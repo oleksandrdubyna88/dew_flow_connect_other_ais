@@ -8,13 +8,12 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// Under policy auto the round machine never calls a person: nobody answering is <c>not_reviewed</c>, a feature review at its cap
+/// The round machine never calls a person: nobody answering is <c>not_reviewed</c>, a feature review at its cap
 /// is <c>good_enough</c> (or <c>not_reviewed</c> when nobody answered), and the rounds running out is <c>good_enough</c> with its reason
 /// (<c>research/PLAN_auto_never_asks_a_person_E1.md</c>, § 8.2).
 /// </summary>
 /// <remarks>
-/// Pure machine: every state is built in code, and a config with no policy named IS policy auto (<see cref="PanelConfig.Uniform"/>).
-/// A policy named in <c>Uniform</c> is never auto, which is how the last tests say what stays as it was.
+/// Pure machine: every state is built in code (<see cref="PanelConfig.Uniform"/>).
 /// </remarks>
 public sealed class AutoNeverCallsAPersonTests
 {
@@ -28,9 +27,6 @@ public sealed class AutoNeverCallsAPersonTests
         Stage.FeatureReview => new SessionState("s", "D:/r", SessionKey.FeatureBranch, PanelConfig.Uniform(maxRounds, 0)) { Stage = stage, Feature = Plan },
         _ => new SessionState("s", "D:/r", "main", PanelConfig.Uniform(maxRounds, 0)) { Stage = stage, PlanProceeded = stage == Stage.CodeReview },
     };
-
-    private static SessionState Named(StagePolicy policy, int maxRounds = 1) =>
-        new("s", "D:/r", "main", PanelConfig.Uniform(maxRounds, 0, policy));
 
     private static Finding F(Severity severity, string title) =>
         new(severity, Category.Reliability, "src/A.cs", 1, title, "why", "fix", ["codex"]);
@@ -61,7 +57,6 @@ public sealed class AutoNeverCallsAPersonTests
 
         var verdict = ok.Verdict.Should().BeOfType<RoundVerdict.NotReviewed>($"policy auto asks nobody, whatever {budget} round(s) are left").Subject;
         verdict.Reason.Should().Contain("no reviewer answered").And.Contain("codex: exit 1");
-        ok.State.HumanGate.Should().BeFalse("no person is called");
         ok.State.AwaitingResolve.Should().BeTrue("the round completed, and resolve is the door the stage moves through");
         ok.State.AdvanceOnResolve.Should().BeTrue("not_reviewed advances like good_enough");
         ok.State.RoundsRunThisStage.Should().Be(1);
@@ -103,7 +98,6 @@ public sealed class AutoNeverCallsAPersonTests
     {
         var verdict = ok.Verdict.Should().BeOfType<RoundVerdict.GoodEnough>("a person is not called, and the findings are the work").Subject;
         verdict.Reason.Should().StartWith("policy auto:").And.Contain("blocking");
-        ok.State.HumanGate.Should().BeFalse();
         ok.State.SecondRound.Should().Be(SecondRoundGround.None);
         ok.State.AdvanceOnResolve.Should().BeTrue("the review closes on resolve");
     }
@@ -115,7 +109,6 @@ public sealed class AutoNeverCallsAPersonTests
 
         var verdict = ok.Verdict.Should().BeOfType<RoundVerdict.GoodEnough>().Subject;
         verdict.Reason.Should().StartWith("policy auto:").And.Contain("reviewer failure").And.Contain("gemini/FeatureReview");
-        ok.State.HumanGate.Should().BeFalse();
         ok.State.SecondRound.Should().Be(SecondRoundGround.None);
         ok.State.AdvanceOnResolve.Should().BeTrue();
     }
@@ -140,7 +133,6 @@ public sealed class AutoNeverCallsAPersonTests
     {
         var verdict = ok.Verdict.Should().BeOfType<RoundVerdict.NotReviewed>().Subject;
         verdict.Reason.Should().StartWith("policy auto:").And.Contain("no reviewer answered");
-        ok.State.HumanGate.Should().BeFalse();
         ok.State.SecondRound.Should().Be(SecondRoundGround.None);
         ok.State.AdvanceOnResolve.Should().BeTrue();
     }
@@ -153,7 +145,6 @@ public sealed class AutoNeverCallsAPersonTests
 
         ok.Verdict.Should().BeOfType<RoundVerdict.Revise>();
         ok.State.SecondRound.Should().Be(SecondRoundGround.ReviewerFailure);
-        ok.State.HumanGate.Should().BeFalse();
     }
 
     // ---------- S3: the rounds ran out ----------
@@ -165,37 +156,8 @@ public sealed class AutoNeverCallsAPersonTests
 
         var verdict = ok.Verdict.Should().BeOfType<RoundVerdict.GoodEnough>().Subject;
         verdict.Reason.Should().Contain("still gate after 1 round(s)");
-        ok.State.HumanGate.Should().BeFalse();
         ok.State.AdvanceOnResolve.Should().BeTrue();
     }
-
-    // ---------- what stays as it was ----------
-
-    [Theory]
-    [InlineData(StagePolicy.Human)]
-    [InlineData(StagePolicy.Continue)]
-    [InlineData(StagePolicy.Escalate)]
-    [InlineData(StagePolicy.GoodEnough)]
-    public void UnderEveryOtherPolicy_NobodyAnsweredStillCallsAPerson(StagePolicy policy)
-    {
-        var ok = Completed(Named(policy), GateResult.Empty, Nobody);
-
-        ok.Verdict.Should().BeOfType<RoundVerdict.CallHuman>("a policy that was named is not auto");
-        ok.State.HumanGate.Should().BeTrue();
-    }
-
-    [Fact]
-    public void ANonAutoGoodEnough_CarriesNoReason()
-    {
-        var ok = Completed(Named(StagePolicy.GoodEnough), TwoMajors(), ReviewerSummary.AllAnswered(2));
-
-        ok.Verdict.Should().BeOfType<RoundVerdict.GoodEnough>().Which.Reason.Should().BeEmpty("only an auto decision says why");
-    }
-
-    [Fact]
-    public void NotReviewedMayProceed() =>
-        RoundCommands.MayProceed(new RoundVerdict.NotReviewed(GateResult.Empty, Nobody, "x")).Should().BeTrue(
-            "or an operator's split order vanishes after an auto plan round");
 
     /// <summary>The extension writes nothing for auto only when this binary lists it (the parent's § 4.6): the entry is the last commit of the epic.</summary>
     [Fact]

@@ -11,7 +11,7 @@
  *   <li>`--providers`' `unrecognised`, read through the extension's own `parseProviderNotes` — the very list the panel
  *   turns into the `server-did-not-understand-a-setting` toast. A missing root of THIS OS must appear there (the
  *   control that the probe can see a root at all); the other side's root must not.</li>
- *   <li>`ask_consultants` over a live MCP session, one root at a time, with one `question-disk` row: a root the server
+ *   <li>`consask` over a live MCP session, one root at a time, with one `question-disk` row: a root the server
  *   skipped leaves the row `disabled`, "inactive on this side"; a root it kept is launched, and the row's note names
  *   the path it kept ("root … is not a git checkout") — qualified with the system drive on Windows. The row's CLI is
  *   the server's own fake CLI: nothing reaches a model, nothing is billed.</li>
@@ -84,7 +84,7 @@ export async function qconsultRootsSeam({ providersIn, sessionsFor, answerOf, bi
   const seen = {};
   for (const root of [thisRoot, otherRoot]) {
     write(dataDir, [root], fakeCli);
-    const server = await serversVerdict(session, answerOf, repoPath, root).catch(async (e) => leave(`ask_consultants failed for ${root}: ${e.message}`, session));
+    const server = await serversVerdict(session, answerOf, repoPath, root).catch(async (e) => leave(`consask failed for ${root}: ${e.message}`, session));
     const existence = await existingHere([root], windows, systemDrive, isDirectory);
     const page = otherSideHere(root, windows, existence.existing.includes(root), existence.unknown.includes(root)) ? 'other' : 'this';
     if (server.side !== page) {
@@ -127,7 +127,7 @@ function write(dataDir, roots, fakeCli) {
 
 /** What the server did with ONE root: `other` when the row is inactive here naming it, `this` when it launched reading it. */
 async function serversVerdict(session, answerOf, repoPath, root) {
-  const reply = answerOf(await session.call('ask_consultants', {
+  const reply = answerOf(await session.call('consask', {
     repoPath,
     question: 'Which of the two parsers should own the count?',
     context: 'Two classes both count; the seam asks only to see which folders the disk row is given.',

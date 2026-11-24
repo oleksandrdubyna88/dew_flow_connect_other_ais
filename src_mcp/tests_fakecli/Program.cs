@@ -69,6 +69,8 @@ AppDomain.CurrentDomain.UnhandledException += (_, e) =>
 //                           child was killed" is checked rather than assumed)
 //   FAKECLI_EXPORT_TEXT   — Vibe's `--output-dir <folder>`: this text is written there as export.json (D7 of
 //                           todo/PLAN_vibe_and_kimi_runtimes.md); {{env:NAME}} in it is the value NAME had in THIS child
+//   FAKECLI_MODEL_MAP     — one JSON file: model name (the value after --model or -m) -> {stdout, stderr, exit, sleepMs, outfileText}; "*" is any other model
+//                           (epoch 3 E1 s3: a whole failover route scripted in one place). An entry beats the FAKECLI_* variables for that launch
 //   FAKECLI_RECORD_ENV    — a file this launch writes every environment variable NAME it was started with into, one per
 //                           line, and the VALUE of each VIBE_* and PYTHON* — what crossed the process boundary, not what a dictionary said
 //   FAKECLI_HOME_WRITE    — a path relative to this child's VIBE_HOME, written as a file: a Vibe that leaves something in
@@ -128,6 +130,18 @@ if (args is ["acp"] && (Environment.GetEnvironmentVariable("FAKECLI_ACP_SCRIPT")
     return CoaiMcp.FakeCli.AcpAgent.Run(acpScriptFromEnv);
 }
 
+// A copy of this program named for the product answers `--version` from the file beside it (the installer's stand-in for `coai-mcp`; CoaiMcpStandIn.cs).
+if (CoaiMcp.FakeCli.CoaiMcpStandIn.Answer(args) is { } standInExit)
+{
+    return standInExit;
+}
+
+// The MCP verbs of claude and codex (the installer's stand-in): started by a wrapper file named for the CLI, BEFORE the vendor mode, for the reason the ACP stand-in is.
+if (args.Length >= 2 && args[0] == "vendor-mcp")
+{
+    return CoaiMcp.FakeCli.McpVendor.Run(args[1], args[2..]);
+}
+
 var minimal = MinimalSteering.Load(args);
 Func<string, string?> read = minimal is { } fromFile ? name => fromFile.GetValueOrDefault(name) : Environment.GetEnvironmentVariable;
 if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor" || minimal is not null)
@@ -174,7 +188,7 @@ if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor" || minimal is
         LaunchRecord.Write(record, string.Join('\0', args.Append(prompt.StdIn)), read("FAKECLI_RECORD_GATE"));
     }
 
-    var steering = Steering.For(prompt.Text, read);
+    var steering = Steering.For(prompt.Text, read, CoaiMcp.FakeCli.ModelMap.For(args, read));
 
     // A vendor that takes its time. It exists for the health probe's timeout arm: a CLI that
     // never answers `--version` must be reported as silent rather than as whatever exit code the
@@ -352,6 +366,17 @@ switch (args0)
     case ["hold-file", var mode, var file]:
         return CoaiMcp.FakeCli.HoldFileVerb.Run(mode, file);
 
+    // Epoch 3 E1 s1: a role job's lease, held by a child for the given time (the kernel frees it when the child dies or is killed). Writes <file>.held with its pid once it holds it; 75 when busy.
+    case ["lease-hold", var leaseFile, var leaseMs]:
+        return CoaiMcp.FakeCli.LeaseHoldVerb.Run(leaseFile, int.Parse(leaseMs));
+
+    // Epoch 3 E1 s1 (A14): a memory hog, and a small parent that starts it as its child and writes the child's exit code — the shape of a runner and the CLI it owns.
+    case ["alloc", var allocMb, var allocLog]:
+        return CoaiMcp.FakeCli.AllocVerbs.Alloc(int.Parse(allocMb), allocLog);
+
+    case ["parent-of-alloc", var parentMb, var parentLog, var parentResult]:
+        return CoaiMcp.FakeCli.AllocVerbs.ParentOfAlloc(int.Parse(parentMb), parentLog, parentResult);
+
     // Takes the REAL EngineLease in its own process, holds it, and prints the window it held it
     // for. Five of these are how the cross-process claim is measured rather than asserted: two
     // objects in one process would prove nothing about two servers on one machine.
@@ -463,15 +488,19 @@ sealed class Steering
 {
     private readonly string[] _prefixes;
     private readonly Func<string, string?> _read;
+    private readonly Func<string, string?>? _model;
 
-    private Steering(string[] prefixes, Func<string, string?> read) => (_prefixes, _read) = (prefixes, read);
+    private Steering(string[] prefixes, Func<string, string?> read, Func<string, string?>? model) => (_prefixes, _read, _model) = (prefixes, read, model);
 
-    /// <summary>The first of the prefixes that names a value — most specific first.</summary>
+    /// <summary>The model map's value for this launch's model (FAKECLI_MODEL_MAP) first; else the first of the prefixes that names a value — most specific first.</summary>
     public string? Get(string name) =>
-        _prefixes.Select(prefix => _read(prefix + name)).FirstOrDefault(value => value is { Length: > 0 });
+        _model?.Invoke(name) is { } mapped
+            ? mapped
+            : _prefixes.Select(prefix => _read(prefix + name)).FirstOrDefault(value => value is { Length: > 0 });
 
     /// <param name="read">Where a steering value comes from: the environment, or the minimal-environment file.</param>
-    public static Steering For(string prompt, Func<string, string?> read)
+    /// <param name="model">What the model map says for this launch's model, or null when there is no map or no entry.</param>
+    public static Steering For(string prompt, Func<string, string?> read, Func<string, string?>? model = null)
     {
         var turn = TurnOf(prompt, read);
         var repair = read("FAKECLI_REPAIR_MARKER") is { Length: > 0 } marker
@@ -481,7 +510,7 @@ sealed class Steering
             ? [$"FAKECLI_TURN{turn}_REPAIR_", $"FAKECLI_TURN{turn}_", "FAKECLI_"]
             : [$"FAKECLI_TURN{turn}_", "FAKECLI_"];
 
-        return new Steering(prefixes, read);
+        return new Steering(prefixes, read, model);
     }
 
     /// <summary>Turn n when the prompt carries the marker with n filled in, for the smallest n from 2 up to 16; else 1.</summary>

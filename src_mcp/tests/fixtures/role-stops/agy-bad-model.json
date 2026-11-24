@@ -1,0 +1,31 @@
+{
+  "cli": "agy",
+  "cliVersion": "1.5.14",
+  "recordedUtc": "2026-11-23T01:45:09.545Z",
+  "how": "agy-bad-model",
+  "argv": [
+    "--print=",
+    "--input-format",
+    "stream-json",
+    "--output-format",
+    "stream-json",
+    "--mode",
+    "plan",
+    "--model",
+    "no-such-model-xyz"
+  ],
+  "envOverrides": [],
+  "stdin": "{\"event\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"Reply with the single word ok.\"}}\n",
+  "exitCode": 1,
+  "signal": null,
+  "seconds": 2.9,
+  "stdout": "{\"event\":\"result\",\"result\":{\"conversation_id\":\"\",\"status\":\"ERROR\",\"response\":\"\",\"error\":\"invalid model selection (--model \\\"no-such-model-xyz\\\" --effort \\\"\\\"): model no-such-model-xyz is not recognized as a known model or custom model in settings\\nAvailable models:\\n  Gemini 4 Neon (High)\\n  Gemini 4 Neon (XHigh)\\n  Gemini 4 Neon (Medium)\\n  Gemini 4 Neon (Low)\\n  Gemini 4 Argon (Medium)\\n  Gemini 4 Argon (High)\\n  Gemini 4 Argon (Low)\\n  Gemini 4 Hydrogen (High)\\n  Gemini 4 Hydrogen (XHigh)\\n  Gemini 4 Hydrogen (Medium)\\n  Gemini 4 Hydrogen (Low)\\n  Orchestrator (Neon)\\n  Orchestrator (Argon)\\n  Gemini 3.8 Flash (High)\\n  Gemini 3.8 Flash (Medium)\\n  Gemini 3.8 Flash (Low)\\n  Claude Opus 5.5 (Low)\\n  Claude Opus 5.5 (Medium)\\n  Claude Opus 5.5 (High)\\n  Claude Sonnet 5.5 (Low)\\n  Claude Sonnet 5.5 (Medium)\\n  Claude Sonnet 5.5 (High)\\n  GPT-OSS 120B (Medium)\",\"duration_seconds\":0,\"num_turns\":0,\"usage\":{\"input_tokens\":0,\"output_tokens\":0,\"thinking_tokens\":0,\"cache_read_tokens\":0,\"total_tokens\":0},\"finished_reason\":\"error\"}}\n",
+  "stderr": "error: invalid model selection (--model \"no-such-model-xyz\" --effort \"\"): model no-such-model-xyz is not recognized as a known model or custom model in settings\nAvailable models:\n  Gemini 4 Neon (High)\n  Gemini 4 Neon (XHigh)\n  Gemini 4 Neon (Medium)\n  Gemini 4 Neon (Low)\n  Gemini 4 Argon (Medium)\n  Gemini 4 Argon (High)\n  Gemini 4 Argon (Low)\n  Gemini 4 Hydrogen (High)\n  Gemini 4 Hydrogen (XHigh)\n  Gemini 4 Hydrogen (Medium)\n  Gemini 4 Hydrogen (Low)\n  Orchestrator (Neon)\n  Orchestrator (Argon)\n  Gemini 3.8 Flash (High)\n  Gemini 3.8 Flash (Medium)\n  Gemini 3.8 Flash (Low)\n  Claude Opus 5.5 (Low)\n  Claude Opus 5.5 (Medium)\n  Claude Opus 5.5 (High)\n  Claude Sonnet 5.5 (Low)\n  Claude Sonnet 5.5 (Medium)\n  Claude Sonnet 5.5 (High)\n  GPT-OSS 120B (Medium)\n",
+  "spawnError": "",
+  "recordedBy": "this story (epoch 3 E1 s3 t1), run live on 2026-11-23",
+  "scrubbed": [
+    "scratch folder path",
+    "session_id and uuid set to zeros",
+    "credential_expires_at"
+  ]
+}

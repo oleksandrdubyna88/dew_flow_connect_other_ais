@@ -1,0 +1,20 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t2-fix-turns
+title: "Fix turns: the failure digest goes to the SAME session with --resume; cap COAI_FIX_ROUNDS (default 3); each turn is one coai commit"
+kind: code
+complexity: 8
+dependsOn:
+  - t1-checks-after-turn
+parallel: false
+files:
+  - src_mcp/src/Server/RoleJobs/CoderFixLoop.cs
+  - src_mcp/src/Server/RoleJobs/CoderWork.cs
+  - src_mcp/src/Server/RoleJobs/RoleJobSettings.cs
+  - src_mcp/tests
+dod:
+  - id: d1
+    item: "FakeCli red, then green after 2 fix turns: FakeCli's recorded argv shows --resume with the handle of turn 0 on both fix turns and the worktree as cwd; no fix turn starts a new session; the envelope says fixTurns 2, green true"
+  - id: d2
+    item: "FakeCli always red: exactly 3 fix turns, then the job is failed with stop not-green and the last digest in the result; COAI_FIX_ROUNDS=1 gives exactly 1; a value that is not a whole number from 0 to 10 falls back to 3 with a note"
+  - id: d3
+    item: "the whole job stays inside timeoutMinutes: a turn or a check that would pass the budget is stopped and the job ends failed with stop timeout, the branch and its commits kept"

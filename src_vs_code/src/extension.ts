@@ -14,7 +14,6 @@ import { bindChatPresets } from './chatPresetsHost';
 import { askWhereDataLives, deleteTheOldDataFolder, moveDataDirectory } from './dataCommands';
 import { openPhrases } from './phrasesPanel';
 import { bindRoles } from './rolesHost';
-import { bindCommands } from './commandsHost';
 import { bindChatSide } from './chatConfig';
 import { registerConfigTransfer } from './configTransferCommands';
 import { ChatPanels } from './chatPanels';
@@ -154,7 +153,6 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
   // The review roles know this window's side from the start: the Settings page edits them as well as the Review
   // roles tab, and either can be the first (PLAN_one_model_catalog.md E4.3).
   bindRoles(context);
-  bindCommands(context);
   // The chat reads this side's catalog rows (E4.6a).
   bindChatSide(context);
   // The road to a `Creds: <host> / <session>` terminal's Claude session (E2.S3): the consent, the picked ids, the hosts command.
@@ -372,8 +370,6 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
   // compares what it read before telling anybody, so a directory polled every five seconds for an
   // afternoon repaints the sidebar exactly as often as a consultation changes.
   consultations.onChanged = () => {
-    // A consultation that closed may be the one a plan's cadence was waiting on — ask again before painting.
-    panel.forgetCadence();
     // And the round counts: a consultation-only session ends no round, and its turns must still move the numbers.
     panel.forgetRoundCounts();
     void panel.render();

@@ -1,4 +1,3 @@
-using CoaiMcp.Core.Commands;
 using CoaiMcp.Core.Rounds;
 using CoaiMcp.Server;
 using FluentAssertions;
@@ -113,18 +112,6 @@ public sealed class StagesTests
     {
         Stages.Of(stage).Kind.Should().Be(kind);
         RoundRefusals.ReviewKindOf(stage).Should().Be(kind, "the refusal reads the row");
-    }
-
-    [Theory]
-    [InlineData(Stage.PlanReview, CommandStage.Plan)]
-    [InlineData(Stage.CodeReview, CommandStage.Code)]
-    [InlineData(Stage.DocumentReview, CommandStage.Any)]
-    [InlineData(Stage.FeatureReview, CommandStage.Any)]
-    [InlineData(Stage.Done, CommandStage.Any)]
-    public void TheCommands_ARoundOfThisStageIsGiven(Stage stage, CommandStage commands)
-    {
-        Stages.Of(stage).Commands.Should().Be(commands);
-        RoundCommands.CommandStageOf(stage).Should().Be(commands, "the panel service reads the row");
     }
 
     [Theory]

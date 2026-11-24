@@ -1,0 +1,62 @@
+{
+  "$comment": "The default roles of coai v2 (server.md §2, §19, §20): which model each external role runs, per MAIN-AI vendor. coai-mcp embeds this file (src_mcp/src/CoaiMcp.csproj, Roles/RoleDefaults.cs) and answers it through the `roles` tool and `coai-mcp --roles [--format json|claude-hook]`; a person's COAI_ROLES_* settings override it. A role's value is an ORDERED list of {model, vendor}: the first entry is the model, the later ones are the FAILOVER order (§20). Names here are the OWNER's (§2, §20) and names this repository already holds; a vendor with no measured model list is left EMPTY with a note, never filled with a guess. `whenVendorRow` makes an entry apply only when the person has a configured reviewer row on that vendor's runtime.",
+  "mainAi": {
+    "claude": {
+      "cli": "claude",
+      "roles": {
+        "orchestrator": [ { "model": "opus", "vendor": "claude" } ],
+        "coder": [ { "model": "sonnet", "vendor": "claude" } ],
+        "scout": [ { "model": "sonnet", "vendor": "claude" } ],
+        "important": [
+          { "model": "fable", "vendor": "claude" },
+          {
+            "model": "astra",
+            "vendor": "codex",
+            "whenVendorRow": "codex",
+            "source": "server.md §20 names it (important: fable, then codex astra); the repository holds `codex-astra` as a codex model in shared/runtime-capabilities.json (read-outside-bare cells) and in Tools.cs"
+          }
+        ],
+        "ba": [ { "model": "fable", "vendor": "claude" }, { "model": "opus", "vendor": "claude" } ]
+      },
+      "complexityBands": [
+        { "min": 0, "max": 2, "model": "haiku", "vendor": "claude" },
+        { "min": 3, "max": 6, "model": "sonnet", "vendor": "claude" },
+        { "min": 7, "max": 8, "model": "opus", "vendor": "claude" },
+        { "min": 9, "max": 10, "model": "fable", "vendor": "claude" }
+      ]
+    },
+    "codex": {
+      "cli": "codex",
+      "roles": {
+        "orchestrator": [],
+        "coder": [],
+        "scout": [],
+        "important": [],
+        "ba": []
+      },
+      "complexityBands": [],
+      "note": "no measured model list for codex as the main AI: the defaults are empty, and a person's COAI_ROLES_MODELS and COAI_ROLES_BANDS fill them"
+    },
+    "agy": {
+      "cli": "agy",
+      "roles": {
+        "orchestrator": [],
+        "coder": [],
+        "scout": [],
+        "important": [],
+        "ba": []
+      },
+      "complexityBands": [],
+      "note": "no measured model list for agy as the main AI: the defaults are empty, and a person's COAI_ROLES_MODELS and COAI_ROLES_BANDS fill them"
+    }
+  },
+  "haikuKinds": [ "translate", "summarize", "rename", "changelog", "simple-docs" ],
+  "workMethod": {
+    "mvpEpics": { "min": 1, "max": 2 },
+    "maxEpicsPerEpoch": 5,
+    "maxStoriesPerEpic": 8,
+    "maxTasksPerStory": 6,
+    "minConsultsPerEpoch": 1,
+    "minConsultsPerEpic": 0
+  }
+}

@@ -173,7 +173,7 @@ test('once the server has answered, its problems replace this window\'s own for 
   await it.settle();
   assert.deepEqual(currentFindings().map((one) => one.value).sort(), ['D:\\gone.exe', 'D:\\server-says-fine'], 'before the server answers the window\'s own probe stands');
 
-  const problems: SettingProblem[] = [{ key: 'COAI_QCONSULT_ROOTS', kind: 'missing-folder', value: 'D:\\server-says-gone', sentence: 'gone' }];
+  const problems: SettingProblem[] = [{ key: 'COAI_CONSASK_ROOTS', kind: 'missing-folder', value: 'D:\\server-says-gone', sentence: 'gone' }];
   it.watch.serverSaid(problems);
   await it.settle();
   assert.deepEqual(currentFindings().map((one) => one.value).sort(), ['D:\\gone.exe', 'D:\\server-says-gone'], 'the server\'s answer did not replace the window\'s own for the roots');

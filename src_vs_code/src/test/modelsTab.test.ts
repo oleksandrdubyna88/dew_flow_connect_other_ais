@@ -74,7 +74,7 @@ test('a row that cannot hold a consultation — a Team server — cannot be tick
   const team = codex({ id: 'acme-codex', runtime: 'remote', baseUrl: 'https://coai.acme.example' });
   const page = run(stateWith([codex(), team]));
   const card = pageTree(page.html).one((node) => node.dataset['modelCard'] === 'acme-codex', 'Team-server card');
-  const tick = card.one((node) => node.tagName === 'LABEL' && node.text().trim() === 'consultant', 'consultant tick on the Team-server card');
+  const tick = card.one((node) => node.tagName === 'LABEL' && node.text().trim() === 'cons', 'consultant tick on the Team-server card');
 
   assert.equal(tick.one((node) => node.tagName === 'INPUT', 'its box').disabled, true, 'a Team server can be ticked consultant');
   assert.ok(!page.commands.some((one) => one.dataset['id'] === 'acme-codex|consultant'), 'the page binds a consultant toggle on a Team server');
@@ -82,7 +82,7 @@ test('a row that cannot hold a consultation — a Team server — cannot be tick
   for (const runtime of CONSULTING_RUNTIMES) {
     assert.ok((tick.attrs['title'] ?? '').includes(runtime), `the reason does not name ${runtime}, a runtime a consultation runs on`);
   }
-  assert.match(card.text(), /Not offered: consultant, question consultant — a consultation runs on/);
+  assert.match(card.text(), /Not offered: cons, consask — a consultation runs on/);
 });
 
 test('remove asks first — removeModel, never a command sent on the first click', () => {

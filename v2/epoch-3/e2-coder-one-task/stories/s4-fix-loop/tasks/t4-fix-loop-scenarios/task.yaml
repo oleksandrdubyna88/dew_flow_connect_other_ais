@@ -1,0 +1,16 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t4-fix-loop-scenarios
+title: "Fix-loop scenarios on the real binary over stdio with FakeCli: green at turn 0, green after 2, never green, server killed in mid-loop"
+kind: test
+complexity: 6
+dependsOn:
+  - t3-coder-failover
+parallel: false
+files:
+  - src_mcp/tests_fakecli
+  - src_mcp/tests
+dod:
+  - id: d1
+    item: "the four scenarios pass against a real coai-mcp and the real detached runner on a fixture repository with its own .coai/toolchain.yaml (a real small build and test, no model call)"
+  - id: d2
+    item: "the MCP server killed while a check runs: a new server reads the same job and it ends succeeded and green, generation unchanged, no role-job-lost notice"

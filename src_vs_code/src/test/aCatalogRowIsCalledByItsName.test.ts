@@ -63,7 +63,7 @@ test('the Consultant tab names a row by its display name — in the strip, the p
   assert.ok(claude.some(([value, label]) => value === 'consult-claude' && label === 'consult-claude'), 'a row with no name keeps its id alone');
   assert.ok(offered(pane, 'consult-row-codex').some(([value, label]) => value === 'chat-preset-old' && label === 'Old Luna (chat-preset-old) (stranded)'),
     'a stranded pick of a row still on Models is not named');
-  assert.match(codexPick.text(), /Old Luna \(chat-preset-old\) is not ticked for the consultant on Models/);
+  assert.match(codexPick.text(), /Old Luna \(chat-preset-old\) is not ticked for the cons on Models/);
 });
 
 test('the Question consultant tab names a row by its display name — in the strip and in each row\'s picker', () => {

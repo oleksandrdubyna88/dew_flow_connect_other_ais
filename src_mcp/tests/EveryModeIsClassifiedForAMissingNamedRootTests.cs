@@ -29,6 +29,8 @@ public sealed class EveryModeIsClassifiedForAMissingNamedRootTests
         [Program.Startup.AskAcp] = "the Kimi ACP shim: prompt on stdin, its child runs in --cwd, the report on stdout (AskAcpMode.cs)",
         [Program.Startup.KimiClearMarker] = "deletes ONE survivor marker under the Kimi lock root and nothing else; it never opens the data directory (KimiClearMarkerMode.cs)",
         [Program.Startup.HostFacts] = "prints ONE JSON line of the host's facts from the environment, /proc and one socket's status; no home, no lock, no network, no data directory (HostFactsMode.cs)",
+        [Program.Startup.SetupClients] = "finds the CLIs and writes THEIR MCP entry through their own commands; its backups, manifest and lock are under the per-user state folder (~/.local/state/coai), never the data directory (Install/SetupClientsMode.cs)",
+        [Program.Startup.Install] = "the same engine as --setup-clients under the install line's name (Install/SetupClientsMode.cs)",
         [Program.Startup.AgyHook] = "the Antigravity tool-use hook: stdin to a decision on stdout (AntigravityReadOnly)",
         [Program.Startup.Normalize] = "reads --in, writes --out (NormalizeMode.cs)",
         [Program.Startup.Outline] = "reads one source file, prints its outline (OutlineMode.cs)",

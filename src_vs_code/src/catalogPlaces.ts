@@ -1,5 +1,5 @@
 /**
- * Where the Settings page can open (research/PLAN_one_model_catalog.md, E3.1; D11): six tabs, their sub-tabs, and a place
+ * Where the Settings page can open (research/PLAN_one_model_catalog.md, E3.1; D11): tabs, their sub-tabs, and a place
  * for every id the old page answered to.
  *
  * <p>A PLACE is `tab` or `tab/sub` — the one string the host holds and the page's script opens, so a deep link names a
@@ -19,7 +19,7 @@ export interface CatalogTab {
   readonly subs: readonly CatalogSub[];
 }
 
-/** The six tabs, in the order the redesign gave them (research/PLAN_one_model_catalog.md, E3). */
+/** The tabs, in the order the redesign gave them (research/PLAN_one_model_catalog.md, E3). */
 export const CATALOG_TABS: readonly CatalogTab[] = [
   { id: 'models', label: 'Models', subs: [] },
   {
@@ -28,14 +28,11 @@ export const CATALOG_TABS: readonly CatalogTab[] = [
     subs: [
       { id: 'stages', label: 'Stages' },
       { id: 'roles', label: 'Roles & prompts' },
-      { id: 'prompts', label: 'Prompts per round' },
       { id: 'gate', label: 'The gate' },
-      { id: 'commands', label: 'Commands' },
       { id: 'limits', label: 'Limits' },
     ],
   },
-  { id: 'consultants', label: 'Consultants', subs: [{ id: 'consultant', label: 'Consultant' }, { id: 'qconsult', label: 'Question consultant' }] },
-  { id: 'security', label: 'Security lane', subs: [] },
+  { id: 'consultants', label: 'Cons & consask', subs: [{ id: 'consultant', label: 'Cons' }, { id: 'qconsult', label: 'Consask' }] },
   { id: 'chat', label: 'Chat', subs: [] },
   {
     id: 'setup',
@@ -59,8 +56,8 @@ export const OLD_TAB_PLACES: Readonly<Record<string, string>> = {
   chat: 'chat',
   consultant: 'consultants/consultant',
   questionconsultant: 'consultants/qconsult',
-  securityLane: 'security',
-  prompts: 'reviews/prompts',
+  securityLane: 'reviews/stages',
+  prompts: 'reviews/stages',
   gate: 'reviews/gate',
   limits: 'reviews/limits',
   keys: 'setup/keys',

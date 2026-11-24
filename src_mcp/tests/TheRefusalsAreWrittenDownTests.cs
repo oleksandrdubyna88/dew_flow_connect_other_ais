@@ -440,15 +440,14 @@ public sealed class TheRefusalsAreWrittenDownTests : IDisposable
         // producers really are there, and really do call the helper.
         ProductionSources.FilesMentioning("ServerNotice.Shortened(").Keys.Order().Should().Equal(
             [
-                // The consultation cadence standing down: a consultation owed and none to be had.
-                "src_mcp/src/Server/Cadence/CadenceDesk.cs",
                 // Story 3.2's crash record: the exception nothing else caught, written as it leaves.
                 "src_mcp/src/Server/HostCrash.cs",
+                // E1.S4: the notice an answered hold gets when the v2 migration releases it.
+                "src_mcp/src/Server/Migrations/HoldBoundary.cs",
                 "src_mcp/src/Server/RefusalNotices.cs",
                 "src_mcp/src/Server/ReviewerNotices.cs",
                 // Epic 3's death record: the unclean-exit a start writes about a run that never finished.
                 "src_mcp/src/Server/RunMarkers.cs",
-                "src_mcp/src/Server/SecurityRound.cs",
                 "src_mcp/src/Server/StartupNotices.cs",
             ],
             "every road that builds a notice goes through the one cut");

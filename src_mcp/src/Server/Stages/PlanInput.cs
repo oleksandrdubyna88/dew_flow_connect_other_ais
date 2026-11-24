@@ -7,7 +7,11 @@ using CoaiMcp.Runners.Worktrees;
 namespace CoaiMcp.Server;
 
 /// <summary>What a caller sent as THE PLAN: its text, or the path of a committed file (and the commit it expects).</summary>
-internal sealed record PlanInput(string Text, string Committed, string ExpectedCommit);
+internal sealed record PlanInput(string Text, string Committed, string ExpectedCommit)
+{
+    /// <summary>The plan item the call named in <c>workItem</c>, as sent — checked by <see cref="WorkItems"/> before any round is spent; empty when none was named.</summary>
+    public string WorkItem { get; init; } = string.Empty;
+}
 
 internal abstract record PlanInputOutcome
 {
@@ -34,8 +38,8 @@ internal abstract record PlanInputOutcome
 /// <c>expectedCommit</c> without <c>committedPlan</c> is refused (an argument that would be silently ignored is a trap);
 /// a whitespace-only <c>committedPlan</c> or <c>expectedCommit</c> counts as absent. A pasted plan takes no resolve and
 /// no git, exactly as before.</para>
-/// <para>For a committed plan the branch is resolved ONCE here and that commit is the round's <c>Head</c>: the plan, the
-/// cadence outline read under the claim and the record are one commit even if the branch moves during the call.
+/// <para>For a committed plan the branch is resolved ONCE here and that commit is the round's <c>Head</c>: the plan and the
+/// record are one commit even if the branch moves during the call.
 /// <c>ResolveShaAsync</c> throws a <see cref="WorktreeException"/>; it sits outside the engine's <c>try</c>, so it is
 /// caught here and answered, as <c>open</c> does. <c>rev-parse --verify &lt;branch&gt;^{commit}</c> answers a COMMIT id —
 /// only that goes on to the reader, which would accept any 40-hex object id.</para>

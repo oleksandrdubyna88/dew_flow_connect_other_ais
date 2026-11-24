@@ -44,13 +44,19 @@ public sealed class EveryBudgetInAClockedClassReadsItsClockTests
     /// </summary>
     private static readonly NotScanned[] Unscanned =
     [
+        new("src_mcp/src/Server/RoleJobs/RoleJobStore.cs", "a wall STAMP on each job record and instants compared with a monotonic reading for its two bounded waits (job.lock, the runner's take window), both on the injected clock; ARoleJobLeaseTests move it by hand (epoch 3 E1 s1)"),
+        new("src_mcp/src/Server/RoleJobs/RoleLease.cs", "a wall STAMP on each write and the heartbeat's instant, from the store's clock; it waits for nothing itself (epoch 3 E1 s1)"),
+        new("src_mcp/src/Server/RoleJobs/RoleRunner.cs", "hands its clock to the job's timeout source and the watch loop's PeriodicTimer, both armed ON that clock (ARoleRunnerTests advance a manual one to fire the timeout); the work's own waits take the work's token (epoch 3 E1 s1)"),
         new("src_mcp/src/Server/Backfill/BackfillAttribution.cs", "forwards its clock to the peer lookup (AuthorPeers.Find) as a deadline instant; no timer, no wait — E5/E7's own tests pin it"),
         new("src_mcp/src/Server/Backfill/BackfillRun.cs", "only defaults and forwards the clock to BackfillAttribution; it arms nothing itself"),
+        new("src_mcp/src/Server/Migrations/HoldBoundary.cs", "a wall STAMP only: the notice's utc comes from the clock, and the two doors (the migration, convert-on-load) hand it their own; it waits for nothing and arms no timer (E1.S4)"),
+        new("src_mcp/src/Server/Migrations/MigrationV2.cs", "a wall STAMP only: the marker's finishedUtc and the journal lines' utc come from the clock; the migration waits for nothing and arms no timer (E1.S4)"),
+        new("src_mcp/src/Server/Migrations/MigrationV2Journal.cs", "a wall STAMP only: each line's utc; it waits for nothing and arms no timer (E1.S4)"),
         new("src_mcp/src/Server/Rounds/RoundAuthorsStep.cs", "reads its clock as instants (a deadline, an elapsed from GetTimestamp) for the round-authors step; no timer, no wait"),
-        new("src_mcp/src/Server/SessionHolds.cs", "a wall STAMP only: a cached entry's age against the ten-minute recheck; it waits for nothing"),
         new("src_mcp/src/Store/ObservedSession.cs", "ReadBudget carries a clock for the transcript read's MaxTime as an instant comparison; the read arms no timer"),
         new("src_mcp/src/Store/RoundsDb.cs", "a wall STAMP for its rows' columns (the clock is what a test controls); its one DateTime.UtcNow is the session row's opened_utc, a stamp and not a budget"),
         new("src_mcp/src/Collecting/CollectRun.cs", "a wall STAMP only: the run id is the clock's instant; the run waits for nothing"),
+        new("src_mcp/src/Install/SetupDependencies.cs", "carries the installer's clock to name a backup folder by its UTC instant (InstallBackup.Create); no timer, no wait — the vendor commands' deadline is the launcher's own Timeout"),
         new("src_bugs/src/RateLimiter.cs", "a rate window compared as instants (GetUtcNow ticks per subject); no timer, no wait — its own tests move the clock"),
     ];
 

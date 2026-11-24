@@ -1,0 +1,21 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t1-plan-binding
+title: "Bind a coder job's session (repository + coder/<jobId>) to the approved plan revision of the feature it was started from"
+kind: security
+complexity: 8
+dependsOn: []
+parallel: false
+security: true
+files:
+  - src_mcp/src/Server/RoleJobs/CoderPlanBinding.cs
+  - src_mcp/src/Server/PanelService.cs
+  - src_mcp/core/Rounds/RoundMachine.cs
+  - src_mcp/core/Rounds/SessionState.cs
+  - src_mcp/tests
+dod:
+  - id: d1
+    item: "review_code on coder/<jobId> is accepted when the branch the job was started from has a plan that proceeded; the session records the inherited plan revision (source session id and plan hash) and the plan text the round is judged against"
+  - id: d2
+    item: "a branch named coder/x that no coder job of this data folder made is refused as today (PlanProceeded false); so is a coder job whose starting branch has no proceeded plan, and a job whose source plan changed after the start (the hash differs)"
+  - id: d3
+    item: "the binding is read from job.json (the authority), never from the branch name alone; every existing RoundMachine and PanelService test passes unchanged"

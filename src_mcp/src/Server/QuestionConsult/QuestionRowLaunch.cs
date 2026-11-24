@@ -10,7 +10,7 @@ using CoaiMcp.Runners.Vibe;
 namespace CoaiMcp.Server;
 
 /// <summary>What one row's launch is handed beside its admission: the prompt, the launch settings, the directory the record lives in.</summary>
-/// <param name="Budget">The row's own deadline (<c>COAI_QCONSULT_ROW_MINUTES</c>): the launcher kills the child at it, and the turn is bounded a grace past it.</param>
+/// <param name="Budget">The row's own deadline (<c>COAI_CONSASK_ROW_MINUTES</c>): the launcher kills the child at it, and the turn is bounded a grace past it.</param>
 public sealed record RowLaunchInput(
     RowAdmission.Admitted Row,
     string Prompt,
@@ -239,7 +239,7 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
     private static bool NeedsAFolder(RowAdmission.Admitted row) => row.Plan.Cwd != CwdKind.Root || KeepsAHome(row);
 
     /// <summary>The copies a <see cref="CwdKind.Snapshot"/> plan stands in, made in the row's folder; nothing for any other plan.</summary>
-    /// <param name="budget">The row's own budget (<c>COAI_QCONSULT_ROW_MINUTES</c>, <see cref="RowLaunchInput.Budget"/>): the copies
+    /// <param name="budget">The row's own budget (<c>COAI_CONSASK_ROW_MINUTES</c>, <see cref="RowLaunchInput.Budget"/>): the copies
     /// must be made inside it, or the row is refused before Vibe starts (the #811 checkpoint round).</param>
     private async Task<ConsultantPlace> PlaceAsync(RowAdmission.Admitted row, string scratch, TimeSpan budget, CancellationToken ct) =>
         row.Plan.Cwd == CwdKind.Snapshot ? await _places.OneShotAsync(scratch, row.Plan.SnapshotSources, budget, ct) : ConsultantPlace.Checkout;
@@ -432,7 +432,7 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
     /// </remarks>
     private static QuestionRowRecord Answered(QuestionRowRecord start, string advice, TimeSpan elapsed, Usage usage, string note) =>
         advice.Trim().Length == 0
-            ? Ended(start, RowOutcomes.Failed, "the consultant answered, and its answer carried no advice", elapsed, usage, note)
+            ? Ended(start, RowOutcomes.Failed, "the row answered, and its answer carried no advice", elapsed, usage, note)
             : Ended(start, RowOutcomes.Answered, string.Empty, elapsed, usage, note) with { Advice = Redaction.SafeSource(advice.Trim()) };
 
     /// <remarks>

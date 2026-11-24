@@ -184,12 +184,12 @@ public class CodeWorkspaceTests
     [Fact]
     public void APlanRoundIsUnaffected_ItNeverHadACheckoutToGiveUp()
     {
-        // A plan round already runs in a scratch directory, and its work is built with planPrompts.
+        // A plan round already runs in a scratch directory.
         // The setting must not reach into it and hand it a second, different empty directory.
         var scratch = Worktree();
 
         var work = Service("none").Roster.BuildWork([RoleCatalog.PlanRole], scratch, "ctx", round: 1, stage: Stage.PlanReview, readsCheckout: false,
-            planPrompts: ["plan-critique"], codexTiers: CodexTiers.None).Reviewers;
+            codexTiers: CodexTiers.None).Reviewers;
 
         work[0].Invocation.Request.WorkingDirectory.Should().Be(scratch);
     }

@@ -5,7 +5,6 @@ import { CoaiSettings, DEFAULTS, envBlock } from '../settingsShape';
 import { ConsultantChoice, resolveConsultant } from '../consultSettings';
 import { DEFAULT_VENDORS, vendorsFrom } from '../vendors';
 import { serverSettingsJson } from '../serverSettingsFile';
-import { selectedFor } from '../prompts';
 
 /**
  * No setting may be silently dropped on its way to the server.
@@ -23,7 +22,6 @@ const CHANGED_CALLERS: Readonly<Record<string, ConsultantChoice>> = {
 };
 
 const CHANGED: { readonly [K in keyof CoaiSettings]: CoaiSettings[K] } = {
-  securityLane: { ...DEFAULTS.securityLane, enabled: true },
   bugzModel: 'local/qwen',
   bugzServer: 'https://bugs.example/',
   // D8 of PLAN_vibe_live_round_fixes.md: a folder the person made, short and local; reaches the server as COAI_CONSULTANT_HOMES.
@@ -33,7 +31,6 @@ const CHANGED: { readonly [K in keyof CoaiSettings]: CoaiSettings[K] } = {
   rounds: { PlanCritique: 5, Architecture: 4, SecurityReliability: 4, UxDxPerformance: 4 },
   thresholds: { PlanCritique: 1, Architecture: 5, SecurityReliability: 5, UxDxPerformance: 5 },
   roleEnabled: { Conventions: true, Architecture: false, SecurityReliability: true, UxDxPerformance: true },
-  dealPlanLenses: true,
   onExhausted: 'escalate',
   maxConcurrency: 7,
   maxPerProvider: 4,
@@ -41,25 +38,9 @@ const CHANGED: { readonly [K in keyof CoaiSettings]: CoaiSettings[K] } = {
   roundTimeoutMinutes: 25,
   credsKey: 'coai-key',
   escalationMinutes: 45,
-  promptsPerRound: { SecurityReliability: ['sec-attack'] },
-  dealCodeLenses: true,
   codeWorkspace: 'worktree',
-  autonomous: true,
-  splitPlan: true,
-  stopLocalWhenQuiet: true,
-  splitWithFable: true,
-  // Issue #131: the non-default scope is what reaches the env block.
-  gatePer: 'task',
-  // Issue #117: a kind whose pair differs from the shipped one is what reaches the env block.
-  commandModels: {
-    claude: { strongest: '', implementation: '', coder: '' },
-    codex: { strongest: 'gpt-6-astra', implementation: 'gpt-6-luna', coder: '' },
-    gemini: { strongest: '', implementation: '', coder: '' },
-    other: { strongest: '', implementation: '', coder: '' },
-  },
   roles: [{ id: 'Requirements', name: 'Requirements we wrote', stage: 'result',
             prompts: [{ id: 'requirements-general', label: 'General' }] }],
-  commands: [{ id: 'custom-1', title: 'Docs', enabled: true, stage: 'code' }],
   // Every part of it changed at once, because this walk changes ONE top-level setting at a time and
   // `consult` is one setting holding five things — a caller map that differs, and four numbers.
   // The same map on both sides, as a value written as definitions and read back would carry it.
@@ -72,20 +53,15 @@ const CHANGED: { readonly [K in keyof CoaiSettings]: CoaiSettings[K] } = {
     idleMinutes: 30,
     enabled: false,
   },
-  // The consultation cadence (research/PLAN_consult_on_a_cadence.md): one setting holding four things,
-  // every one of them changed, for the reason `consult` above gives.
-  cadence: { mode: 'require', every: 4, riskThreshold: 6, riskMax: 2 },
-  // The question consultant (todo/PLAN_question_consultant.md, S4): eight settings in one, every one changed;
+  // The question consultant (todo/PLAN_question_consultant.md, S4): six settings in one, every one changed;
   // `qconsultSettings.test.ts` changes each alone and checks its key.
   qconsult: {
     enabled: false,
-    mode: 'remind',
     rows: [{ id: 'sonnet-disk', vendor: 'claude', runtime: 'claude', model: 'sonnet', baseUrl: '', executablePath: '', key: '', prompt: 'question-disk', enabled: true }],
     prompts: [{ id: 'ask-the-docs', title: 'The docs', capability: 'web', text: 'Read the vendor docs.' }],
     roots: ['D:/projects'],
     rowMinutes: 3,
     questionsPerSession: 4,
-    freeBatches: 1,
     // Not a setting a person changes: which catalog row a row refers to, read from the rows (C2).
     catalogRows: {},
   },
@@ -119,9 +95,9 @@ test('every setting, changed on its own, reaches the server file', () => {
 // would stay green there. Each cap is changed alone here and must arrive as its own key with its own value
 // (research/PLAN_consult_limits_kinds_and_help.md, story 1).
 for (const [cap, key, value] of [
-  ['turns', 'COAI_CONSULT_TURNS', 3],
-  ['callsPerSession', 'COAI_CONSULT_CALLS_PER_SESSION', 4],
-  ['idleMinutes', 'COAI_CONSULT_IDLE_MINUTES', 30],
+  ['turns', 'COAI_CONS_TURNS', 3],
+  ['callsPerSession', 'COAI_CONS_CALLS_PER_SESSION', 4],
+  ['idleMinutes', 'COAI_CONS_IDLE_MINUTES', 30],
 ] as const) {
   test(`the consultant's ${cap}, changed alone, reaches the server as ${key}`, () => {
     const settings = { ...DEFAULTS, consult: { ...DEFAULTS.consult, [cap]: value } } as CoaiSettings;
@@ -143,10 +119,7 @@ test('the file the panel writes is the shape the server parses', () => {
     assert.match(key, /^COAI_[A-Z_]+$/, `${key} is not an env-shaped key`);
     assert.equal(typeof value, 'string', `${key} must be a string, the env carries no other type`);
   }
-  assert.equal(written['COAI_DEAL_PLAN'], 'true');
-  assert.equal(written['COAI_DEAL_CODE'], 'true');
   assert.equal(written['COAI_CODE_WORKSPACE'], 'worktree');
-  assert.deepEqual(JSON.parse(written['COAI_PROMPTS_PER_ROUND']!), { SecurityReliability: ['sec-attack'] });
   // Only the role that is OFF, and spelled the way the server reads it. A key the server does not
   // recognise is a reviewer that keeps running while the panel shows it unticked.
   assert.equal(written['COAI_ENABLED_ARCHITECTURE'], 'false');
@@ -178,27 +151,6 @@ test('a stored vendor keeps its runtime through the parser, not only through the
 
 test('a runtime nobody knows still falls back to codex, which is the one that takes a base URL', () => {
   assert.equal(vendorsFrom([{ id: 'x', runtime: 'llama.cpp', baseUrl: 'https://x/v1' }])[0]!.runtime, 'codex');
-});
-
-test('a round nobody chose is padded with nothing, not with what it resolves to today', () => {
-  // The panel pads the array up to the round being set. Padding with a RESOLVED id would freeze
-  // today's default into a stored choice, so a later change to the default would never reach a
-  // person who had once set round 3 — a fix that was made, lost to a careless whole-file write,
-  // and only noticed because the panel was re-read.
-  const stored: Record<string, string[]> = {};
-  const rounds = [...(stored['Architecture'] ?? [])];
-  while (rounds.length < 3) {
-    rounds.push('');
-  }
-  rounds[2] = 'arch-evolution';
-
-  assert.deepEqual(rounds, ['', '', 'arch-evolution']);
-  // An empty slot resolves the way the server resolves it: this role's universal prompt. Round 1
-  // used to be the conventions pass here; Conventions is a role of its own now, so Architecture's
-  // first round is Architecture's own question.
-  assert.equal(selectedFor('Architecture', 1, { Architecture: rounds }), 'architecture');
-  assert.equal(selectedFor('Architecture', 2, { Architecture: rounds }), 'architecture');
-  assert.equal(selectedFor('Architecture', 3, { Architecture: rounds }), 'arch-evolution');
 });
 
 /**

@@ -48,7 +48,6 @@ import {
   endpointAnswer,
   endpointConflict,
 } from './consultantWrite';
-import { SLOT_LABELS, commandModelTarget, commandModelsAfter } from './commandModels';
 import { ChatDoorRecord } from './chatDoors';
 import { chatDoorsPath, readChatDoors } from './chatDoorsFile';
 import {
@@ -60,7 +59,6 @@ import {
 } from './cliVersions';
 import { rememberCliStatus } from './cliVersionMemory';
 import { askVersion, capture } from './versionProbe';
-import { CADENCE_CAP_MS, CadenceProbes } from './cadenceProbe';
 import { ConsultantHealthPanel } from './consultantHealthPanel';
 import { consultantTabShowing } from './consultantHealthWatcher';
 import { ClaudeProbeCache } from './claudeProbeCache';
@@ -68,15 +66,6 @@ import { ConsultPromptFile } from './consultPromptFile';
 import { QconsultHost, isQconsultCallerKey, type QconsultWriteHooks } from './qconsultHost';
 import { isQconsultCommand } from './qconsultWrite';
 import type { QuestionConsult } from './questionConsults';
-import { securityLaneFrom, securityLaneSave } from './securityLane';
-import { securityTryAnswer, securityTryFailed, securityTryRefusal, securityTryRequest, type SecurityTryResult } from './securityTry';
-import { editSecurityPrompt } from './securityPromptEditor';
-import { SECURITY_PROMPT_WATCH, SecurityPromptTextCache } from './securityPromptFiles';
-import { securityFlowHost } from './securityCommands';
-import { runSecurityCommand, type SecurityFlowHost } from './securityFlows';
-import { promptsDir } from './rolesPrompts';
-import { watchGlob } from './fileWatch';
-import { WATCH_DEBOUNCE_MS, debounced, type Debounced } from './debounced';
 import { RoundsLogCache } from './roundsLogCache';
 import { finishedRounds, RoundCountsCache } from './roundCountsCache';
 import { PLAN_PRICES_SETTING, type PlanPriceRefusal, planPricesFrom, savePlanPrice } from './planPrice';
@@ -91,14 +80,12 @@ import { bugzServerThisSide, readerFor, reportRefusal, saveSetting, userLayer, w
 import { foldedWrite } from './catalogEdit';
 import { asRecord } from './catalogLaunch';
 import { consultantPickWrites } from './consultantPicks';
-import { rowsFor } from './catalogPicks';
 import { clientFilesFor, ClientReader } from './mcpClientsRead';
 import { MOVE_RECORD } from './dataCommands';
 import type { MoveRecord } from './dataMove';
 import * as os from 'node:os';
 import { inCatalogTurn, MIGRATION_TRIGGERS } from './catalogMigrationHost';
 import { isReviewerRow } from './catalogRules';
-import { promptChosen } from './promptsPerRound';
 import { hostExecutableSide, hostFamily, hostKind, type HostKind, hostPlatform, Platform } from './hostSide';
 import { cliBoxFamily, cliPathRefusal, vendorFieldWrite } from './cliPathSave';
 import type { DroppedValue } from './cliPathKeep';
@@ -138,8 +125,6 @@ import { ServerStatus, sideKey, sideLabel } from './coaiInstall';
 import { flushRoleEdits, onRolesRedraw, queueRoleEdit, roleRows, rolesEmbedState } from './rolesHost';
 import { roleEdit } from './rolesMessages';
 import { roleSwitchFollows } from './rolesSwitch';
-import { commandsEmbedState, flushCommandEdits, onCommandsRedraw, queueCommandEdit } from './commandsHost';
-import { commandEdit } from './commandsMessages';
 import { flushChatPresetEdits, onChatPresetsRedraw, pruneDeadModelRows, queueChatPresetEdit } from './chatPresetsHost';
 import { presetEdit } from './chatPresetsMessages';
 import { ModelPrice, PriceTable, priceFor } from './modelPrices';
@@ -231,7 +216,7 @@ import { access } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import { asText } from './asText';
 import { notify, notifyAndAsk, notifyOnce } from './notify';
-import { chosenRoot, coaiDataDir, dataSideName, serverEnv, whereData, type DataLocation } from './dataDir';
+import { chosenRoot, coaiDataDir, dataSideName, whereData, type DataLocation } from './dataDir';
 import { alsoWatchDataDirectories } from './escalationWatcher';
 import { usableDirs, watchedDirs, type WatchedDir } from './escalationDirs';
 import { consultationsHtml } from './roundsLog';
@@ -300,9 +285,7 @@ interface PanelMessage {
   readonly id?: string;
   readonly open?: boolean;
   readonly role?: string;
-  readonly securityField?: string;
   readonly caller?: string;
-  readonly commandModel?: string;
   readonly round?: number;
   readonly editing?: boolean;
   readonly start?: number;
@@ -350,16 +333,8 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
    */
   private readonly claudeProbes: ClaudeProbeCache;
 
-  /** Each recent plan's consultation cadence, asked of `coai-mcp --cadence` and never awaited by a render. */
-  private readonly cadenceProbes: CadenceProbes;
-
   /** The Consultant tab's health blocks — probe, watcher, Check and Copy — composed in `consultantHealthPanel.ts`. */
   private readonly consultantHealth: ConsultantHealthPanel;
-
-  /** Repaints the Security lane tab when a prompt override file changes (research/PLAN_the_security_tab_reads_at_a_glance.md, epic 2). */
-  private readonly securityPromptWatch: { readonly changed: Debounced; readonly stop: () => void };
-  /** The prompt files' states, re-read only for a file whose size or modification time changed. */
-  private readonly securityPromptText = new SecurityPromptTextCache();
 
   private readonly consultPrompt: ConsultPromptFile;
   /** The Question consultant tab's host half — its buttons, its writes, its prompt files (todo/PLAN_question_consultant.md, S4). */
@@ -577,17 +552,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       render: () => this.render(),
       watched: () => anyHeld(this.slots),
     });
-    this.cadenceProbes = new CadenceProbes({
-      executable: () => serverPath(this.context.globalStorageUri)?.fsPath ?? '',
-      // With this window's data directory, for the reason `readProviders` gives: the answer comes out of
-      // the settings file and the session files inside it.
-      run: (executable, args) => capture(executable, args, false, CADENCE_CAP_MS, undefined, serverEnv()),
-      now: Date.now,
-      render: () => { void this.render(); },
-      log: (message) => console.warn(message),
-    });
     this.consultantHealth = this.healthPanel(dataDir);
-    this.securityPromptWatch = this.watchSecurityPrompts(dataDir.fsPath);
   }
 
   /**
@@ -726,11 +691,6 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
         notAnswering: reach.filter((one) => one.reach === 'not-answering').map((one) => one.directory),
       },
     });
-  }
-
-  /** A consultation changed, so every plan's cadence line is asked again — each stays up until its answer lands. */
-  forgetCadence(): void {
-    this.cadenceProbes.forget();
   }
 
   async roundsLog(): Promise<DbLog> {
@@ -1222,7 +1182,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     panel.onDidDispose(() => {
       this.settingsTab.detach(panel);
       this.consultantHealth.pause();
-      void Promise.all([flushRoleEdits(), flushCommandEdits(), flushChatPresetEdits()]);
+      void Promise.all([flushRoleEdits(), flushChatPresetEdits()]);
     });
     // Hidden behind another editor tab: nobody is reading the Consultant tab, so its watcher pauses; shown again, a render
     // decides whether it resumes (the whole-branch review, N2).
@@ -1255,11 +1215,6 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       this.openSections = m.open === true
         ? [...new Set([...this.openSections, m.id])]
         : this.openSections.filter((s) => s !== m.id);
-    } else if (m.type === 'prompt' && m.role !== undefined && m.round !== undefined) {
-      // A setting write like any other, so it is serialised with them (the gate's code round).
-      const { role, round } = m;
-      this.enqueue(() => this.choosePrompt(role, round, String(m.value), from));
-      this.settleQueued(from, m);
     } else if (m.type === 'setting') {
       this.enqueue(() => this.write(settingMessageFrom(m), from));
       this.settleQueued(from, m);
@@ -1267,13 +1222,13 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       if (from.edited(m.editing === true, m.id ?? '', Number(m.start), Number(m.end))) {
         // A roles prompt still settling is written first: the repaint reads the prompt files, and one that overtook the
         // write would draw the box from the text being replaced (E4.3).
-        void Promise.all([flushRoleEdits(), flushCommandEdits(), flushChatPresetEdits()]).then(() => this.render());
+        void Promise.all([flushRoleEdits(), flushChatPresetEdits()]).then(() => this.render());
       }
     } else if (m.type === 'roles') {
       this.track(from, m, () => this.roleEdited(m.edit));
-    } else if (m.type === 'commands' || m.type === 'chatPresets') {
-      // An edit from the Settings page's Commands (E4.4) or Chat (E4.6b), into the one queue its own tab uses too.
-      this.track(from, m, () => (m.type === 'commands' ? queueCommandEdit(commandEdit(m.edit)) : queueChatPresetEdit(presetEdit(m.edit))));
+    } else if (m.type === 'chatPresets') {
+      // An edit from the Settings page's Chat (E4.6b), into the one queue its own tab uses too.
+      this.track(from, m, () => queueChatPresetEdit(presetEdit(m.edit)));
     } else if (m.type === 'command') {
       this.track(from, m, () => this.run(m.command, m.id, from));
     } else if (m.type === 'ready') {
@@ -1347,34 +1302,8 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   dispose(): void {
     settleEverything(this.inFlight);
     this.consultantHealth.dispose();
-    // Stop first, then cancel: both are synchronous, so no file event can re-arm the debounce in between.
-    this.securityPromptWatch.stop();
-    this.securityPromptWatch.changed.cancel();
     this.rolesRedraw.dispose();
-    this.commandsRedraw.dispose();
     this.chatPresetsRedraw.dispose();
-  }
-
-  /**
-   * A prompt's text is edited in an ordinary editor, so nothing on the page knows it changed: watch the files the server
-   * reads, and repaint only while the Settings page is open. Based at the data directory, as the health watcher is,
-   * because `prompts/` may not exist until the first override is written.
-   */
-  private watchSecurityPrompts(dataDir: string): { readonly changed: Debounced; readonly stop: () => void } {
-    const changed = debounced(() => {
-      if (this.settingsTab.view !== undefined) void this.render();
-    }, WATCH_DEBOUNCE_MS);
-    return { changed, stop: watchGlob(dataDir, SECURITY_PROMPT_WATCH, changed) };
-  }
-
-  /** What the Security lane tab's buttons run against: this provider's write queue, write path and stored setting. */
-  private securityCommandHost(from: SurfaceSlot): SecurityFlowHost {
-    return securityFlowHost({
-      lane: () => securityLaneFrom(this.read(vscode.workspace.getConfiguration('coai'))('securityLane')),
-      dataDir: this.dataDir,
-      enqueue: (work) => this.enqueue(work),
-      write: (field, value) => this.write({ key: 'securityLane', securityField: field, value }, from),
-    });
   }
 
   /**
@@ -1429,7 +1358,6 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       vendors: shown,
       // The Settings page draws every row (PLAN_one_model_catalog.md E4): `vendors` above is the reviewers only.
       catalogRows: vendors,
-      securityTry: this.securityTry,
       ...(await this.newPageReads(server)),
       // The data folder's last move (E4.5), which survives a reload so the delete can be offered — a read of memory.
       lastDataMove: this.context.globalState.get<MoveRecord>(MOVE_RECORD),
@@ -1448,8 +1376,6 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       questions: this.watcher.openQuestions,
       openSections: this.openSections,
       sessions,
-      // Not asked at all while the cadence is off: the server would answer `null` for every session.
-      cadence: settings.cadence.mode === 'off' ? [] : this.cadenceProbes.lines(sessions),
       // Never awaited: the probe and the watcher land on their own and repaint (epic 5 of the consultant plan). Only while
       // the Consultant tab is SHOWING — --consultants asks every CLI its version — and paused otherwise (the review, N2).
       consultantHealth: this.consultantHealth.stateWhile(consultantTabShowing(this.settingsTab.view?.visible === true, heldSettingsTab())),
@@ -1467,10 +1393,6 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       snippetStatus: await pastedSnippetStatus(),
       consultPrompt: await this.consultPrompt.readConsultPrompt(),
       qconsultPromptOverrides: await this.qconsult.overrides(),
-      // Read only while the Settings page exists: the sidebar never draws a prompt card.
-      securityPromptDir: promptsDir(this.dataDir.fsPath),
-      securityPromptText: this.settingsTab.view === undefined ? undefined
-        : await this.securityPromptText.states(this.dataDir.fsPath, settings.securityLane.prompts.map(p => p.id)),
       qconsultPlaces: await this.qconsult.places(settings.qconsult.roots),
       // Which rows' CLI paths this side skips as the other side's — asked of the disk HERE (paths per side, E1.5).
       otherSideClis: otherSideClis(vendors, hostExecutableSide()),
@@ -2025,31 +1947,6 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   }
 
   /**
-   * One role's prompt for one round.
-   *
-   * <p>Stored as <code>role -&gt; [round1, round2, ...]</code> — the shape the server reads and
-   * the shape a person reasons in. Rounds nobody has chosen stay EMPTY rather than being filled
-   * with what they resolve to today: both reviewers of this change caught that padding them
-   * freezes today’s default into a stored choice the moment anyone touches a later round, so a
-   * later change to that default would never reach them again. Both halves read an empty entry
-   * as "not chosen".</p>
-   */
-  private async choosePrompt(role: string, round: number, id: string, from: SurfaceSlot): Promise<void> {
-    const config = vscode.workspace.getConfiguration('coai');
-    // Read and written through THIS side: `promptsPerRound` is an overlaid setting, and the picker used to read the
-    // shared layer and write straight to the global one — one side's choice landing on every side.
-    const settings = settingsFrom(this.read(config));
-    const pick = promptChosen(settings.promptsPerRound, role, round, id, settings.rounds[role] ?? 1);
-    if (!pick.ok || !(await this.save(config, 'promptsPerRound', pick.value))) {
-      // A dropdown too, and not in the write queue: `save` has said why, and the box is put back.
-      await afterTheWrite(() => this.snapBack(from))();
-      return;
-    }
-    // Started, not awaited: this runs in the write queue, and a render waits for that queue.
-    await afterTheWrite(() => this.render())();
-  }
-
-  /**
    * One setting, written globally.
    * <p>Global rather than workspace: the vendors you review with and the language you read in are
    * properties of YOU, not of one checkout — and a workspace write would surprise anyone whose
@@ -2144,19 +2041,6 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   }
 
   private async write(message: SettingMessage, from: SurfaceSlot): Promise<void> {
-    if (message.key === 'securityLane' && message.securityField) {
-      const config = vscode.workspace.getConfiguration('coai');
-      const read = this.read(config);
-      // Nothing is saved against a malformed setting: writing the panel's stand-in would replace
-      // what the person wrote in settings JSON, which is the one place they are told to correct it.
-      // Named against the rows the page OFFERED: the rows ticked Security lane (E4.2).
-      const offered = rowsFor('security', vendorsFrom(read('vendors')));
-      const next = securityLaneSave(read('securityLane'), message.securityField, message.value, offered);
-      if (next !== undefined) {
-        await this.save(config, 'securityLane', next);
-      }
-      return;
-    }
     const write = settingWrite(message);
     if (write === undefined) {
       return;
@@ -2225,15 +2109,6 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
         if (write.key === 'consultantRow') {
           await saveOrSnapBack(() => this.savePick(write.caller, String(write.value ?? '')), afterTheWrite(() => this.snapBack(from)), write.value, write.control);
         }
-        return;
-      }
-      case 'commandModel': {
-        // One slot of one caller kind, merged into `commandModels` like a consultant row into
-        // `consultants` — read through the SIDE-AWARE reader for the same reason, since it is one of
-        // the overlaid settings. A cleared box removes the field, which is how a person gets the
-        // shipped model back (issue #117).
-        const current = this.read(config)('commandModels');
-        await this.saveWrite(config, 'commandModels', commandModelsAfter(current, write.commandModel, write.key, String(write.value ?? '')), write, from);
         return;
       }
       case 'plain': {
@@ -2639,23 +2514,6 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
           await this.customModel(id, from);
         }
         break;
-      case 'editSecurityPrompt':
-        if (id !== undefined) await editSecurityPrompt(this.dataDir, id,
-          securityLaneFrom(this.read(vscode.workspace.getConfiguration('coai'))('securityLane')));
-        break;
-      case 'addSecurityRun':
-      case 'removeSecurityRun':
-      case 'newSecurityPrompt':
-      case 'restoreSecurityPrompt':
-      case 'removeSecurityPrompt':
-      case 'clearSecurityConditions':
-        await runSecurityCommand(command, id, this.securityCommandHost(from));
-        break;
-      case 'customCommandModel':
-        if (id !== undefined) {
-          await this.customCommandModel(id, from);
-        }
-        break;
       case 'resetApiSetting':
         await this.resetApiSetting(id, from);
         break;
@@ -2802,9 +2660,6 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
         if (id !== undefined) {
           await this.consultantHealth.checkModel(id);
         }
-        break;
-      case 'trySecurity':
-        await this.trySecurity(id ?? '');
         break;
       case 'clearKimiMarker':
         await this.clearKimiMarker(id ?? '');
@@ -3037,27 +2892,6 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     }
 
     await this.write({ key: 'model', value: model.trim(), vendor: id }, from);
-  }
-
-  /**
-   * "another model…" in a split-order model picker (issue #117): ask for the name, then write it
-   * through the same route the picker itself uses. `id` is `<caller kind>:<slot>`.
-   */
-  private async customCommandModel(id: string, from: SurfaceSlot): Promise<void> {
-    const target = commandModelTarget(id);
-    if (target === undefined) {
-      return;
-    }
-    const model = await askPerson(() => vscode.window.showInputBox({
-      title: `${SLOT_LABELS[target.slot]} model for ${target.label}`,
-      prompt: 'The model name the split order should give this assistant. Empty goes back to the default.',
-      placeHolder: 'e.g. fable, gpt-6-astra, gemini-pro-latest',
-    }));
-    if (model === undefined) {
-      return; // dismissed — the picker snaps back to the saved value on re-render
-    }
-
-    await this.write({ key: target.slot, value: model.trim(), commandModel: target.kind }, from);
   }
 
   /** A preset, or a name and an endpoint typed in — the list is not meant to stay at two. */
@@ -3459,12 +3293,6 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     return this.features?.of(serverPath(this.context.globalStorageUri)?.fsPath, serverRun) ?? Promise.resolve(NO_CACHE_YET);
   }
 
-  /** How long Try it waits: one classification of at most 64 K characters, never a vendor turn. */
-  private static readonly TRY_SECURITY_CAP_MS = 15_000;
-
-  /** What the installed binary last said about a sample — this window's, drawn on the Settings page's Security lane tab. */
-  private securityTry: SecurityTryResult | undefined;
-
   /** The MCP clients' config files, each read again only when it changed (E4.5). */
   private readonly clients = new ClientReader();
 
@@ -3474,10 +3302,10 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   }
 
   /**
-   * What only the Settings page draws — the roles' prompt files (E4.3), the command texts (E4.4) and the MCP
+   * What only the Settings page draws — the roles' prompt files (E4.3) and the MCP
    * clients' config files (E4.5) — read only while that page can be shown, so a sidebar repaint reads no file.
    */
-  private async newPageReads(server: ServerStatus): Promise<Pick<PanelState, 'roles' | 'commands' | 'mcpClients'>> {
+  private async newPageReads(server: ServerStatus): Promise<Pick<PanelState, 'roles' | 'mcpClients'>> {
     if (!this.newPageCanShow()) {
       return {};
     }
@@ -3486,7 +3314,6 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
 
     return {
       roles: await rolesEmbedState(version),
-      commands: await commandsEmbedState(version),
       mcpClients: await this.clients.read(clientFilesFor(os.homedir(), folder), folder),
     };
   }
@@ -3494,26 +3321,8 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   /** A change to the roles' shape redraws the Settings page's Roles & prompts (E4.3). */
   private readonly rolesRedraw = onRolesRedraw(() => this.render());
 
-  /** The same for the gate's commands, edited from the Settings page's Commands or the Gate commands tab (E4.4). */
-  private readonly commandsRedraw = onCommandsRedraw(() => this.render());
-
   /** The same for the chat presets, edited from the Settings page's Chat or the Chat presets tab (E4.6b). */
   private readonly chatPresetsRedraw = onChatPresetsRedraw(() => this.render());
-
-  /**
-   * Try it (PLAN_one_model_catalog.md E4.2): the sample and the stored lane, as a round would send it, to
-   * `coai-mcp --check-security` on STDIN — a sample can hold a token, and an argument is in process listings. Refused
-   * before a spawn when the binary cannot answer it or the sample is too long; the answer, or why there is none, is drawn.
-   */
-  private async trySecurity(sample: string): Promise<void> {
-    const features = (await this.binaryFeatures()).features;
-    const server = serverPath(this.context.globalStorageUri);
-    const refusal = server === undefined ? 'coai-mcp is not installed on this side.' : securityTryRefusal(sample, features);
-    this.securityTry = refusal.length > 0 || server === undefined
-      ? securityTryFailed(sample, refusal)
-      : await this.askCheckSecurity(server.fsPath, sample, features);
-    await this.render();
-  }
 
   /** How long the clear mode may take: it reads a few `/proc` entries and deletes one file. */
   private static readonly CLEAR_MARKER_CAP_MS = 20_000;
@@ -3535,13 +3344,6 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     if (executable.length > 0) {
       await this.refreshProviders(executable);
     }
-  }
-
-  private async askCheckSecurity(executable: string, sample: string, features: readonly string[]): Promise<SecurityTryResult> {
-    const lane = securityLaneFrom(this.read(vscode.workspace.getConfiguration('coai'))('securityLane'));
-    const { code, output } = await serverRun(executable, undefined, securityTryRequest(sample, lane, features))(['--check-security'], PanelProvider.TRY_SECURITY_CAP_MS);
-
-    return securityTryAnswer(sample, code, output);
   }
 
   /** How long a close may take. It is one small write behind a repository lock, not a vendor turn. */

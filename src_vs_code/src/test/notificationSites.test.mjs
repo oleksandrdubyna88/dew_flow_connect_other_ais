@@ -287,7 +287,9 @@ test('a `code` belongs to a notice, and an object that merely has a `code` prope
 // registered command does (`terminal-door-failed`, one more site, the same code).
 // 183 -> 185 on 2026-11-17 (E2.S2 of research/PLAN_auto_never_asks_a_person_E2.md), two sites: the one notification of the reset of When the rounds run out to
 // Auto, in its two forms (`on-exhausted-migrated`, an `outcome`), and the warning for a settings file that refused the change (`on-exhausted-not-reset`).
-const PLACES_THIS_SPEAKS = 185;
+// 185 -> 180 on 2026-11-22 (v2 E3.S2): the commands page and the Security lane tab went, with their five notices
+// (`command-edit-refused`, `commands-page-failure`, `remove-command`, `security-lane-command`, `security-lane-confirm`).
+const PLACES_THIS_SPEAKS = 180;
 
 test('the POPULATION changes only on purpose', () => {
   // Routing must not move it in either direction: the completeness promise is made over this

@@ -1,0 +1,4 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: s1-shell-core
+title: "Entry, lazy loader, ids, per-module bundles, firewall, budgets"
+dependsOn: []

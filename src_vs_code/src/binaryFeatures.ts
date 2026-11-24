@@ -28,10 +28,6 @@ export const FEATURES = {
   cliEffort: 'cliEffort',
   /** E2.3: a consultant on an api row, or a codex row on somebody else's endpoint. */
   apiConsultant: 'apiConsultant',
-  /** E2.4: COAI_SECURITY_LANE's `signals` and a prompt's `words` — an older binary refuses those members. */
-  securityWords: 'securityWords',
-  /** E2.4: `--check-security [--validate]` on stdin. */
-  checkSecurity: 'checkSecurity',
   /** An api row's `stream`: its answer asked for as a stream (research/PLAN_api_streaming.md). */
   apiStream: 'apiStream',
   /** C2 (the epics 1–3 consultation): a consultant entry's and a question row's `row` — the whole catalog row. */

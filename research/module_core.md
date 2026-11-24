@@ -17,6 +17,16 @@ for query/execution calls and SQL statements, rather than generic prose words su
 `update`. These are routing hints, not vulnerability claims. `SecurityContext` retains supporting
 material when another file activates a module, fences it as data, and reports omitted coverage.
 
+## v2: four outcomes, and no state in which the machine waits (2026-11-22, E1.S1)
+
+`RoundVerdict` is a closed hierarchy of four records — `Proceed`, `Revise`, `GoodEnough`, `NotReviewed` — and `RoundMachine` has no
+transition that waits for a person. The held gate (`HumanGate`), hold questions, request questions, `escalationsUsed`, the per-stage policy
+(`StagePolicy`, `EscalationStep`, `PanelConfig.OnExhausted`/`Autonomous`) and the verdicts `continue_anyway`, `call_human` and `escalated` are gone from the
+types. Where v1 called a person, v2 ends the round (`AutoVerdicts`, below): nobody answered is `NotReviewed`, rounds spent is `GoodEnough`, and a
+`resolve` is the one door the stage advances through. A session file an older build wrote still loads — the removed members land in the `Unknown`
+bag of `SessionState` and `PanelConfig`, which a save writes back — and `LegacyHold` reads the bag so the v2 data migration can find held sessions.
+Everything below that still says "held", "escalation", `call_human` or "person" in an older section is history of the v1 gate unless it says v2.
+
 ## Flow
 
 ```mermaid
@@ -26,7 +36,7 @@ flowchart LR
   raw2[codex -o file\nschema-bound] --> RP
   RP --> DD[FindingDedup.Merge\ncategory+file+±5 lines+same remark]
   DD --> GR[GateRule.Evaluate\nblocking+major, prior rejections discounted]
-  GR --> RM[RoundMachine.CompleteRound\nverdict: proceed / revise / continue / human / escalate]
+  GR --> RM[RoundMachine.CompleteRound\nverdict: proceed / revise / good_enough / not_reviewed]
   RM --> RES[RoundMachine.Resolve\ndecisions with reasons → next round's memory]
   RES --> DB[(rounds database\nwhat was decided)]
   DD --> SF[StuckFindings.SurvivedAcceptance\nthis round vs earlier decisions of the same stage]
@@ -71,10 +81,11 @@ flowchart LR
 | `StuckFindings`, `EarlierDecision`, `Survivors` | `Gate/StuckFindings.cs` | how many of this round's findings the caller had already ACCEPTED — phase 2's instrument, calling nothing |
 | `SessionState`, `PanelConfig`, `SessionKey` | `Rounds/SessionState.cs` | immutable session; key = normalised repo path + branch (+ a document, + a feature's plan) |
 | `Stage`, `StageDescriptor`, `Stages` | `Rounds/SessionState.cs`, `Rounds/Stages.cs` | the four stages, and the ONE table of what each answers by name — bucket, phrase, kind, commands, next stage, sentences, whether it records a commit |
-| `RoundMachine`, `RoundVerdict`, `Decision`, `Transition` | `Rounds/RoundMachine.cs` | ordering by refusal; the escalation ladder; resolve feeds rejections forward (REJECTIONS only: `Decision` is `Accepted`, `Rejected` and `ProceededOver`, and the last — a finding a person's Proceed carried the stage over — is never added to the standing rejections nor read by `GateRule`); `Resolve(state, decisions, HumanDecision personsDecision, bool callerClaimsProceed)` takes the PERSON's decision and judges the caller's claim beside it (`ClaimRefusal`) — a tool argument never releases a held gate |
-| `HumanDecision` | `Rounds/HumanDecision.cs` | what a person chose on a hold's notice: `None` (prose), `Continue`, `Fix`, `Discuss` — all of which keep the findings alive — and `Proceed`, which ships with them open; `Proceed` is applied by `RoundMachine.Resolve` only (`ApplyHumanDecision` leaves it alone) |
+| `RoundMachine`, `RoundVerdict`, `Decision`, `Transition` | `Rounds/RoundMachine.cs` | ordering by refusal; **four verdicts and no more** (v2, E1.S1): `Proceed`, `Revise`, `GoodEnough`, `NotReviewed` — a closed hierarchy with a private constructor, so a fifth cannot be added outside the file; no ladder, no hold, no wait; `Resolve(state, decisions)` feeds rejections forward (REJECTIONS only: `Decision` is `Accepted` and `Rejected`) and is the ONE door a stage advances through (`AdvanceOnResolve`) |
+| `AutoVerdicts` | `Rounds/AutoVerdicts.cs` | the three decisions that used to call a person, each now ending the round for good (v2): nobody answered (`NotReviewed`), a feature review at its two-round cap (`GoodEnough`, or `NotReviewed` when nobody answered), the rounds running out (`GoodEnough`); every reason begins `policy auto:` so the note and the log say who decided |
+| `LegacyHold` | `Rounds/LegacyHold.cs` | read-only knowledge of a session an older build HELD: `humanGate`, `holdQuestions`, `requestQuestions` and `escalationsUsed` are no longer fields of `SessionState`, they survive in its `Unknown` bag; `Stands` is the one eligibility test and `Released` the one conversion (nothing held, `AwaitingResolve` + `AdvanceOnResolve` set together so the next `resolve` moves the stage). Used by the v2 migration and by convert-on-load (`module_server.md`, *The v2 data migration*); deleted with them
 | `FeatureBases` | `Rounds/FeatureBases.cs` | the base a feature review was opened against, held to on every later call of the same plan — a different base is refused naming BOTH SHAs, and `again` is the door |
-| `SecondRoundGround` | `Rounds/SecondRoundGround.cs` | why a feature review's second round may run (D23): a reviewer failure, a blocking finding, the person's request — `None` until round 1 gave one; on `SessionState.SecondRound`, read by `BeginFeatureRound` alone |
+| `SecondRoundGround` | `Rounds/SecondRoundGround.cs` | why a feature review's second round may run (D23): a reviewer failure, a blocking finding (`PersonAsked` is read from old files and never written in v2) — `None` until round 1 gave one; on `SessionState.SecondRound`, read by `BeginFeatureRound` alone |
 | `FeatureGate` | `Feature/FeatureGate.cs` | the feature gate's decisions that are numbers, as against `FeatureBudget`'s measurements: the three-epic floor (D17) |
 | `RoleDefinition`, `RoleCatalog`, `RoleStages` | `Rounds/RoleCatalog.cs` | which roles exist and which prompt a round of one gets; `Builtin` is the embedded seed; `RoleStages.All` is the one list of stages a role may belong to |
 | `CadenceMode`, `EpicGroup`, `CadenceRule` | `Cadence/CadenceRule.cs` | the consultation cadence's arithmetic: groups of `every` epics counted from the plan's OWN first epic, the risk question from `threshold` epics, nothing past `MostEpics` (14); the defaults 3 / 5 / 3 are the numbers the panel is tested to agree with |
@@ -214,19 +225,13 @@ flowchart LR
   to read, not a throw to catch.
 - **Verdict at completion, stage advance at resolve.** `CompleteRound` computes the verdict and sets
   `AdvanceOnResolve`; only `Resolve` moves the stage. So findings are never left undecided: even a
-  passing round's minors must be accepted/rejected before the next stage opens. That now includes a
-  person's Proceed (2026-10-22): it advances the stage in `Resolve` and nowhere else — not in
-  `ApplyHumanDecision`, not in `status` — and it arrives as a `HumanDecision` the server read from the
-  hold's notice, never as the AI's `humanDecision` argument, which `Resolve` receives as a claim
-  (`ClaimRefusal`: refused when it would change the outcome, ignored when redundant). A Proceed on a gate
-  that is not held is `None`; on a held gate whose round the AI already resolved it is admitted without
-  decisions (G6) and releases the hold with its `HoldQuestions`. It authorises THIS transition only:
-  the findings it carried the stage over arrive as `Decision.ProceededOver` records (only the server builds
-  them, and `Resolve` refuses one when no Proceed is being consumed, `ProceededOverNeedsAProceed`), which
-  are not standing rejections — the same defect raised in a later round, `again: true` included, gates in
-  full (plan §13.1).
-- **The ladder** (`ReviewerEffortUp → ReviewerModelUp → ArbiterModelUp`) fires one step per
-  exhausted stage and resets the round counter; exhausted ladder falls through to `CallHuman`.
+  passing round's minors must be accepted/rejected before the next stage opens. **v2 (E1.S1):** there is
+  no person's Proceed, no `HumanDecision`, no `Decision.ProceededOver` and no claim to judge — `Resolve(state,
+  decisions)` takes the caller's decisions and nothing else, and a held gate (`HumanGate`) is not a field
+  any more, so the machine has no state in which it waits.
+- **No ladder, no escalation.** `ReviewerEffortUp`, `ReviewerModelUp`, `ArbiterModelUp` and `CallHuman` are
+  gone with `StagePolicy`/`EscalationStep` and `PanelConfig.OnExhausted`: rounds that run out are
+  `GoodEnough` (`AutoVerdicts.ExhaustedReason`), always.
 - **A rejection without a reason refuses the whole resolve** — the reason is what the discount rule
   compares future `why`s against.
 - **"Stuck" is a finding the caller ACCEPTED and was handed back, and it is not `re_raised`.** That one
@@ -320,7 +325,7 @@ not a finished one.
 
 **Why a table.** §9 of the feature-review plan counted the switches: two were exhaustive
 (`BucketFor`, `ProviderSettings.Reviews` in the server) and four swallowed an unknown stage with a
-discard — `StageName` said "done" (so a document review's `call_human` notice read "The **done** gate
+discard — `StageName` said "done" (so a document review's held-gate notice, which v2 no longer has, read "The **done** gate
 needs your decision"), `ReviewKindOf` said "code", `CommandStageOf` said `Any`, and `Finish` said
 "The code stage is complete" for any session that reached `Done`, a document review included. A
 fourth stage would have inherited all four without a compile error. Every existing bucket, phrase and
@@ -373,7 +378,7 @@ two rules a pure transition cannot decide — the head and the base — extracte
 flowchart LR
   key["SessionKey.For(repo, ':feature', '', plan)<br/>repo#:feature#feature:&lt;plan key&gt;"]
   st["SessionState.Feature<br/>IsFeatureSession"]
-  begin["RoundMachine.BeginFeatureRound<br/>not a feature session · held gate · unresolved · done<br/>two rounds run · round 2 with no ground (D23)"]
+  begin["RoundMachine.BeginFeatureRound<br/>not a feature session · unresolved · done<br/>two rounds run · round 2 with no ground (D23)"]
   again["BeginFeatureRoundAgain<br/>Done → FeatureReview, the count kept: its second round, or refused"]
   bases["FeatureBases.WhyNot(recorded, asked, again)<br/>a different base names both SHAs"]
   gate["PanelConfig.ShippedDefault(stage)<br/>Plan · Code · Feature — one road for three sites"]
@@ -391,18 +396,16 @@ flowchart LR
   because the document segment comes before the feature one. `SessionState.Feature` is the one
   field that says which kind a session is, normalised where it is declared like `Document`, and
   `IsFeatureSession` is derived from it.
-- **`BeginFeatureRound` has six refusals, in the document gate's order and then D23's** — not a feature
-  session, a held human gate, an unresolved round, a finished review, two rounds already run, and a
-  second round no ground admits — and no `PlanProceeded` check: the plan IS the input. The held gate is
-  asked BEFORE the finished stage on purpose, and the engine keeps the same order before its skip branch,
-  so un-ticking every vendor cannot dissolve a person's decision. `BeginFeatureRoundAgain` reopens a
+- **`BeginFeatureRound` has five refusals (v2; six before E1.S1 removed the held-gate one), in the document gate's order and then D23's** — not a feature
+  session, an unresolved round, a finished review, two rounds already run, and a
+  second round no ground admits — and no `PlanProceeded` check: the plan IS the input. (The held-gate refusal, asked BEFORE the finished stage so that un-ticking every vendor could not dissolve a person's decision, left with the hold.) `BeginFeatureRoundAgain` reopens a
   finished review for its SECOND round with the count KEPT (S3.4 — it used to reset the count, which
   handed a finished review a whole new budget over the same base), so the reopened state meets the same
-  admission: the person's ground runs round 2, two rounds run refuse a third, no ground is refused naming
-  the three. The three other begins refuse a feature session BY NAME (`ThisIsAFeatureSession`), as they
+  admission: a recorded ground runs round 2, two rounds run refuse a third, no ground is refused naming
+  the two grounds. The three other begins refuse a feature session BY NAME (`ThisIsAFeatureSession`), as they
   refuse a document session — one budget, one job.
 - **Another base is a fresh review** (§4.3, from the code review of 2026-09-26).
-  `RoundMachine.FreshFeatureReview(state)` starts over the stage's count, its escalations, its
+  `RoundMachine.FreshFeatureReview(state)` starts over the stage's count, its escalations (none in v2), its
   standing `Rejections` AND its second-round ground, whatever the stage was: a rejection made in one
   review must not discount a finding in a different one, and an open review reopened against another
   base ran as round 2 of a budget that was not its own. It is a state function rather than a transition
@@ -431,7 +434,7 @@ flowchart LR
 
 ### The second round, only when it is needed (2026-09-26, S3.4 of the feature-review plan — D23)
 
-A feature review is one round unless it needs another, and "needs" is exactly three things. The machine
+A feature review is one round unless it needs another, and "needs" is exactly two things (a reviewer failed, a blocking finding came back). The machine
 decides all of it; the server only shapes the round it admitted.
 
 ```mermaid
@@ -443,58 +446,35 @@ flowchart TD
   blocking --> which{"round 1, and min(2, budget) allows?"}
   failure --> which
   which -- yes --> revise["revise, 1 round left — the ground on the state"]
-  which -- no --> human["call_human, the gate held<br/>a blocking finding still standing · a failure again · nobody answered again"]
-  which -- "no, under policy auto" --> auto["good_enough with its reason (a ground) · not_reviewed (nobody answered)<br/>no hold — AdvanceOnResolve"]
-  person["ApplyPersonsRequest(state, Continue|Fix)<br/>feature · no gate · one round run · no ground yet"] --> asked["SecondRound = PersonAsked"]
+  which -- no --> auto["good_enough with its reason (a ground) · not_reviewed (nobody answered)<br/>no hold — AdvanceOnResolve"]
   revise --> begin["BeginFeatureRound: round 2 admitted on the ground, and on nothing else"]
-  asked --> begin
   begin -- "two rounds run" --> third["refused: at most two, ever"]
 ```
 
 - **`SecondRoundGround`** (`Rounds/SecondRoundGround.cs`) is the ground, on `SessionState.SecondRound`,
   serialised by name — `None` until round 1 gave one, and `None` again the moment the round it admitted
   completes, because completing it spends it. `ReviewerFailure` and `BlockingFinding` are written by
-  `CompleteRound`; `PersonAsked` only by `ApplyPersonsRequest`, from a `HumanDecision` — the same
-  `Continue`/`Fix` a held gate is answered with — and never from an argument.
-- **`RoundCompletion`** (`Rounds/RoundCompletion.cs`, 2026-11-17) holds the two places a completed round used to call a person, each a fork between the person and policy auto:
-  `NobodyAnswered` (a plan, code or document round no ordinary reviewer answered) and `FeatureAtItsCap`. A pure move out of `RoundMachine` — the file is at its size cap
-  — so that `CompleteRound` (`Judged` holds what follows a round somebody answered) and `CompleteFeatureRound` stay within cyclomatic complexity 4. Auto is asked first, as before.
-- **Policy auto never reaches `call_human` here** (`AutoVerdicts.FeatureAtItsCap`, 2026-11-17, `research/PLAN_auto_never_asks_a_person_E1.md` § 8). A feature review at its cap with a ground is `good_enough` — its `Reason` says which ground ("policy auto: …"), `HumanGate` stays false and `SecondRound` is spent — or `not_reviewed` when `reviewers.Answered == 0`: no ordinary reviewer answered, and the verdict says so (a security-lane finding may still stand beside it). The round-1 retry is unchanged (below its cap a round nobody answered still answers `revise`: that is not a `call_human` site). The same two verdicts close the other stages: `CompleteRound` answers `not_reviewed` for a round nobody answered and `Exhausted` answers `good_enough` for spent rounds, each setting `AwaitingResolve` and `AdvanceOnResolve`, so a `resolve` that decides every pending finding moves the stage: with none pending (no finding, nothing the security lane raised) one empty `resolve` does, and with a finding pending (a security-lane finding beside a round no ordinary reviewer answered) an empty `resolve` is refused until each finding has its decision (`SecurityLaneRoundTests`). Every other policy is as before. Policy auto is `PanelConfig.IsAutonomous`; every config the server writes for auto sets it with `OnExhausted = GoodEnough` and never apart from it (a file read back through the JSON constructor, `SessionState.cs:106-110`, takes the two members as stored, so a hand-edited file could carry them apart); `NotReviewed` carries a reason, `GoodEnough` an optional one (empty for every non-auto `good_enough`).
+  `CompleteRound`. **v2 (E1.S1):** `PersonAsked` is never written — nobody can ask for a round any more; the
+  member stays only so a session file an older build wrote still reads, and `ApplyPersonsRequest`,
+  `RecordQuestion`, `AsksForTheGate` and `RequestQuestions` are gone.
+- **`AutoVerdicts`** (`Rounds/AutoVerdicts.cs`) holds the three places a completed round used to call a person; in v2 each ends the round for good, with no hold:
+  `NobodyAnswered` (a plan, code or document round no ordinary reviewer answered → `not_reviewed`), `FeatureAtItsCap` (a feature review at its two-round cap → `good_enough`, or
+  `not_reviewed` when nobody answered) and `ExhaustedReason` (the rounds running out → `good_enough`). Each sets `AwaitingResolve` and `AdvanceOnResolve`, so a `resolve` that decides every pending finding
+  moves the stage: with none pending one empty `resolve` does, and with a finding pending (a security-lane finding beside a round no ordinary reviewer answered) an empty `resolve` is refused until each
+  finding has its decision. The reasons begin `policy auto:` — the words are kept, so a note on a v1 round and one on a v2 round read alike.
 - **`CompleteRound` routes the feature stage to `CompleteFeatureRound`.** Everything the gate computed
   stays; what changes is which verdict it becomes. No ground closes the review on `resolve` however
   many findings gate (`good_enough` over the threshold, `proceed` at or under it): the findings are
   decided, the accepted fixes land as pull requests, and no second review reads them. A ground in round
   1 is `revise` with one round left — capped by the operator's own budget, so `COAI_MAX_ROUNDS_FEATURE=1`
-  runs no retry and a bigger number is still two. A ground in round 2 is `call_human` with the gate
-  held. Nobody answering is a failure whatever the failure list says, so the gate does not fail open
-  over a round of stood-down reviewers either — it buys a retry, then a person.
+  runs no retry and a bigger number is still two. A ground in round 2 is `good_enough` (`not_reviewed`
+  when nobody answered, over a round of stood-down reviewers too: it buys one retry, then proceeds).
 - **`Resolve` keeps the feature stage's count into `Done`.** Every other stage starts the next at zero;
   a finished feature review has to remember whether it ran one round or two, because `again` reopens
   it for its second or is refused a third, and the machine can only tell which from the count.
-- **A person's fresh set starts the ground over** (`ApplyHumanDecision`): what admitted the round that
-  called them has been spent, and the fresh set's own first round decides whether it needs a second.
-  `ApplyPersonsRequest` records nothing on a held gate for that reason — a fresh set is a different
-  promise — and nothing after two rounds, which the begin refuses whoever asks. WHICH answer is the
-  request is the engine's check (`PersonsRequest`, in the server), and the rule is identity.
-- **The request is bound to a question asked FOR it** (2026-09-27, the gate's finding #27 on epic 3's
-  code round). `SessionState.RequestQuestions` holds the `ask_human` question ids asked on a feature
-  session after its first round while no hold stands, written by `RoundMachine.RecordQuestion(state, id)`
-  — the one function that says where a question's answer may later count: on the current hold
-  (`HoldQuestions`) when the gate is held, as a request question when the session is a feature session
-  that can still be asked for its second round (one round run, no ground, not held — narrowed from "a
-  round run" on 2026-10-03), nowhere otherwise (a question asked BEFORE round 1 is about whatever it
-  asked, and binding the request to it was the clock rule in a new coat). **Its predicate is
-  `RoundMachine.AsksForTheGate(state)`** (2026-10-03, `research/PLAN_ask_human_is_for_the_gate.md`, G1) — the
-  same function the server asks whether an `ask_human` question becomes a CARD at all, so the binding and
-  the card are one decision; every other question is the AI's own and is asked in its conversation. `ApplyPersonsRequest` spends the list
-  with the request; `CompleteFeatureRound` empties it (the questions that may request round 2 are the
-  ones asked after round 1 completed), and so do `FreshFeatureReview` and a person's fresh set. Before
-  this the newest `continue`/`fix` NEWER than round 1 was the request, so any question of the session
-  answered that way admitted round 2 — one asked while the review was still skipped, one an older build
-  filed. Normalised where declared, as `HoldQuestions` is.
-- **The sentences name the door.** `FeatureDone` says a second round runs only on the three grounds and
-  never a third; `NoGroundForASecondRound(state)` names all three and how the third arrives — `ask_human`
-  with `feature`, the person's "Keep going" — and that no argument grants it; `TwoFeatureRoundsRun(state)`
+- **The sentences name the grounds.** `NoGroundForASecondRound(state)` names the two grounds a second round
+  has (a reviewer failure, a blocking finding) and says no argument grants a third; `TwoFeatureRoundsRun(state)`
+  says the only fresh start is a new base.
   says the only fresh start is a new base.
 
 ## `IAstNormalizer` — a native parser that cannot spread (2026-09-15)
@@ -988,3 +968,11 @@ the non-streaming path already reads, so a streamed and an unstreamed answer are
 - `ApiTurn.Stream` reaches `ChatRequest.Body(..., streamed)` through every module; on it writes `"stream": true`
   followed by `"stream_options": {"include_usage": true}`, off it writes exactly the bytes every golden holds.
 - `ApiRowSettings.Stream` / `ApiEffective.Stream`: the row's own switch — no environment knob, no module default.
+
+## What runs now: the router, the model names, the work plan (2026-11-23, v2 epoch 3 E1 code gate)
+
+Pure code in `src_mcp/core/Roles/` and `src_mcp/core/Work/`; the server half (jobs, runner, BA) is in module_server.md, *What runs now: role jobs, the router, the BA*.
+
+- **`RoleRouter.Route(RouteRequest, RouteTable)`** returns a `RouteResult`, a closed pair: `Routed(Models, Why)` or `Refused(Reason)`. Its two rule functions (`Important`, `Ordinary`) also return a `RouteResult` (the old four-field tuple that mixed route data and a refusal is gone; no behaviour change), and `Judged` then checks the whole list. In order: an important task (`ImportantRule`: `security: true`, kind `security`, complexity 10 — the validator lists the same tasks) takes the `important` list and refuses an explicit model outside it; an explicit model goes first, then the role's list; a coder task takes its complexity band's model, then the coder list; no duplicates; an empty list is a refusal naming `COAI_ROLES_MODELS`; every entry must keep `VendorRouting` and pass `RoleModelNames`. No IO, no clock; vectors in `shared/role-route-vectors.json` (`ARoleIsRoutedTests`).
+- **`RoleModelNames`** embeds `shared/role-model-names.json`: claude aliases `opus sonnet haiku fable` plus `verifiedIds` (full ids seen as real, one `source` each); codex and agy names from their lists. No shape pattern for claude ids: a typo has the shape of a real id. `Refusal(model, vendor, key)` is empty when allowed, else a sentence that names the key. A vendor the file does not name is not judged here.
+- **Work plan (`core/Work/`).** `shared/work-plan.schema.json` and the rules of `shared/work-method.md` are checked by `WorkPlanValidator` (structure, tasks, dependencies, parallel, limits rules in `Work*Rules.cs`); the reader sits behind `IYamlReader`, and the shipped reader is `StrictYamlReader`, a strict subset of YAML (block maps and lists, `[]`, plain and quoted scalars, comments; anchors, tags, duplicate keys, two documents and over 64 KiB are errors), written for Native AOT. Quoted scalars are read by small steps (`ParseQuoted`, `ScanQuoted`, `Step`, `Closing`, `QuotedScalar`) so each stays under the complexity cap. `OverlayWorkFolder` lets the BA role validate disk plus its output before anything is written; `BaOutput` reads the BA's JSON answer.

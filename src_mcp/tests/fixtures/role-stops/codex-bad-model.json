@@ -1,0 +1,32 @@
+{
+  "cli": "codex",
+  "cliVersion": "codex-cli 0.171.0",
+  "recordedUtc": "2026-11-23T01:44:59.562Z",
+  "how": "codex-bad-model",
+  "argv": [
+    "exec",
+    "-s",
+    "read-only",
+    "--skip-git-repo-check",
+    "--color",
+    "never",
+    "--json",
+    "-m",
+    "no-such-model-xyz",
+    "-"
+  ],
+  "envOverrides": [],
+  "stdin": "Reply with the single word ok.",
+  "exitCode": 1,
+  "signal": null,
+  "seconds": 3.1,
+  "stdout": "{\"type\":\"thread.started\",\"thread_id\":\"01a20613-e42e-7662-afe0-3f1c17e776a3\"}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_0\",\"type\":\"error\",\"message\":\"Model metadata for `no-such-model-xyz` not found. Defaulting to fallback metadata; this can degrade performance and cause issues.\"}}\n{\"type\":\"turn.started\"}\n{\"type\":\"error\",\"message\":\"The 'no-such-model-xyz' model is not supported when using Codex with a ChatGPT account.\"}\n{\"type\":\"turn.failed\",\"error\":{\"message\":\"The 'no-such-model-xyz' model is not supported when using Codex with a ChatGPT account.\"}}\n",
+  "stderr": "",
+  "spawnError": "",
+  "recordedBy": "this story (epoch 3 E1 s3 t1), run live on 2026-11-23",
+  "scrubbed": [
+    "scratch folder path",
+    "session_id and uuid set to zeros",
+    "credential_expires_at"
+  ]
+}

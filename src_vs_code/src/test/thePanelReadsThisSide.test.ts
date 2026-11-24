@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { test } from 'node:test';
-import { promptChosen } from '../promptsPerRound';
 import { OVERLAID_SETTINGS } from '../settingsShape';
 
 /**
@@ -112,7 +111,7 @@ const SANCTIONED: Readonly<Record<string, { readonly count: number; readonly why
 
 test('the scan finds every shape of a read or write that goes around this side', () => {
   for (const planted of [
-    "await config.update('promptsPerRound', value);",
+    "await config.update('rounds', value);",
     "await config.update(\n      'vendors',\n      kept,\n    );",
     "const cfg = vscode.workspace.getConfiguration('coai'); await cfg.update('rounds', 2);",
     'vscode.workspace.getConfiguration("coai").get("bugzServer")',
@@ -143,31 +142,9 @@ test('every sanctioned site still exists, so none of the counts is a stale pass'
   assert.deepEqual(stale, [], 'a sanctioned site is gone — lower its count or remove the entry');
 });
 
-test('the page itself reads through this side, and the prompt picker writes through the one save', () => {
+test('the page itself reads through this side', () => {
   const panel = source('panelProvider.ts');
 
-  // Pinned with the render's NEXT line: `choosePrompt` has the same first line, and must not satisfy this for it.
   assert.match(panel, /const settings = settingsFrom\(this\.read\(config\)\);\s*const vendors = vendorsFrom\(this\.read\(config\)\('vendors'\)\);/u,
     'the render does not read its settings through this side');
-  assert.match(panel, /this\.save\(config, 'promptsPerRound', pick\.value\)/u, 'the prompt picker does not write through the one save');
-});
-
-test('choosing a round\'s prompt pads the earlier rounds with "not chosen" and keeps every other role', () => {
-  const current = { plan: ['a'], code: ['x', 'y'] };
-
-  assert.deepEqual(promptChosen(current, 'plan', 3, 'c', 3), { ok: true, value: { plan: ['a', '', 'c'], code: ['x', 'y'] } });
-  assert.deepEqual(promptChosen(current, 'code', 1, 'z', 2), { ok: true, value: { plan: ['a'], code: ['z', 'y'] } });
-  assert.deepEqual(promptChosen(current, 'code', 2, 'y', 2), { ok: true, value: current }, 'the same pick again changes nothing');
-  assert.deepEqual(promptChosen({}, 'feature', 1, 'f', 2), { ok: true, value: { feature: ['f'] } });
-  assert.deepEqual(current, { plan: ['a'], code: ['x', 'y'] }, 'the stored value is never changed in place');
-});
-
-test('a round the role does not have is refused, never written somewhere a save drops it', () => {
-  for (const round of [0, -1, 1.5, Number.NaN, 4, 1e9]) {
-    assert.deepEqual(promptChosen({ plan: ['a'] }, 'plan', round, 'p', 3), { ok: false }, `round ${round} was accepted`);
-  }
-});
-
-test('a role is read only as its own key, so an inherited name is no role', () => {
-  assert.deepEqual(promptChosen({}, 'constructor', 1, 'p', 1), { ok: true, value: { constructor: ['p'] } });
 });

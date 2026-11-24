@@ -1,0 +1,5 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: s2-measure
+title: "Cold-start measurement M1/M2/M3"
+dependsOn:
+  - s1-shell-core

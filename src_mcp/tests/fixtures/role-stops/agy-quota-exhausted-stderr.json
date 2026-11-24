@@ -1,0 +1,14 @@
+{
+  "cli": "agy",
+  "cliVersion": "not recorded in the repository (the fixture is from the consultant work of 2026-10-03, PR 662)",
+  "recordedUtc": "2026-10-03",
+  "how": "agy-quota-exhausted-stderr",
+  "recordedBy": "EARLIER WORK, not this story: copied from tests/fixtures/antigravity/consult-quota.stderr.txt, a real answer of agy on a spent individual quota (research/RESULTS_consultant_live_acceptance.md, Windows row). A real limit cannot be triggered on purpose.",
+  "scrubbed": [],
+  "argv": [
+    "(a consultation launch)"
+  ],
+  "exitCode": 1,
+  "stdout": "",
+  "stderr": "AGY_ERROR {\"code\":\"RESOURCE_EXHAUSTED\",\"message\":\"RESOURCE_EXHAUSTED (code 429): Individual quota reached for gemini-3.1-pro-high. Resets in 33m52s\"}\n"
+}

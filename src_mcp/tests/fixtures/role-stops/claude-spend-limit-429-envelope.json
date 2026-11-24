@@ -1,0 +1,18 @@
+{
+  "cli": "claude",
+  "cliVersion": "2.1.284 (Claude Code)",
+  "recordedUtc": "2026-09-29",
+  "how": "claude-spend-limit-429-envelope",
+  "recordedBy": "EARLIER WORK, not this story: the benchmark campaign of 2026-09-29, copied from tests/AClaudeReasonInItsEnvelopeTests.cs (which says it was captured on the owner machine). A real rate or spend limit cannot be triggered on purpose.",
+  "scrubbed": [
+    "session_id and uuid were already zeros in the source"
+  ],
+  "argv": [
+    "-p",
+    "--output-format",
+    "json"
+  ],
+  "exitCode": 1,
+  "stdout": "{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":true,\"api_error_status\":429,\"duration_ms\":518,\"duration_api_ms\":824,\"num_turns\":1,\"result\":\"You've hit your monthly spend limit. Switch to another model to continue.\",\"stop_reason\":\"stop_sequence\",\"session_id\":\"00000000-0000-0000-0000-000000000000\",\"total_cost_usd\":0.001282,\"terminal_reason\":\"api_error\",\"permission_denials\":[],\"uuid\":\"00000000-0000-0000-0000-000000000000\"}\n",
+  "stderr": ""
+}

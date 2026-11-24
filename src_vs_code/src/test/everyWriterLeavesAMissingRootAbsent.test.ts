@@ -12,7 +12,6 @@ import { NOTHING_CHOSEN, useStorageSettings } from '../dataDir';
 import { makeDataDirectory, makeDataDirectorySync } from '../dataDirMaker';
 import { forgetFindingsBoard } from '../findingsBoard';
 import { appendLine } from '../jsonlLedger';
-import { ensureOverride } from '../securityPromptOverride';
 import { writeToken } from '../teamServerAuth';
 import { UNDER_THE_DATA_DIRECTORY, WRITERS, codeOf } from './dataDirWriters';
 import { ownedTemp } from './ownedTemp';
@@ -67,7 +66,6 @@ const RUNS: Readonly<Record<string, Run | HeldElsewhere>> = {
   },
   'extension.ts': { needsAnEditor: 'the settings file and its lock: run against a missing named root by the host\'s second launch (missingDataRootScenario.ts)' },
   'jsonlLedger.ts': async (root) => { await appendLine(join(root, 'notifications.jsonl'), '{}\n', 'a test line', { chain: 'notifications' }); },
-  'securityPromptOverride.ts': async (root) => { await quietly(() => ensureOverride(join(root, 'prompts', 'security', 'lane.md'))); },
   'teamServerAuth.ts': async (root) => { await quietly(() => writeToken(root, 'https://team.example', 'a-token')); },
 };
 

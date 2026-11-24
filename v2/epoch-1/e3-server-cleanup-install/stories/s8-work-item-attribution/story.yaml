@@ -1,0 +1,5 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: s8-work-item-attribution
+title: "Work-item attribution: every gate, cons and consask call names its plan item"
+dependsOn:
+  - s3-renames

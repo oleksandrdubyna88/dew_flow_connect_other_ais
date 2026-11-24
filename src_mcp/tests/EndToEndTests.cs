@@ -145,14 +145,13 @@ public sealed class EndToEndTests : IAsyncLifetime
     }
 
     private PanelService Service(
-        StagePolicy onExhausted = StagePolicy.Human,
         int maxRounds = 3,
         Serilog.ILogger? log = null) =>
         new(
             new PanelSettings
             {
                 Providers = [new("codex") { ExecutablePath = FakeCliExe }, new("gemini") { ExecutablePath = FakeCliExe }],
-                Rounds = PanelConfig.Uniform(maxRounds, 2, onExhausted),
+                Rounds = PanelConfig.Uniform(maxRounds, 2),
                 DataDir = _data,
                 ReviewerTimeout = TimeSpan.FromSeconds(30),
                 RateLimitBackoff = TimeSpan.FromMilliseconds(5),
@@ -388,7 +387,7 @@ public sealed class EndToEndTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task CodeRound_WithEveryReviewerFailing_CallsAHuman_NeverProceeds()
+    public async Task CodeRound_WithEveryReviewerFailing_IsNotReviewed_NeverProceeds()
     {
         // This test asserted `proceed` until the first real run showed what that means: both
         // vendors failed (one out of quota, one refusing an untrusted folder), no findings
@@ -402,14 +401,14 @@ public sealed class EndToEndTests : IAsyncLifetime
         Script(Clean, exit: 1, stderr: "429 Too Many Requests");
         var code = Parse(await service.ReviewCodeAsync(_repo, "feature", "main", Scope));
 
-        code.GetProperty("verdict").GetString().Should().Be("call_human");
+        code.GetProperty("verdict").GetString().Should().Be("not_reviewed");
         code.GetProperty("reviewers").GetString().Should().Contain("0 of 6").And.Contain("rate limited");
         // A round can fail AND have skipped a role, and the failure must not swallow the skip: an
         // implementation that built the sentence only for the happy path would still pass the check
         // above while this reader — the one whose round went wrong — learned nothing about the
         // fourth role. (codex, the plan round.)
         code.GetProperty("reviewers").GetString().Should().Contain("Conventions was not asked");
-        code.GetProperty("instruction").GetString().Should().Contain("do not proceed on your own");
+        code.GetProperty("instruction").GetString().Should().Contain("WITHOUT a review");
     }
 
     [Fact]
@@ -420,7 +419,7 @@ public sealed class EndToEndTests : IAsyncLifetime
             new PanelSettings
             {
                 Providers = [new("codex") { ExecutablePath = "codex-that-is-not-installed" }, new("gemini") { ExecutablePath = FakeCliExe }],
-                Rounds = PanelConfig.Uniform(3, 2, StagePolicy.Human),
+                Rounds = PanelConfig.Uniform(3, 2),
                 DataDir = _data,
                 ReviewerTimeout = TimeSpan.FromSeconds(30),
                 RateLimitBackoff = TimeSpan.FromMilliseconds(5),
@@ -437,29 +436,6 @@ public sealed class EndToEndTests : IAsyncLifetime
         round.GetProperty("verdict").GetString().Should().Be("revise", "one vendor's findings still gate");
         round.GetProperty("gatingCount").GetInt32().Should().Be(3);
         round.GetProperty("reviewers").GetString().Should().Contain("1 of 2");
-    }
-
-    [Fact]
-    public async Task MaxRoundsExhausted_UnderEscalate_FiresTheLadderInOrder()
-    {
-        var service = Service(StagePolicy.Escalate, maxRounds: 1);
-        await service.OpenAsync(_repo, "feature");
-
-        var steps = new List<string?>();
-        for (var i = 0; i < 3; i++)
-        {
-            Script(FourMajors);
-            var round = Parse(await service.ReviewPlanAsync(_repo, "feature", "the plan"));
-            round.GetProperty("verdict").GetString().Should().Be("escalated");
-            steps.Add(round.GetProperty("escalationStep").GetString());
-            await service.ResolveAsync(_repo, "feature", AcceptAll(round));
-        }
-
-        steps.Should().Equal("ReviewerEffortUp", "ReviewerModelUp", "ArbiterModelUp");
-
-        Script(FourMajors);
-        Parse(await service.ReviewPlanAsync(_repo, "feature", "the plan"))
-            .GetProperty("verdict").GetString().Should().Be("call_human", "the ladder is exhausted");
     }
 
     [Fact]

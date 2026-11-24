@@ -1,0 +1,14 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t1-baseline
+title: "Define the measure and record the baseline: main-AI token count, wall time and accepted gate findings for one task done by the main AI itself"
+kind: measure
+complexity: 4
+dependsOn: []
+parallel: false
+files:
+  - v2/epoch-3/e2-coder-one-task/BASELINE.md
+dod:
+  - id: d1
+    item: "the file says how each of the three numbers is read (which transcript or ledger, from which event to which event, what counts as an accepted finding) so that a second person gets the same numbers"
+  - id: d2
+    item: "the file holds the baseline numbers of at least one real task of this repository of a named kind and complexity, with its commit, and names the task the coder run of t3 will do (same kind, complexity within 1)"

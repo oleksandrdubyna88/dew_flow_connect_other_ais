@@ -113,9 +113,9 @@ test('a finding is found by its setting and its stored value, trimmed', () => {
 
 test('the notice says "not found now", names the place, and never says "deleted" — an unmounted drive reports absence too', () => {
   assert.equal(findingSubject(MISSING), 'coai.qconsultRoots|D:\\old-project', 'one counter per path, so fixing one clears one');
-  assert.equal(missingTitle(MISSING), "The question consultant's folder D:\\old-project was not found on this machine (Windows) just now — a disk row skips it.");
+  assert.equal(missingTitle(MISSING), "The folder consask reads D:\\old-project was not found on this machine (Windows) just now — a disk row skips it.");
   assert.doesNotMatch(missingTitle(MISSING), /deleted/u);
-  assert.match(missingCure(MISSING), /Create the folder, or remove it from the list in Settings › Consultants › Question consultant/u);
+  assert.match(missingCure(MISSING), /Create the folder, or remove it from the list in Settings › Cons & consask › Consask/u);
 
   const cli: PathFinding = { key: 'coai.vendors[].executablePath', place: 'models', value: 'C:\\t\\codex.exe', family: 'windows', state: 'missing', owner: 'codex' };
   assert.equal(missingTitle(cli), 'The CLI path of the model codex C:\\t\\codex.exe was not found on this machine (Windows) just now — that model cannot run here until it is.');

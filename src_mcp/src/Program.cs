@@ -160,6 +160,39 @@ internal static class Program
         HostFacts,
 
         /// <summary>
+        /// The Claude mod's band, in one JSON object: <c>{phrases[], consultations[], failures[]}</c>, read from the local data folder — read-only, never makes the data directory.
+        /// See <see cref="BandJsonMode"/> (v2 E3.S4).
+        /// </summary>
+        BandJson,
+
+        /// <summary>
+        /// What each item of a plan cost the gate and the consultants, in one JSON object: <c>--plan-report &lt;feature-dir&gt; --json</c>, read from the rounds database — read-only, never makes the data directory.
+        /// See <see cref="PlanReportMode"/> (v2 E3.S8).
+        /// </summary>
+        PlanReport,
+
+        /// <summary>
+        /// A work plan (the YAML folder tree of <c>shared/work-method.md</c>) checked against the work-plan contract, in one JSON object: <c>--validate-work &lt;feature-dir&gt;</c> — reads the working tree, never makes the data directory.
+        /// See <see cref="ValidateWorkMode"/> (epoch 3 E1 s2).
+        /// </summary>
+        ValidateWork,
+
+        /// <summary>
+        /// The roles table in one JSON object (<c>--format json</c>) or as Claude Code's SessionStart hook output (<c>--format claude-hook</c>) — read-only, never makes the data directory.
+        /// See <see cref="Roles.RolesMode"/> (v2 E3.S7).
+        /// </summary>
+        Roles,
+
+        /// <summary>
+        /// Finds claude, codex and agy on this side and writes the <c>coai</c> MCP entry through each one's own command — a backup first, nothing changed when it is already right — and prints ONE JSON object.
+        /// See <see cref="Install.SetupClientsMode"/> (v2 E3.S6). Not a writer of the data directory: its state is <c>~/.local/state/coai</c>.
+        /// </summary>
+        SetupClients,
+
+        /// <summary>The same engine as <see cref="SetupClients"/> under the name the install line uses (v2 E3.S6; <c>--shared</c> is epoch 2).</summary>
+        Install,
+
+        /// <summary>
         /// The measurement behind a vendor dialect: the vault read the product's way, <c>GET /models</c>,
         /// and the S0.5 request matrix, printed as an allowlist of fields.
         /// </summary>
@@ -197,16 +230,6 @@ internal static class Program
         CloseConsult,
 
         /// <summary>
-        /// Print a plan's consultation cadence as JSON and leave — what `status` answers as `cadence`.
-        /// </summary>
-        /// <remarks>
-        /// For the SIDEBAR, which reads session files and never calls `status`, and cannot work the cadence
-        /// out from them (research/PLAN_consult_on_a_cadence.md, epic 4 story 4.2). See
-        /// <see cref="Server.CadenceReadMode"/>.
-        /// </remarks>
-        Cadence,
-
-        /// <summary>
         /// Print, per caller kind, the consultant it resolves to and what is known of it — and write the same answer
         /// to <c>consultations/health/consultants.json</c>. See <see cref="Server.ConsultantsReadMode"/>.
         /// </summary>
@@ -219,22 +242,10 @@ internal static class Program
         CheckConsultant,
 
         /// <summary>
-        /// Each named security prompt's override file as this server reads it, as JSON. Read only; for the seam that
-        /// checks the Security lane tab draws what the server sends. See <see cref="Server.SecurityPromptTextReadMode"/>.
-        /// </summary>
-        SecurityPromptText,
-
-        /// <summary>
         /// The capabilities this build has, as JSON, so the extension sends a catalog field only when it is listed.
         /// See <see cref="Server.FeaturesMode"/>.
         /// </summary>
         Features,
-
-        /// <summary>
-        /// What the security lane would make of a sample read on stdin — signals, due cards, refused patterns. See
-        /// <see cref="Server.CheckSecurityMode"/>.
-        /// </summary>
-        CheckSecurity,
 
         /// <summary>
         /// ONE paid check of a catalog row read on stdin — the consultant's check, of any row. See
@@ -332,6 +343,27 @@ internal static class Program
         /// </summary>
         /// <remarks>Its own <c>args[0]</c> and a WRITER mode: a named data folder that is missing is refused before it runs.</remarks>
         BackfillAuthors,
+
+        /// <summary>
+        /// The v2 data migration of this side's data folder: held sessions leave their hold, open cards are withdrawn and archived, the cadence and question
+        /// phase stores and the removed settings keys move to an archive (E1.S4). Without <c>--apply</c> it is a dry run that creates nothing. See
+        /// <see cref="Server.Migrations.MigrateV2Mode"/>.
+        /// </summary>
+        /// <remarks>Its own <c>args[0]</c> and a WRITER mode: a named data folder that is missing is refused before it runs. Never exits 64.</remarks>
+        MigrateV2,
+
+        /// <summary>
+        /// The detached runner of one external-role job: <c>--role-run &lt;jobId&gt; [--data-dir &lt;folder&gt;]</c> takes the job's lease, runs the role's work and writes its result (epoch 3 E1 s1). Started by a role start
+        /// through <see cref="Runners.Detach.DetachedLauncher"/>, never by a person; speaks no JSON-RPC and prints nothing on stdout. See <see cref="Server.RoleJobs.RoleRunMode"/>.
+        /// </summary>
+        /// <remarks>Its own <c>args[0]</c> and a WRITER mode: a named data folder that is missing is refused before it runs (74). An unknown job is 65, never 64.</remarks>
+        RoleRun,
+
+        /// <summary>
+        /// How much of what a BA job wrote the orchestrator changed: <c>--role-delta &lt;jobId&gt; --at &lt;commit&gt;</c>, in one JSON object — read-only, never makes the data directory (epoch 3 E1 s4). See <see cref="RoleDeltaMode"/>.
+        /// </summary>
+        /// <remarks>Its own <c>args[0]</c>. Exit 0 measured, 65 a wrong argument or no such job or commit, 74 a read that fails — never 64.</remarks>
+        RoleDelta,
     }
 
     /// <summary>
@@ -347,7 +379,7 @@ internal static class Program
     internal static readonly IReadOnlySet<Startup> WriterModes = new HashSet<Startup>
     {
         Startup.CheckConsultant, Startup.CheckModel, Startup.Collect, Startup.PairsKeep, Startup.PairsDecide,
-        Startup.UploadPairs, Startup.RequeueRefused, Startup.ProbeApi, Startup.Consultants, Startup.BackfillAuthors,
+        Startup.UploadPairs, Startup.RequeueRefused, Startup.ProbeApi, Startup.Consultants, Startup.BackfillAuthors, Startup.MigrateV2, Startup.RoleRun,
     };
 
     /// <summary>Why <paramref name="startup"/> may not run here — empty when it may (not a writer, or its root is there).</summary>
@@ -373,6 +405,12 @@ internal static class Program
                 "--ask-acp" => Startup.AskAcp,
                 "--kimi-clear-marker" => Startup.KimiClearMarker,
                 "--host-facts" => Startup.HostFacts,
+                "--band-json" => Startup.BandJson,
+                "--plan-report" => Startup.PlanReport,
+                "--validate-work" => Startup.ValidateWork,
+                "--roles" => Startup.Roles,
+                "--setup-clients" => Startup.SetupClients,
+                "--install" => Startup.Install,
                 "--probe-api" => Startup.ProbeApi,
                 "--log" => Startup.Log,
                 "--round-counts" => Startup.RoundCounts,
@@ -397,13 +435,13 @@ internal static class Program
                 "--requeue-refused" => Startup.RequeueRefused,
                 "--providers" => Startup.Providers,
                 "--close-consult" => Startup.CloseConsult,
-                "--cadence" => Startup.Cadence,
                 "--consultants" => Startup.Consultants,
                 "--check-consultant" => Startup.CheckConsultant,
-                "--security-prompt-text" => Startup.SecurityPromptText,
                 "--features" => Startup.Features,
-                "--check-security" => Startup.CheckSecurity,
                 "--check-model" => Startup.CheckModel,
+                "--migrate-v2" => Startup.MigrateV2,
+                "--role-run" => Startup.RoleRun,
+                "--role-delta" => Startup.RoleDelta,
                 _ => Startup.Usage,
             };
 
@@ -483,6 +521,28 @@ internal static class Program
             case Startup.HostFacts:
                 // One line on stdout, read-only (no home, lock, network or data folder), exit 0 — never 64.
                 return HostFactsMode.Run(Console.Out);
+
+            case Startup.BandJson:
+                // One object on stdout, read-only, exit 0; a wrong argument is 65, never 64.
+                return BandJsonMode.Run(args, Environment.GetEnvironmentVariable, Console.Out, Note, TimeProvider.System);
+
+            case Startup.PlanReport:
+                // One object on stdout, read-only, exit 0; a wrong argument or a folder outside a checkout is 65, never 64.
+                return PlanReportMode.Run(args, Environment.GetEnvironmentVariable, Directory.GetCurrentDirectory(), Console.Out, Note);
+
+            case Startup.ValidateWork:
+                // One object on stdout, read-only, exit 0 valid or 1 invalid; a wrong argument or a folder with no feature.yaml is 65, a read the disk refuses 74, never 64.
+                return ValidateWorkMode.Run(args, Environment.GetEnvironmentVariable, Directory.GetCurrentDirectory(), Console.Out, Note);
+
+            case Startup.Roles:
+                // One object on stdout, read-only, exit 0; a wrong argument is 65, never 64. A hook calls this, so nothing here may take a session down.
+                return Roles.RolesMode.Run(args[1..], Environment.GetEnvironmentVariable, Console.Out, Note);
+
+            case Startup.SetupClients:
+            case Startup.Install:
+                // One object on stdout; a bad argument is 65, never 64. The state folder is the installer's own — the data directory is never opened.
+                return await Install.SetupClientsMode.RunAsync(
+                    startup == Startup.Install ? "install" : "setup-clients", args[1..], Install.SetupDependencies.ForThisProcess(VersionText), Console.Out, Note);
 
             case Startup.ProbeApi:
                 // The vault is read the way `--providers` reads it: `creds config`, the one child this
@@ -567,27 +627,36 @@ internal static class Program
             case Startup.CloseConsult:
                 return await CloseConsultAsync(args);
 
-            case Startup.Cadence:
-                // A one-shot answers on stdout and exits; a writer thread here is one nobody drains.
-                return await Server.CadenceReadMode.RunAsync(args, Server.Noticing.None);
-
             case Startup.Consultants:
                 return await Server.ConsultantsReadMode.RunAsync(args, Server.Noticing.None);
 
             case Startup.CheckConsultant:
                 return await Server.ConsultantCheckMode.RunAsync(args, Server.Noticing.None);
 
-            case Startup.SecurityPromptText:
-                return await Server.SecurityPromptTextReadMode.RunAsync(args);
-
             case Startup.Features:
                 return await Server.FeaturesMode.RunAsync();
 
-            case Startup.CheckSecurity:
-                return await Server.CheckSecurityMode.RunAsync(args);
-
             case Startup.CheckModel:
                 return await Server.ConsultantCheckMode.RunAsync(args, Server.Noticing.None);
+
+            case Startup.MigrateV2:
+                // A one-shot WRITER (with --apply): ONE JSON object on stdout whenever it runs, its sentences on stderr, never 64.
+                return Server.Migrations.MigrateV2Mode.Run(
+                    args, Environment.GetEnvironmentVariable, Console.Out, Note,
+                    MigrationNotices(Environment.GetEnvironmentVariable, NoticeWriter.Shared, Serilog.Core.Logger.None, RunIds.New()));
+
+            case Startup.RoleRun:
+                // The detached runner of one role job: stdout stays empty, its sentences go to stderr and to its own log file; 0 terminal state reached, 65 wrong argument or no such job, 70 fault, 75 not the writer — never 64.
+                // SIGTERM and SIGINT reach the work's token, so a stopped unit ends its child and writes its state instead of leaving the job at running.
+                using (var stopping = new CancellationTokenSource())
+                using (Runners.Processes.StopSignals.Into(stopping))
+                {
+                    return await Server.RoleJobs.RoleRunMode.RunAsync(args, Environment.GetEnvironmentVariable, Note, stopping.Token);
+                }
+
+            case Startup.RoleDelta:
+                // One object on stdout, read-only, exit 0 whatever the share; a wrong argument, no such job or commit is 65, a read that fails 74 — never 64.
+                return await RoleDeltaMode.RunAsync(args, Environment.GetEnvironmentVariable, Console.Out, Note);
 
             default:
                 return await ServeAsync();
@@ -2054,6 +2123,7 @@ internal static class Program
             ToolCollection = [.. Tools.All(new Server.RefusingServiceSource(reason))],
             PromptCollection = [.. Prompts.All()],
         };
+        RenamedTools.HideFromLists(options);
         using var stopping = new CancellationTokenSource();
         using var terminated = System.Runtime.InteropServices.PosixSignalRegistration.Create(System.Runtime.InteropServices.PosixSignal.SIGTERM, context =>
         {
@@ -2080,6 +2150,15 @@ internal static class Program
 
         return 74; // EX_IOERR
     }
+
+    /// <summary>
+    /// How the v2 migration writes a notice (E1.S4): through <see cref="NoticeWriter"/> — the one writer thread every notice of this server goes through —
+    /// and then it WAITS for the writer to drain, so "accepted" means "on disk" before the migration goes on to convert the session the notice is about
+    /// (the migration reads the line back before it does). The wait is bounded by <see cref="NoticeWriter.DrainBudget"/>. Here, in <c>Program</c>, because
+    /// the census of who composes a <see cref="Noticing"/> and who reaches for the shared writer names this file and no other.
+    /// </summary>
+    internal static Func<ServerNotice, bool> MigrationNotices(Func<string, string?> env, NoticeWriter writer, Serilog.ILogger log, string run) =>
+        Noticing.Through(writer, env, log, run).Settled;
 
     private static async Task<int> ServeAsync()
     {
@@ -2148,6 +2227,13 @@ internal static class Program
             // settings file happens before there is a host to own anything.
             var noticing = Noticing.Through(notices, Environment.GetEnvironmentVariable, log, run);
             var dataDir = dir.Path; // the one resolution above, not a second one
+            // The v2 data migration, once, before anything reads the folder (E1.S4): only a v2 build, only with no marker of these tables. Never throws and never
+            // writes stdout; a lease held elsewhere, a read-only folder or deferred objects are a warning here and the next start tries again.
+            Server.Migrations.MigrateV2Mode.RunAutomatic(
+                dataDir,
+                typeof(Program).Assembly.GetName().Version ?? new Version(0, 0, 0),
+                sentence => log.Warning("{Detail}", sentence),
+                MigrationNotices(Environment.GetEnvironmentVariable, notices, log, run));
             var configuration = SettingsFile.Layer(
                 dataDir,
                 Environment.GetEnvironmentVariable,
@@ -2187,8 +2273,6 @@ internal static class Program
             // code rounds (issue #115).
             var storage = PanelSettings.StorageNotes(Environment.GetEnvironmentVariable);
             StartupNotices.Record(settings, storage, noticing, log);
-            // A policy a client's env block pins other than auto: the process environment only, as the panel's own value is no note.
-            StartupNotices.PinnedPolicy(PanelSettings.PinnedPolicy(Environment.GetEnvironmentVariable), noticing, log);
 
             try
             {
@@ -2207,7 +2291,7 @@ internal static class Program
                     options.ToolCollection.Add(tool);
                 }
 
-                // And the one PROMPT, which is the person's own trigger: `/mcp__coai__consult` in a
+                // And the one PROMPT, which is the person's own trigger: `/mcp__coai__cons` in a
                 // client that lists them. A prompt calls nothing — it hands the assistant a message —
                 // so every cap, refusal and invariant the tool has still applies to what it decides.
                 options.PromptCollection ??= [];
@@ -2215,6 +2299,9 @@ internal static class Program
                 {
                     options.PromptCollection.Add(prompt);
                 }
+
+                // The v1 names stay callable for older clients and are not listed (RenamedTools).
+                RenamedTools.HideFromLists(options);
 
                 // The client closing stdin is the HOST ending: the host's stopping token (startStop) fires BEFORE the SDK sees its input
                 // end and cancels the in-flight requests' own tokens (E3.S2 of todo/PLAN_the_round_counter_tail_E3.md;
@@ -2243,6 +2330,8 @@ internal static class Program
                 // Once per window for every server on this data directory (ConsultantsSurveyClaim). Cancelled with serving,
                 // which kills a probe still running.
                 var surveying = ConsultantsReadMode.WriteInBackground(settings, launcher, log, noticing, serving.Token);
+                // The role jobs a dead runner left (epoch 3 E1 s1): one look at each job not over, then the retention. Background, never fatal.
+                var sweepingRoles = Server.RoleJobs.RoleJobStartup.SweepInBackground(dataDir, Roles.RolesMode.Layered(Environment.GetEnvironmentVariable), log, noticing, serving.Token);
                 try
                 {
                     await server.RunAsync(stopping.Token);
@@ -2254,7 +2343,7 @@ internal static class Program
                     // ONE bounded wait, well inside the signal's grace so the notices still drain: the stop cuts a survey's
                     // probes, the vault read and the sweeper's wait short, and an ending process does not wait on a start
                     // still sweeping or a beat still running (the code round, codex and gemini, 2026-10-07).
-                    await StartingHost.Ended(Task.WhenAll(sweeping, surveying, starting.Started), StartingHost.EndBudget);
+                    await StartingHost.Ended(Task.WhenAll(sweeping, surveying, sweepingRoles, starting.Started), StartingHost.EndBudget);
                 }
             }
             catch (Exception) when (starting.Failed)
@@ -2446,28 +2535,24 @@ internal static class Program
         ConnectOtherAIs: a review gate run by OTHER vendors' models over your plan and code.
         It is ADDITIONAL: run your own review and start both AT ONCE. Another
         vendor's model answers what your own is worst placed to answer; your reviewers read
-        the change in context. A `call_human` verdict stops the SHIPPING, not the task.
+        the change in context. Nothing waits for a person: a round nobody answered says `not_reviewed`.
         The protocol: `open` a session for the repo+branch. `review_plan` sends the plan to
         every enabled provider; `resolve` records an accept/reject for EVERY finding (a rejection needs a reason).
-        Repeat until the verdict advances the stage (`proceed`, `continue_anyway`, `good_enough` or `not_reviewed`), `resolve`,
+        Repeat until the verdict advances the stage (`proceed`, `good_enough` or `not_reviewed`), `resolve`,
         implement, then `review_code`, `resolve`, fix — the same loop. `review_code` REFUSES until the plan
         stage advanced.
         `providers` says what is configured; `status` re-orients a resumed conversation;
-        `ask_consultants`, then `ask_human`: a card for the gate's question, `ask_in_conversation` for yours.
-        Three rules:
-        1. A reply can carry COMMANDS — a `commands` list from the operator's panel switches.
-           They outrank your defaults and are about HOW to work. Say which you applied.
-           An empty list is the default, not a fault.
-        2. Reject in round ONE, not when the rounds run out. Accepting to please stops the loop
+        `consask` puts a question to other models before you ask the person in your own conversation
+        (`ask_human` is removed in v2 and only says so).
+        Two rules:
+        1. Reject in round ONE, not when the rounds run out. Accepting to please stops the loop
            converging: each accepted finding rewrites the plan, so the next round meets fresh text
            and the count never falls.
-        3. `call_human` comes only from a policy asking a person; under the default `auto` an
-           unreviewed round says `not_reviewed`, and an older build's hold is released, saying so.
-           It is an ENFORCED stop: `review_plan` and `review_code` refuse while it stands and `resolve`
-           does not clear it. Only an answer on the notice card releases it — not any argument of yours.
-        `consult` is for when YOU are stuck: an independent model reads this checkout read-only with its
+        2. Nothing holds the gate: `not_reviewed` and `good_enough` advance on `resolve` like `proceed`.
+           Say in your summary what was not reviewed, or which findings you declined, and why.
+        `cons` is for when YOU are stuck: an independent model reads this checkout read-only with its
         uncommitted diff and answers advice, not orders — verify it, then report back on the same
-        consultationId. The person can ask for one themselves with the `consult` PROMPT.
+        consultationId, and record how it ended with `cons_close`. The person can ask for one themselves with the `cons` PROMPT.
         """;
 
     /// <summary>
@@ -2601,26 +2686,59 @@ internal static class Program
         (only denied-by-cli is observed confinement), or the classified failure. Exits 0 for every
         outcome (already-checking included), 65 without a known --caller, 74 when the data directory or
         the check's lock cannot be opened.
-        `--security-prompt-text --ids <id,id>` prints, per security prompt id, what its override file in the
-        data directory counts as when this server reads it: none, blank, placeholder, oversized, unreadable or
-        written. Read only; no model is called.
         `--features` prints the capabilities this build has as {"features":[...]} — what the extension asks
         before it sends a catalog field. A build too old for it exits 64.
-        `--check-security [--validate]` reads {"text": …, "lane": …} on stdin and prints the signals the security lane
-        would raise, the cards that would be due and the patterns it refuses; --validate checks the patterns alone.
-        A request it cannot read exits 65.
+        `--band-json` prints ONE JSON object {"phrases":[],"consultations":[],"failures":[]} for the Claude mod's band, read
+        from the data directory and never creating it: the consultations in flight (cons asking or open, consask consulting)
+        and the failure notices of the last 24 hours. The phrases live in the editor's settings, so the list is empty here.
+        Any other argument is 65; a build too old for the mode exits 64.
+        `--plan-report <feature-dir> --json` prints ONE JSON object for a plan: one entry per folder of the feature found on disk (the feature folder, then each epoch-N, eN-*, sN-* and tN-*
+        folder, by name — no YAML is read), each with the gates run, rounds, cons and consask counts, the first and last event (UTC) and the wall time of the calls that named it in their
+        `workItem` argument, read from the rounds database and never creating the data directory. An item with no events reports zeros. 65 for other arguments or a folder not inside a
+        git checkout, 74 when the database cannot be read; a build too old for the mode exits 64.
+        `--validate-work <feature-dir>` checks a work plan (feature.yaml, epoch-N/epoch.yaml, eN-*/epic.yaml, stories/sN-*/story.yaml, tasks/tN-*/task.yaml; the rules are in shared/work-method.md) and prints ONE JSON object
+        {mode, featureFolder, valid, counts, limits {…, source: device|default, settingsRevision}, errors [{code, path, node, message}], notes, important [{node, reason}], truncated}. The limits are this device's work method
+        (`roles`), never constants. Reads the working tree and the settings, writes nothing, never creates the data directory. Exit 0 a valid plan, 1 an invalid one, 65 for a wrong argument or a folder with no
+        feature.yaml, 74 when a file cannot be read; never 64. The MCP tool `validate_work(repoPath, featureFolder)` answers the same object.
+        `--roles [--format json|claude-hook]` prints the roles table: the main AI, an ORDERED model list per role (the order is the failover order), the complexity bands,
+        the task kinds a small model may take, the work method and a settings revision — as ONE JSON object, or with `claude-hook` as Claude Code's SessionStart hook output
+        (a short role table and the work-method sentence in `hookSpecificOutput.additionalContext`). Read from the settings file and the environment (`COAI_ROLES_MODELS`,
+        `COAI_ROLES_BANDS`, `COAI_ROLES_HAIKU_KINDS`, `COAI_ROLES_WORK_METHOD`, `COAI_ROLES_MAIN_AI`) and never creating the data directory. A wrong argument is 65.
+        `--setup-clients [--dry-run] [--only claude,codex,agy] [--binary <path>] [--remove | --restore <id|latest>]` finds the CLIs on this side and writes the `coai` MCP
+        entry through each one's own command (`claude mcp add-json --scope user`, `codex mcp add`) — a backup in the state folder first, nothing changed when the entry
+        is already right — and prints ONE JSON object: per CLI found, absent, changed, unchanged, refused, failed or unmeasured (agy), per target the action and the
+        entry before and after (environment NAMES only). Claude also gets ONE SessionStart hook (`--roles --format claude-hook`) in its settings.json, and Codex ONE block between `<!-- coai:roles:start -->` and
+        `<!-- coai:roles:end -->` in its AGENTS.md; inside a Claude Code session the claude MCP target is refused (the vendor refuses a registration there), the others done. `--install` is the same engine (`--shared` is epoch 2: refused, 65). `--dry-run` plans only and answers the code the
+        real run would. Exits 0 every found CLI in the wanted state, 65 bad arguments or an unknown backup id, 69 no CLI found, 73 the backup could not be written,
+        74 a write failed after the backup, 75 another run holds the lock, 78 a CLI refused (the others done) — never 64.
         `--check-model` reads {"row": {…}} on stdin and runs ONE paid check of that catalog row — the consultant's
         check (a scratch repository, a marker, a canary), its record kept as model-<id>. A request without a row exits 65.
+        `--migrate-v2 [--apply]` migrates THIS side's data folder to v2: a session a v1 build held leaves its hold
+        (good_enough; the next resolve advances the stage), an open escalation card is marked withdrawn_v2 and moved to
+        escalations/archive/, qphase/ and cadence/ move to migrations/v1-archive/, and the settings keys v2 no longer reads
+        move from settings.json to settings.v1-removed.json. Without --apply it is a dry run: it prints what it would do and
+        creates nothing. It always scans (the marker migrations/v2.done gates only the automatic run at server start) and is safe to
+        run again. Prints ONE JSON object on stdout (status plan, done, busy, partial or failed; counts; the holds a person had
+        answered; the steps). Exits 0 plan printed or apply complete, 65 a bad argument, 74 the data folder is missing or not
+        writable, 75 another migration holds the lease, or some objects were deferred and no marker was written — never 64.
+        `--role-run <jobId> [--data-dir <folder>]` is the detached runner of one external-role job (the `start_role` tool launches it; a person never needs to): it takes the job's lease, runs the
+        role's work, writes the result or the terminal state and exits, printing nothing on stdout. Exits 0 when it took the job to a terminal state, 65 for a wrong argument or a job that does not
+        exist, 70 for an unexpected fault (the job is closed as failed), 75 when it is not the job's writer (the lease is held elsewhere, the job is over, or it was taken over); a named data
+        folder that is missing is 74 — never 64. Optional environment: COAI_ROLE_JOBS_MAX (live jobs at once, 3; 2 on WSL), COAI_ROLE_MEMORY_MB (a runner unit's memory ceiling, 4096),
+        COAI_ROLE_LAUNCHER (auto, systemd-run or setsid).
+        `--role-delta <jobId> --at <commit>` measures how much of what a BA job wrote the orchestrator changed: of the task files in the job's manifest, how many are edited, deleted or joined by another
+        task file at that commit (line ends read as LF), as ONE JSON object {mode, jobId, epic, commit, manifestTasks, changed, deleted, added, changedShare, threshold, pass, changedFiles, deletedFiles, addedFiles};
+        pass is a share below 0.20. Reads the job folder and the repository, writes nothing, never creates the data directory. Exits 0 measured (pass or not), 65 for a wrong argument, no such job,
+        a job that is not a BA job that succeeded, a repository or commit that is not there, 74 when a manifest or git cannot be read — never 64.
         Configure it in your client as:
 
           { "mcpServers": { "coai": { "command": "<full path to coai-mcp>" } } }
 
         Optional environment: COAI_PROVIDERS, COAI_MODEL_<PROVIDER>, COAI_EXE_<PROVIDER>,
-        COAI_MAX_ROUNDS, COAI_GATE_THRESHOLD, COAI_ON_EXHAUSTED (auto|human|continue|good_enough|escalate; absent = auto),
+        COAI_MAX_ROUNDS, COAI_GATE_THRESHOLD,
         COAI_MAX_CONCURRENCY, COAI_MAX_PER_PROVIDER, COAI_LOCAL_CONCURRENCY,
         COAI_REVIEWER_TIMEOUT_MINUTES,
-        COAI_DATA_DIR, COAI_RATE_LIMIT_BACKOFF_SECONDS, COAI_ESCALATION_MINUTES
-        (or COAI_ESCALATION_SECONDS, which wins),
+        COAI_DATA_DIR, COAI_RATE_LIMIT_BACKOFF_SECONDS,
         COAI_SWEEP_SECONDS (the background sweep's beat, 60, 10–3600),
         COAI_CONSULTANTS_REUSE_SECONDS (one consultants survey per window per data directory, 300),
         COAI_CREDS_KEY (the CredsForDevs config-entry key holding vendor keys),

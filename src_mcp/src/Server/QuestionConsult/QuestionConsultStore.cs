@@ -60,77 +60,6 @@ public sealed class QuestionConsultStore(
 
     public QuestionConsultRecord? Read(string id) => IsWellFormedId(id) ? ReadFile(PathFor(id)) : null;
 
-    /// <summary>
-    /// D14 (a), S4b item 8: the consultation's proof spent on ONE card, atomically — the record read, judged and written
-    /// under its turn, before the card is posted. Answers what came of it; on <see cref="SpendOutcome.Spent"/> the record
-    /// names the card and says the person was asked.
-    /// </summary>
-    /// <remarks>
-    /// <para>Before this the proof was verified, the card posted, and only then the record marked — so two
-    /// <c>ask_human</c> calls with one <c>consultId</c> in flight at once both verified it and both went through.</para>
-    /// <para>The turn guards against another process; <see cref="SpendGate"/> against this one, because the turn is a
-    /// lock file opened <c>FileShare.None</c> and is not re-entrant — a second call of this process cannot take it, waits
-    /// out its attempts and would then go on WITHOUT it. A turn that cannot be had is refused (<see cref="SpendOutcome.Busy"/>),
-    /// never spent without it.</para>
-    /// </remarks>
-    /// <param name="spentAs">What the record says happened next — <see cref="QuestionOutcomes.PersonAsked"/> for a card,
-    /// <see cref="QuestionOutcomes.PersonAskedInConversation"/> when the AI asks in its own conversation and no card exists.</param>
-    public (SpendOutcome Outcome, string PreviousOutcome) Spend(string id, string escalationId, string spentAs = QuestionOutcomes.PersonAsked)
-    {
-        var previous = string.Empty;
-        var outcome = Changed(id, record =>
-        {
-            previous = record.Outcome;
-
-            return record.EscalationId.Length > 0 ? null : record with { Outcome = spentAs, EscalationId = escalationId };
-        });
-
-        return (outcome, previous);
-    }
-
-    /// <summary>A spend undone because its card was never posted: the record forgets the card, and the proof can open the door again.</summary>
-    /// <remarks>Fenced by the card's id — a record another card has spent since is left as it is.</remarks>
-    public SpendOutcome Release(string id, string escalationId, string previousOutcome) =>
-        Changed(id, record => record.EscalationId == escalationId ? record with { Outcome = previousOutcome, EscalationId = string.Empty } : null);
-
-    /// <summary>One record read, changed and written whole under its turn and <see cref="SpendGate"/>; a null change writes nothing.</summary>
-    private SpendOutcome Changed(string id, Func<QuestionConsultRecord, QuestionConsultRecord?> change)
-    {
-        if (!IsWellFormedId(id))
-        {
-            return SpendOutcome.Gone;
-        }
-
-        var path = PathFor(id);
-        lock (SpendGate)
-        {
-            using var turn = SessionTurn.Take(path);
-
-            return turn.Held ? ChangedUnderTurn(path, change) : SpendOutcome.Busy;
-        }
-    }
-
-    private SpendOutcome ChangedUnderTurn(string path, Func<QuestionConsultRecord, QuestionConsultRecord?> change)
-    {
-        if (ParsedFile(path) is not { } record)
-        {
-            return SpendOutcome.Gone;
-        }
-
-        if (change(record) is not { } next)
-        {
-            return SpendOutcome.AlreadyUsed;
-        }
-
-        AtomicJson.WriteUnderTurn(path, JsonSerializer.Serialize(next, QuestionConsultJsonContext.Default.QuestionConsultRecord));
-        projected?.Invoke(next);
-
-        return SpendOutcome.Spent;
-    }
-
-    /// <summary>One gate for every spend of this process — the turn is not re-entrant (<see cref="Spend"/>).</summary>
-    private static readonly Lock SpendGate = new();
-
     /// <summary>Every question in the directory — and nothing else that happens to be JSON in it. The NAME is the guard.</summary>
     public IReadOnlyList<QuestionConsultRecord> All()
     {
@@ -152,7 +81,7 @@ public sealed class QuestionConsultStore(
     /// its cap, and the answer files go on the same clock. Returns how many records changed or went.
     /// </summary>
     /// <param name="deadline">
-    /// A row's budget (<c>COAI_QCONSULT_ROW_MINUTES</c>): rows run in parallel, so it is the question's deadline too, and
+    /// A row's budget (<c>COAI_CONSASK_ROW_MINUTES</c>): rows run in parallel, so it is the question's deadline too, and
     /// a <c>consulting</c> record past TWICE it is ended whatever its pid says (§5, S4b item 9).
     /// </param>
     public int Sweep(Func<int, bool> isAlive, DateTime nowUtc, TimeSpan deadline)
@@ -237,24 +166,4 @@ public sealed class QuestionConsultStore(
 
     private static QuestionConsultRecord? ReadFile(string path) =>
         RecordFiles.Read(path, QuestionConsultJsonContext.Default.QuestionConsultRecord);
-
-    /// <summary>The record in the file, read by a caller that holds its turn — or null: torn, busy, half-written or gone.</summary>
-    private static QuestionConsultRecord? ParsedFile(string path) =>
-        RecordFiles.ReadHeld(path, QuestionConsultJsonContext.Default.QuestionConsultRecord);
-}
-
-/// <summary>What spending (or releasing) a consultation's proof came to (S4b item 8).</summary>
-public enum SpendOutcome
-{
-    /// <summary>The record now names the card — or, on a release, no longer does.</summary>
-    Spent,
-
-    /// <summary>Another card already spent it (on a release: a card other than this one holds it).</summary>
-    AlreadyUsed,
-
-    /// <summary>Its turn could not be had in time; nothing was written, and nothing is spent without the turn.</summary>
-    Busy,
-
-    /// <summary>No such record, or one that cannot be read.</summary>
-    Gone,
 }

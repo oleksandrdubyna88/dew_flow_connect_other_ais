@@ -1,0 +1,14 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t2-sidebar-module
+title: "shell/modules/sidebar + pages/sidebar.ts on kit 0.2: skeleton first, ready after paint, data after ready"
+kind: code
+complexity: 6
+dependsOn: []
+parallel: false
+files:
+  - src_vs_code/shell/modules/sidebar
+  - src_vs_code/pages/sidebar.ts
+  - src_vs_code/package.json
+dod:
+  - id: d1
+    item: "the sidebar polls only while visible"

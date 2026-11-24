@@ -1,0 +1,145 @@
+{
+  "state": {
+    "sessionId": "70fb179b",
+    "repoPath": "/fixture/repo",
+    "branch": "epic-1",
+    "config": {
+      "onExhausted": "Human",
+      "securityLane": {
+        "maxRounds": 2,
+        "threshold": 0,
+        "enabled": false
+      },
+      "roles": {
+        "PlanCritique": {
+          "maxRounds": 1,
+          "threshold": 0,
+          "enabled": true
+        },
+        "Conventions": {
+          "maxRounds": 1,
+          "threshold": 0,
+          "enabled": true
+        },
+        "Architecture": {
+          "maxRounds": 1,
+          "threshold": 0,
+          "enabled": true
+        },
+        "SecurityReliability": {
+          "maxRounds": 1,
+          "threshold": 0,
+          "enabled": true
+        },
+        "UxDxPerformance": {
+          "maxRounds": 1,
+          "threshold": 0,
+          "enabled": true
+        },
+        "DocumentReview": {
+          "maxRounds": 1,
+          "threshold": 0,
+          "enabled": true
+        },
+        "DocumentSummary": {
+          "maxRounds": 1,
+          "threshold": 0,
+          "enabled": true
+        },
+        "FeatureReview": {
+          "maxRounds": 1,
+          "threshold": 0,
+          "enabled": true
+        },
+        "Spec": {
+          "maxRounds": 1,
+          "threshold": 0,
+          "enabled": true
+        }
+      }
+    },
+    "stage": "DocumentReview",
+    "roundsRunThisStage": 1,
+    "escalationsUsed": 0,
+    "awaitingResolve": false,
+    "planProceeded": false,
+    "advanceOnResolve": false,
+    "humanGate": true,
+    "rejections": [
+      {
+        "finding": {
+          "severity": "Major",
+          "category": "Completeness",
+          "file": "",
+          "line": 0,
+          "title": "'fast' is not a number",
+          "why": "nobody can tell whether the result meets it",
+          "fix": "state a latency and a percentile",
+          "providers": [
+            "codex"
+          ],
+          "role": "Spec",
+          "capReason": "",
+          "alsoSeenBy": [],
+          "isGating": true
+        },
+        "reason": "the timeout lives in the caller"
+      }
+    ],
+    "secondRound": "None",
+    "document": "docs/spec.md",
+    "isDocumentSession": true,
+    "feature": "",
+    "isFeatureSession": false
+  },
+  "rounds": [
+    {
+      "stage": "DocumentReview",
+      "number": 1,
+      "verdict": "call_human",
+      "gatingCount": 1,
+      "reviewers": "all 1 reviewers answered",
+      "completedUtc": "2026-11-22T18:34:39.9380401Z",
+      "status": "done",
+      "startedUtc": "2026-11-22T18:34:39.8907068Z",
+      "runnerPid": 334294,
+      "sha": "",
+      "planKey": "",
+      "epicNumber": 0,
+      "cadenceNote": "",
+      "note": "",
+      "key": "c5da0cead1902df4cb0658067ac1d05d",
+      "admittedBy": "",
+      "repeats": 1,
+      "loggedNote": "",
+      "reviewerStates": [
+        {
+          "provider": "codex",
+          "role": "Spec",
+          "status": "done",
+          "findings": 1,
+          "note": "",
+          "seconds": 0,
+          "model": "",
+          "effort": ""
+        }
+      ],
+      "subject": "What this document is for",
+      "tokensIn": 0,
+      "tokensOut": 0,
+      "costNote": "",
+      "usageNote": ""
+    }
+  ],
+  "openedUtc": "2026-11-22T18:34:39.8533134Z",
+  "pending": [],
+  "planText": "# What this document is for\n\nIt is the requirements for a payments integration, written for the two engineers who will\nbuild it and the manager who signs it off. After reading it they must be able to start\nwithout asking anybody a question. It deliberately does not cover the contract with the\nprovider or the pricing, both of which are settled elsewhere.",
+  "plan": "",
+  "epic": "",
+  "cadenceRepoId": "",
+  "featureBase": "",
+  "carried": [],
+  "usedPrompts": [
+    "spec-general"
+  ]
+}

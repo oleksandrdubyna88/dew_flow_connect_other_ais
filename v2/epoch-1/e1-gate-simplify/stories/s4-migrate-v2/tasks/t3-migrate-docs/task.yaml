@@ -1,0 +1,14 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t3-migrate-docs
+title: "PROJECT.md one-shot list and shared/data-inventory.json updated for the added and removed modes"
+kind: docs
+complexity: 2
+dependsOn:
+  - t1-migrate-mode
+parallel: true
+files:
+  - .agents/PROJECT.md
+  - shared/data-inventory.json
+dod:
+  - id: d1
+    item: "every one-shot mode in Program.cs is listed and no removed one is"

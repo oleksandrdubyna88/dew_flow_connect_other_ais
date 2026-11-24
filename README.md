@@ -106,8 +106,8 @@ two of its seventy code-stage findings were worth having.
 
 ## <a id="no-ports-nothing-listening"></a>No ports, nothing listening
 
-The server is a Native-AOT binary speaking MCP over **stdio**. Escalations to a person are atomic
-files in a local state directory. No daemon, no localhost port, no network listener on your machine.
+The server is a Native-AOT binary speaking MCP over **stdio**. State is atomic
+files in a local state directory (v2 has no escalation cards: the gate never waits for a person). No daemon, no localhost port, no network listener on your machine.
 (A company-wide *team server* is a separate, opt-in deployment — that one is an HTTP service behind
 your own sign-in.)
 
@@ -149,6 +149,17 @@ German and Spanish.
 
 ![The help page, in five languages](assets/help-in-five-languages.png)
 
+## Roles that run as jobs (v2)
+
+Beside the review tools, `coai-mcp` can run a role on another model as a **detached job** that outlives the call, the server and your session:
+
+- `start_role(role, repoPath, taskFile | brief)` starts it and answers at once with a `jobId`. Today: `ba` (plans an epic that has no stories into stories and tasks) and `probe` (a diagnostic).
+- `role_status(jobId, maxSeconds?)` shows the state, the attempts (which model, why one stopped) and the result; `role_cancel(jobId)` stops the job.
+- If a model hits a limit, refuses or crashes, the job moves to the next model of the role's list (`COAI_ROLES_MODELS`) at once, with one log line and one notice per switch.
+- `validate_work(repoPath, featureFolder)` (or `coai-mcp --validate-work <dir>`) checks a work-plan tree; `coai-mcp --role-delta <jobId> --at <commit>` measures how much of a BA's task files the orchestrator changed (the plan passes below 20 %).
+
+The design is in [ARCHITECTURE.md](ARCHITECTURE.md#role-jobs-and-the-ba-v2-epoch-3).
+
 ## Security lane
 
 The optional **Security lane** adds reviewer/prompt pairs beside ordinary code and feature reviews.
@@ -164,18 +175,16 @@ identity in history. Missing lane answers are recorded explicitly. See
 
 ## When the rounds run out
 
-Five answers, and you choose which one this repository gets. **Auto** is the default: the gate
-raises no new hold, never waits for a person and never writes a card, so a round nobody answered
-proceeds as `not_reviewed` (never a pass; a feature review's first round is retried first) and spent rounds proceed as
-`good_enough`, each logged and noted on the round. A hold this version raised under *ask a human* stays yours to
-answer, and your AI may still ask you a question its consultants could not settle, or when no
-consultant can be had; and a question it declares a production risk, with a reason, reaches you at once in the Planning or
-Released phase, where no consultant is asked first. Those are the only roads to a person under Auto. The other four are
-**ask a human** (the gate stops and puts the decision in front of you), **continue anyway** (it
-proceeds and says out loud that findings remain), **good enough** (the agent applies what is true,
-rejects the rest *with reasons*, and proceeds), and **escalate** (more reviewer effort, then a
-stronger model, then a stronger arbiter). A rejection needs a reason, and a reasoned rejection is
-discounted in later rounds unless a reviewer re-raises it with a genuinely new argument.
+v2 has four outcomes and no choice to make. A round ends as `proceed`, `revise`, `good_enough` or
+`not_reviewed`. The gate never holds, never waits for a person and never writes a card: a round nobody
+answered proceeds as `not_reviewed` (never a pass; a feature review's first round is retried first), and
+spent rounds proceed as `good_enough` — the agent applies what is true, rejects the rest *with reasons*,
+and proceeds — each logged and noted on the round. Your AI may still ask you a question its consultants
+could not settle, but it asks in its own chat: the `ask_human` tool only points it back there. The old
+policies (**ask a human**, **continue anyway**, **escalate**) and the `COAI_ON_EXHAUSTED` setting are gone;
+a data folder from an older build is converted by the first v2 start (`coai-mcp --migrate-v2` shows what
+it would do). A rejection needs a reason, and a reasoned rejection is discounted in later rounds unless a
+reviewer re-raises it with a genuinely new argument.
 
 ## Deeper
 

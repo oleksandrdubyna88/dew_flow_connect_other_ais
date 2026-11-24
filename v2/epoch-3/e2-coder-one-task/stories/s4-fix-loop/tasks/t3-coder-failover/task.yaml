@@ -1,0 +1,17 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t3-coder-failover
+title: "Failover of a coder: limit, refusal or crash goes to the next claude model in the same worktree, from the last coai commit, in a new session"
+kind: code
+complexity: 7
+dependsOn:
+  - t2-fix-turns
+parallel: false
+files:
+  - src_mcp/src/Server/RoleJobs/RoleFailover.cs
+  - src_mcp/src/Server/RoleJobs/CoderWork.cs
+  - src_mcp/tests
+dod:
+  - id: d1
+    item: "FakeCli model 1 crashes in mid-turn with files half written: the worktree is put back to the last coai commit (uncommitted changes dropped, proven by git status), model 2 starts from turn 0 with the task prompt, one switch line and one role-model-switched notice"
+  - id: d2
+    item: "the fix-turn count is per job, not per model (a switch does not give 3 new turns); output-invalid, cancelled and not-green never fail over; the read-only roles (ba, probe) behave as before (their tests pass unchanged)"

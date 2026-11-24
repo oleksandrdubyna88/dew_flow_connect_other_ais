@@ -47,7 +47,6 @@ export const WRITERS: Readonly<Record<string, Writer>> = {
   'installer.ts': { sites: 5, guard: 'extension storage', why: 'the binary and its download scratch live in globalStorageUri, never in the data directory' },
   'jsonlLedger.ts': { sites: 1, guard: 'board', why: 'the notifications, seen, chat-usage and door ledgers all append through it' },
   'roundsDbRead.ts': { sites: 1, guard: 'extension storage', why: 'the --findings-many keys file is written to the folder the caller names: the extension\'s own storage' },
-  'securityPromptOverride.ts': { sites: 1, guard: 'board', why: 'opening a security prompt override for editing creates the empty file under the data directory' },
   'teamServerAuth.ts': { sites: 1, guard: 'board', why: 'a sign-in writes the token file under the data directory' },
 };
 

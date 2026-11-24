@@ -1,0 +1,5 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: s6-joint-smoke
+title: "Joint smoke: shell VSIX + E1 binary"
+dependsOn:
+  - s2-measure

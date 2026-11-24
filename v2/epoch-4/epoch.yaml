@@ -1,0 +1,12 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: epoch-4
+title: Operator
+proves: "the person works through coai: questions answered, sessions one click away, everything visible"
+dependsOn:
+  - epoch-1
+epics:
+  - e1-ask-hook
+  - e2-sessions-creds
+  - e3-claude-mod
+  - e4-local-pages
+  - e5-features-page

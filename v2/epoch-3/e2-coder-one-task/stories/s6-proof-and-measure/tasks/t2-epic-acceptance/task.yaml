@@ -1,0 +1,15 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t2-epic-acceptance
+title: "Epic acceptance on the real binary over stdio with FakeCli: coder job on a fixture task to green, boundary, inherited plan, one code round"
+kind: test
+complexity: 6
+dependsOn: []
+parallel: false
+files:
+  - src_mcp/tests/TheCoderEpicAcceptanceTests.cs
+  - src_mcp/tests_fakecli
+dod:
+  - id: d1
+    item: "one test drives start_role(coder) to green after 1 fix turn, then review_code on coder/<jobId> to a verdict without a plan round on that branch, on a real coai-mcp with the detached runner"
+  - id: d2
+    item: "the same run proves: the route held claude models only, FakeCli saw --resume once, nothing outside the worktree changed, and the envelope's filesChanged equals the git diff of base to head"

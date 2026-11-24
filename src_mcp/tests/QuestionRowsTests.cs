@@ -5,7 +5,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// <c>COAI_QCONSULT_ROWS</c> as the server reads it (PLAN_question_consultant.md, S2): a model and exactly one
+/// <c>COAI_CONSASK_ROWS</c> as the server reads it (PLAN_question_consultant.md, S2): a model and exactly one
 /// prompt per row, the same prompt allowed on several rows, at most six on.
 /// </summary>
 public sealed class QuestionRowsTests
@@ -126,7 +126,7 @@ public sealed class QuestionRowsTests
 
         setting.Unreadable.Should().BeTrue("the tool refuses by name rather than running nobody");
         setting.Rows.Should().BeEmpty();
-        setting.Complaints.Should().ContainSingle().Which.Should().Contain("COAI_QCONSULT_ROWS could not be read");
+        setting.Complaints.Should().ContainSingle().Which.Should().Contain("COAI_CONSASK_ROWS could not be read");
     }
 
     [Fact]

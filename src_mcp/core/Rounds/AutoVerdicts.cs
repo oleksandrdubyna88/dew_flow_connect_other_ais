@@ -3,12 +3,12 @@ using CoaiMcp.Core.Gate;
 namespace CoaiMcp.Core.Rounds;
 
 /// <summary>
-/// What the round machine decides under policy auto at the three sites that called a person: nobody answered, a feature review at its
-/// cap, and the rounds running out. Each ends the round for good — <c>HumanGate</c> is never set, and the stage advances on <c>resolve</c>.
+/// What the round machine decides at the three sites that used to call a person: nobody answered, a feature review at its
+/// cap, and the rounds running out. Each ends the round for good — nobody is waited for, and the stage advances on <c>resolve</c>.
 /// </summary>
 /// <remarks>
-/// <para>Kept out of <see cref="RoundMachine"/> on purpose: that file is at the size cap, and these three decisions are one idea — the
-/// auto twin of every <c>call_human</c> — that reads better in one place than as three branches in three methods.</para>
+/// <para>Kept out of <see cref="RoundMachine"/> on purpose: that file is at the size cap, and these three decisions are one idea
+/// that reads better in one place than as three branches in three methods.</para>
 /// <para>Every reason begins <c>policy auto:</c>, so the note on the round and the log line say who decided.</para>
 /// </remarks>
 internal static class AutoVerdicts

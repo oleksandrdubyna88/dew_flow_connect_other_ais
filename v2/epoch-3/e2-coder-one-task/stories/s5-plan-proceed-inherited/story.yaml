@@ -1,0 +1,5 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: s5-plan-proceed-inherited
+title: "The task session inherits the feature's plan proceed: review_code works on a coder branch without its own plan round"
+dependsOn:
+  - s3-coder-role-case

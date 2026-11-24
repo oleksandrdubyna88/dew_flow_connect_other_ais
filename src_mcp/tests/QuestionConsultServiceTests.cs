@@ -53,7 +53,7 @@ public sealed class QuestionConsultServiceTests : IAsyncLifetime
         var scripted = launcher ?? new ScriptedLauncher(_real, Answers);
         var settings = new PanelSettings
         {
-            Rounds = new PanelConfig(OnExhausted: StagePolicy.Human),
+            Rounds = new PanelConfig(),
             DataDir = _data,
             Providers = [],
             QuestionConsult = new QuestionConsultSettings
@@ -121,7 +121,7 @@ public sealed class QuestionConsultServiceTests : IAsyncLifetime
         var reply = await AskAsync(Service(enabled: false));
 
         reply.GetProperty("status").GetString().Should().Be("off");
-        reply.GetProperty("next").GetString().Should().Contain("COAI_QCONSULT_ENABLED").And.Contain("ask_human");
+        reply.GetProperty("next").GetString().Should().Contain("COAI_CONSASK_ENABLED").And.Contain("your own conversation");
         reply.GetProperty("answers").GetArrayLength().Should().Be(0);
     }
 
@@ -133,7 +133,7 @@ public sealed class QuestionConsultServiceTests : IAsyncLifetime
         var reply = await AskAsync(service);
 
         reply.GetProperty("status").GetString().Should().Be("none_available");
-        reply.GetProperty("next").GetString().Should().Contain("ask_human");
+        reply.GetProperty("next").GetString().Should().Contain("your own conversation");
         var record = service.Store.All().Should().ContainSingle().Subject;
         record.Outcome.Should().Be(QuestionOutcomes.NoneAvailable);
         record.Status.Should().Be(QuestionConsultStatuses.Failed);
@@ -155,7 +155,7 @@ public sealed class QuestionConsultServiceTests : IAsyncLifetime
 
         eleventh.GetProperty("status").GetString().Should().Be("quota_spent");
         eleventh.GetProperty("questionsLeft").GetInt32().Should().Be(0);
-        eleventh.GetProperty("next").GetString().Should().Contain("COAI_QCONSULT_QUESTIONS_PER_SESSION").And.Contain("ask_human");
+        eleventh.GetProperty("next").GetString().Should().Contain("COAI_CONSASK_QUESTIONS_PER_SESSION").And.Contain("your own conversation");
         service.Store.All().Where(r => r.Outcome == QuestionOutcomes.QuotaSpent).Should().ContainSingle("the refused question is written down too");
     }
 
@@ -200,7 +200,7 @@ public sealed class QuestionConsultServiceTests : IAsyncLifetime
 
         answers.Select(a => a.GetProperty("advice").GetString()!).Should().OnlyHaveUniqueItems("two vendors, two answers");
         answers.Single(a => a.GetProperty("vendor").GetString() == "codex").GetProperty("flag").GetString().Should().Be("unconfined", "D13's flag rides into the reply");
-        reply.GetProperty("next").GetString().Should().Contain("2 of 2 consultant(s) answered").And.Contain("verify each answer");
+        reply.GetProperty("next").GetString().Should().Contain("2 of 2 row(s) answered").And.Contain("verify each answer");
     }
 
     [Fact]
@@ -291,7 +291,7 @@ public sealed class QuestionConsultServiceTests : IAsyncLifetime
             var scripted = new ScriptedLauncher(_real, Answers);
             var settings = new PanelSettings
             {
-                Rounds = new PanelConfig(OnExhausted: StagePolicy.Human),
+                Rounds = new PanelConfig(),
                 DataDir = _data,
                 Providers = [],
                 QuestionConsult = new QuestionConsultSettings
@@ -322,13 +322,13 @@ public sealed class QuestionConsultServiceTests : IAsyncLifetime
     public async Task RowsThatCannotBeRead_RefuseByName()
     {
         var scripted = new ScriptedLauncher(_real, Answers);
-        var settings = new PanelSettings { Rounds = new PanelConfig(OnExhausted: StagePolicy.Human), DataDir = _data, Providers = [], QuestionConsult = new QuestionConsultSettings { RowsUnreadable = true } };
+        var settings = new PanelSettings { Rounds = new PanelConfig(), DataDir = _data, Providers = [], QuestionConsult = new QuestionConsultSettings { RowsUnreadable = true } };
         var service = new QuestionConsultService(
             settings, scripted, new ReviewerExecutor(scripted), new ContextAssembler(scripted), new RolePrompts(_data),
             new UsageLedger(_data), VaultKeys.None("no vault"), Logger.None, _ => null, Noticing.None);
 
         var reply = await AskAsync(service);
 
-        reply.GetProperty("error").GetString().Should().Contain("COAI_QCONSULT_ROWS").And.Contain("could not be read");
+        reply.GetProperty("error").GetString().Should().Contain("COAI_CONSASK_ROWS").And.Contain("could not be read");
     }
 }

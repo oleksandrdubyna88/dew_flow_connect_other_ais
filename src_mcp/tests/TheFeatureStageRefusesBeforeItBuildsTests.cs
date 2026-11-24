@@ -306,7 +306,7 @@ public sealed class TheFeatureStageRefusesBeforeItBuildsTests : IAsyncLifetime
     [Fact]
     public async Task NamingADocumentAndAFeature_IsRefused()
     {
-        var answer = JsonDocument.Parse(await Service().StatusAsync(_repo, "main", "docs/spec.md", string.Empty, feature: PlanPath)).RootElement;
+        var answer = JsonDocument.Parse(await Service().StatusAsync(_repo, "main", "docs/spec.md", feature: PlanPath)).RootElement;
 
         answer.GetProperty("error").GetString().Should().Contain("not both");
     }

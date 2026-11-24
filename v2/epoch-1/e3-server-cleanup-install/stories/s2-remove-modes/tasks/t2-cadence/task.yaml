@@ -1,0 +1,16 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t2-cadence
+title: "Remove Server/Cadence, core/Cadence, CadenceArgs and the --cadence one-shot"
+kind: code
+complexity: 4
+dependsOn:
+  - t1-consask-modes
+parallel: false
+files:
+  - src_mcp/src/Server/Cadence
+  - src_mcp/core/Cadence
+  - src_mcp/src/Tools.cs
+  - src_mcp/src/Program.cs
+dod:
+  - id: d1
+    item: "--cadence exits 64 (unknown mode)"

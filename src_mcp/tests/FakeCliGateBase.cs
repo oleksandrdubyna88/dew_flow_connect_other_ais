@@ -105,7 +105,7 @@ public abstract class FakeCliGateBase : IAsyncLifetime
             new PanelSettings
             {
                 Providers = [new("codex") { ExecutablePath = FakeCliExe }],
-                Rounds = PanelConfig.Uniform(3, 2, StagePolicy.Human),
+                Rounds = PanelConfig.Uniform(3, 2),
                 DataDir = Data,
                 AgentLogDir = transcripts,
                 ReviewerTimeout = TimeSpan.FromSeconds(30),

@@ -1,0 +1,149 @@
+{
+  "files": [
+    {
+      "path": "v2/epoch-3/e2-coder-one-task/stories/s1-toolchain-file/story.yaml",
+      "sha256": "51fe685f6031384c1f59aa04274178cd995a74d5ef276afdec1d0ec0d04af65d",
+      "kind": "story"
+    },
+    {
+      "path": "v2/epoch-3/e2-coder-one-task/stories/s1-toolchain-file/tasks/t1-toolchain-schema-reader/task.yaml",
+      "sha256": "7bf524817c81b6c06322468bac8d258fd1059bb0cc68e6903c3503946fc0881b",
+      "kind": "task"
+    },
+    {
+      "path": "v2/epoch-3/e2-coder-one-task/stories/s1-toolchain-file/tasks/t2-check-runner/task.yaml",
+      "sha256": "f94d8b46c73afbf1d4d40f65072192eedecddc0374d67fa3d490731316eb2861",
+      "kind": "task"
+    },
+    {
+      "path": "v2/epoch-3/e2-coder-one-task/stories/s1-toolchain-file/tasks/t3-failure-digest/task.yaml",
+      "sha256": "f6667b319cc456c4a628fb56a2421b4b5d59eef2abdd2a7c1ca4ec00d35feab9",
+      "kind": "task"
+    },
+    {
+      "path": "v2/epoch-3/e2-coder-one-task/stories/s1-toolchain-file/tasks/t4-this-repository-file/task.yaml",
+      "sha256": "d157d20a634bbda8645a33993712d7eda21cd5a0860d71a79fc81a5ec72bd0b6",
+      "kind": "task"
+    },
+    {
+      "path": "v2/epoch-3/e2-coder-one-task/stories/s2-write-boundary/story.yaml",
+      "sha256": "78723954cd777a93407c8d3aa4f9cb4ae803c10657a5472055b78720716a8115",
+      "kind": "story"
+    },
+    {
+      "path": "v2/epoch-3/e2-coder-one-task/stories/s2-write-boundary/tasks/t1-boundary-measure/task.yaml",
+      "sha256": "5f1e0177eb0f1a3749cb58a7efce2c9b09ee672cf1a0ad850a9823ea927163ea",
+      "kind": "task"
+    },
+    {
+      "path": "v2/epoch-3/e2-coder-one-task/stories/s2-write-boundary/tasks/t2-coder-worktree/task.yaml",
+      "sha256": "b14423ec4200548b48e56bd9ca4ffb3e5453c4c4e8a5492e4b3fe68394adb2e6",
+      "kind": "task"
+    },
+    {
+      "path": "v2/epoch-3/e2-coder-one-task/stories/s2-write-boundary/tasks/t3-claude-write-launch/task.yaml",
+      "sha256": "c47f7ac4b5b2e5d5d77ea52efb8afe85214bbc515a1ac7125ba79ebeac886c1b",
+      "kind": "task"
+    },
+    {
+      "path": "v2/epoch-3/e2-coder-one-task/stories/s2-write-boundary/tasks/t4-checks-inside-boundary/task.yaml",
+      "sha256": "1a022217bb074ac01789cb43d6869d2d5058acd468950eda2c27e3b057af38f1",
+      "kind": "task"
+    },
+    {
+      "path": "v2/epoch-3/e2-coder-one-task/stories/s2-write-boundary/tasks/t5-boundary-tests/task.yaml",
+      "sha256": "9dd30283d25ae3f07f791ef69d13677dfea883875f44a6676b532ae0b84ee38c",
+      "kind": "task"
+    },
+    {
+      "path": "v2/epoch-3/e2-coder-one-task/stories/s3-coder-role-case/story.yaml",
+      "sha256": "ca5c58f6b8449c2731483063a1959e14603d3a2a1d8ba087f2e26ef07fb1aa91",
+      "kind": "story"
+    },
+    {
+      "path": "v2/epoch-3/e2-coder-one-task/stories/s3-coder-role-case/tasks/t1-coder-contract/task.yaml",
+      "sha256": "917d9aa675105fe166a841eaf19a88d9dad74d79cdcefb810e5e73e659d41ef7",
+      "kind": "task"
+    },
+    {
+      "path": "v2/epoch-3/e2-coder-one-task/stories/s3-coder-role-case/tasks/t2-coder-task-check/task.yaml",
+      "sha256": "6b128c3ffc7cf7c1a95de581f3574baca7caa1f61f767719d6e38c5b85c38867",
+      "kind": "task"
+    },
+    {
+      "path": "v2/epoch-3/e2-coder-one-task/stories/s3-coder-role-case/tasks/t3-coder-first-turn/task.yaml",
+      "sha256": "d1674346a690aedb72130f2c29a0d6b604a7cee0a233e8b60a29413706aff962",
+      "kind": "task"
+    },
+    {
+      "path": "v2/epoch-3/e2-coder-one-task/stories/s3-coder-role-case/tasks/t4-coder-tool-text/task.yaml",
+      "sha256": "610f3af729cee694b2c70bb9b151879184a63fbee77b25b2cc057d40ef670858",
+      "kind": "task"
+    },
+    {
+      "path": "v2/epoch-3/e2-coder-one-task/stories/s4-fix-loop/story.yaml",
+      "sha256": "c1fb87cc60f7104f0a28a7dffef20cc688af3c3f0cd00cafd48927d054bbda05",
+      "kind": "story"
+    },
+    {
+      "path": "v2/epoch-3/e2-coder-one-task/stories/s4-fix-loop/tasks/t1-checks-after-turn/task.yaml",
+      "sha256": "856b23a7852cb3c7a6843ecffdea6cb960383ac33ea59911555f3cb393570f36",
+      "kind": "task"
+    },
+    {
+      "path": "v2/epoch-3/e2-coder-one-task/stories/s4-fix-loop/tasks/t2-fix-turns/task.yaml",
+      "sha256": "54e0ab73098f4769b67c6833793ea361cea57c44c6bacd5d3a95093e4bd8085c",
+      "kind": "task"
+    },
+    {
+      "path": "v2/epoch-3/e2-coder-one-task/stories/s4-fix-loop/tasks/t3-coder-failover/task.yaml",
+      "sha256": "c2ea152f9152b9fdeace01e8bceff5ab77ba4701a17fed1c2865e7936adef46c",
+      "kind": "task"
+    },
+    {
+      "path": "v2/epoch-3/e2-coder-one-task/stories/s4-fix-loop/tasks/t4-fix-loop-scenarios/task.yaml",
+      "sha256": "59cb4a8df55f442cf19dc7326ed26d696ea1ac61a88f75e98a69eb22d70c72df",
+      "kind": "task"
+    },
+    {
+      "path": "v2/epoch-3/e2-coder-one-task/stories/s5-plan-proceed-inherited/story.yaml",
+      "sha256": "775c190c8f748829f218edea26894b1302be8845a1d6372c9410ff62fac0d8ba",
+      "kind": "story"
+    },
+    {
+      "path": "v2/epoch-3/e2-coder-one-task/stories/s5-plan-proceed-inherited/tasks/t1-plan-binding/task.yaml",
+      "sha256": "de19f526073b28ac2fb8fe736b3bc9223c773c33d42c4bbf4cb1819731d0c450",
+      "kind": "task"
+    },
+    {
+      "path": "v2/epoch-3/e2-coder-one-task/stories/s5-plan-proceed-inherited/tasks/t2-plan-binding-tests/task.yaml",
+      "sha256": "54c22ab85962cb0e0eb260383c1838466ebafa7cd4a53fae2f8bca8cd4b0f07d",
+      "kind": "task"
+    },
+    {
+      "path": "v2/epoch-3/e2-coder-one-task/stories/s6-proof-and-measure/story.yaml",
+      "sha256": "8a0aafc0a6f7176df1412ce05e4693be4716d56b8fa018fdaa01ec4e9ea933f2",
+      "kind": "story"
+    },
+    {
+      "path": "v2/epoch-3/e2-coder-one-task/stories/s6-proof-and-measure/tasks/t1-baseline/task.yaml",
+      "sha256": "d76b486333cda8b320d3e00da12afeb4906c841876173135b2dcadcf3309778e",
+      "kind": "task"
+    },
+    {
+      "path": "v2/epoch-3/e2-coder-one-task/stories/s6-proof-and-measure/tasks/t2-epic-acceptance/task.yaml",
+      "sha256": "199cc5cd0ff29f20849690b8343ece7dfcd2ff427e572d6b3130a07b648c8a9f",
+      "kind": "task"
+    },
+    {
+      "path": "v2/epoch-3/e2-coder-one-task/stories/s6-proof-and-measure/tasks/t3-real-coder-run/task.yaml",
+      "sha256": "68e4e8d905f2de8211d7e032f0f6c2f560ab495ecc443d67c348e5115e19f47e",
+      "kind": "task"
+    },
+    {
+      "path": "v2/epoch-3/e2-coder-one-task/stories/s6-proof-and-measure/tasks/t4-docs/task.yaml",
+      "sha256": "d6684591e4e58f55d91747063ebb5157972b4b8409efc03226272fc058e1c16f",
+      "kind": "task"
+    }
+  ]
+}

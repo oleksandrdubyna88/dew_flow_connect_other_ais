@@ -1,0 +1,12 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: epoch-3
+title: "Deterministic work"
+proves: "an external role does a task that coai routes, checks and keeps green"
+dependsOn:
+  - epoch-1
+epics:
+  - e1-role-jobs-ba
+  - e2-coder-one-task
+  - e3-roles-complete
+  - e4-adapters-coder-hardening
+  - e5-work-scheduler

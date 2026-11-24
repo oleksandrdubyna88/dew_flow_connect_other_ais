@@ -55,6 +55,9 @@ public sealed class AWriterModeRefusesAMissingNamedRootTests : IDisposable
         new[] { "--upload-pairs", "--server", "http://127.0.0.1:9" },
         new[] { "--requeue-refused" },
         new[] { "--consultants" },
+        new[] { "--migrate-v2", "--apply" },
+        // The detached runner of one role job (epoch 3 E1 s1): a server started it, so its data folder is there; named and missing, it is refused before it runs.
+        new[] { "--role-run", "r20260101000000-00000000" },
     };
     // END WRITER MODES
 
@@ -180,7 +183,7 @@ public sealed class AWriterModeRefusesAMissingNamedRootTests : IDisposable
     public void AModeThatDoesNotWrite_IsNotRefusedHere()
     {
         Program.MissingRootRefusal(Program.Startup.Log, Named(Missing), File.GetAttributes).Should().BeEmpty("a reader answers on its own terms");
-        Program.MissingRootRefusal(Program.Startup.CheckSecurity, Named(Missing), File.GetAttributes).Should().BeEmpty("--check-security never touches the data directory");
+        Program.MissingRootRefusal(Program.Startup.Features, Named(Missing), File.GetAttributes).Should().BeEmpty("--features never touches the data directory");
     }
 
     private static string RowJson =>

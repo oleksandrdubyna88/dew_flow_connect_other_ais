@@ -1,0 +1,15 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t4-security-lane
+title: "Remove the security lane (SecurityLane*, CheckSecurityMode, SecurityPromptTextReadMode, core/Security, shared/security-lane*.json)"
+kind: code
+complexity: 4
+dependsOn:
+  - t3-commands-picker
+parallel: false
+files:
+  - src_mcp/src/Server
+  - src_mcp/core/Security
+  - shared/security-lane.json
+dod:
+  - id: d1
+    item: "--check-security and --security-prompt-text exit 64"

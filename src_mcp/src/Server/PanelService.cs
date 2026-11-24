@@ -34,19 +34,13 @@ public sealed class PanelService
 
     private readonly ContextAssembler _context;
     private readonly RosterBuilder _roster;
-    private readonly RoundCommands _commands;
     private readonly RoundEngine _engine;
     private readonly FeatureStage _feature;
-    private readonly Escalations _escalations;
-    private readonly AskHumanService _askHuman;
-    private readonly EscalationRetention _retention;
     private readonly Store.Projection _projection;
-    private readonly SessionPolicy _policy;
     private readonly Runners.Processes.ProcessTracking _tracking;
     private readonly RemoteProbe _remote;
     private readonly ConsultationService _consultations;
     private readonly QuestionConsultService _questions;
-    private readonly CadenceDesk _cadence;
 
     /// <summary>
     /// The host's stopping token — what a local round tells a stopping server's cancellation from a person's withdrawal by
@@ -72,7 +66,8 @@ public sealed class PanelService
         _launcher = launcher;
         _log = log;
         _noticing = noticing;
-        _store = new SessionStore(settings.DataDir, settings.Rounds.Catalog);
+        // The store converts a held session it loads across the same boundary the migration uses: an answered hold is announced through the host's writer first.
+        _store = new SessionStore(settings.DataDir, settings.Rounds.Catalog) { Notice = noticing.Settled, Log = log };
         _artifacts = new ArtifactStore(settings.DataDir);
         _worktrees = new WorktreeManager(
             launcher,
@@ -100,11 +95,8 @@ public sealed class PanelService
             // takes as proof that no round was ever silent.
             problem => _log.Warning("evidence: {Problem}", problem));
         var prompts = new RolePrompts(settings.DataDir);
-        _escalations = new Escalations(settings.DataDir);
         var ledger = new UsageLedger(settings.DataDir);
-        var callers = new CallerSessions(settings.DataDir);
         _projection = new Store.Projection(settings.DataDir, log);
-        _policy = new SessionPolicy(settings, _store, _escalations, _projection, log);
         _consultations = new ConsultationService(
             settings, launcher, executor, _context, prompts, ledger, log,
             Environment.GetEnvironmentVariable, noticing, keys);
@@ -112,23 +104,6 @@ public sealed class PanelService
         // its own record store and its fan-out — kept out of this file, as the consultation is.
         _questions = new QuestionConsultService(
             settings, launcher, executor, _context, prompts, ledger, keys, log, Environment.GetEnvironmentVariable, noticing);
-        var cadenceStore = new CadenceStore(settings.DataDir);
-        // ask_human with its gate (S3): the desk gathers the phase from the session and the cadence record, verifies
-        // a consultId against the question records, and runs the consultants beside a production risk.
-        _askHuman = new AskHumanService(settings, _store, _escalations, log, noticing, AddressOf,
-            new AskGateDesk(_questions, cadenceStore, new QuestionPhaseStore(settings.DataDir), _escalations, Environment.GetEnvironmentVariable, log), _policy);
-        _retention = new EscalationRetention(_escalations, _store.HeldQuestions, message => _log.Warning("escalations: {Detail}", message));
-        // The consultation cadence (research/PLAN_consult_on_a_cadence.md): its record, its gate over the
-        // consultation records, and every decision a round makes about it — kept out of this file.
-        _cadence = new CadenceDesk(
-            settings,
-            cadenceStore,
-            new CadenceGate(_consultations.Store, () => _consultations.Preflight()),
-            _context,
-            new Runners.Collecting.GitHistory(launcher),
-            log,
-            noticing);
-
         // One client for every Team server this configuration names. A probe and a cancellation are
         // both short requests to the same handful of hosts, so a shared handler is the whole point.
         _remote = new RemoteProbe(new HttpClient());
@@ -138,14 +113,11 @@ public sealed class PanelService
         _roster = new RosterBuilder(
             settings, keys, prompts, new ReviewerPrompt(prompts), _remote, CanRun, RuntimeFor, () => PruneOldAnswerDirs(settings.ConsultantHomesRoot, log), log);
 
-        // The orders a round carries, read by the engine for its reply and by the cadence check before a
-        // code round; and the engine every stage runs through. The engine is handed what only this service
-        // can say — who a stage excludes, and the sentence for a round nobody could serve — and holds no
-        // reference back.
-        _commands = new RoundCommands(settings, prompts, log);
+        // The engine every stage runs through. It is handed what only this service can say — who a stage excludes, and
+        // the sentence for a round nobody could serve — and holds no reference back.
         _engine = new RoundEngine(
-            settings, log, noticing, _store, _worktrees, scheduler, executor, _commands, _escalations, ledger,
-            _projection, _policy, callers, _remote, new RoundAuthorsStep(settings, log, _store, environment), ExcludedFrom, NoReviewerRefusal, hostStopping);
+            settings, log, noticing, _store, _worktrees, scheduler, executor, ledger,
+            _projection, _remote, new RoundAuthorsStep(settings, log, _store, environment), ExcludedFrom, NoReviewerRefusal, hostStopping);
         // The fourth gate, in a file of its own (S2.2b): its inputs, its refs and its pack, over the same
         // engine. The outliner is the in-process tree-sitter one the pack is measured with.
         _feature = new FeatureStage(settings, launcher, _engine, _roster, new Normalizer.TreeSitterOutliner(), log, noticing);
@@ -186,9 +158,6 @@ public sealed class PanelService
         }
 
         _log.Debug("re-projected {Count} question consultation(s) into the rounds database", _questions.Reproject());
-        // And the person's cards (A4, S3): answered and expired questions, orphans and temp files older than seven
-        // days go; a question a live session still holds is kept. The phase records they count into go after thirty.
-        _log.Debug("swept {Count} escalation file(s) and phase record(s)", SweepEscalations());
         _log.Debug("retired {Count} Kimi lock key(s)", SweepKimiLocks());
 
         // And the reviewers those rounds left RUNNING, which is the more expensive half of the
@@ -219,6 +188,9 @@ public sealed class PanelService
     /// underneath the tools when the panel rewrites its file.
     /// </summary>
     public PanelSettings Settings => _settings;
+
+    /// <summary>The external-role jobs of this data directory, over this service's log and notice boundary (epoch 3 E1 s1) — the three role tools need nothing else of it.</summary>
+    internal RoleJobs.RoleJobService RoleJobs() => new(_settings.DataDir, Roles.RolesMode.Layered(Environment.GetEnvironmentVariable), _log, _noticing.Offer);
 
     /// <summary>
     /// The roster this service deals its rounds from — internal so a test can build a round's work
@@ -549,16 +521,13 @@ public sealed class PanelService
     /// own session, which is what every caller before plan 4 meant and still means.
     /// </param>
     public Task<string> StatusAsync(string repoPath, string branch, string document = "") =>
-        StatusAsync(repoPath, branch, document, string.Empty, ct: HostStopping);
+        StatusAsync(repoPath, branch, document, string.Empty, HostStopping);
 
-    /// <param name="plan">A plan to report the consultation cadence of — or empty for the one this session holds,
-    /// if any (<c>research/PLAN_consult_on_a_cadence.md</c>). Read from the plan's own record, so it answers the same
-    /// on every branch the plan is built on.</param>
     /// <param name="feature">
     /// Which plan's FEATURE review, when the session is one: the same <c>planPath</c> that was passed to
     /// <c>review_feature</c>. The branch is then not read — a feature session is keyed by its plan.
     /// </param>
-    public async Task<string> StatusAsync(string repoPath, string branch, string document, string plan, string feature = "", CancellationToken ct = default)
+    public async Task<string> StatusAsync(string repoPath, string branch, string document, string feature = "", CancellationToken ct = default)
     {
         if (Both(document, feature) is { Length: > 0 } both)
         {
@@ -566,18 +535,13 @@ public sealed class PanelService
         }
 
         var at = AddressOf(repoPath, branch, document, feature);
-        var session = LoadedUnderThePolicy(repoPath, at);
+        var session = _store.Load(repoPath, at.Branch, at.Document, at.Feature);
         if (session is null)
         {
             return Error(NoSession(document, feature));
         }
 
-        _escalations.OfferHeldNotices(session);
-        var cadence = _settings.CadenceMode == Core.Cadence.CadenceMode.Off || document.Length > 0 || feature.Length > 0
-            ? null
-            : await _cadence.AnswerAsync(session, plan, await _worktrees.ShaOrNoneAsync(repoPath, branch), ct);
-
-        return Json(SessionAnswerFor(session) with { Cadence = cadence }, ServerJsonContext.Default.SessionAnswer);
+        return Json(SessionAnswerFor(session), ServerJsonContext.Default.SessionAnswer);
     }
 
     /// <summary>
@@ -644,21 +608,21 @@ public sealed class PanelService
     /// is expected to sit through.</para>
     /// </remarks>
     public Task<string> ReviewPlanAsync(string repoPath, string branch, string planText, CancellationToken ct = default) =>
-        ReviewPlanAsync(repoPath, branch, planText, CadenceArgs.None, ct);
-
-    /// <param name="cadence">What the caller declared about the consultation cadence — the plan, the epic, the
-    /// risk answer (<c>research/PLAN_consult_on_a_cadence.md</c>). Checked under the claim; a false declaration is
-    /// refused, and the facts shape the orders the reply carries.</param>
-    public Task<string> ReviewPlanAsync(string repoPath, string branch, string planText, CadenceArgs cadence, CancellationToken ct = default) =>
-        ReviewPlanAsync(repoPath, branch, new PlanInput(planText, string.Empty, string.Empty), cadence, ct);
+        ReviewPlanAsync(repoPath, branch, new PlanInput(planText, string.Empty, string.Empty), ct);
 
     /// <summary>The same gate for a plan named either way: its text, or a committed file the server reads itself.</summary>
     /// <remarks>
     /// A refusal of the input is answered HERE, before the claim, the begin and any round number — see <see cref="PlanInputs"/>.
     /// </remarks>
-    internal async Task<string> ReviewPlanAsync(string repoPath, string branch, PlanInput input, CadenceArgs cadence, CancellationToken ct = default)
+    internal async Task<string> ReviewPlanAsync(string repoPath, string branch, PlanInput input, CancellationToken ct = default)
     {
-        var trace = new CadenceTrace();
+        // The item the call is for: refused HERE, before the claim, a number or a reviewer, like every refusal of the input.
+        var (workItem, workItemRefusal) = WorkItems.Check(input.WorkItem);
+        if (workItemRefusal.Length > 0)
+        {
+            return Error(workItemRefusal);
+        }
+
         // The same guard the code stage has had, for the same reason: a round that launches no
         // reviewer is not an empty round, it is an unresolved one, and it sits open for ever. It
         // became reachable here when the plan roster started coming from the catalog.
@@ -687,21 +651,19 @@ public sealed class PanelService
                 // scratch folder on purpose, and collecting from it would gather nothing while
                 // looking like it worked. `Collect` reads the WORKING TREE, which is the honest
                 // input at plan time: the plan under review describes work about to happen in it.
-                var rules = RuleFiles.Collect(repoPath, RuleOrder.Staged(StageRules.Plan));
+                // The repository's OWN written rules, in the order the code stage reads them: coai names no
+                // rule of its own (v2 E3.S5), so a repository that mounts the shared conventions has them
+                // read as its own instructions, and one that does not is told nothing is missing.
+                var rules = RuleFiles.Collect(repoPath, RuleOrder.ForBranch(branch));
 
-                // The same sentence the code stage writes, carrying this stage's own numbers. The
-                // tier COVERAGE is here because this gate reviews other repositories: a target on an
-                // older conventions pin may carry only some of the tier, and a round that matched
-                // none of it must not read like a round that matched all of it.
                 _log.Information(
                     "context for review: plan {PlanBytes} bytes (id {TextId}); rules {RulesBytes} bytes, "
-                    + "{Matched} of {Tier} tier rule(s), {Omitted} omitted",
+                    + "{Omitted} omitted, {Missing} mount(s) not in the tree",
                     System.Text.Encoding.UTF8.GetByteCount(plan.Text),
                     plan.TextId,
                     rules.Bytes,
-                    rules.MatchedCount(StageRules.Plan),
-                    StageRules.Plan.Length,
-                    rules.Omitted.Count);
+                    rules.Omitted.Count,
+                    rules.MissingMounts.Count);
 
                 // A plan round skips no role for a RULE's sake: it has one, and there is nothing for
                 // a rule file to decide about it. What BuildWork itself could not ask — a role
@@ -721,30 +683,21 @@ public sealed class PanelService
                 return WithNothingSkippedByRule(
                     _roster.BuildWork(
                         roles, workingDir,
-                        RulesText.Section(rules, rules.TierCoverage(StageRules.Plan))
+                        RulesText.Section(rules)
                             + PlanSection.Compose(plan.Text, plan.SourceLine, plan.TextId),
                         round,
                         stage: Stage.PlanReview, readsCheckout: false,
                         seed: StableSeed(session.State.SessionId, round),
-                        planPrompts: _settings.DealPlanLenses ? UnspentPlanLenses(session, roles) : null,
-                        deal: _settings.DealPlanLenses,
                         codexTiers: tiers,
                         // The round's own scratch (D17's homes); a plan round mounts no checkout, so no snapshot.
                         scratch: await _roster.ScratchAsync(_launcher, Stage.PlanReview, workingDir, readsCheckout: false, roundToken))).WithUnreviewed(plan.Unreviewed);
             })
         {
-            // The ONE commit the plan was read at: the engine resolves this, so the plan, the cadence outline and the record agree.
+            // The ONE commit the plan was read at: the engine resolves this, so the plan and the record agree.
             Head = plan.Head,
             PlanSource = plan.Source,
             RolesPerVendor = 1,
-            Cadence = trace,
-            // The plan stage refuses only what the declaration itself gets wrong; which groups are owed
-            // is an ORDER here, never a refusal — nothing is built yet.
-            RefuseBeforeBuilding = async (loaded, sha) =>
-            {
-                trace.Call = await _cadence.PrepareAsync(loaded, cadence, repoPath, sha, ct);
-                return trace.Call.Refusal;
-            },
+            WorkItem = workItem,
         },
             ct);
     }
@@ -764,14 +717,18 @@ public sealed class PanelService
     /// </remarks>
     public Task<string> ReviewCodeAsync(
         string repoPath, string branch, string baseRef, string planText, bool again = false, CancellationToken ct = default) =>
-        ReviewCodeAsync(repoPath, branch, baseRef, planText, again, CadenceArgs.None, ct);
+        ReviewCodeAsync(repoPath, branch, baseRef, planText, again, string.Empty, ct);
 
-    /// <param name="cadence">The plan and epic this code round is for, and any risk answer — what the
-    /// consultation cadence refuses on in <c>require</c> (<c>research/PLAN_consult_on_a_cadence.md</c>).</param>
+    /// <summary>The code gate for a call that names the plan item it is for (<see cref="WorkItems"/>); `workItem` empty is the old call.</summary>
     public Task<string> ReviewCodeAsync(
-        string repoPath, string branch, string baseRef, string planText, bool again, CadenceArgs cadence, CancellationToken ct = default)
+        string repoPath, string branch, string baseRef, string planText, bool again, string workItem, CancellationToken ct = default)
     {
-        var trace = new CadenceTrace();
+        var (item, itemRefusal) = WorkItems.Check(workItem);
+        if (itemRefusal.Length > 0)
+        {
+            return Task.FromResult(Error(itemRefusal));
+        }
+
         // Before the scope check and before anything is built, because it needs nothing to be true:
         // a code round with every role switched off would launch no reviewer, and that is not an
         // empty round — the session counts a round nobody answered as unresolved, so it would sit
@@ -894,17 +851,12 @@ public sealed class PanelService
                         round, RosterBuilder.NoWrittenRules, string.Join(", ", RuleFiles.SourceNames));
                 }
                 _log.Information("round {Round} runs {Count} role(s): {Roles}", round, roles.Count, string.Join(", ", roles));
-                var securitySources = await SecuritySources.ReadAsync(_settings.SecurityLane,
-                    _roster.Security().Due(Stage.CodeReview, round), collected.Files,
-                    new Runners.Feature.SourceResolver(new Runners.Collecting.GitHistory(_launcher),
-                        new Normalizer.TreeSitterOutliner(), repoPath, sha), roundToken);
-                // The ordinary reviewers' codex and the security lane's alike (research/PLAN_codex_tier_floor.md).
+                // The reviewers' codex rows (research/PLAN_codex_tier_floor.md).
                 var tiers = await _roster.CodexTiersAsync(_launcher, workingDir, roundToken);
                 var built = WithSkippedByRule(
                     _roster.BuildWork(roles, workingDir, context, round,
                         stage: Stage.CodeReview, readsCheckout: true,
                         seed: StableSeed(session.State.SessionId, round),
-                        deal: _settings.DealCodeLenses, securityFiles: collected.Files, securitySources: securitySources,
                         codexTiers: tiers,
                         // The round's own scratch: D17's homes, and D6's sanitised snapshot of the pinned tree for a runtime
                         // that must not start in the checkout — made here, once, because BuildWork cannot await.
@@ -933,29 +885,15 @@ public sealed class PanelService
             // from the session as it stands UNDER the claim — never from a read taken before it, which
             // a round finishing in between would make stale (code round, gemini). Only a finished stage
             // is compared: asking again of a stage still open changes nothing.
-            Cadence = trace,
+            WorkItem = item,
             RefuseBeforeBuilding = async (loaded, sha) =>
                 await NothingSince(repoPath, sha, again ? SinceWhenFinished(loaded) : NoCodeRound, ct) is { Length: > 0 } unchanged
                     ? unchanged
                     : await NothingOver(repoPath, branch, baseRef, sha, ct) is { Length: > 0 } empty
                         ? empty
-                        : await CadenceBeforeTheCode(loaded, cadence, trace, repoPath, branch, sha, ct),
+                        : string.Empty,
         },
             ct);
-    }
-
-    /// <summary>
-    /// The consultation cadence's word on this code round — after the checks that need nothing but the commit,
-    /// because a round with nothing to review owes no consultation (research/PLAN_consult_on_a_cadence.md, story 3.3).
-    /// </summary>
-    private async Task<string> CadenceBeforeTheCode(
-        PersistedSession loaded, CadenceArgs cadence, CadenceTrace trace, string repoPath, string branch, string sha, CancellationToken ct)
-    {
-        var prepared = await _cadence.PrepareAsync(loaded, cadence, repoPath, sha, ct);
-        var (refusal, call) = _cadence.BeforeTheCode(loaded, prepared, _commands.CommandTextsNow(), branch);
-        trace.Call = call;
-
-        return refusal;
     }
 
     /// <summary>A code round's number and the commit it reviewed; number 0 is "none".</summary>
@@ -1035,8 +973,27 @@ public sealed class PanelService
         string? documentText = null,
         string? documentName = null,
         bool newReview = false,
+        CancellationToken ct = default) =>
+        ReviewDocumentAsync(repoPath, branch, purposeText, documentPath, documentText, documentName, newReview, string.Empty, ct);
+
+    /// <summary>The document gate for a call that names the plan item it is for (<see cref="WorkItems"/>); `workItem` empty is the old call.</summary>
+    public Task<string> ReviewDocumentAsync(
+        string repoPath,
+        string branch,
+        string purposeText,
+        string? documentPath,
+        string? documentText,
+        string? documentName,
+        bool newReview,
+        string workItem,
         CancellationToken ct = default)
     {
+        var (item, itemRefusal) = WorkItems.Check(workItem);
+        if (itemRefusal.Length > 0)
+        {
+            return Task.FromResult(Refused(itemRefusal));
+        }
+
         // Before anything is read, resolved or written: a round with no reviewer in it is not an
         // empty round, it is an unresolved one that sits open for ever. The same guard the other two
         // stages have, for the same reason.
@@ -1048,7 +1005,7 @@ public sealed class PanelService
         {
             DocumentOutcome.Refused no => Task.FromResult(Refused(no.Sentence)),
             DocumentOutcome.Ready document =>
-                ReviewTheDocumentAsync(repoPath, branch, purposeText, document, roles, newReview, ct),
+                ReviewTheDocumentAsync(repoPath, branch, purposeText, document, roles, newReview, item, ct),
             _ => throw new InvalidOperationException("the union is closed"),
         };
     }
@@ -1066,12 +1023,13 @@ public sealed class PanelService
         DocumentOutcome.Ready document,
         int roles,
         bool newReview,
+        string workItem,
         CancellationToken ct) =>
         OpenDocumentSession(repoPath, branch, document, purposeText, newReview) switch
         {
             DocumentTurn.Refused no => Task.FromResult(Refused(no.Sentence)),
             DocumentTurn.Open open => RunDocumentStageAsync(
-                repoPath, branch, purposeText, document, open.Session, roles, ct),
+                repoPath, branch, purposeText, document, open.Session, roles, workItem, ct),
             _ => throw new InvalidOperationException("the union is closed"),
         };
 
@@ -1145,9 +1103,6 @@ public sealed class PanelService
     /// Why a FRESH review of this document may not start beside the current one, or null.
     /// </summary>
     /// <remarks>
-    /// <para>Not over a held gate: a new session has no hold and a fresh budget, and <c>resolve</c> and <c>status</c> would address
-    /// it, so the AI would leave the hold on its own. It is told what the held session's own entries are told
-    /// (<see cref="RoundEngine.HeldSentence"/>) — ask the person, or call <c>resolve</c> once a Proceed is on file.</para>
     /// <para>Not over a round nobody has decided on: the old session would sit awaiting a resolve that now has no way to reach it,
     /// which is the orphaning this whole design was rewritten to prevent — one ordinal further along. (codex, the code round.)</para>
     /// </remarks>
@@ -1155,25 +1110,13 @@ public sealed class PanelService
     {
         var identity = DocumentSessions.Which(document, newReview: false, id => _store.Exists(repoPath, branch, id));
 
-        // The session is read through policy auto first (a hold from before policy auto is released by whichever call reads it first),
-        // so a released one says so — and never "nobody has decided" — and one whose release could not be written says why.
-        return _policy.CurrentUnclaimed(_store.Load(repoPath, branch, identity), repoPath, new SessionAddress(branch, identity, string.Empty)) switch
+        return _store.Load(repoPath, branch, identity) switch
         {
             null => null,
-            { NotWritten.Length: > 0 } release => LegacyHold.NotWrittenSentence(SessionPolicy.StageOf(release.Session), release.NotWritten),
-            { Session.State.HumanGate: true } release => _engine.HeldSentence(release.Session),
-            { Session: var released } when SessionPolicy.AwaitsItsResolve(released) => LegacyHold.ReleasedSentence(SessionPolicy.StageOf(released)),
-            { Session.State.AwaitingResolve: true } => DocumentSessions.StillOpen(document),
+            { State.AwaitingResolve: true } => DocumentSessions.StillOpen(document),
             _ => null,
         };
     }
-
-    /// <summary>
-    /// The session at this address, after a hold from before policy auto was released by whichever call reads it first; this call holds no
-    /// claim, so it takes it for the release alone. Null for no session.
-    /// </summary>
-    private PersistedSession? LoadedUnderThePolicy(string repoPath, SessionAddress at) =>
-        _policy.CurrentUnclaimed(_store.Load(repoPath, at.Branch, at.Document, at.Feature), repoPath, at)?.Session;
 
     /// <summary>
     /// The session at this identity: the one that is there, or a new one.
@@ -1244,6 +1187,7 @@ public sealed class PanelService
         DocumentOutcome.Ready document,
         PersistedSession session,
         int roles,
+        string workItem,
         CancellationToken ct)
     {
         // The snapshot is kept BEFORE the round, so a round that is then killed still leaves the
@@ -1265,21 +1209,20 @@ public sealed class PanelService
                     // From `repoPath`, not `workingDir` — this stage is handed no checkout on
                     // purpose, so its working directory is empty and collecting there would gather
                     // nothing while looking like it worked.
-                    var rules = RuleFiles.Collect(repoPath, RuleOrder.Staged(StageRules.Document));
+                    var rules = RuleFiles.Collect(repoPath, RuleOrder.ForBranch(branch));
 
-                    // The same sentence the other two stages write, carrying this one's own numbers.
+                    // The same sentence the other stages write, carrying this one's own numbers.
                     _log.Information(
                         "context for review: document {Name} ({DocumentBytes} bytes, snapshot {Artifact}), "
                         + "purpose {PurposeBytes} bytes; rules {RulesBytes} bytes, "
-                        + "{Matched} of {Tier} tier rule(s), {Omitted} omitted",
+                        + "{Omitted} omitted, {Missing} mount(s) not in the tree",
                         document.Name,
                         System.Text.Encoding.UTF8.GetByteCount(document.Text),
                         document.ArtifactId,
                         System.Text.Encoding.UTF8.GetByteCount(purposeText),
                         rules.Bytes,
-                        rules.MatchedCount(StageRules.Document),
-                        StageRules.Document.Length,
-                        rules.Omitted.Count);
+                        rules.Omitted.Count,
+                        rules.MissingMounts.Count);
 
                     var round = running.State.RoundsRunThisStage + 1;
                     var roles = _settings.Rounds.RolesForRound(Stage.DocumentReview, round);
@@ -1302,6 +1245,7 @@ public sealed class PanelService
                 // the count the GUARD read, passed down rather than read again — an empty roster is
                 // refused before this line, and a second read is how that could stop being true.
                 RolesPerVendor = roles,
+                WorkItem = workItem,
             },
             ct);
     }
@@ -1322,54 +1266,8 @@ public sealed class PanelService
     /// </remarks>
     private static string DocumentContext(string purposeText, DocumentOutcome.Ready document, RuleBundle rules) =>
         $"## What this document is for\n\n{purposeText}\n\n"
-        + RulesText.Section(rules, rules.TierCoverage(StageRules.Document))
+        + RulesText.Section(rules)
         + $"## The document under review — {document.Name}\n\n{document.Text}";
-
-    /// <summary>
-    /// The plan lenses this session has not spent yet, one for each vendor that can run.
-    /// </summary>
-    /// <remarks>
-    /// <para>The plan role has a universal prompt and two narrow lenses. A round deals one to each
-    /// vendor, so two vendors cover the pool in two rounds — instead of both being asked the
-    /// universal question while the two lenses go unasked, which is what handing every vendor the
-    /// same prompt did.</para>
-    /// <para>When the pool is empty the whole list comes back: a fourth round asks the universal
-    /// question again rather than nothing at all.</para>
-    /// </remarks>
-    private IReadOnlyList<string> UnspentPlanLenses(PersistedSession session, IReadOnlyList<string> roles)
-    {
-        // Every role in the round contributes, and the pool was read from the shipped plan role
-        // alone — which was the whole plan stage until a person could add a second role to it. With
-        // dealing switched on, every question in the hand then belonged to PlanCritique, so a round
-        // configured for two plan roles asked one of them twice and the other nothing.
-        //
-        // One lens each first, so no role is starved by the take below; then the first role tops the
-        // hand up to one question per vendor, which is what the take has always been for.
-        var hand = new List<string>();
-        foreach (var role in roles)
-        {
-            if (Pool(session, role) is [var first, ..])
-            {
-                hand.Add(first);
-            }
-        }
-
-        var vendors = Math.Max(_settings.Providers.Count(p => p.Enabled), 1);
-
-        return [.. hand, .. roles.Count > 0 ? Pool(session, roles[0]).Skip(1).Take(Math.Max(vendors - hand.Count, 0)) : []];
-    }
-
-    /// <summary>One role's lenses, the unspent ones first and its general prompt first of those.</summary>
-    private IReadOnlyList<string> Pool(PersistedSession session, string role)
-    {
-        var all = _settings.Rounds.Catalog.For(role)
-            .OrderByDescending(p => p.Universal)
-            .Select(p => p.Id)
-            .ToList();
-        var unspent = all.Where(id => !session.UsedPrompts.Contains(id)).ToList();
-
-        return unspent.Count > 0 ? unspent : all;
-    }
 
     /// <summary>
     /// A seed that is the same on every replay of one round, and different for the next.
@@ -1631,13 +1529,38 @@ public sealed class PanelService
         string clientVersion = "",
         string head = "",
         CancellationToken ct = default) =>
-        _feature.ReviewAsync(
+        ReviewFeatureAsync(repoPath, planPath, baseRef, epics, lessons, again, callerModel, client, clientVersion, head, string.Empty, ct);
+
+    /// <summary>The feature gate for a call that names the plan item it is for (<see cref="WorkItems"/>); `workItem` empty is the old call.</summary>
+    public Task<string> ReviewFeatureAsync(
+        string repoPath,
+        string planPath,
+        string baseRef,
+        string epics,
+        string lessons,
+        bool again,
+        string callerModel,
+        string client,
+        string clientVersion,
+        string head,
+        string workItem,
+        CancellationToken ct = default)
+    {
+        var (item, itemRefusal) = WorkItems.Check(workItem);
+        if (itemRefusal.Length > 0)
+        {
+            return Task.FromResult(Error(itemRefusal));
+        }
+
+        return _feature.ReviewAsync(
             new FeatureRequest(repoPath, planPath, baseRef, epics, lessons, again,
                 CallerDeclaration.From(CallerIdentity.Current(), client, clientVersion, callerModel))
             {
                 Head = head,
+                WorkItem = item,
             },
             ct);
+    }
 
     // ---------- resolve ----------
 
@@ -1650,9 +1573,8 @@ public sealed class PanelService
     /// Which plan's feature review is being resolved: the same <c>planPath</c> passed to
     /// <c>review_feature</c>. The branch is then not read.
     /// </param>
-    /// <param name="callerClaimsProceed">The AI's <c>humanDecision</c>: a claim <see cref="RoundMachine.ClaimRefusal"/> judges, never a decision.</param>
     public Task<string> ResolveAsync(
-        string repoPath, string branch, string decisionsJson, bool callerClaimsProceed = false, string document = "", string feature = "")
+        string repoPath, string branch, string decisionsJson, string document = "", string feature = "")
     {
         if (Both(document, feature) is { Length: > 0 } both)
         {
@@ -1665,22 +1587,17 @@ public sealed class PanelService
         using var claim = SessionClaim.TryTake(_settings.DataDir, repoPath, at.Branch, at.Document, at.Feature);
         return claim is null
             ? Task.FromResult(Error(SessionClaim.Busy(branch)))
-            : ResolveUnderClaim(repoPath, at, decisionsJson, callerClaimsProceed, NoSession(document, feature));
+            : ResolveUnderClaim(repoPath, at, decisionsJson, NoSession(document, feature));
     }
 
     private Task<string> ResolveUnderClaim(
-        string repoPath, SessionAddress at, string decisionsJson, bool callerClaimsProceed, string noSession)
+        string repoPath, SessionAddress at, string decisionsJson, string noSession)
     {
         var session = _store.Load(repoPath, at.Branch, at.Document, at.Feature);
         if (session is null)
         {
             return Task.FromResult(Error(noSession));
         }
-
-        // Under the claim this call holds: a hold from before policy auto is released here, and the decisions below are made on what it left.
-        session = _policy.Current(session).Session;
-        _escalations.OfferHeldNotices(session);
-        var persons = PersonsDecision(session);
 
         List<DecisionDto>? dtos;
         try
@@ -1694,11 +1611,9 @@ public sealed class PanelService
 
         if (dtos is null or [])
         {
-            return Task.FromResult(session.Pending.Count == 0 || persons == HumanDecision.Proceed
-                ? Finish(session, [], persons, callerClaimsProceed)
-                : Error(RoundMachine.ClaimRefusal(session.State, persons, callerClaimsProceed) is { Length: > 0 } claimed
-                    ? claimed
-                    : $"{session.Pending.Count} finding(s) await a decision — pass one per finding index"));
+            return Task.FromResult(session.Pending.Count == 0
+                ? Finish(session, [])
+                : Error($"{session.Pending.Count} finding(s) await a decision — pass one per finding index"));
         }
 
         // Each decision keeps the NUMBER the caller made it by. The projection used to take that
@@ -1752,7 +1667,7 @@ public sealed class PanelService
             decisions.Add(made);
         }
 
-        return Task.FromResult(Finish(session, decisions, persons, callerClaimsProceed));
+        return Task.FromResult(Finish(session, decisions));
     }
 
     /// <summary>
@@ -1764,53 +1679,16 @@ public sealed class PanelService
     /// </remarks>
     private void Project(Action<Store.RoundsDb> write) => _projection.Write(write);
 
-    /// <summary>
-    /// What the PERSON pressed on a <c>call_human</c> notice, if they pressed anything — the machine applies it
-    /// (<see cref="RoundMachine.Resolve"/> takes the decision, not a flag).
-    /// </summary>
-    /// <remarks>
-    /// <para>Continue and Fix mean "the stage is not finished, carry on": another set of rounds either way, differing only in
-    /// whether the AI changes something first. So both reset the stage's round count — which is the whole unblocking, and it is the
-    /// person's doing, not the AI's. Proceed advances the stage over the open findings, and it is the person's alone: read from
-    /// the answer file of the hold's own notice, never from an argument of the caller's. <c>Discuss</c> leaves the session exactly
-    /// where it is: the AI is meant to stop and talk.</para>
-    /// <para><b>Only while the gate is HELD, and only an answer to THIS hold</b> — the guards the engine's
-    /// own reader has, through the one rule (<see cref="CurrentAnswer"/>). Without the first, the newest
-    /// answered notice of the session was applied on EVERY later resolve, so one "keep going" reset the
-    /// round count for the life of the session: a feature review's second round resolved to a count of
-    /// zero, and D23's cap let a third round run. Without the second, an answer to an earlier hold was
-    /// spent on a later one's count (both found by S3.4's scenarios, 2026-09-26).</para>
-    /// </remarks>
-    private HumanDecision PersonsDecision(PersistedSession session)
+    private string Finish(PersistedSession session, List<DecisionAt> decisions)
     {
-        var decision = session.State.HumanGate ? CurrentAnswer.DecisionFor(session, _escalations, _log) : HumanDecision.None;
-        if (decision != HumanDecision.None)
-        {
-            _log.Information("the person chose {Decision} on the held {Stage} gate", decision, session.State.Stage);
-        }
-
-        return decision;
-    }
-
-    private string Finish(PersistedSession session, List<DecisionAt> given, HumanDecision persons, bool callerClaimsProceed)
-    {
-        // Under a person's Proceed, the findings nobody decided are recorded as proceeded over, never dropped (§11.5).
-        var decisions = ProceededOver.Recorded(session.Pending, given, persons, session.State.HumanGate);
         // The state machine judges DECISIONS and has no use for the numbers they were made by; the
         // projection needs both. One projection here rather than two lists carried side by side.
         var judged = decisions.Select(d => d.Decision).ToList();
-        switch (RoundMachine.Resolve(session.State, judged, persons, callerClaimsProceed))
+        switch (RoundMachine.Resolve(session.State, judged))
         {
             case Transition.Refused refused:
                 return Error(refused.Sentence);
             case Transition.Moved moved:
-                // An epic through its code gate is recorded BEFORE the session moves, so the commoner
-                // failure — this save — cannot lose it; its own failure is logged and reconciled by the
-                // next call, never allowed to fail the resolve (research/PLAN_consult_on_a_cadence.md, D3).
-                if (session.State.Stage == Stage.CodeReview && moved.State.Stage == Stage.Done && session.Rounds.Count > 0)
-                {
-                    _cadence.Close(session, session.Rounds[^1].Verdict);
-                }
                 // A feature review's round-1 decisions are kept for its second round (D23): the reviewers
                 // that answered are not asked again, and what was decided about their findings rides on
                 // round 2's verdict. Empty for every other resolve.
@@ -1832,7 +1710,7 @@ public sealed class PanelService
                 // owns the sentence. It read `Done => "The code stage is complete"`, which told a
                 // document review a code round had finished (§9.2 of the feature-review plan).
                 var instruction = moved.State.Stage != session.State.Stage
-                    ? ProceededOver.Instruction(session.State, persons)
+                    ? Stages.Of(session.State.Stage).CompletedSentence
                     : "Decisions recorded. Apply the accepted findings, then run the review again.";
                 return Json(new ResolveAnswer(moved.State.Stage.ToString(), moved.State.AwaitingResolve, decisions.Count, instruction),
                     ServerJsonContext.Default.ResolveAnswer);
@@ -1841,20 +1719,6 @@ public sealed class PanelService
         }
     }
 
-    // ---------- ask_human ----------
-
-    /// <summary>
-    /// Puts the question in front of a person and waits — <see cref="AskHumanService"/>, which the block moved
-    /// to as a proved move (PLAN_question_consultant.md, S2, D12). A delegation, so every caller is unchanged.
-    /// </summary>
-    public Task<string> AskHumanAsync(
-        string repoPath, string branch, string question, string document = "", string feature = "",
-        string consultId = "", bool productionRisk = false, string riskReason = "", CancellationToken ct = default) =>
-        _askHuman.AskHumanAsync(repoPath, branch, question, document, feature, consultId, productionRisk, riskReason, ct);
-
-    /// <summary>The escalation cards' retention and the phase records' (S3), for <see cref="ConsultationSweeper"/>'s beat beside the other two sweeps.</summary>
-    public int SweepEscalations() => _retention.Sweep(DateTime.UtcNow) + _askHuman.SweepPhases(DateTime.UtcNow);
-
     /// <summary>
     /// The ninth tool: another vendor's model, consulted about the LIVE working tree — a thin
     /// delegation, the way the review half's vendor questions are delegations since 2026-09-05.
@@ -1862,24 +1726,20 @@ public sealed class PanelService
     public Task<string> ConsultAsync(string repoPath, string problem, string suspectedFiles, string consultationId, CancellationToken ct = default) =>
         _consultations.AskAsync(repoPath, problem, suspectedFiles, consultationId, ct);
 
-    /// <summary>
-    /// The same, FOR something: a group of epics or a risky piece the cadence ordered
-    /// (<c>research/PLAN_consult_on_a_cadence.md</c>). The three arguments are read into ONE canonical aim before
-    /// anything else, so a spelling the gate would not match is refused rather than paid for.
-    /// </summary>
-    public Task<string> ConsultAsync(string repoPath, string problem, string suspectedFiles, string consultationId, string kind, string plan, string epics, CancellationToken ct = default)
+    /// <summary><c>cons</c> for a call that names the plan item it is for (<see cref="WorkItems"/>), written on the consultation's record; `workItem` empty is the old call.</summary>
+    public Task<string> ConsultAsync(string repoPath, string problem, string suspectedFiles, string consultationId, string workItem, CancellationToken ct = default)
     {
-        var (aim, refusal) = Core.Consultation.ConsultAim.Parse(kind, plan, epics);
+        var (item, itemRefusal) = WorkItems.Check(workItem);
 
-        return refusal.Length > 0
-            ? Task.FromResult(Error(refusal))
-            : _consultations.AskAsync(repoPath, problem, suspectedFiles, consultationId, aim, ct);
+        return itemRefusal.Length > 0
+            ? Task.FromResult(Error(itemRefusal))
+            : _consultations.AskAsync(repoPath, problem, suspectedFiles, consultationId, ct, item);
     }
 
-    /// <summary>Whether a consultation could be had right now — what the cadence gate asks before it refuses.</summary>
+    /// <summary>Whether a consultation could be had right now — what the consultants report asks.</summary>
     public ConsultPreflight ConsultPreflight() => _consultations.Preflight();
 
-    /// <summary>The consultation records, for the cadence gate and the tests that read what was written.</summary>
+    /// <summary>The consultation records, for the tests that read what was written.</summary>
     public ConsultationStore Consultations => _consultations.Store;
 
     /// <summary>
@@ -1911,14 +1771,22 @@ public sealed class PanelService
     /// in parallel before the person is asked. A delegation, like `consult`; what this service adds is which
     /// SESSION the question is filed under, which only it can resolve.
     /// </summary>
-    public Task<string> AskConsultantsAsync(string repoPath, string question, string context, string document = "", string feature = "", CancellationToken ct = default)
+    public Task<string> AskConsultantsAsync(string repoPath, string question, string context, string document = "", string feature = "", CancellationToken ct = default) =>
+        AskConsultantsAsync(repoPath, question, context, document, feature, string.Empty, ct);
+
+    /// <summary><c>consask</c> for a call that names the plan item it is for (<see cref="WorkItems"/>), written on the question's record; `workItem` empty is the old call.</summary>
+    public Task<string> AskConsultantsAsync(string repoPath, string question, string context, string document, string feature, string workItem, CancellationToken ct = default)
     {
         if (Both(document, feature) is { Length: > 0 } both)
         {
             return Task.FromResult(Error(both));
         }
 
-        return _questions.AskAsync(repoPath, question, context, document, feature, SessionIdOf, ct);
+        var (item, itemRefusal) = WorkItems.Check(workItem);
+
+        return itemRefusal.Length > 0
+            ? Task.FromResult(Error(itemRefusal))
+            : _questions.AskAsync(repoPath, question, context, document, feature, SessionIdOf, ct, item);
     }
 
     /// <summary>The session a question's arguments name, or <c>no-session</c> — the record's reference, never a precondition.</summary>
@@ -1958,10 +1826,7 @@ public sealed class PanelService
 
     // ---------- plumbing ----------
 
-    private SessionAnswer SessionAnswerFor(PersistedSession session) => SessionAnswerFor(
-        session, CurrentAnswer.TheGatesAnswer(session, _escalations), CurrentAnswer.TheGatesDecision(session, _escalations));
-
-    private SessionAnswer SessionAnswerFor(PersistedSession session, EscalationAnswer? gatesAnswer, HumanDecision gatesDecision) => new(
+    private SessionAnswer SessionAnswerFor(PersistedSession session) => new(
         session.State.SessionId,
         session.State.Stage.ToString(),
         session.State.RoundsRunThisStage,
@@ -1973,10 +1838,6 @@ public sealed class PanelService
         // the session file and the rounds page keep it) and without the members a newer server wrote (the session-file guard, #868).
         WithoutUnknownMembers(session.Rounds.Select(round => round with { Authors = null })))
     {
-        HumanDecision = CurrentAnswer.WordFor(gatesDecision),
-        // Told, not left to be inferred: a Proceed on file is waiting for the AI's `resolve`, and nothing else moves the stage (D8, §11.6).
-        HumanNote = gatesDecision == HumanDecision.Proceed && session.State.HumanGate ? RoundMachine.ProceedPressed : string.Empty,
-        HumanAnswer = gatesAnswer?.Answer ?? string.Empty,
         Consultations = _consultations.OpenIn(session.State.RepoPath),
         Pending = session.State.AwaitingResolve ? session.Pending : [],
     };

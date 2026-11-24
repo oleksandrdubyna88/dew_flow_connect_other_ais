@@ -1,0 +1,1309 @@
+{
+ "$comment": "Test vectors of the work-plan validator (epoch 3 E1 s2). Each vector is {name, covers, files, limits?, expect}: `files` maps a path inside a feature folder to its text; `limits` holds the device limits (maxEpicsPerEpoch, mvpEpics {min,max}, maxStoriesPerEpic, maxTasksPerStory) and falls back to the shipped defaults (5, 1-2, 8, 6); `expect` is the sorted list of the DISTINCT error codes the validator answers - [] for a valid plan. A file value may also be {prefix, line, times}: prefix followed by `line` repeated `times` times (a file over the 64 KiB cap without 64 KiB of JSON). Server only in E1 (the extension has no YAML reader). Every error code has one failing and one passing vector (AWorkPlanVectorsTests).",
+ "vectors": [
+  {
+   "name": "yaml-too-large: a task file of 65 KiB + 1",
+   "covers": "yaml-too-large",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": {
+     "prefix": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n",
+     "line": "# padding to go over the cap padding padding padding\n",
+     "times": 1300
+    }
+   },
+   "expect": [
+    "yaml-too-large"
+   ]
+  },
+  {
+   "name": "pass for yaml-too-large: a task file under the cap",
+   "covers": "yaml-too-large",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": {
+     "prefix": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n",
+     "line": "# padding to go over the cap padding padding padding\n",
+     "times": 1000
+    }
+   },
+   "expect": []
+  },
+  {
+   "name": "yaml-syntax: an unterminated quoted string",
+   "covers": "yaml-syntax",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": [
+    "yaml-syntax"
+   ]
+  },
+  {
+   "name": "yaml-syntax: a line with no colon",
+   "covers": "yaml-syntax",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\na stray line\n"
+   },
+   "expect": [
+    "yaml-syntax"
+   ]
+  },
+  {
+   "name": "yaml-syntax: a tab as indentation",
+   "covers": "yaml-syntax",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n\t- src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": [
+    "yaml-syntax"
+   ]
+  },
+  {
+   "name": "pass for yaml-syntax: single quotes with an escaped quote, a comment, CRLF-free LF text",
+   "covers": "yaml-syntax",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: 'It''s task one' # a comment\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": []
+  },
+  {
+   "name": "yaml-forbidden: an anchor",
+   "covers": "yaml-forbidden",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: &a \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": [
+    "yaml-forbidden"
+   ]
+  },
+  {
+   "name": "yaml-forbidden: an alias",
+   "covers": "yaml-forbidden",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: *a\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": [
+    "yaml-forbidden"
+   ]
+  },
+  {
+   "name": "yaml-forbidden: a tag",
+   "covers": "yaml-forbidden",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: !!int 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": [
+    "yaml-forbidden"
+   ]
+  },
+  {
+   "name": "yaml-forbidden: a block scalar",
+   "covers": "yaml-forbidden",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: |\n  Task one\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": [
+    "yaml-forbidden"
+   ]
+  },
+  {
+   "name": "yaml-forbidden: a flow list with items",
+   "covers": "yaml-forbidden",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles: [src/t1-one.txt]\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": [
+    "yaml-forbidden"
+   ]
+  },
+  {
+   "name": "yaml-forbidden: a flow map",
+   "covers": "yaml-forbidden",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - {id: d1, item: \"it works\"}\n"
+   },
+   "expect": [
+    "yaml-forbidden"
+   ]
+  },
+  {
+   "name": "yaml-forbidden: a second document",
+   "covers": "yaml-forbidden",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n---\nid: t2-two\n"
+   },
+   "expect": [
+    "yaml-forbidden"
+   ]
+  },
+  {
+   "name": "yaml-forbidden: a directive",
+   "covers": "yaml-forbidden",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "%YAML 1.2\nid: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": [
+    "yaml-forbidden"
+   ]
+  },
+  {
+   "name": "pass for yaml-forbidden: one leading document marker, comments, quoted scalars and the empty list",
+   "covers": "yaml-forbidden",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "---\n# the one document\nid: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": []
+  },
+  {
+   "name": "yaml-duplicate-key: complexity twice",
+   "covers": "yaml-duplicate-key",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\ncomplexity: 4\n"
+   },
+   "expect": [
+    "yaml-duplicate-key"
+   ]
+  },
+  {
+   "name": "pass for yaml-duplicate-key: the same key in two different maps",
+   "covers": "yaml-duplicate-key",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"a\"\n  - id: d2\n    item: \"b\"\n"
+   },
+   "expect": []
+  },
+  {
+   "name": "missing-file: no feature.yaml",
+   "covers": "missing-file",
+   "files": {
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": [
+    "missing-file"
+   ]
+  },
+  {
+   "name": "missing-file: an epic folder without epic.yaml",
+   "covers": "missing-file",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": [
+    "missing-file"
+   ]
+  },
+  {
+   "name": "missing-file: a task folder without task.yaml",
+   "covers": "missing-file",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/notes.md": "text"
+   },
+   "expect": [
+    "missing-file"
+   ]
+  },
+  {
+   "name": "pass for missing-file: every folder has its file; other folders and files are not read",
+   "covers": "missing-file",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n",
+    "architecture/notes.md": "text",
+    "spikes/x.yaml": "not: a plan"
+   },
+   "expect": []
+  },
+  {
+   "name": "wrong-type: complexity \"5\" is a string",
+   "covers": "wrong-type",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: \"5\"\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": [
+    "wrong-type"
+   ]
+  },
+  {
+   "name": "wrong-type: parallel: yes is a string",
+   "covers": "wrong-type",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: yes\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": [
+    "wrong-type"
+   ]
+  },
+  {
+   "name": "wrong-type: dependsOn is a map",
+   "covers": "wrong-type",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn:\n  a: b\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": [
+    "wrong-type"
+   ]
+  },
+  {
+   "name": "wrong-type: the epoch file is a list",
+   "covers": "wrong-type",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "- a\n- b\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": [
+    "wrong-type"
+   ]
+  },
+  {
+   "name": "pass for wrong-type: complexity 5, parallel true",
+   "covers": "wrong-type",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 5\ndependsOn: []\nparallel: true\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": []
+  },
+  {
+   "name": "missing-key: a task without kind",
+   "covers": "missing-key",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": [
+    "missing-key"
+   ]
+  },
+  {
+   "name": "missing-key: a dod item without item",
+   "covers": "missing-key",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n"
+   },
+   "expect": [
+    "missing-key"
+   ]
+  },
+  {
+   "name": "pass for missing-key: optional keys left out",
+   "covers": "missing-key",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": []
+  },
+  {
+   "name": "unknown-key: secuirty",
+   "covers": "unknown-key",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\nsecuirty: true\n"
+   },
+   "expect": [
+    "unknown-key"
+   ]
+  },
+  {
+   "name": "unknown-key: an unknown key on a story",
+   "covers": "unknown-key",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\nowner: me\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": [
+    "unknown-key"
+   ]
+  },
+  {
+   "name": "pass for unknown-key: the optional keys the schema names; any key on the feature",
+   "covers": "unknown-key",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nplan: PLAN.md\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\nsecurity: false\nstatus: open\n"
+   },
+   "expect": []
+  },
+  {
+   "name": "bad-id: an uppercase task id (the folder matches)",
+   "covers": "bad-id",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-One/task.yaml": "id: t1-One\ntitle: \"Task t1-One\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-One.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": [
+    "bad-id"
+   ]
+  },
+  {
+   "name": "bad-id: a story id that climbs out of its folder (also not its folder name; one error is enough)",
+   "covers": "bad-id",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-../../../outside\ntitle: \"Story s1-../../../outside\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": [
+    "bad-id"
+   ]
+  },
+  {
+   "name": "bad-id: a task id with a slash (also not its folder name; one error is enough)",
+   "covers": "bad-id",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-a/b\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": [
+    "bad-id"
+   ]
+  },
+  {
+   "name": "bad-id: a dod id d-one",
+   "covers": "bad-id",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d-one\n    item: \"a\"\n"
+   },
+   "expect": [
+    "bad-id"
+   ]
+  },
+  {
+   "name": "pass for bad-id: ids of the full pattern",
+   "covers": "bad-id",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": []
+  },
+  {
+   "name": "bad-value: complexity 11",
+   "covers": "bad-value",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 11\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": [
+    "bad-value"
+   ]
+  },
+  {
+   "name": "bad-value: complexity -1",
+   "covers": "bad-value",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: -1\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": [
+    "bad-value"
+   ]
+  },
+  {
+   "name": "bad-value: a kind outside the list",
+   "covers": "bad-value",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: magic\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": [
+    "bad-value"
+   ]
+  },
+  {
+   "name": "bad-value: a status outside the list",
+   "covers": "bad-value",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\nstatus: finished\n"
+   },
+   "expect": [
+    "bad-value"
+   ]
+  },
+  {
+   "name": "bad-value: a files entry that climbs out of the repository",
+   "covers": "bad-value",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - ../outside.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": [
+    "bad-value"
+   ]
+  },
+  {
+   "name": "pass for bad-value: complexity 0 and 10, kind security",
+   "covers": "bad-value",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: security\ncomplexity: 10\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": []
+  },
+  {
+   "name": "folder-id-mismatch: a task folder that is not its id",
+   "covers": "folder-id-mismatch",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-uno/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": [
+    "folder-id-mismatch"
+   ]
+  },
+  {
+   "name": "folder-id-mismatch: an epic folder that is not its id",
+   "covers": "folder-id-mismatch",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-other\ntitle: \"Epic e1-other\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": [
+    "folder-id-mismatch"
+   ]
+  },
+  {
+   "name": "folder-id-mismatch: an epoch folder that is not its id",
+   "covers": "folder-id-mismatch",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-2\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": [
+    "folder-id-mismatch"
+   ]
+  },
+  {
+   "name": "folder-id-mismatch: a story folder that is not its id",
+   "covers": "folder-id-mismatch",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s2-second\ntitle: \"Story s2-second\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": [
+    "folder-id-mismatch"
+   ]
+  },
+  {
+   "name": "pass for folder-id-mismatch: a feature id that is not its folder name",
+   "covers": "folder-id-mismatch",
+   "files": {
+    "feature.yaml": "id: anything-goes\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": []
+  },
+  {
+   "name": "list-folder-mismatch: an epic folder the epochs file does not list",
+   "covers": "list-folder-mismatch",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics: []\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": [
+    "list-folder-mismatch"
+   ]
+  },
+  {
+   "name": "list-folder-mismatch: an epic listed that has no folder",
+   "covers": "list-folder-mismatch",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n  - e2-ghost\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": [
+    "list-folder-mismatch"
+   ]
+  },
+  {
+   "name": "list-folder-mismatch: an epoch folder the feature does not list",
+   "covers": "list-folder-mismatch",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-2\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": [
+    "list-folder-mismatch"
+   ]
+  },
+  {
+   "name": "pass for list-folder-mismatch: lists equal the folders in another order",
+   "covers": "list-folder-mismatch",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e2-extra\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n",
+    "epoch-1/e2-extra/epic.yaml": "id: e2-extra\ntitle: \"Epic e2-extra\"\ndependsOn: []\n"
+   },
+   "expect": []
+  },
+  {
+   "name": "too-many-epics: cap 1, two epics",
+   "covers": "too-many-epics",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n  - e2-extra\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n",
+    "epoch-1/e2-extra/epic.yaml": "id: e2-extra\ntitle: \"Epic e2-extra\"\ndependsOn: []\n"
+   },
+   "limits": {
+    "maxEpicsPerEpoch": 1
+   },
+   "expect": [
+    "too-many-epics"
+   ]
+  },
+  {
+   "name": "too-many-epics: cap 3, four epics (the device cap, not the default)",
+   "covers": "too-many-epics",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n  - e2-extra\n  - e3-more\n  - e4-last\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n",
+    "epoch-1/e2-extra/epic.yaml": "id: e2-extra\ntitle: \"Epic e2-extra\"\ndependsOn: []\n",
+    "epoch-1/e3-more/epic.yaml": "id: e3-more\ntitle: \"Epic e3-more\"\ndependsOn: []\n",
+    "epoch-1/e4-last/epic.yaml": "id: e4-last\ntitle: \"Epic e4-last\"\ndependsOn: []\n"
+   },
+   "limits": {
+    "maxEpicsPerEpoch": 3
+   },
+   "expect": [
+    "too-many-epics"
+   ]
+  },
+  {
+   "name": "pass for too-many-epics: cap 2, two epics",
+   "covers": "too-many-epics",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n  - e2-extra\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n",
+    "epoch-1/e2-extra/epic.yaml": "id: e2-extra\ntitle: \"Epic e2-extra\"\ndependsOn: []\n"
+   },
+   "limits": {
+    "maxEpicsPerEpoch": 2
+   },
+   "expect": []
+  },
+  {
+   "name": "too-many-stories: cap 1, two stories",
+   "covers": "too-many-stories",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n",
+    "epoch-1/e1-core/stories/s2-second/story.yaml": "id: s2-second\ntitle: \"Story s2-second\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s2-second/tasks/t1-two/task.yaml": "id: t1-two\ntitle: \"Task t1-two\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-two.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "limits": {
+    "maxStoriesPerEpic": 1
+   },
+   "expect": [
+    "too-many-stories"
+   ]
+  },
+  {
+   "name": "pass for too-many-stories: cap 2, two stories",
+   "covers": "too-many-stories",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n",
+    "epoch-1/e1-core/stories/s2-second/story.yaml": "id: s2-second\ntitle: \"Story s2-second\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s2-second/tasks/t1-two/task.yaml": "id: t1-two\ntitle: \"Task t1-two\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-two.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "limits": {
+    "maxStoriesPerEpic": 2
+   },
+   "expect": []
+  },
+  {
+   "name": "too-many-tasks: cap 1, two tasks",
+   "covers": "too-many-tasks",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t2-two/task.yaml": "id: t2-two\ntitle: \"Task t2-two\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t2-two.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "limits": {
+    "maxTasksPerStory": 1
+   },
+   "expect": [
+    "too-many-tasks"
+   ]
+  },
+  {
+   "name": "pass for too-many-tasks: cap 2, two tasks",
+   "covers": "too-many-tasks",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t2-two/task.yaml": "id: t2-two\ntitle: \"Task t2-two\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t2-two.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "limits": {
+    "maxTasksPerStory": 2
+   },
+   "expect": []
+  },
+  {
+   "name": "mvp-count: no MVP epic",
+   "covers": "mvp-count",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": [
+    "mvp-count"
+   ]
+  },
+  {
+   "name": "mvp-count: two MVP epics where the device allows one",
+   "covers": "mvp-count",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n  - e2-extra\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n",
+    "epoch-1/e2-extra/epic.yaml": "id: e2-extra\ntitle: \"Epic e2-extra\"\nmvp: true\ndependsOn: []\n"
+   },
+   "limits": {
+    "mvpEpics": {
+     "min": 1,
+     "max": 1
+    }
+   },
+   "expect": [
+    "mvp-count"
+   ]
+  },
+  {
+   "name": "pass for mvp-count: two MVP epics where the device allows two",
+   "covers": "mvp-count",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n  - e2-extra\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n",
+    "epoch-1/e2-extra/epic.yaml": "id: e2-extra\ntitle: \"Epic e2-extra\"\nmvp: true\ndependsOn: []\n"
+   },
+   "expect": []
+  },
+  {
+   "name": "mvp-order: an MVP epic after one that is not",
+   "covers": "mvp-order",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n  - e2-extra\n  - e3-more\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n",
+    "epoch-1/e2-extra/epic.yaml": "id: e2-extra\ntitle: \"Epic e2-extra\"\ndependsOn: []\n",
+    "epoch-1/e3-more/epic.yaml": "id: e3-more\ntitle: \"Epic e3-more\"\nmvp: true\ndependsOn: []\n"
+   },
+   "expect": [
+    "mvp-order"
+   ]
+  },
+  {
+   "name": "pass for mvp-order: the MVP epics come first",
+   "covers": "mvp-order",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n  - e2-extra\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n",
+    "epoch-1/e2-extra/epic.yaml": "id: e2-extra\ntitle: \"Epic e2-extra\"\nmvp: true\ndependsOn: []\n"
+   },
+   "expect": []
+  },
+  {
+   "name": "story-without-tasks: a story with no task",
+   "covers": "story-without-tasks",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n"
+   },
+   "expect": [
+    "story-without-tasks"
+   ]
+  },
+  {
+   "name": "pass for story-without-tasks: an epic with no story is allowed",
+   "covers": "story-without-tasks",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n"
+   },
+   "expect": []
+  },
+  {
+   "name": "unknown-dependency: a task that names nothing",
+   "covers": "unknown-dependency",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn:\n  - t9-nope\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": [
+    "unknown-dependency"
+   ]
+  },
+  {
+   "name": "unknown-dependency: a task of another story is not a sibling",
+   "covers": "unknown-dependency",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n",
+    "epoch-1/e1-core/stories/s2-second/story.yaml": "id: s2-second\ntitle: \"Story s2-second\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s2-second/tasks/t1-two/task.yaml": "id: t1-two\ntitle: \"Task t1-two\"\nkind: code\ncomplexity: 3\ndependsOn:\n  - t1-one\nparallel: false\nfiles:\n  - src/t1-two.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": [
+    "unknown-dependency"
+   ]
+  },
+  {
+   "name": "unknown-dependency: an epic that the epic does not depend on",
+   "covers": "unknown-dependency",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n  - e2-extra\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n",
+    "epoch-1/e2-extra/epic.yaml": "id: e2-extra\ntitle: \"Epic e2-extra\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e2-extra/stories/s1-other/story.yaml": "id: s1-other\ntitle: \"Story s1-other\"\ndependsOn:\n  - s1-first\n",
+    "epoch-1/e2-extra/stories/s1-other/tasks/t1-x/task.yaml": "id: t1-x\ntitle: \"Task t1-x\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-x.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": [
+    "unknown-dependency"
+   ]
+  },
+  {
+   "name": "pass for unknown-dependency: a sibling task",
+   "covers": "unknown-dependency",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t2-two/task.yaml": "id: t2-two\ntitle: \"Task t2-two\"\nkind: code\ncomplexity: 3\ndependsOn:\n  - t1-one\nparallel: false\nfiles:\n  - src/t2-two.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": []
+  },
+  {
+   "name": "pass for unknown-dependency: a story of an epic this epic depends on (decision 0.4)",
+   "covers": "unknown-dependency",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n  - e2-extra\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n",
+    "epoch-1/e2-extra/epic.yaml": "id: e2-extra\ntitle: \"Epic e2-extra\"\nmvp: true\ndependsOn:\n  - e1-core\n",
+    "epoch-1/e2-extra/stories/s1-other/story.yaml": "id: s1-other\ntitle: \"Story s1-other\"\ndependsOn:\n  - s1-first\n",
+    "epoch-1/e2-extra/stories/s1-other/tasks/t1-x/task.yaml": "id: t1-x\ntitle: \"Task t1-x\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-x.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": []
+  },
+  {
+   "name": "ambiguous-dependency: one story id in two depended-on epics",
+   "covers": "ambiguous-dependency",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n  - e2-b\n  - e3-c\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n",
+    "epoch-1/e1-core/stories/s2-shared/story.yaml": "id: s2-shared\ntitle: \"Story s2-shared\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s2-shared/tasks/t1-a/task.yaml": "id: t1-a\ntitle: \"Task t1-a\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-a.txt\ndod:\n  - id: d1\n    item: \"it works\"\n",
+    "epoch-1/e2-b/epic.yaml": "id: e2-b\ntitle: \"Epic e2-b\"\ndependsOn: []\n",
+    "epoch-1/e2-b/stories/s2-shared/story.yaml": "id: s2-shared\ntitle: \"Story s2-shared\"\ndependsOn: []\n",
+    "epoch-1/e2-b/stories/s2-shared/tasks/t1-b/task.yaml": "id: t1-b\ntitle: \"Task t1-b\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-b.txt\ndod:\n  - id: d1\n    item: \"it works\"\n",
+    "epoch-1/e3-c/epic.yaml": "id: e3-c\ntitle: \"Epic e3-c\"\ndependsOn:\n  - e1-core\n  - e2-b\n",
+    "epoch-1/e3-c/stories/s1-use/story.yaml": "id: s1-use\ntitle: \"Story s1-use\"\ndependsOn:\n  - s2-shared\n",
+    "epoch-1/e3-c/stories/s1-use/tasks/t1-u/task.yaml": "id: t1-u\ntitle: \"Task t1-u\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-u.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": [
+    "ambiguous-dependency"
+   ]
+  },
+  {
+   "name": "pass for ambiguous-dependency: the same story named as <epic>/<story>",
+   "covers": "ambiguous-dependency",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n  - e2-b\n  - e3-c\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n",
+    "epoch-1/e1-core/stories/s2-shared/story.yaml": "id: s2-shared\ntitle: \"Story s2-shared\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s2-shared/tasks/t1-a/task.yaml": "id: t1-a\ntitle: \"Task t1-a\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-a.txt\ndod:\n  - id: d1\n    item: \"it works\"\n",
+    "epoch-1/e2-b/epic.yaml": "id: e2-b\ntitle: \"Epic e2-b\"\ndependsOn: []\n",
+    "epoch-1/e2-b/stories/s2-shared/story.yaml": "id: s2-shared\ntitle: \"Story s2-shared\"\ndependsOn: []\n",
+    "epoch-1/e2-b/stories/s2-shared/tasks/t1-b/task.yaml": "id: t1-b\ntitle: \"Task t1-b\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-b.txt\ndod:\n  - id: d1\n    item: \"it works\"\n",
+    "epoch-1/e3-c/epic.yaml": "id: e3-c\ntitle: \"Epic e3-c\"\ndependsOn:\n  - e1-core\n  - e2-b\n",
+    "epoch-1/e3-c/stories/s1-use/story.yaml": "id: s1-use\ntitle: \"Story s1-use\"\ndependsOn:\n  - e2-b/s2-shared\n",
+    "epoch-1/e3-c/stories/s1-use/tasks/t1-u/task.yaml": "id: t1-u\ntitle: \"Task t1-u\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-u.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": []
+  },
+  {
+   "name": "dependency-cycle: two tasks that depend on each other",
+   "covers": "dependency-cycle",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn:\n  - t2-two\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t2-two/task.yaml": "id: t2-two\ntitle: \"Task t2-two\"\nkind: code\ncomplexity: 3\ndependsOn:\n  - t1-one\nparallel: false\nfiles:\n  - src/t2-two.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": [
+    "dependency-cycle"
+   ]
+  },
+  {
+   "name": "dependency-cycle: a task that depends on itself",
+   "covers": "dependency-cycle",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn:\n  - t1-one\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": [
+    "dependency-cycle"
+   ]
+  },
+  {
+   "name": "pass for dependency-cycle: a chain",
+   "covers": "dependency-cycle",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t2-two/task.yaml": "id: t2-two\ntitle: \"Task t2-two\"\nkind: code\ncomplexity: 3\ndependsOn:\n  - t1-one\nparallel: false\nfiles:\n  - src/t2-two.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": []
+  },
+  {
+   "name": "parallel-dependent: a depends on b",
+   "covers": "parallel-dependent",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: true\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t2-two/task.yaml": "id: t2-two\ntitle: \"Task t2-two\"\nkind: code\ncomplexity: 3\ndependsOn:\n  - t1-one\nparallel: true\nfiles:\n  - src/t2-two.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": [
+    "parallel-dependent"
+   ]
+  },
+  {
+   "name": "parallel-dependent: a path through a third, non-parallel sibling",
+   "covers": "parallel-dependent",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: true\nfiles:\n  - src/a.txt\ndod:\n  - id: d1\n    item: \"it works\"\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t2-two/task.yaml": "id: t2-two\ntitle: \"Task t2-two\"\nkind: code\ncomplexity: 3\ndependsOn:\n  - t3-mid\nparallel: true\nfiles:\n  - src/b.txt\ndod:\n  - id: d1\n    item: \"it works\"\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t3-mid/task.yaml": "id: t3-mid\ntitle: \"Task t3-mid\"\nkind: code\ncomplexity: 3\ndependsOn:\n  - t1-one\nparallel: false\nfiles:\n  - src/t3-mid.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": [
+    "parallel-dependent"
+   ]
+  },
+  {
+   "name": "pass for parallel-dependent: parallel and independent",
+   "covers": "parallel-dependent",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: true\nfiles:\n  - src/a.txt\ndod:\n  - id: d1\n    item: \"it works\"\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t2-two/task.yaml": "id: t2-two\ntitle: \"Task t2-two\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: true\nfiles:\n  - src/b.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": []
+  },
+  {
+   "name": "parallel-files: a parallel task with no files",
+   "covers": "parallel-files",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: true\nfiles: []\ndod:\n  - id: d1\n    item: \"it works\"\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t2-two/task.yaml": "id: t2-two\ntitle: \"Task t2-two\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: true\nfiles:\n  - src/b.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": [
+    "parallel-files"
+   ]
+  },
+  {
+   "name": "parallel-files: a glob in files",
+   "covers": "parallel-files",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: true\nfiles:\n  - src/*.cs\ndod:\n  - id: d1\n    item: \"it works\"\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t2-two/task.yaml": "id: t2-two\ntitle: \"Task t2-two\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: true\nfiles:\n  - tests/b.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": [
+    "parallel-files"
+   ]
+  },
+  {
+   "name": "pass for parallel-files: a task that is not parallel needs no files",
+   "covers": "parallel-files",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles: []\ndod:\n  - id: d1\n    item: \"it works\"\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t2-two/task.yaml": "id: t2-two\ntitle: \"Task t2-two\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: true\nfiles:\n  - src/b.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": []
+  },
+  {
+   "name": "parallel-overlap: a folder and a file inside it",
+   "covers": "parallel-overlap",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: true\nfiles:\n  - src/Roles\ndod:\n  - id: d1\n    item: \"it works\"\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t2-two/task.yaml": "id: t2-two\ntitle: \"Task t2-two\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: true\nfiles:\n  - src/Roles/A.cs\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": [
+    "parallel-overlap"
+   ]
+  },
+  {
+   "name": "parallel-overlap: the same file in other letters",
+   "covers": "parallel-overlap",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: true\nfiles:\n  - src/A.cs\ndod:\n  - id: d1\n    item: \"it works\"\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t2-two/task.yaml": "id: t2-two\ntitle: \"Task t2-two\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: true\nfiles:\n  - SRC/a.cs\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": [
+    "parallel-overlap"
+   ]
+  },
+  {
+   "name": "pass for parallel-overlap: a prefix of letters is not a path prefix",
+   "covers": "parallel-overlap",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: true\nfiles:\n  - src/Roles\ndod:\n  - id: d1\n    item: \"it works\"\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t2-two/task.yaml": "id: t2-two\ntitle: \"Task t2-two\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: true\nfiles:\n  - src/RolesTwo/A.cs\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": []
+  },
+  {
+   "name": "empty-dod: dod: []",
+   "covers": "empty-dod",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod: []\n"
+   },
+   "expect": [
+    "empty-dod"
+   ]
+  },
+  {
+   "name": "pass for empty-dod: one item",
+   "covers": "empty-dod",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "expect": []
+  },
+  {
+   "name": "duplicate-dod-id: d1 twice",
+   "covers": "duplicate-dod-id",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"a\"\n  - id: d1\n    item: \"b\"\n"
+   },
+   "expect": [
+    "duplicate-dod-id"
+   ]
+  },
+  {
+   "name": "pass for duplicate-dod-id: d1 and d2",
+   "covers": "duplicate-dod-id",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"a\"\n  - id: d2\n    item: \"b\"\n"
+   },
+   "expect": []
+  },
+  {
+   "name": "security-contradiction: kind security with security: false",
+   "covers": "security-contradiction",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: security\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\nsecurity: false\n"
+   },
+   "expect": [
+    "security-contradiction"
+   ]
+  },
+  {
+   "name": "pass for security-contradiction: kind security with security: true, and no flag",
+   "covers": "security-contradiction",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo plan\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Foundation\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-one/task.yaml": "id: t1-one\ntitle: \"Task t1-one\"\nkind: security\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-one.txt\ndod:\n  - id: d1\n    item: \"it works\"\nsecurity: true\n"
+   },
+   "expect": []
+  }
+ ]
+}

@@ -13,10 +13,10 @@ import { rowHasFastTier } from './fastTier';
  */
 
 /** A non-review feature an instance may serve. The review stages stay the row's own flags. */
-export type CatalogUse = 'security' | 'consultant' | 'qconsult' | 'chat' | 'bugz';
+export type CatalogUse = 'consultant' | 'qconsult' | 'chat' | 'bugz';
 
 /** Every use, in the order the catalog stores and draws them. */
-export const CATALOG_USES: readonly CatalogUse[] = ['security', 'consultant', 'qconsult', 'chat', 'bugz'];
+export const CATALOG_USES: readonly CatalogUse[] = ['consultant', 'qconsult', 'chat', 'bugz'];
 
 export interface CatalogFields {
   name?: string;

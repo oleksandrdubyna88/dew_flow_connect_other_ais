@@ -41,7 +41,7 @@ test('a row written before the catalog parses to exactly what it parsed to befor
 test('uses keeps only the features it knows, once each, in the catalog order', () => {
   const [row] = vendorsFrom([{ ...CODEX, uses: ['chat', 'review', 'security', 'chat', 7, 'bugz'] }]);
 
-  assert.deepEqual(row?.uses, ['security', 'chat', 'bugz']);
+  assert.deepEqual(row?.uses, ['chat', 'bugz'], 'security lane is no use any more, and is read past');
 });
 
 test('an empty uses list is absent, not an empty array', () => {
@@ -66,7 +66,7 @@ test('a time limit the box would not accept is absent', () => {
 
 test('the new fields do not cross to coai-mcp: the wire is a whitelist', () => {
   const plain = vendorsFrom([CODEX]);
-  const widened = vendorsFrom([{ ...CODEX, name: 'C', uses: ['security'], systemPrompt: 'x', timeoutMinutes: 9, chatStartingPrompt: 'y' }]);
+  const widened = vendorsFrom([{ ...CODEX, name: 'C', uses: ['chat'], systemPrompt: 'x', timeoutMinutes: 9, chatStartingPrompt: 'y' }]);
 
   assert.equal(vendorsEnv(widened), vendorsEnv(plain));
 });

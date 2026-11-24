@@ -1,0 +1,15 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t4-this-repository-file
+title: ".coai/toolchain.yaml of this repository: src_mcp build and its MTP test executable"
+kind: config
+complexity: 3
+dependsOn:
+  - t2-check-runner
+parallel: false
+files:
+  - .coai/toolchain.yaml
+dod:
+  - id: d1
+    item: "a test reads the committed .coai/toolchain.yaml with the reader of t1 and gets the src_mcp project with a build argv and a test argv that names the MTP test executable (never `dotnet test`); the file is of the strict YAML subset (block lists, no flow list other than [])"
+  - id: d2
+    item: "the check runner on a clean checkout of this repository ends the build step with exit 0 and starts a real test of the suite (a recorded run is in the task's results)"

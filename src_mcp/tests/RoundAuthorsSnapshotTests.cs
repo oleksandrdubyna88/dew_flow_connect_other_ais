@@ -237,7 +237,7 @@ public sealed class RoundAuthorsSnapshotTests : IDisposable
         var store = new SessionStore(_dir.At("data"));
         store.Save(new PersistedSession(State with { RepoPath = repo }, [Round(Observed())]) { OpenedUtc = DateTime.UtcNow });
         var service = new PanelService(
-            new PanelSettings { DataDir = _dir.At("data"), Rounds = PanelConfig.Uniform(3, 2, StagePolicy.Human) },
+            new PanelSettings { DataDir = _dir.At("data"), Rounds = PanelConfig.Uniform(3, 2) },
             VaultKeys.None("no vault in tests"), default, new CoaiMcp.Runners.Processes.ProcessLauncher(), Serilog.Core.Logger.None, Noticing.None);
 
         var answer = await service.StatusAsync(repo, State.Branch);

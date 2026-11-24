@@ -1,0 +1,4 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: s1-verdicts-and-holds
+title: "Remove the policy enum, ladder, held gates, cards and ask_human"
+dependsOn: []

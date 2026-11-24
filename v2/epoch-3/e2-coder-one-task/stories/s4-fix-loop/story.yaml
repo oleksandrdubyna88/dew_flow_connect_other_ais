@@ -1,0 +1,6 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: s4-fix-loop
+title: "To green: coai formats, builds and tests after each turn; failures go back to the same claude session, at most 3 fix turns"
+dependsOn:
+  - s1-toolchain-file
+  - s3-coder-role-case

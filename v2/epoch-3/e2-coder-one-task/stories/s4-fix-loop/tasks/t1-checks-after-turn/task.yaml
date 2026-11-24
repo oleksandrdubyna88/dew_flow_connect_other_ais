@@ -1,0 +1,17 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t1-checks-after-turn
+title: "After each coder turn coai runs the checks in the worktree and writes them into the envelope (checks, green)"
+kind: code
+complexity: 6
+dependsOn: []
+parallel: false
+files:
+  - src_mcp/src/Server/RoleJobs/CoderChecks.cs
+  - src_mcp/src/Server/RoleJobs/CoderWork.cs
+  - src_mcp/src/Server/RoleJobs/CoderEnvelope.cs
+  - src_mcp/tests
+dod:
+  - id: d1
+    item: "a FakeCli turn whose work builds and passes gives green true with checks [{step, argv, exitCode, durationMs, logRef}]; a repository with no .coai/toolchain.yaml gives checks not_configured, green false and the job state failed with stop not-configured"
+  - id: d2
+    item: "the heartbeat phase is `checks` while a build or test runs, so a long build is never stalled or lost; the checks run through the boundary of s2 t4"

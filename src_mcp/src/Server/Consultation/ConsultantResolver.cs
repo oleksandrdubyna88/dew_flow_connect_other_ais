@@ -70,7 +70,7 @@ public abstract record ResolvedConsultant
 /// </remarks>
 public static class ConsultantResolver
 {
-    private const string Section = "ConnectOtherAIs > Consultant (COAI_CONSULTANTS)";
+    private const string Section = "ConnectOtherAIs > Cons (COAI_CONSULTANTS)";
 
     /// <summary>What <paramref name="choice"/> means for a NEW consultation by a <paramref name="callerKind"/> caller.</summary>
     public static ResolvedConsultant Resolve(ConsultantChoice choice, string callerKind, IReadOnlyList<ProviderSettings> rows) =>
@@ -268,19 +268,19 @@ public static class ConsultantResolver
 
     /// <summary>An entry whose catalog row does not read: who, and what to do. Nothing was built for it.</summary>
     private static string RowUnreadable(ConsultantChoice choice, string callerKind) =>
-        $"the consultant for a '{callerKind}' caller is '{choice.Vendor}', whose model settings could not be read — "
-        + $"nothing was built or launched; open its model on the Models tab and save it again, or choose another consultant in {Section}";
+        $"the cons for a '{callerKind}' caller is '{choice.Vendor}', whose model settings could not be read — "
+        + $"nothing was built or launched; open its model on the Models tab and save it again, or choose another model for cons in {Section}";
 
     /// <summary>A definition on a runtime outside the allowlist: who, what, on which runtime, and what may run instead. Nothing was built for it.</summary>
     private static string ForeignRuntime(ConsultantChoice choice, string callerKind) =>
-        $"the consultant for a '{callerKind}' caller is the vendor '{choice.Vendor}' on the runtime '{choice.Runtime}', "
-        + $"which a consultant may not run on — consultants run on: {Allowlist}. Nothing was built or launched; "
+        $"the cons for a '{callerKind}' caller is the vendor '{choice.Vendor}' on the runtime '{choice.Runtime}', "
+        + $"which cons may not run on — cons runs on: {Allowlist}. Nothing was built or launched; "
         + $"pick one of those for this caller in {Section}";
 
     /// <summary>Rule (c): what the entry is, why nothing can run it, and the two ways to fix that.</summary>
     private static string NothingNamed(ConsultantChoice choice, string callerKind) =>
-        $"the consultant for a '{callerKind}' caller is '{choice.Vendor}', which names no reviewer and is not a runtime "
-        + $"this build can consult with ({Allowlist}) — choose another consultant for this caller in {Section}, "
+        $"the cons for a '{callerKind}' caller is '{choice.Vendor}', which names no reviewer and is not a runtime "
+        + $"this build can consult with ({Allowlist}) — choose another model for cons for this caller in {Section}, "
         + "or add a reviewer under that name";
 
     /// <summary>A resumed consultation whose vendor nothing describes any more. The cure is a new one.</summary>
@@ -308,8 +308,8 @@ public static class ConsultantResolver
     /// </remarks>
     private static string FrozenOnAForeignRuntime(ConsultationRecord record) =>
         $"consultation {record.Id} was opened on the vendor '{record.Vendor}' running on '{record.Runtime}', "
-        + $"which is not a runtime a consultant may run on ({Allowlist}) — it cannot be resumed; "
-        + $"choose a consultant for this caller in {Section} and start a new consultation";
+        + $"which is not a runtime cons may run on ({Allowlist}) — it cannot be resumed; "
+        + $"choose a model for cons for this caller in {Section} and start a new consultation";
 
     /// <summary>A resumed consultation whose vendor id now runs on another CLI — refused rather than launched on the wrong binary.</summary>
     private static string MovedRuntime(ConsultationRecord record, ProviderSettings today) =>

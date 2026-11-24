@@ -1,0 +1,18 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t1-policy-ladder
+title: "Remove StagePolicy/EscalationStep, PanelConfig.OnExhausted/Autonomous, PolicyOf and the ContinueAnyway/CallHuman/Escalated/Ladder/GateHeld verdicts; keep Proceed/Revise/GoodEnough/NotReviewed"
+kind: code
+complexity: 7
+dependsOn: []
+parallel: false
+files:
+  - src_mcp/core/Rounds/SessionState.cs
+  - src_mcp/core/Rounds/RoundMachine.cs
+  - src_mcp/src/Server/PanelSettings.cs
+dod:
+  - id: d1
+    item: "a round can end only in the four kept outcomes"
+  - id: d2
+    item: "an over-threshold round with budget left returns revise"
+  - id: d3
+    item: "the solution builds with warnings as errors"

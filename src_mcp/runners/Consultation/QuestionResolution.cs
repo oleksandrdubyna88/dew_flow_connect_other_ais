@@ -41,6 +41,6 @@ public static class QuestionResolution
     public static string CannotAnswer(VendorIdentity vendor) =>
         $"the vendor '{vendor.Provider}' runs on '{RuntimeResolution.NameOf(vendor)}'"
         + (vendor.BaseUrl.Length > 0 && RuntimeResolution.NameOf(vendor) == "codex" ? " with a custom endpoint" : string.Empty)
-        + $", which the question consultant cannot launch in this build — it launches on: {string.Join(", ", Answering)}. "
-        + "Pick one of those in ConnectOtherAIs > Question consultant.";
+        + $", which consask cannot launch in this build — it launches on: {string.Join(", ", Answering)}. "
+        + "Pick one of those in ConnectOtherAIs > Consask.";
 }

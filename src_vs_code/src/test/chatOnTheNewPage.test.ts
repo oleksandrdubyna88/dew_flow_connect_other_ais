@@ -39,7 +39,6 @@ function stateWith(chat: Partial<ChatSettings> = {}, over: Partial<PanelState> =
   return {
     ...panelState('reviewers'),
     chat: { ...CHAT, ...chat },
-    commands: { rows: [], texts: {}, serverVersion: '', perSide: false },
     roles: { rows: [], texts: {}, serverVersion: '', perSide: false, stranded: [] },
     ...over,
   };
@@ -150,15 +149,13 @@ test('the chat\'s controls post the presets\' own edits — a pick numbered, typ
   assert.deepEqual(focus, [{ id: 'chatPresets|p2|name', editing: true }]);
 });
 
-test('the chat, the roles and the commands never read each other\'s controls', () => {
+test('the chat and the roles never read each other\'s controls', () => {
   const { page, tree, pane } = chatPage();
   const roles = tree.one((node) => node.dataset.pane === 'reviews/roles', 'Roles & prompts pane');
-  const commands = tree.one((node) => node.dataset.pane === 'reviews/commands', 'Commands pane');
   const presses: readonly [PageNode, string][] = [
     [rowOf(pane, 'p1').one((node) => node.dataset.chpField === 'name', 'a prompt name'), 'input'],
     [rowOf(pane, 'p1').one((node) => node.dataset.chpRemove !== undefined, 'a prompt Remove'), 'click'],
     [roles.one((node) => node.dataset.field === 'name', 'a role name'), 'input'],
-    [commands.one((node) => node.dataset.cmdAdd !== undefined, 'Add a command'), 'click'],
   ];
 
   for (const [node, kind] of presses) {
@@ -166,7 +163,7 @@ test('the chat, the roles and the commands never read each other\'s controls', (
   }
 
   assert.deepEqual(page.posted.filter((one) => ['roles', 'commands', 'chatPresets'].includes(String(one['type']))).map((one) => one['type']),
-    ['chatPresets', 'chatPresets', 'roles', 'commands']);
+    ['chatPresets', 'chatPresets', 'roles']);
 });
 
 test('a side that keeps its own settings says the chat models are saved for it', () => {

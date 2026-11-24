@@ -1,5 +1,4 @@
 import { reviewsFeatures } from './featureGate';
-import { SecurityLane } from './securityLane';
 import { reviewsDocuments, Vendor } from './vendors';
 
 /**
@@ -68,16 +67,12 @@ export function isReviewerRow(row: Vendor): boolean {
  * knows nothing of `uses`, so such a row on the wire is a provider in no round, and the env block of a
  * migrated setup would no longer be the one it was (plan-round finding 7).
  *
- * <p>Kept whenever anything on the wire may name it: a `security` use, a Security lane run, or a lane this
- * build could not read (its runs are unknown). A row with no `uses` at all is a row from before the catalog
- * and crosses exactly as it always did.</p>
+ * <p>A row with no `uses` at all is a row from before the catalog and crosses exactly as it always did.</p>
  */
-export function rowsOnTheWire(rows: readonly Vendor[], lane: SecurityLane): readonly Vendor[] {
-  const named = new Set(lane.runs.map((run) => run.vendor.toLowerCase()));
-
-  return 'invalidConfiguration' in lane ? rows : rows.filter((row) => crosses(row, named));
+export function rowsOnTheWire(rows: readonly Vendor[]): readonly Vendor[] {
+  return rows.filter((row) => crosses(row));
 }
 
-function crosses(row: Vendor, named: ReadonlySet<string>): boolean {
-  return reviewsAnything(row) || row.uses === undefined || row.uses.includes('security') || named.has(row.id);
+function crosses(row: Vendor): boolean {
+  return reviewsAnything(row) || row.uses === undefined;
 }

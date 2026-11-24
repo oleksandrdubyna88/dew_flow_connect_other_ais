@@ -34,7 +34,9 @@ public sealed record QuestionConsultRow(
     long TokensIn,
     long TokensOut,
     double? CostUsd,
-    string Alert);
+    string Alert,
+    /// <summary>The plan item (a feature-folder path) the question was for, as the caller named it; empty when it named none (schema step 25).</summary>
+    string WorkItem = "");
 
 /// <summary>One model row of a question, as the database holds it. The advice is cut at <see cref="AdviceLimit"/>.</summary>
 public sealed record QuestionConsultRowEntry(

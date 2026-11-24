@@ -34,7 +34,7 @@ internal static class Schema
         TheRunsThemselves, ThePairsThemselves, WhatWasSent, HowItEnded, WhoSaidSo,
         TheSendsThemselves, WhatAPersonSaid, WhatItWasTold, WhatTheCadenceCounts,
         WhyARoundDidNotRun, TheQuestionsAsked, SecurityEvidence, WhyAConsultationFailed,
-        TheReviewersModel, TheRoundsKey, TheRoundsSize, ThePlanSource, TheRoundsAuthors,
+        TheReviewersModel, TheRoundsKey, TheRoundsSize, ThePlanSource, TheRoundsAuthors, TheWorkItem, TheRoleJobs,
     ];
 
     internal const string SecurityEvidence = """
@@ -726,5 +726,78 @@ internal static class Schema
         ALTER TABLE rounds ADD COLUMN ambiguous_cache_creation_tokens  INTEGER NOT NULL DEFAULT 0;
         ALTER TABLE rounds ADD COLUMN ambiguous_cache_read_tokens      INTEGER NOT NULL DEFAULT 0;
         CREATE INDEX IF NOT EXISTS rounds_by_authors_session ON rounds (authors_session);
+        """;
+
+    /// <summary>
+    /// Step 25: which item of a plan each round, consultation and question was FOR (coai v2 E3.S8, <c>v2/architecture/server.md</c> §21).
+    /// </summary>
+    /// <remarks>
+    /// <para><c>work_item</c> is the repository-relative path of an epoch, epic, story or task folder, as the caller named it in the optional
+    /// <c>workItem</c> argument of <c>review_plan</c>, <c>review_code</c>, <c>review_document</c>, <c>review_feature</c>, <c>cons</c> and <c>consask</c>
+    /// (validated by <c>WorkItems</c>: relative, inside the repository, no <c>..</c>). <b>Empty means "not attributed"</b> — every row written before
+    /// this step, and every call by a caller that sent none; it is never a missing value and never a guess. One column on each of the three tables the
+    /// per-item report reads: <c>rounds</c> (rewritten from the round on every re-record, as <c>round_key</c> is), <c>consultations</c> and
+    /// <c>question_consults</c> (frozen at the first turn: a follow-up cannot move a consultation to another item).</para>
+    /// <para>The indexes serve the one query that asks per item (<c>--plan-report</c>); each is partial over the attributed rows, so the rows of every
+    /// caller that never sends the argument cost nothing.</para>
+    /// <para>Appended, never inserted, for the reason step 20 records; a reader opened read-only (<c>--plan-report</c>) runs no step and asks the schema
+    /// whether the column is there, so a database an older server last wrote reads as no events rather than as an error.</para>
+    /// </remarks>
+    internal const string TheWorkItem = """
+        ALTER TABLE rounds ADD COLUMN work_item TEXT NOT NULL DEFAULT '';
+        ALTER TABLE consultations ADD COLUMN work_item TEXT NOT NULL DEFAULT '';
+        ALTER TABLE question_consults ADD COLUMN work_item TEXT NOT NULL DEFAULT '';
+        CREATE INDEX IF NOT EXISTS rounds_by_work_item ON rounds (work_item) WHERE work_item <> '';
+        CREATE INDEX IF NOT EXISTS consultations_by_work_item ON consultations (work_item) WHERE work_item <> '';
+        CREATE INDEX IF NOT EXISTS question_consults_by_work_item ON question_consults (work_item) WHERE work_item <> '';
+        """;
+
+    /// <summary>
+    /// Step 26: the external-role jobs of epoch 3 E1 — a PROJECTION of <c>roles/jobs/&lt;jobId&gt;/job.json</c>, which is the authority (<c>v2/epoch-3/e1-role-jobs-ba/SPEC.md</c> section 0, decision 1).
+    /// </summary>
+    /// <remarks>
+    /// <para><c>role_jobs</c> holds one row per job: who asked (<c>role</c>, <c>repo</c>, <c>work_item</c>, <c>task_file</c>), where it stands (<c>state</c>, <c>generation</c>, <c>launcher</c>), when
+    /// (<c>created_utc</c> … <c>updated_utc</c>; <b>empty means "not yet"</b>), the model that gave the answer, how many attempts there were, why it did not succeed (<c>stop</c>, <c>reason</c>) and the
+    /// two numbers the router and the repair loop leave (<c>complexity</c>, <c>security</c>, <c>repair_turns</c>). <c>role_attempts</c> holds one row per try of one model (<c>ordinal</c> from 1), with
+    /// its tokens. A row is rewritten from the job file on every change, so a database that missed a write catches up at the next one; a database that cannot be written changes no job.</para>
+    /// <para>Retention removes a terminal job FOLDER after 30 days or past 200; the rows stay (about 1 KB each). Appended, never inserted, for the reason step 20 records; a reader opened read-only
+    /// runs no step and asks the schema whether the table is there.</para>
+    /// </remarks>
+    internal const string TheRoleJobs = """
+        CREATE TABLE IF NOT EXISTS role_jobs (
+            job_id        TEXT PRIMARY KEY,
+            role          TEXT NOT NULL DEFAULT '',
+            repo          TEXT NOT NULL DEFAULT '',
+            work_item     TEXT NOT NULL DEFAULT '',
+            task_file     TEXT NOT NULL DEFAULT '',
+            state         TEXT NOT NULL DEFAULT '',
+            generation    INTEGER NOT NULL DEFAULT 0,
+            launcher      TEXT NOT NULL DEFAULT '',
+            created_utc   TEXT NOT NULL DEFAULT '',
+            started_utc   TEXT NOT NULL DEFAULT '',
+            ended_utc     TEXT NOT NULL DEFAULT '',
+            updated_utc   TEXT NOT NULL DEFAULT '',
+            final_model   TEXT NOT NULL DEFAULT '',
+            attempts      INTEGER NOT NULL DEFAULT 0,
+            stop          TEXT NOT NULL DEFAULT '',
+            reason        TEXT NOT NULL DEFAULT '',
+            repair_turns  INTEGER NOT NULL DEFAULT 0,
+            complexity    INTEGER NOT NULL DEFAULT 0,
+            security      INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE TABLE IF NOT EXISTS role_attempts (
+            job_id      TEXT NOT NULL REFERENCES role_jobs(job_id),
+            ordinal     INTEGER NOT NULL,
+            model       TEXT NOT NULL DEFAULT '',
+            vendor      TEXT NOT NULL DEFAULT '',
+            started_utc TEXT NOT NULL DEFAULT '',
+            ended_utc   TEXT NOT NULL DEFAULT '',
+            stop        TEXT NOT NULL DEFAULT '',
+            reason      TEXT NOT NULL DEFAULT '',
+            tokens_in   INTEGER NOT NULL DEFAULT 0,
+            tokens_out  INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (job_id, ordinal)
+        );
+        CREATE INDEX IF NOT EXISTS role_jobs_by_state ON role_jobs (state, updated_utc);
         """;
 }

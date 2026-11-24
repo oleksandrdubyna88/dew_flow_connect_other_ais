@@ -21,7 +21,6 @@ import { presses, runPageHtml } from './pageScriptHarness';
 function stateWith(): PanelState {
   return {
     ...panelState('reviewers'),
-    commands: { rows: [], texts: {}, serverVersion: '', perSide: false },
     roles: { rows: [], texts: {}, serverVersion: '', perSide: false, stranded: [] },
   };
 }
@@ -43,16 +42,6 @@ function pageAt(place: string) {
 function buttonSaying(pane: PageNode, label: string): PageNode {
   return pane.one((node) => node.tagName === 'BUTTON' && node.text().trim() === label, `"${label}" button`);
 }
-
-test('the gate\'s "Edit commands…" opens Reviews › Commands on this page — no page is asked for', () => {
-  const { page, paneOf } = pageAt('reviews/gate');
-
-  bubbled(page, 'click', buttonSaying(paneOf('reviews/gate'), 'Edit commands…'));
-
-  assert.equal(paneOf('reviews/commands').hidden, false, 'Commands was not opened');
-  assert.equal(paneOf('reviews/gate').hidden, true, 'the gate stayed open');
-  assert.deepEqual(presses(page), [{ type: 'tab', id: 'reviews/commands' }]);
-});
 
 test('the stages\' "Edit roles…" opens Reviews › Roles & prompts on this page — no page is asked for', () => {
   const { page, paneOf } = pageAt('reviews/stages');

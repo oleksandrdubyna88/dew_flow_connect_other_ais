@@ -1,0 +1,4 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: s1-toolchain-file
+title: "This repository's checks through .coai/toolchain.yaml: schema, reader, check runner, failure digest"
+dependsOn: []

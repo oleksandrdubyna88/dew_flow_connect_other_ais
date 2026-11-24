@@ -1,0 +1,18 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t3-real-coder-run
+title: "Real coder job (claude) on the task named in the baseline: green in at most 3 fix turns, the three numbers compared with the baseline"
+kind: measure
+complexity: 5
+dependsOn:
+  - t1-baseline
+  - t2-epic-acceptance
+parallel: false
+files:
+  - v2/epoch-3/e2-coder-one-task/RESULTS_coder_proof.md
+dod:
+  - id: d1
+    item: "the results file holds the job id, route, attempts, fixTurns (at most 3), green true from this repository's .coai/toolchain.yaml checks, the wall time, the coder's own usage and cost, and what was paid in total"
+  - id: d2
+    item: "main-AI token count and wall time are below the baseline and the accepted findings of the code gate on the coder branch are not higher than the baseline's; a number that misses is written as a miss with its cause, not left out"
+  - id: d3
+    item: "at most two paid runs, the second only after a recorded change; the worktree of the main checkout is not edited while the job runs"

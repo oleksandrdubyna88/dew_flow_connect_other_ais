@@ -321,12 +321,12 @@ const SCENARIOS: readonly Scenario[] = [
       const row = { id: 'host-row', vendor: 'claude', runtime: 'claude', model: 'sonnet', baseUrl: '', executablePath: '', key: '', prompt: 'question-disk', enabled: true };
       try {
         await config().update('qconsultRows', [row], vscode.ConfigurationTarget.Global);
-        await settingsUntil(file, (text) => text.includes('COAI_QCONSULT_ROWS') && text.includes('host-row'),
+        await settingsUntil(file, (text) => text.includes('COAI_CONSASK_ROWS') && text.includes('host-row'),
           'a question-consultant row set in this editor never reached the file the server reads');
       } finally {
         await config().update('qconsultRows', undefined, vscode.ConfigurationTarget.Global);
       }
-      await settingsUntil(file, (text) => !text.includes('COAI_QCONSULT_ROWS'), 'removing the row left it in the file');
+      await settingsUntil(file, (text) => !text.includes('COAI_CONSASK_ROWS'), 'removing the row left it in the file');
       await vscode.window.tabGroups.close(tabsOf('coaiSettings'));
 
       await vscode.commands.executeCommand('coai.showRounds');
@@ -423,21 +423,21 @@ const SCENARIOS: readonly Scenario[] = [
       const before = await settingsUntil(
         file, () => true, 'the extension never wrote a settings file at all');
 
-      assert.ok(!before.includes('COAI_DEAL_PLAN'), 'the setting this scenario changes is already on');
+      assert.ok(!before.includes('COAI_CODE_WORKSPACE'), 'the setting this scenario changes is already on');
       try {
-        await config().update('dealPlanLenses', true, vscode.ConfigurationTarget.Global);
+        await config().update('codeWorkspace', 'worktree', vscode.ConfigurationTarget.Global);
         await settingsUntil(
           file,
-          (text) => text.includes('COAI_DEAL_PLAN'),
+          (text) => text.includes('COAI_CODE_WORKSPACE'),
           'the setting was changed and the file the server reads never followed, which is '
           + 'the defect of this story, in the one place no unit test can look',
         );
       } finally {
-        await config().update('dealPlanLenses', undefined, vscode.ConfigurationTarget.Global);
+        await config().update('codeWorkspace', undefined, vscode.ConfigurationTarget.Global);
       }
       await settingsUntil(
         file,
-        (text) => !text.includes('COAI_DEAL_PLAN'),
+        (text) => !text.includes('COAI_CODE_WORKSPACE'),
         'returning the setting to its default left the old value in the file',
       );
     },

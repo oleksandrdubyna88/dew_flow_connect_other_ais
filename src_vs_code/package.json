@@ -178,11 +178,6 @@
         "category": "ConnectOtherAIs"
       },
       {
-        "command": "coai.editCommands",
-        "title": "Edit the gate's commands",
-        "category": "ConnectOtherAIs"
-      },
-      {
         "command": "coai.editPhrases",
         "title": "Edit phrases",
         "category": "ConnectOtherAIs"
@@ -340,17 +335,6 @@
     "configuration": {
       "title": "ConnectOtherAIs",
       "properties": {
-        "coai.promptsPerRound": {
-          "type": "object",
-          "default": {},
-          "markdownDescription": "Which prompt each role uses on each round, by catalog id — `{ \"Architecture\": [\"architecture\", \"arch-boundaries\"] }`. Index 0 is round 1. An empty or unknown entry is treated as *not chosen*: round 1 of a code role falls back to the conventions pass when the repository has written rules, and every other round to that role's universal prompt.",
-          "additionalProperties": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        },
         "coai.onExhausted": {
           "type": "string",
           "enum": [
@@ -579,16 +563,6 @@
           },
           "markdownDescription": "How many blocking/major findings each ROLE may still have and pass. A finding is counted against the threshold of the role that raised it."
         },
-        "coai.dealPlanLenses": {
-          "type": "boolean",
-          "default": false,
-          "markdownDescription": "Deal the plan stage’s lenses across the vendors instead of giving every vendor the same one. **Off** (the default): every vendor answers the same question, so two vendors agreeing on a finding is a fact the gate can use. **On**: every lens gets asked once at half the launches, and that agreement is gone."
-        },
-        "coai.dealCodeLenses": {
-          "type": "boolean",
-          "default": false,
-          "markdownDescription": "Deal the three code roles across the vendors, one vendor each, instead of asking every role of every vendor."
-        },
         "coai.codeWorkspace": {
           "type": "string",
           "enum": [
@@ -684,58 +658,6 @@
           "type": "string",
           "default": "",
           "markdownDescription": "A name for **this** installation inside the folder above, so two that share one folder keep their own database, sessions and sign-ins — a NAS reached from both Windows and WSL. Empty means the folder is not divided, which is right when only this installation uses it. Trimmed and lower-cased before it is used, so `Windows` and `windows` are one name; what is left may contain letters, digits, dot, dash and underscore, and anything else is refused rather than quietly ignored — the server will not start on it. Ignored when no folder is chosen: a side only divides a folder you named."
-        },
-        "coai.autonomous": {
-          "type": "boolean",
-          "default": false,
-          "markdownDescription": "Tell the assistant to work autonomously: questions that do not block are collected and asked at the END, all together; one that does block is asked at once, but only after every other blocking question it can foresee has been gathered, so you are interrupted once."
-        },
-        "coai.splitPlan": {
-          "type": "boolean",
-          "default": false,
-          "markdownDescription": "After a plan passes, tell the assistant how big it is — build it as it stands, 3-5 stories, or 2-3, 3-4 or 4-5 epics of stories, never more — measured from its build steps and length. How often the work comes back through the gate is `#coai.gatePer#`: once per epic or once for the whole task, never per story. The order is given once per assistant — an epic coming back for its own review is told it is a piece, not told to split again."
-        },
-        "coai.stopLocalWhenQuiet": {
-          "type": "boolean",
-          "default": false,
-          "markdownDescription": "When every cloud reviewer of a round has answered and they found at most one remark between them, the local reviewer finishes the launch it is on and starts no more; the round and the server log say so. Off unless you turn it on. Needs `coai-mcp` **0.34.0** or later."
-        },
-        "coai.gatePer": {
-          "type": "string",
-          "enum": [
-            "epic",
-            "task"
-          ],
-          "enumDescriptions": [
-            "One gate per epic: each epic gets one plan round and one code round over its whole diff, and one commit.",
-            "One gate for the whole task: one code round over the whole diff at the end; still one commit per epic."
-          ],
-          "default": "epic",
-          "markdownDescription": "How often split work comes back through the gate. Never per story — a gate session ends at its code round, so a round per story cost a new branch and two rounds for every story."
-        },
-        "coai.splitWithFable": {
-          "type": "boolean",
-          "default": false,
-          "markdownDescription": "Order the calling assistant to work in three model tiers: its STRONGEST model splits the plan into epics (after asking the question consultant what matters) and writes the spec of the cornerstone and security stories; its briefs-and-review model splits epics into stories, writes test scenarios and briefs, and reviews; its code-and-search model writes the code and tests and runs the search scouts. All three are chosen per kind of assistant in `#coai.commandModels#`; Claude Code's are Fable, Opus and Sonnet unless you change them. They are models of YOUR assistant, not reviewers in the list. (The setting keeps its old name, `splitWithFable`.)"
-        },
-        "coai.commandModels": {
-          "type": "object",
-          "default": {},
-          "markdownDescription": "The three models the split order names, per kind of calling assistant — `claude`, `codex`, `gemini`, `other` — as `{ \"strongest\": \"…\", \"implementation\": \"…\", \"coder\": \"…\" }` (strongest: epics and cornerstone specs; implementation: stories, briefs and review; coder: code and search). A blank field keeps the shipped name: Fable, Opus and Sonnet for Claude Code, and for the others no model at all (the order then says \"the strongest model your client offers\"). Edited in **ConnectOtherAIs: Settings** → *The gate*.",
-          "additionalProperties": {
-            "type": "object",
-            "properties": {
-              "strongest": {
-                "type": "string"
-              },
-              "implementation": {
-                "type": "string"
-              },
-              "coder": {
-                "type": "string"
-              }
-            }
-          }
         },
         "coai.chatPrompt": {
           "type": "string",
@@ -955,42 +877,6 @@
             }
           }
         },
-        "coai.commands": {
-          "type": "array",
-          "default": [],
-          "markdownDescription": "The gate commands you have added, as the server reads them. Edit these in **ConnectOtherAIs: Settings** (*The gate* → **Edit commands…**) rather than here: the page makes the ids and writes each command's TEXT to a file beside your other coai data. A command is handed to the calling AI after the built-in orders, in the rounds its stage names. Needs `coai-mcp` **0.33.0** or later.",
-          "items": {
-            "type": "object",
-            "required": [
-              "id"
-            ],
-            "properties": {
-              "id": {
-                "type": "string",
-                "pattern": "^[a-z0-9][a-z0-9-]*$"
-              },
-              "title": {
-                "type": "string"
-              },
-              "enabled": {
-                "type": "boolean"
-              },
-              "stage": {
-                "type": "string",
-                "enum": [
-                  "plan",
-                  "code",
-                  "any"
-                ]
-              }
-            }
-          }
-        },
-        "coai.securityLane": {
-          "type": "object",
-          "default": {},
-          "markdownDescription": "Additional security reviewer/prompt pairs. Configure in ConnectOtherAIs Settings → Security lane. Prompt bodies live in the MCP data directory."
-        },
         "coai.catalogMigration": {
           "type": "string",
           "enum": [
@@ -1094,58 +980,10 @@
           "default": true,
           "markdownDescription": "Whether the `consult` tool answers at all — for all three kinds: a stuck AI asking on its own, and the cadence and risk consultations the gate orders. Off refuses by NAME, so the AI is told the feature is switched off rather than left to guess why nothing came back, and a consultation cadence on Require stands its refusal down with the reason on the round."
         },
-        "coai.cadenceMode": {
-          "type": "string",
-          "enum": [
-            "off",
-            "remind",
-            "require"
-          ],
-          "enumDescriptions": [
-            "No cadence orders, nothing refused.",
-            "Every review reply carries the order to consult on the current group of epics; nothing is refused.",
-            "The first code round of a group of epics is refused until its consultation has been taken and closed with an outcome."
-          ],
-          "default": "remind",
-          "markdownDescription": "The consultation cadence: after a plan is split into epics, every group of epics owes one consultation before its first code round, and from `coai.cadenceRiskThreshold` epics the riskiest epics and stories get one each. A consultant that cannot be reached never jams the work — the round goes through with the reason written on it."
-        },
-        "coai.cadenceEvery": {
-          "type": "integer",
-          "default": 3,
-          "minimum": 1,
-          "description": "One cadence consultation per this many epics of a plan."
-        },
-        "coai.cadenceRiskThreshold": {
-          "type": "integer",
-          "default": 5,
-          "minimum": 1,
-          "description": "From this many epics, the assistant is asked which epics and stories carry the most risk, and each one it names gets a consultation of its own."
-        },
-        "coai.cadenceRiskMax": {
-          "type": "integer",
-          "default": 3,
-          "minimum": 1,
-          "description": "The most risky epics and stories one plan may name for a consultation of their own."
-        },
         "coai.qconsultEnabled": {
           "type": "boolean",
           "default": true,
           "description": "Let an AI put a question to the question consultant (ask_consultants) before it asks you. Off: the tool answers off and the gate stands down."
-        },
-        "coai.qconsultMode": {
-          "type": "string",
-          "enum": [
-            "off",
-            "remind",
-            "require"
-          ],
-          "enumDescriptions": [
-            "ask_human never asks for the consultants first.",
-            "ask_human reminds the AI to ask the consultants first, and still asks you.",
-            "Once a plan is being built, ask_human refuses a question that was not put to the consultants first — unless it is a production risk with a reason."
-          ],
-          "default": "require",
-          "description": "What the gate in front of ask_human does about a question asked without the question consultant."
         },
         "coai.qconsultRows": {
           "type": "array",
@@ -1182,12 +1020,6 @@
           "default": 10,
           "minimum": 1,
           "description": "Questions one session may put to the consultants; past it the question goes straight to you."
-        },
-        "coai.qconsultFreeBatches": {
-          "type": "integer",
-          "default": 2,
-          "minimum": 1,
-          "description": "How many batches of questions after a plan's proceed go to you directly before the consultants are required."
         }
       }
     },
@@ -1424,7 +1256,7 @@
     }
   },
   "scripts": {
-    "prepare:gate": "node scripts/prepare-gate.mjs && node scripts/generate-security-lane.mjs",
+    "prepare:gate": "node scripts/prepare-gate.mjs",
     "precompile": "npm run prepare:gate",
     "pretypecheck": "npm run prepare:gate",
     "prebundle": "npm run prepare:gate",
@@ -1447,12 +1279,10 @@
     "test:claude-models": "npm run compile && node scripts/live-claude-models.mjs",
     "test:close-compat": "node scripts/live-close-consult-compat.mjs",
     "test:feature-compat": "node scripts/live-feature-schema-compat.mjs",
-    "test:security-compat": "npm run compile && node scripts/live-security-settings-compat.mjs",
     "test:feature-vendor-compat": "npm run compile && node scripts/live-feature-vendor-compat.mjs",
     "test:api-settings-compat": "npm run compile && node scripts/live-api-settings-compat.mjs",
     "test:paths-per-side-compat": "npm run compile && node scripts/live-paths-per-side-compat.mjs",
     "test:gauge-compat": "npm run compile && node scripts/live-gauge-compat.mjs",
-    "test:command-models-compat": "npm run compile && node scripts/live-command-models-compat.mjs",
     "test:on-exhausted-compat": "npm run compile && node scripts/live-on-exhausted-compat.mjs",
     "test:vibe-runtime-compat": "npm run compile && node scripts/live-vibe-runtime-compat.mjs",
     "measure:stream": "npm run compile && node scripts/measure-stream.mjs",

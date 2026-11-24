@@ -103,37 +103,7 @@ public sealed record RuleOrder
             .Select(candidate => candidate.Path));
     }
 
-    /// <summary>
-    /// The order for a gate with NO diff: the named tier, and nothing else from the mount.
-    /// </summary>
-    /// <remarks>
-    /// <para>The one order here that FILTERS, and it filters ONLY. A plan or document round has no
-    /// change to select from, so the mount's other rules are not "lower priority" — they are not what
-    /// the stage is judged against at all, and letting them in would spend a budget the tier needs.</para>
-    /// <para><b>It is not the epic 2 ordering.</b> An earlier draft of this comment claimed the same
-    /// list would "order a manifest instead of filtering"; a code round pointed out that it cannot —
-    /// handed a manifest carrying rules outside the tier, this would silently DROP them. The tier list
-    /// is shared with that future ordering; this entry point is not. Epic 2 adds its own, and until it
-    /// does, nothing here may be called with a manifest.</para>
-    /// <para><b>An entry that matches nothing is skipped in silence, and a tier that matches nothing
-    /// yields nothing.</b> That is not a failure and it is not softened by a fallback: falling back to
-    /// <see cref="Walk"/> would hand a plan reviewer the code rules the tier exists to exclude. What
-    /// the reviewer sees in that case is the instruction files and this repository's OWN rules — which
-    /// are outside every order — and none of the family's. A caller that must tell "the tier was
-    /// satisfied" from "the tier matched nothing" reads the bundle: the mount contributed no file.
-    /// <c>StageRulesTests.EveryTierEntry_ResolvesInThePinnedConventionsMount</c> is what keeps a typo
-    /// or an upstream rename from reaching that silence.</para>
-    /// </remarks>
-    public static RuleOrder Staged(IReadOnlyList<string> tier)
-    {
-        // Snapshotted: a caller's array stays theirs to mutate, and an order that changed under a
-        // later round would be exactly the instability this whole plan exists to remove.
-        string[] entries = [.. tier];
-
-        return new(candidates => entries.SelectMany(entry => Named(candidates, entry)));
-    }
-
-    /// <summary>Orders the mount's rule files. Total, and never drops one — except <see cref="Staged"/>, which filters.</summary>
+    /// <summary>Orders the mount's rule files. Total, and never drops one.</summary>
     public IEnumerable<string> Mount(IReadOnlyList<RuleCandidate> candidates) => _mount(candidates);
 
     /// <summary>
@@ -154,8 +124,7 @@ public sealed record RuleOrder
     /// table has never heard of ranks last and is ordered alphabetically rather than dropped.</para>
     /// <para><b>Public because a second copy of this list is the defect it would cause.</b> A code
     /// round found the canary in <c>StageRulesTests</c> classifying rules against a hand-typed tier
-    /// assembled from <c>StageRules.Plan</c> — a DIFFERENT stage's tier — so a genuinely reachable
-    /// tail rule was read as tier and never counted. Anything that must tell tier from tail asks
+    /// — a DIFFERENT list from this one — so a genuinely reachable tail rule was read as tier and never counted. Anything that must tell tier from tail asks
     /// <see cref="IsTier"/> rather than keeping its own list.</para>
     /// </remarks>
     public static ImmutableArray<string> TierRules { get; } =
@@ -187,22 +156,6 @@ public sealed record RuleOrder
 
         return rank < 0 ? TierRules.Length : rank;
     }
-
-    /// <summary>
-    /// Every candidate that IS the named rule — one entry names one file, not a family of tails.
-    /// </summary>
-    /// <remarks>
-    /// A code round asked for <c>Take(1)</c> here, against two mounts both carrying
-    /// <c>common/security.md</c>. Writing that test showed the state is unreachable: a mount is only
-    /// collected when it sits at one of <c>RuleFiles.RuleFolders</c>' known paths, and two mounts
-    /// cannot share one path — the test passed with the guard removed, which is the definition of a
-    /// guard worth nothing. Left ungated rather than carrying defensive code no input can reach.
-    /// </remarks>
-    private static IEnumerable<string> Named(IReadOnlyList<RuleCandidate> candidates, string entry) =>
-        candidates
-            .Where(candidate => candidate.WithinMount.Equals(entry, StringComparison.OrdinalIgnoreCase))
-            .OrderBy(candidate => candidate.Path, StringComparer.Ordinal)
-            .Select(candidate => candidate.Path);
 
     /// <summary>
     /// A rule's place in the tail for one branch: stable, reproducible, and the same everywhere.

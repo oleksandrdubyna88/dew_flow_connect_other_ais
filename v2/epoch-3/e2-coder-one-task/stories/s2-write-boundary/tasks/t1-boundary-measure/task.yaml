@@ -1,0 +1,15 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t1-boundary-measure
+title: "Measure on the installed claude CLI which launch flags let a session edit and run commands in one folder only (permission mode, tools, restricted, add-dir, cwd), fresh and resumed"
+kind: measure
+complexity: 6
+dependsOn: []
+parallel: false
+security: true
+files:
+  - v2/spikes/RESULTS_coder_write_boundary.md
+dod:
+  - id: d1
+    item: "the results file has one row per flag set with the CLI version, and for each row the measured answer to: an edit in the worktree, an edit of a canary outside it, a shell command that writes outside it, a read outside it, each for a fresh and a resumed session"
+  - id: d2
+    item: "the file names ONE flag set to ship and says plainly what it does not stop (for example a shell command), and which OS-level boundary (read-only bind of the main checkout through systemd-run properties, or none) closes that gap on Linux, WSL and Windows"

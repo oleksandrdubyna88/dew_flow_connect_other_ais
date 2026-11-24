@@ -111,6 +111,6 @@ internal sealed class RosterCollector
     }
 
     /// <summary>The round's work: every local row first (<see cref="RosterBuilder.LocalRowsFirst"/>), the scratch with it.</summary>
-    public RoundWork Work(bool ordinaryDue, RoundScratch scratch) =>
-        new(RosterBuilder.LocalRowsFirst(_work), _notAsked, _excluded) { OrdinaryDue = ordinaryDue, Scratch = scratch };
+    public RoundWork Work(RoundScratch scratch) =>
+        new(RosterBuilder.LocalRowsFirst(_work), _notAsked, _excluded) { Scratch = scratch };
 }

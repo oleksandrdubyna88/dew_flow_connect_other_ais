@@ -56,10 +56,6 @@ const { tokenFileName } = await import('../out/teamServers.js');
 // copies of them.
 const { refusalSeam } = await import('./seam-refusal.mjs');
 const { answerOf, sessionsFor } = await import('./seam-session.mjs');
-// The security lane's leg, in a module of its own for the same reason as the sixth.
-const { securitySeam } = await import('./seam-security.mjs');
-// The security prompt text leg: the tab's reading of real prompt files against the server's (epic 2).
-const { securityTextSeam } = await import('./seam-security-text.mjs');
 const { catalogSeam } = await import('./seam-catalog.mjs');
 const { usageCountsSeam } = await import('./seam-usage-counts.mjs');
 // E3's ledger fields: the lines the REAL writer leaves, read through the extension's own parseUsageLine.
@@ -77,8 +73,8 @@ const { cliPathOtherSideSeam } = await import('./seam-cli-path-other-side.mjs');
 const { pathMissingSeam } = await import('./seam-path-missing.mjs');
 // A missing NAMED data folder: the extension's own decision against the real binary's writer mode and served tools.
 const { missingNamedRootSeam } = await import('./seam-missing-named-root.mjs');
-// A HELD gate: the notice the real binary writes at call_human, parsed by the extension's parser, offering the decisions it lists.
-const { heldGateSeam } = await import('./seam-held-gate.mjs');
+// The held-gate leg (scripts/seam-held-gate.mjs) is deleted: v2/architecture/server.md lists held gates, call_human and cards under "Delete".
+// The v2 server answers good_enough when the rounds are exhausted, so no plan round ends in call_human any more.
 
 /**
  * The consultant settings as the PANEL reads them, from a stored map — never built by hand here.
@@ -553,19 +549,6 @@ console.log(capabilities.older
   ? '  skip the named server was declared older than --features; run the seam without COAI_MCP_DLL to ask this repository\x27s own build'
   : `  ok  the server lists ${capabilities.listed.join(', ')} — every capability the extension knows`);
 
-// The EIGHTH leg: the security lane as the extension serializes it — a well-formed lane draws no
-// complaint, its unknown trigger is refused by name, and its malformed form is refused, not ignored.
-const security = await securitySeam({ providersIn, fail });
-console.log(`  ok  the security lane crosses the seam; the unknown trigger was refused: "${security.refusal}"`);
-
-// The NINTH leg: real prompt override files read by the extension and by the server, compared file by file.
-// A skip needs BOTH: a named binary, and the person running it declaring that binary older than the mode.
-const olderExpected = (process.env['COAI_MCP_DLL'] ?? '').length > 0 && process.env['COAI_SEAM_OLDER_SERVER'] === '1';
-const text = await securityTextSeam({ binary, olderExpected, fail, timeoutMs: TIMEOUT_MS });
-console.log(text.older
-  ? '  skip the named server was declared older than --security-prompt-text (MCP 0.43.0); run the seam without COAI_MCP_DLL to compare this repository\'s own build'
-  : `  ok  ${text.compared} prompt ids (every fixture file, and one with none) read alike by the Security lane tab and the server`);
-
 // The SIXTH leg: a real refusal over stdio, its secret taken out, read back by the extension.
 const refusal = await refusalSeam({ serverSession, resolvedFor, answerOf, fail, timeoutMs: TIMEOUT_MS });
 console.log('  ok  a side\'s settings are written and read at the same path, and the root is adopted');
@@ -715,12 +698,12 @@ try {
 }
 
 if (!String(switched.error ?? '').includes('switched off')) {
-  await consultFail(`COAI_CONSULT_ENABLED did not cross the seam, or a live server does not re-read it. The server answered: ${JSON.stringify(switched).slice(0, 400)}`);
+  await consultFail(`COAI_CONS_ENABLED did not cross the seam, or a live server does not re-read it. The server answered: ${JSON.stringify(switched).slice(0, 400)}`);
 }
 
 // The tool must still be THERE while it is off. A caller that cannot see a tool cannot be told why
 // it is not there, and the documentation promises this in those words.
-if (!(listed?.result?.tools ?? []).some((tool) => tool.name === 'consult')) {
+if (!(listed?.result?.tools ?? []).some((tool) => tool.name === 'cons')) {
   await consultFail(`the consult tool vanished from tools/list while the feature was off: ${
     (listed?.result?.tools ?? []).map((tool) => tool.name).join(', ')}`);
 }
@@ -882,16 +865,6 @@ const namedRoot = await missingNamedRootSeam({
   fail: (why) => { rmSync(repoPath, { recursive: true, force: true }); fail(why); },
 });
 console.log('  ok  a missing named data folder is refused by the extension and by the server alike, and nothing makes it; a side folder and the default are still made');
-
-// A held gate (todo/PLAN_only_a_person_releases_the_gate.md §11.2): a real plan round to call_human over the stand-in CLI, with
-// HOME, USERPROFILE and CODEX_HOME isolated. The notice it wrote is read by the extension's own parser, the answer window offers
-// exactly the decisions the notice lists (Proceed included), the caller's argument is refused over the wire, and the extension's
-// own Proceed answer is what releases the hold.
-const held = await heldGateSeam({
-  serverSession, answerOf, fakeCli: cli,
-  fail: (why) => { rmSync(repoPath, { recursive: true, force: true }); fail(why); },
-});
-console.log(`  ok  a held gate's notice lists ${held.decisions.join(', ')}; the answer window offers exactly those, the caller's argument is refused, and the extension's own Proceed advances the stage to ${held.stage}`);
 
 rmSync(repoPath, { recursive: true, force: true });
 rmSync(dataDir, { recursive: true, force: true });

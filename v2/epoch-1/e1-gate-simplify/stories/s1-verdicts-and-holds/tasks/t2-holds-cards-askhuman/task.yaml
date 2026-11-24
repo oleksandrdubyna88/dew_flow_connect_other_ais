@@ -1,0 +1,19 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t2-holds-cards-askhuman
+title: "Remove RoundEngine.ApplyAnyHumanDecision, Escalations (move AtomicJson and ScratchDirectory out), EscalationRetention, SessionHolds, AskHumanService, AskUnderAuto, EscalationBudget; ask_human becomes an alias reply"
+kind: code
+complexity: 6
+dependsOn:
+  - t1-policy-ladder
+parallel: false
+files:
+  - src_mcp/src/Server/Rounds/RoundEngine.cs
+  - src_mcp/src/Server/Escalations.cs
+  - src_mcp/src/Server/AskHumanService.cs
+  - src_mcp/src/Server/AskUnderAuto.cs
+  - src_mcp/src/Tools.cs
+dod:
+  - id: d1
+    item: "no code path waits for a person"
+  - id: d2
+    item: "ask_human returns status ask_in_conversation with note 'removed in v2'"

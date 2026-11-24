@@ -59,20 +59,6 @@ internal static class StartupNotices
         noticing.Offered(() => Note(ServerNoticeCodes.UnrecognisedSetting, StoodDown, Canonical(settingsPath), sentence));
     }
 
-    /// <summary>
-    /// A policy a client's <c>env</c> block still pins (<see cref="PanelSettings.PinnedPolicy"/>), said at Warning and offered as an unrecognised setting
-    /// is — the existing code and class, because the extension renders the codes it knows. Its own method, after <see cref="SettingsUnread"/>, calling
-    /// neither it nor <see cref="Record"/>: when both an unreadable file and a pinned policy hold, each writes its own note, under its own subject.
-    /// </summary>
-    internal static void PinnedPolicy(IReadOnlyList<UnrecognisedSetting> pinned, Noticing noticing, Serilog.ILogger log)
-    {
-        foreach (var setting in pinned)
-        {
-            log.Warning("{Pinned}", setting.Sentence);
-            noticing.Offered(() => Note(ServerNoticeCodes.UnrecognisedSetting, StoodDown, setting.Key, setting.Sentence));
-        }
-    }
-
     /// <summary>Every unrecognised setting and every storage note this run has, written down.</summary>
     internal static void Record(
         PanelSettings settings, IReadOnlyList<StorageNote> storage, Noticing noticing,

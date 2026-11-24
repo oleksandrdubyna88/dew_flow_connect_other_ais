@@ -156,20 +156,6 @@ test('every language describes the sides seen and the path-fields switch, by the
   }
 });
 
-test('every language says the split order names Briefs and review, Code and search and Sonnet (model tiers)', () => {
-  const article = HELP_ARTICLES.find((one) => one.id === 'the-gate');
-  assert.ok(article !== undefined, 'the gate article has been renamed, and this test is now asserting nothing');
-  for (const language of HELP_LANGUAGES) {
-    const { body, fallback } = bodyFor(article, language);
-    const said = Object.values(body).join(' ');
-    assert.equal(fallback, false, `the ${language} gate article is missing`);
-    assert.ok(said.includes('**Split with the strongest model**'), `the ${language} gate article lost the split paragraph`);
-    for (const label of ['**Briefs and review**', '**Code and search**', 'Sonnet']) {
-      assert.ok(said.includes(label), `the ${language} gate article never says ${label} — the third model slot is undocumented there`);
-    }
-  }
-});
-
 test('every language says a CLI path is kept per side, and names the older-extension limit (paths per side E3)', () => {
   // Design (c) of research/PLAN_paths_per_side.md: "Said in the help and in the CHANGELOG when E3 ships." The two example
   // paths are the same in every language, so they are what all five are asked for; `PATH` is the lookup an emptied
@@ -209,22 +195,6 @@ test('every language says why the other side\'s boxes are gone while each side k
     const said = Object.values(bodyFor(article, language).body).join(' ');
     assert.ok(said.includes('*This side keeps its own settings — set the other side\'s value from a window on that side.*'),
       `the ${language} settings article never says why the other side's CLI path and folder box are not shown while each side keeps its own settings`);
-  }
-});
-
-test('every language says how a Security lane pair names its reviewer, by the page\'s own English words (names and a missing root, story 1)', () => {
-  // research/PLAN_names_and_a_missing_root.md: the pair's Reviewer now reads like the question consultant's picker — a
-  // row by its card's name, `(switched off)`, `(stranded)`, "no reviewer — pick one", and a removed row whose pair the
-  // server DROPS. The marks are English in every language, as every control text here is.
-  const article = HELP_ARTICLES.find((one) => one.id === 'security-lane');
-  assert.ok(article !== undefined, 'the security lane article has been renamed, and this test is now asserting nothing');
-  for (const language of HELP_LANGUAGES) {
-    const { body, fallback } = bodyFor(article, language);
-    const said = Object.values(body).join(' ');
-    assert.equal(fallback, false, `the ${language} security lane article is missing`);
-    for (const words of ['*(switched off)*', '*(stranded)*', '*no reviewer — pick one*', '**Change on Models**']) {
-      assert.ok(said.includes(words), `the ${language} security lane article never says ${words} — how a pair names its reviewer is undocumented there`);
-    }
   }
 });
 
@@ -423,7 +393,7 @@ function asProse(title: string): string {
  * the phrase, and this goes red rather than quietly losing the coverage.
  */
 const ALIAS: Record<string, string> = {
-  // `coai.editRoles`, `coai.editCommands` and `coai.editChatPresets` need no alias since E5.2: the pages they opened are
+  // `coai.editRoles` and `coai.editChatPresets` need no alias since E5.2: the pages they opened are
   // gone, and the Settings tab's article names the three by their titles as the redirects they are for one release.
   'coai.copyConfigBlock': 'copy the mcp config block',
   'coai.copyClaudeSnippet': 'copy the claude.md snippet',
@@ -449,14 +419,12 @@ const SELF_EVIDENT: Record<string, string> = {
 };
 
 const SETTING_ALIAS: Record<string, string> = {
-  'coai.securityLane': 'security lane',
   'coai.bugzModel': 'ranking model',
   'coai.bugzServer': 'review bugs',
   'coai.chatPrompt': 'the prompt the passage travels with',
   'coai.chatPromptChoice': 'which of your saved prompts a chat opens with',
   'coai.chatModelName': 'which of its models answers',
   'coai.phrases': 'a list of sentences you keep',
-  'coai.commands': 'commands of your own',
   'coai.chatPromptPresets': 'your saved prompts, each with a name',
   'coai.chatModelPresets': 'your saved models, each with a name',
   'coai.chatLanguage': 'the language the other ai answers in',
@@ -474,26 +442,17 @@ const SETTING_ALIAS: Record<string, string> = {
   'coai.rounds': 'rounds',
   'coai.thresholds': 'passes at or under',
   'coai.roleEnabled': 'its **active** tick in **reviews › roles & prompts**',
-  'coai.dealPlanLenses': 'deal the lenses across vendors',
-  'coai.dealCodeLenses': 'deal the lenses across vendors',
   'coai.codeWorkspace': 'what a reviewer gets',
   'coai.credsKey': 'credsfordevs config key',
-  'coai.promptsPerRound': 'one picker per round per role',
   'coai.roles': 'the roles you add are your own',
   'coai.uiScale': 'text size',
   'coai.textTone': 'text tone',
   'coai.helpLanguage': 'language switch',
   // The three gate switches. They shipped undeclared, so this guard never saw them: a setting that
   // VS Code does not know about is a setting nothing checks the help for either.
-  'coai.autonomous': 'work autonomously',
-  'coai.splitPlan': 'split the plan into epics and stories',
-  'coai.stopLocalWhenQuiet': 'stop the local reviewer when the cloud reviewers found almost nothing',
   // Issue #117: the switch names the caller's own strongest model now, and the three models are chosen
   // per kind of assistant — the key keeps its historical name.
-  'coai.splitWithFable': 'split with the strongest model',
-  'coai.commandModels': 'chosen per kind of assistant',
   // Issue #131: the article names both choices and says what neither of them is.
-  'coai.gatePer': 'never once per story',
   'coai.perSideSettings': 'separate settings for each side',
   // research/PLAN_paths_per_side.md E2.3: the switch, by the label Setup › This side gives it.
   'coai.pathFieldsPerSide': 'path fields per side',
@@ -503,15 +462,9 @@ const SETTING_ALIAS: Record<string, string> = {
   'coai.consultTurns': 'turns per consultation',
   'coai.consultCallsPerSession': 'calls per session',
   'coai.consultIdleMinutes': 'close an idle consultation after, minutes',
-  'coai.consultEnabled': 'let an ai consult another vendor',
-  // The consultation cadence's four (research/PLAN_consult_on_a_cadence.md), by the panel's own labels.
-  'coai.cadenceMode': 'consultation cadence',
-  'coai.cadenceEvery': 'one consultation per this many epics',
-  'coai.cadenceRiskThreshold': 'ask for the riskiest pieces from this many epics',
-  'coai.cadenceRiskMax': 'riskiest pieces per plan, at most',
+  'coai.consultEnabled': 'let an ai use cons',
   // The question consultant's eight (todo/PLAN_question_consultant.md, S4), by the tab's own labels.
-  'coai.qconsultEnabled': 'let an ai ask the question consultant first',
-  'coai.qconsultMode': 'before it asks you',
+  'coai.qconsultEnabled': 'let an ai ask consask first',
   'coai.qconsultRows': 'who answers',
   'coai.qconsultPrompts': 'base prompts',
   'coai.qconsultRoots': 'folders a disk row may read',
@@ -520,7 +473,6 @@ const SETTING_ALIAS: Record<string, string> = {
   'coai.kimiAllowNetworkSignIn': 'allow a kimi sign-in on network storage',
   'coai.qconsultRowMinutes': 'minutes one row may run',
   'coai.qconsultQuestionsPerSession': 'questions per session',
-  'coai.qconsultFreeBatches': 'question batches that reach you first',
   // The storage pair (issue #115). Their article is the one a person reaches for after reinstalling
   // an operating system, which is the moment these two settings exist for.
   'coai.dataDirectory': 'where your data lives',

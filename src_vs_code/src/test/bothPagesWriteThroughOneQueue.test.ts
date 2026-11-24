@@ -27,7 +27,7 @@ test('both pages hand their messages to the one dispatcher, each naming itself',
     'the Settings tab is heard by something other than the shared dispatcher, so its controls can store differently');
 });
 
-test('the dispatcher queues every setting and every prompt pick through the one write path, for either page', () => {
+test('the dispatcher queues every setting through the one write path, for either page', () => {
   const at = source.indexOf('private receive(from: SurfaceSlot, m: PanelMessage): void {');
   // A search that found nothing must FAIL: slicing from -1 reads one character and passes (plan F7).
   assert.ok(at >= 0, 'the dispatcher could not be found, so this proves nothing');
@@ -36,8 +36,6 @@ test('the dispatcher queues every setting and every prompt pick through the one 
 
   assert.match(body, /this\.enqueue\(\(\) => this\.write\(settingMessageFrom\(m\), from\)\)/,
     'a setting is written outside the queue, or without the page it came from');
-  assert.match(body, /this\.enqueue\(\(\) => this\.choosePrompt\(role, round, String\(m\.value\), from\)\)/,
-    'a prompt pick is written outside the queue, or without the page it came from');
 });
 
 test('a probe asks whether ANY page is watching, not the sidebar alone (F8)', () => {

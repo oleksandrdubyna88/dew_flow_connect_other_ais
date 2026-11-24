@@ -749,7 +749,7 @@ public sealed class AVibeDiskRowExpandsAParentFolderTests : IDisposable
 
         place.Refusal.Should().Contain("took longer than the row's budget (6 s)")
             .And.Contain("the budget ran out while confirming 2 candidates with git, before anything was copied")
-            .And.Contain("grant fewer or smaller folders, or give the row more time (COAI_QCONSULT_ROW_MINUTES)")
+            .And.Contain("grant fewer or smaller folders, or give the row more time (COAI_CONSASK_ROW_MINUTES)")
             .And.NotContain("0 of 0");
         Snapshots().Should().BeEmpty();
         _bytes.Held.Should().Be(0);

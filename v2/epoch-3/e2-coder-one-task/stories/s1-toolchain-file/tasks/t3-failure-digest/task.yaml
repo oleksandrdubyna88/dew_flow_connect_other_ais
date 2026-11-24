@@ -1,0 +1,16 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t3-failure-digest
+title: "Failure digest from a failed step: MSBuild error lines and the test executable's failed tests, with a raw tail as fallback"
+kind: code
+complexity: 5
+dependsOn:
+  - t2-check-runner
+parallel: false
+files:
+  - src_mcp/core/Toolchain/FailureDigest.cs
+  - src_mcp/tests
+dod:
+  - id: d1
+    item: "a recorded real MSBuild output of this repository with 2 errors gives 2 items {step, file, line, code, message}; a recorded real failed run of the CoaiMcp.Tests executable gives one item per failed test"
+  - id: d2
+    item: "the digest never has more than 40 items or 16 KB; an output no parser knows gives one item with the last lines of the raw output; credential-like text is redacted by the existing Redaction rule"

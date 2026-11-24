@@ -1,0 +1,43 @@
+{
+  "id": "73a6fb63d39f",
+  "sessionId": "1d7cb7e4",
+  "repoPath": "/fixture/repo",
+  "branch": "epic-1",
+  "question": "The plan review gate needs your decision: 1 finding(s) still gate after 1 round(s). Proceed anyway, or fix the findings and review again?",
+  "questionOriginal": "",
+  "language": "en",
+  "translationNote": "",
+  "openFindings": [
+    {
+      "severity": 0,
+      "category": 2,
+      "file": "",
+      "line": 0,
+      "title": "the poll has no timeout",
+      "why": "a hung peer hangs the loop",
+      "fix": "add one",
+      "providers": [
+        "codex"
+      ],
+      "role": "PlanCritique",
+      "reproduction": null,
+      "capReason": "",
+      "alsoSeenBy": [],
+      "isGating": true
+    }
+  ],
+  "askedUtc": "2026-11-22T18:34:41.0226204Z",
+  "status": "expired",
+  "expiredUtc": "2026-11-22T18:34:41.0549447Z",
+  "consultId": "",
+  "productionRisk": false,
+  "riskReason": "",
+  "consultantAnswers": [],
+  "kind": "notice",
+  "decisions": [
+    "continue",
+    "fix",
+    "discuss",
+    "proceed"
+  ]
+}

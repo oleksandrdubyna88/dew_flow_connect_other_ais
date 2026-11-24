@@ -128,8 +128,7 @@ public sealed class ACustomRoleReviewsAChangeTests : IAsyncLifetime
                 // One round each, and a threshold generous enough that a clean plan proceeds: the
                 // subject here is which ROLE reviews, not what the gate makes of what it finds.
                 Rounds = new PanelConfig(
-                    catalog.Roles.ToDictionary(r => r.Id, _ => new RoleGate(1, 5)),
-                    StagePolicy.Human)
+                    catalog.Roles.ToDictionary(r => r.Id, _ => new RoleGate(1, 5)))
                 {
                     Catalog = catalog,
                 },
@@ -143,7 +142,7 @@ public sealed class ACustomRoleReviewsAChangeTests : IAsyncLifetime
     }
 
     /// <summary>The shipped plan role, plus one a person added to the same stage.</summary>
-    private PanelService WithACustomPlanRole(bool dealLenses = false)
+    private PanelService WithACustomPlanRole()
     {
         File.WriteAllText(Path.Combine(_data, "prompts", "brief-general.md"),
             "You read one thing: whether the plan says what it is for.");
@@ -161,13 +160,12 @@ public sealed class ACustomRoleReviewsAChangeTests : IAsyncLifetime
             new PanelSettings
             {
                 Providers = [new("codex") { ExecutablePath = FakeCliExe }],
-                Rounds = new PanelConfig(catalog.Roles.ToDictionary(r => r.Id, _ => new RoleGate(1, 5)), StagePolicy.Human)
+                Rounds = new PanelConfig(catalog.Roles.ToDictionary(r => r.Id, _ => new RoleGate(1, 5)))
                 {
                     Catalog = catalog,
                 },
                 DataDir = _data,
                 ReviewerTimeout = TimeSpan.FromSeconds(30),
-                DealPlanLenses = dealLenses,
             },
             VaultKeys.None("no vault in tests"),
             default,
@@ -203,35 +201,6 @@ public sealed class ACustomRoleReviewsAChangeTests : IAsyncLifetime
         var round = Parse(await service.StatusAsync(_repo, "feature")).GetProperty("rounds")[0];
         round.GetProperty("reviewerStates").EnumerateArray().Select(r => r.GetProperty("role").GetString())
             .Should().BeEquivalentTo([RoleCatalog.PlanRole, "Brief"]);
-    }
-
-    /// <summary>
-    /// And it still reviews the plan when the round is dealing lenses rather than asking everyone
-    /// everything.
-    /// </summary>
-    /// <remarks>
-    /// The unspent-lens pool was read from the shipped plan role alone, which was the whole plan
-    /// stage until a person could add a second role to it. With lens dealing switched on, every
-    /// question in the hand then belonged to <c>PlanCritique</c> — so the round a person configured
-    /// two plan roles for asked one of them twice and the other nothing. (Found while fixing the
-    /// lens-ownership defect codex and gemini both raised on the second code round.)
-    /// </remarks>
-    [Fact]
-    public async Task ACustomPlanRole_ReviewsThePlan_EvenWhenTheRoundDealsItsLenses()
-    {
-        var service = WithACustomPlanRole(dealLenses: true);
-        await service.OpenAsync(_repo, "feature");
-
-        Script(OneMajor);
-        await service.ReviewPlanAsync(_repo, "feature", Scope);
-
-        var round = Parse(await service.StatusAsync(_repo, "feature")).GetProperty("rounds")[0];
-        // Both, and each ONCE: a hand that gave one role two lenses and the other none would satisfy
-        // "contains Brief" while being the very defect this test is about. (CodeRabbit, this plan's
-        // pull request.)
-        round.GetProperty("reviewerStates").EnumerateArray().Select(r => r.GetProperty("role").GetString())
-            .Should().BeEquivalentTo([RoleCatalog.PlanRole, "Brief"],
-                "a hand dealt from one role's lenses is not a round of two roles");
     }
 
     private static JsonElement Parse(string json) => JsonDocument.Parse(json).RootElement;

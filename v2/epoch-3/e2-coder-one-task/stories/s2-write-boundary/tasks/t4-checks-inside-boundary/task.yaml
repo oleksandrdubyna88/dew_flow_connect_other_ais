@@ -1,0 +1,18 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t4-checks-inside-boundary
+title: "The check commands (build, test, formatter) run inside the same boundary: cwd in the worktree, minimal environment, main checkout read-only where the launcher can do it"
+kind: security
+complexity: 7
+dependsOn:
+  - t1-boundary-measure
+  - t2-coder-worktree
+parallel: false
+security: true
+files:
+  - src_mcp/runners/Toolchain/CheckBoundary.cs
+  - src_mcp/tests
+dod:
+  - id: d1
+    item: "a check command is started with the worktree as cwd and an allow-listed environment (no vendor key and no COAI_ secret name reaches it; a test lists what does)"
+  - id: d2
+    item: "under the systemd-run launcher a fixture build command that writes a file into the main checkout fails and the main checkout is unchanged; on a launcher with no OS boundary the result records `boundary: cwd-only` and the filesystem snapshot of the main checkout is kept as evidence"

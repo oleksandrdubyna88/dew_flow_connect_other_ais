@@ -36,8 +36,8 @@ export interface ConsultantViewState {
  */
 export function consultantBody(consult: ConsultSettings, state: ConsultantViewState, callerRows: string): string {
   return `<div class="field">
-  <div class="check-row"><label for="consultEnabled"><input type="checkbox" id="consultEnabled" data-setting="consultEnabled"${consult.enabled ? ' checked' : ''}> Let an AI consult another vendor</label>${help('consultEnabled')}</div>
-  <div class="hint">The AI calls <code>consult</code> itself when it is stuck, and the gate orders one for a group of epics or a risky piece when the consultation cadence is on. The consultant reads this checkout READ-ONLY, with the uncommitted change, and answers advice the AI must verify.</div>
+  <div class="check-row"><label for="consultEnabled"><input type="checkbox" id="consultEnabled" data-setting="consultEnabled"${consult.enabled ? ' checked' : ''}> Let an AI use cons</label>${help('consultEnabled')}</div>
+  <div class="hint">The AI calls <code>cons</code> itself when it is stuck. Another model reads this checkout READ-ONLY, with the uncommitted change, and answers advice the AI must verify.</div>
 </div>
 ${callerRows}
 <div class="field inline">

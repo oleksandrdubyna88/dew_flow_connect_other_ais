@@ -103,20 +103,11 @@ test('each role shows its own rounds, its own threshold and its own prompts', ()
     // which asks where the value LANDS.
     assert.ok(html.includes(`data-setting="rounds" data-role="${role}"`), `${role} has no rounds control`);
     assert.ok(html.includes(`data-setting="thresholds" data-role="${role}"`), `${role} has no threshold control`);
-    assert.ok(html.includes(`data-prompt="${role}" data-round="1"`), `${role} has no round-1 prompt`);
   }
 
   // What is left in The Gate is the one decision that belongs to neither role nor stage.
   assert.ok(html.includes('data-setting="onExhausted"'));
   assert.ok(!html.includes('data-setting="maxRoundsPlan"'), 'the per-stage controls are gone, not hidden');
-});
-
-test('both deal switches are offered, and off is the default', () => {
-  const html = everyPageHtml(state(), 'n0nce');
-
-  assert.ok(html.includes('data-setting="dealPlanLenses"'));
-  assert.ok(html.includes('data-setting="dealCodeLenses"'));
-  assert.ok(!html.includes('data-setting="dealPlanLenses" checked'), 'dealing gives up cross-vendor agreement');
 });
 
 test('the code stage offers Fast and Full, and Fast is the lit one', () => {
@@ -645,7 +636,7 @@ test('each code role is wrapped in its own colour, and still says its name', () 
     ['SecurityReliability', 'sec'],
     ['UxDxPerformance', 'uxdx'],
   ] as const) {
-    assert.match(html, new RegExp(`class="role role-${tone}"[\\s\\S]*?data-prompt="${role}"`),
+    assert.match(html, new RegExp(`class="role role-${tone}"[\\s\\S]*?data-setting="rounds" data-role="${role}"`),
       `${role} is not wrapped in its own tone`);
   }
   // The colour is never the only signal: a person who cannot tell them apart still reads the name.
@@ -667,20 +658,18 @@ test('the role colours come from the theme with a fallback, never a bare hex', (
   }
 });
 
-test('the number of rounds each stage shows follows that stage’s own budget', () => {
+test('each stage shows the budget it was given: the rounds box carries the stored number', () => {
   const html = everyPageHtml(
     state({ settings: { ...DEFAULTS, rounds: { ...DEFAULTS.rounds, PlanCritique: 2, Architecture: 4, SecurityReliability: 4, UxDxPerformance: 4 } } }),
     'n0nce',
   );
-  assert.ok(html.includes('data-prompt="PlanCritique" data-round="2"'));
-  assert.ok(!html.includes('data-prompt="PlanCritique" data-round="3"'), 'a plan round nobody will run needs no picker');
-  assert.ok(html.includes('data-prompt="Architecture" data-round="4"'));
+  assert.match(html, /id="rounds-PlanCritique"[^>]*value="2"/);
+  assert.match(html, /id="rounds-Architecture"[^>]*value="4"/);
 });
 
-test('code round 1 is the conventions pass, and says so', () => {
+test('the code stage says what the Conventions role judges against', () => {
   const html = everyPageHtml(state(), 'n0nce');
-  assert.match(html, /Round 1[\s\S]{0,400}?Conventions/, 'the first code round defaults to the rules check');
-  assert.ok(html.includes('written down'), 'and the section says what that pass judges against');
+  assert.ok(html.includes('written down'), 'the section says what that role judges against');
 });
 
 test('the code stage states its own arithmetic, in the numbers actually configured', () => {
@@ -876,15 +865,6 @@ test('the round limit says what it works out to, and warns when it cannot be met
   assert.match(planOnly, /worked out: at most 2 waves × 10 min = 20 min/,
     'no code-capable vendor floors at one, not at every enabled vendor');
 
-  const dealt = withSettings({ roundTimeoutMinutes: 0, reviewerTimeoutMinutes: 10, maxConcurrency: 3, dealCodeLenses: true });
-  const dealtWaves = /worked out: at most (\d+) waves?/.exec(dealt);
-  const undealtWaves = /worked out: at most (\d+) waves?/.exec(derived);
-  assert.ok(dealtWaves && undealtWaves);
-  assert.ok(
-    Number(dealtWaves[1]) <= Number(undealtWaves[1]),
-    'dealing sends each lens to one vendor, so a dealt round is never wider than an undealt one',
-  );
-
   const byHand = withSettings({ roundTimeoutMinutes: 90, reviewerTimeoutMinutes: 10 });
   assert.ok(byHand.includes('set by hand'), 'a workable explicit limit needs no arithmetic');
   // "worked out:" with the colon — the note's own form. The help article on the same page says
@@ -1013,11 +993,11 @@ test('S5.7.2 a consultant on a runtime the installed server cannot consult on is
  * that lets somebody create a role and a section that never draws it is two features that disagree.</p>
  */
 function promptsSection(html: string): string {
-  // The old Prompts section is two places on the new page (E4.1): the stages with their role boxes, and the pickers.
-  return `${paneIn(html, 'reviews/stages')}\n${paneIn(html, 'reviews/prompts')}`;
+  // The old Prompts section is one place on the new page: the stages with their role boxes (the per-round pickers are gone).
+  return paneIn(html, 'reviews/stages');
 }
 
-test('a role a person added is drawn in Prompts per round, under their own name', () => {
+test('a role a person added is drawn on Stages, under their own name', () => {
   const settings = {
     ...DEFAULTS,
     roles: [{ id: 'Requirements', name: 'Requirements we wrote', stage: 'result',
@@ -1027,7 +1007,6 @@ test('a role a person added is drawn in Prompts per round, under their own name'
 
   assert.ok(prompts.includes('Requirements we wrote'), 'the name they gave it');
   assert.ok(prompts.includes('data-role="Requirements"'), 'with its own rounds and threshold');
-  assert.ok(prompts.includes('data-prompt="Requirements"'), 'and its own prompt picker');
 });
 
 test('a role switched off in the catalog is drawn as off, whatever the section’s own tick says', () => {

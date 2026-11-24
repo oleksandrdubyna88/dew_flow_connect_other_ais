@@ -1,0 +1,5 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: s2-write-boundary
+title: "Write boundary at launch: the coder worktree, the claude write launch and the check commands cannot write outside the worktree"
+cornerstone: true
+dependsOn: []

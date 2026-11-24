@@ -330,7 +330,7 @@ async function confirmed(names: readonly string[]): Promise<boolean> {
     class: 'confirmation',
     source: 'catalogMigrationHost',
     code: 'catalog-restore-confirm',
-    title: `Put the reviewers, consultants and question-consultant rows in ${names.join(' and ')} back exactly as they `
+    title: `Put the reviewers, cons and consask rows in ${names.join(' and ')} back exactly as they `
       + 'were before the catalog? Anything changed in them since is replaced, and they are not moved into the catalog '
       + 'again until you ask.',
     action: RESTORE,

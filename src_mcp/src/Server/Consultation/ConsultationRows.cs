@@ -48,5 +48,6 @@ public static class ConsultationRows
         Epics: record.Epics,
         FailureKind: record.FailureKind,
         FailureCure: record.FailureCure,
-        Evidence: record.Evidence);
+        Evidence: record.Evidence,
+        WorkItem: record.WorkItem);
 }

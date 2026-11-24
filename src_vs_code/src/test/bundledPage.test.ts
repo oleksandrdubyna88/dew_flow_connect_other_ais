@@ -1231,7 +1231,7 @@ test('a server too old for questionConsults is an empty Questions tab, saying wh
 
   assert.deepEqual(parsed.questions, []);
   assert.equal(rowsWith(log.qconsultLogHtml([]), 'data-question').length, 0);
-  assert.match(log.qconsultLogHtml([]), /No question has been put to the consultants yet/);
+  assert.match(log.qconsultLogHtml([]), /No question has been put to consask yet/);
 });
 
 test('the shipped page opens the Questions tab on a press, and a push replaces its body', () => {

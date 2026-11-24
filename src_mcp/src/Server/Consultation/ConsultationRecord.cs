@@ -169,6 +169,12 @@ public sealed record ConsultationRecord(
     public int CarryBudget { get; init; }
 
     /// <summary>
+    /// The plan item this consultation was for — the repository-relative feature-folder path the caller named in <c>workItem</c> (coai v2 E3.S8,
+    /// <c>WorkItems</c>). Empty when it named none, and on every record written before the field. Frozen with the first turn.
+    /// </summary>
+    public string WorkItem { get => field ?? string.Empty; init; } = string.Empty;
+
+    /// <summary>
     /// The consultant's row's system prompt as it stood when this consultation opened (research/PLAN_one_model_catalog.md, C2)
     /// — frozen with the model and the runtime, because a turn's prompt is composed from the record alone: an edit made
     /// today never reaches a conversation opened yesterday. Empty for none, and for a record written before it existed.

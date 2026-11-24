@@ -1,0 +1,16 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t3-commands-picker
+title: "Remove CommandsSetting, CommandModelsSetting, core/Commands, shared/command-models.json, the operator flags and PromptsPerRound/DealPlan/CodeLenses"
+kind: code
+complexity: 5
+dependsOn:
+  - t2-cadence
+parallel: false
+files:
+  - src_mcp/src/Server/CommandsSetting.cs
+  - src_mcp/core/Commands
+  - shared/command-models.json
+  - src_mcp/src/Server/PanelSettings.cs
+dod:
+  - id: d1
+    item: "one prompt per role by default; variants only as overrides"

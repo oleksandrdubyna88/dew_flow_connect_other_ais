@@ -1,0 +1,13 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t4-entry-purity
+title: "entryPurity.test.ts runs the entry against a recording vscode fake"
+kind: test
+complexity: 4
+dependsOn:
+  - t1-entry-lazy
+parallel: true
+files:
+  - src_vs_code/src/test/entryPurity.test.ts
+dod:
+  - id: d1
+    item: "the test fails on any call other than register* or subscriptions.push"

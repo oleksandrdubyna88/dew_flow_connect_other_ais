@@ -1,0 +1,23 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t3-coder-first-turn
+title: "CoderWork, turn 0: descriptor registered, worktree made, claude launched with the write boundary, coai commits the work, the envelope is the result"
+kind: code
+complexity: 8
+dependsOn:
+  - t1-coder-contract
+  - t2-coder-task-check
+parallel: false
+files:
+  - src_mcp/src/Server/RoleJobs/CoderWork.cs
+  - src_mcp/src/Server/RoleJobs/CoderEnvelope.cs
+  - src_mcp/src/Server/RoleJobs/RoleDescriptors.cs
+  - src_mcp/src/Server/RoleJobs/RoleJobModels.cs
+  - src_mcp/tests_fakecli
+  - src_mcp/tests
+dod:
+  - id: d1
+    item: "with FakeCli as claude: start_role(role: coder, taskFile) ends succeeded with a result that holds jobId, baseSha, headSha, branch coder/<jobId>, schemaValid, fixTurns 0 and filesChanged taken from `git diff --name-status <baseSha> <headSha>` only (a report that claims other files changes nothing)"
+  - id: d2
+    item: "the coder's changes are one coai commit on coder/<jobId>; a report that is not valid gets ONE repair turn in the same session and then schemaValid false; a report that claims met true never makes the job green by itself"
+  - id: d3
+    item: "the runner compares its generation before the commit and before the result: a stale runner writes neither (exit 75); a cancel stops the CLI child and leaves the worktree for the retention sweep"

@@ -1,0 +1,18 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t4-coder-tool-text
+title: "start_role names coder: tool description, the refusal list of roles, optional baseSha, role_status shows the envelope"
+kind: code
+complexity: 3
+dependsOn:
+  - t3-coder-first-turn
+parallel: false
+files:
+  - src_mcp/src/Tools.cs
+  - src_mcp/src/Server/RoleJobs/RoleJobService.cs
+  - src_mcp/src/Server/RoleJobs/RoleJobAnswers.cs
+  - src_mcp/tests
+dod:
+  - id: d1
+    item: "over real stdio the start_role description names coder, an unknown role's refusal lists coder, and there is no start_coder tool (the coder is the role case, server.md section 19)"
+  - id: d2
+    item: "start_role with baseSha starts the worktree at that commit; without it the base is the HEAD of repoPath at the start, and role_status returns the same envelope JSON that result.json holds"

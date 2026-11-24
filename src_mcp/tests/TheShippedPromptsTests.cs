@@ -124,19 +124,4 @@ public sealed class TheShippedPromptsTests
     public void AStaleOrForeignId_FallsThroughInsteadOfLeavingTheRoundWithNoPrompt(string id) =>
         Shipped.ForRound(RoleCatalog.SecurityRole, 1, [id])
             .Should().Be(Shipped.UniversalFor(RoleCatalog.SecurityRole));
-
-    [Fact]
-    public void ANullRoundList_IsNotAChoice_AndDoesNotCrashTheRound()
-    {
-        // `{"Architecture": null}` is valid JSON. Found by the gate reviewing the catalog commit:
-        // it reached the round as a null list and was dereferenced there.
-        var settings = PanelSettings.FromEnvironment(name =>
-            name == "COAI_PROMPTS_PER_ROUND" ? """{"Architecture": null}""" : null);
-
-        settings.PromptsPerRound.Should().NotContainKey("Architecture");
-        var act = () => Shipped.ForRound(
-            RoleCatalog.ArchitectureRole, 1,
-            settings.PromptsPerRound.GetValueOrDefault(RoleCatalog.ArchitectureRole, []));
-        act.Should().NotThrow();
-    }
 }

@@ -1,0 +1,17 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t4-docs
+title: "Docs: the coder role, .coai/toolchain.yaml, the fix loop and the write boundary in ARCHITECTURE.md and README.md"
+kind: docs
+complexity: 3
+dependsOn:
+  - t3-real-coder-run
+parallel: false
+files:
+  - ARCHITECTURE.md
+  - README.md
+  - v2/architecture/server.md
+dod:
+  - id: d1
+    item: "ARCHITECTURE.md and README.md name start_role role coder, the envelope keys, COAI_FIX_ROUNDS, the toolchain file's keys and the measured limits of the write boundary; the list of roles in both files equals RoleDescriptors.Shipped (a test or a grep in the task result proves it)"
+  - id: d2
+    item: "server.md records what this epic decided differently from its sections 2, 10 and 12 (no start_coder tool, the toolchain file in the strict YAML subset, what is left to e4)"

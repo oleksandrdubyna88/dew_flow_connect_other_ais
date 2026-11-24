@@ -34,7 +34,6 @@ public sealed record ReviewerWork(
     /// every turn it hands back.
     /// </summary>
     public IReviewerContinuation Continue { get; init; } = ReviewerContinuation.None;
-    public bool IsSecurity { get; init; }
 
     /// <summary>
     /// A cap on the WHOLE conversation — every turn of it, launch to final answer — when the stage sets one;
@@ -262,11 +261,9 @@ public sealed class BoundedScheduler(
             var settled = settle ?? (outcome => outcome);
             var tasks = work.Select(w =>
             {
-                var engineStandDown = w.IsSecurity ? null : standDown;
-                var progress = w.IsSecurity ? onProgress : cloudProgress;
                 return w.Invocation.IsOnEngine
-                    ? EngineLaneAsync(w, executor, onProgress, engineStandDown, settled, ct)
-                    : MachineLaneAsync(w, global, perProvider[w.Invocation.Provider], runningPerProvider, executor, progress, settled, ct);
+                    ? EngineLaneAsync(w, executor, onProgress, standDown, settled, ct)
+                    : MachineLaneAsync(w, global, perProvider[w.Invocation.Provider], runningPerProvider, executor, cloudProgress, settled, ct);
             });
             return await Task.WhenAll(tasks);
         }
