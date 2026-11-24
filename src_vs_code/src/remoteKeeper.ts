@@ -62,7 +62,7 @@ const keyOf = (one: { readonly kind: 'refuse' | 'stop'; readonly host?: string }
 
 const changeOf = (one: Held): RefusalChange => (one.kind === 'stop' ? { kind: 'stop', utc: one.utc } : { kind: 'refuse', host: one.host, utc: one.utc });
 
-const isLanded = (result: Committed): boolean => result.kind === 'written' || result.kind === 'kept' || result.kind === 'full';
+const isLanded = (result: Committed): boolean => result.kind === 'written' || result.kind === 'kept';
 
 const validUtc = (utc: string, fallback: string): string => (Number.isNaN(Date.parse(utc)) ? fallback : utc);
 
@@ -240,16 +240,16 @@ class Keeper implements HostKeeper {
     await this.dropLanded(read);
     let last: Committed | undefined;
     for (const [key, item] of this.todo(read)) {
-      last = (await this.settle(key, item, await this.seams.refusals.commit(changeOf(item), take), read)) ?? last;
+      last = (await this.settle(key, item, await this.seams.refusals.commit(changeOf(item), take), read, take === 'person')) ?? last;
     }
 
     return last;
   }
 
-  /** `undefined` when the change landed; else the result that did not, after the notice. */
-  private async settle(key: string, item: Held, result: Committed, read: RefusalsRead): Promise<Committed | undefined> {
+  /** `undefined` when the change landed; else the result that did not, after the marker is tried again and the notice. `press`: a person's *Save now*. */
+  private async settle(key: string, item: Held, result: Committed, read: RefusalsRead, press: boolean): Promise<Committed | undefined> {
     if (!isLanded(result)) {
-      this.noticeOnce(key, item, result);
+      await this.unlanded(key, item, result, press);
 
       return result;
     }
@@ -257,6 +257,29 @@ class Keeper implements HostKeeper {
     await this.unmarkAll(read, key);
 
     return undefined;
+  }
+
+  /** A marker that could not be made is tried again with the write (§ S1.5). `true`: a marker stands, here or from another window. */
+  private async remark(key: string, item: Held): Promise<boolean> {
+    const mine = this.memory.get(key);
+    if (mine === undefined) {
+      return true;
+    }
+    if (!mine.marked) {
+      mine.marked = await this.seams.refusals.mark(unsureOf(item));
+    }
+
+    return mine.marked;
+  }
+
+  /** A change the file did not take: the marker is tried again, and the person is told — once, and again at each press of *Save now* that fails. */
+  private async unlanded(key: string, item: Held, result: Committed, press: boolean): Promise<void> {
+    const marked = await this.remark(key, item);
+    if (press && result.kind === 'unwritten') {
+      this.seams.unkept(item.kind === 'stop' ? undefined : item.host, result.why, marked);
+    } else {
+      this.noticeOnce(key, item, result);
+    }
   }
 
   /** A change that waits and was made in ANOTHER window is told once here, as `elsewhere`. */
@@ -437,7 +460,24 @@ class Keeper implements HostKeeper {
   private async mend(change: Extract<HostChange, { kind: 'mend' }>): Promise<Committed> {
     const read = await this.look();
 
-    return !readableOf(this.stored()).damaged && read.kind === 'file' ? this.lifted(change) : this.mendDamage(change, read);
+    return read.kind === 'damaged' ? this.mendDamage(change, read) : this.mendOverFile(change);
+  }
+
+  /**
+   * Over a file that can be read a mend is the plain change (§ S1.4): a "no" is a refusal — the copy first, then the file — and a *Read* or
+   * a *Forget* a lift — the file first. Over a damaged list the same write mends the list too.
+   */
+  private mendOverFile(change: Extract<HostChange, { kind: 'mend' }>): Promise<Committed> {
+    return change.answer === 'no' ? this.refusedHere(change) : this.lifted(change);
+  }
+
+  /** The "no" of a mend, inside the queue already: the full check, the copy in the list, then the file. */
+  private async refusedHere(change: Extract<HostChange, { kind: 'mend' }>): Promise<Committed> {
+    if (isFullFor(this.remembered, change.host)) {
+      return { kind: 'full' };
+    }
+
+    return this.refuseAfterCopy(change.host, commit(this.seams.state, this.seams.key, change, hostMerge(this.seams.now())));
   }
 
   private async mendDamage(change: Extract<HostChange, { kind: 'mend' }>, read: RefusalsRead): Promise<Committed> {
@@ -560,19 +600,31 @@ class Keeper implements HostKeeper {
   /** A person's press: takes the lock over whatever its owner, lands every change that waits and stops the round after a torn marker. */
   saveWaiting(): Promise<Committed> {
     return this.queued(async () => {
+      this.tornRemoved = false;
       const read = await this.look();
       const last = await this.landAll(read, 'person');
       const torn = this.waiting(read).filter((one) => one.kind === 'torn');
       if (last !== undefined) {
         return last;
       }
-      for (const one of torn) {
-        await this.seams.refusals.unmark(one.name);
-      }
-      this.tornRemoved = torn.length > 0;
 
-      return torn.length > 0 ? this.seams.refusals.commit({ kind: 'stop', utc: this.seams.now() }, 'person') : { kind: 'written', row: undefined, evicted: [] };
+      return torn.length > 0 ? this.stopAfterTorn(torn) : { kind: 'written', row: undefined, evicted: [] };
     });
+  }
+
+  /** The Stop is committed FIRST; the torn notes go, and the press says so, only when the file took it. Else the Stop is held like any other. */
+  private async stopAfterTorn(torn: readonly Waiting[]): Promise<Committed> {
+    const utc = this.seams.now();
+    const result = await this.seams.refusals.commit({ kind: 'stop', utc }, 'person');
+    if (stops(result)) {
+      return this.holdAndAnswer(result, { kind: 'stop', host: '', utc });
+    }
+    for (const one of torn) {
+      await this.seams.refusals.unmark(one.name);
+    }
+    this.tornRemoved = true;
+
+    return result;
   }
 
   savedTorn = (): boolean => this.tornRemoved;

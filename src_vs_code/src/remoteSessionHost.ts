@@ -9,7 +9,7 @@ import { askPerson } from './personWait';
 import { thisSideLabel } from './consultantSides';
 import { credsSession } from './credsSession';
 import { Committed, HostChange, HostStanding, listedHosts, readableOf } from './remoteHosts';
-import { HOSTS_SAID, UnkeptWhy } from './remoteHostsSaid';
+import { HOSTS_SAID, UnkeptWhy, notKeptSaid } from './remoteHostsSaid';
 import { HostKeeper, hostKeeper } from './remoteKeeper';
 import { PickRow, Picked, Purpose, RemoteAnswer, RoadSeams, onePerTerminal, reachOf, readsKey, remoteRoad } from './remoteRead';
 import { refusalsStore } from './remoteRefusals';
@@ -146,14 +146,8 @@ const tell = (title: string): Promise<void> => notify({
 /** The empty list: which of the three wordings of W5 says why. */
 const emptySaid = (damaged: boolean, allowNew: boolean): string => (damaged ? HOSTS_SAID.emptyDamaged : allowNew ? HOSTS_SAID.emptyOn : HOSTS_SAID.emptyOff);
 
-const keptSaid = (host: string, result: Committed): string | undefined => {
-  switch (result.kind) {
-    case 'full': return HOSTS_SAID.fullOfRefusals(host);
-    case 'damaged': return HOSTS_SAID.cannotRead;
-    case 'unwritten': return HOSTS_SAID.notSaved(host);
-    default: return undefined;
-  }
-};
+/** What the person chose, whatever the kind of change that carried it. `auto` is never a person's choice. */
+const chosenOf = (change: HostChange): 'yes' | 'no' | 'forget' => (change.kind === 'forget' ? 'forget' : change.kind === 'auto' ? 'yes' : change.answer);
 
 /** The change question's detail: how the host stands, over damage what is wrong, then the words that tell what each button does. */
 async function changeDetail(keeper: HostKeeper, host: string, allowNew: boolean): Promise<{ readonly detail: string; readonly damaged: boolean }> {
@@ -199,7 +193,7 @@ const plainChange = (host: string, answer: 'yes' | 'no' | 'forget'): HostChange 
 
 /** Commits a person's answer for a host and tells the person when the store did not keep it. */
 async function committedAndTold(keeper: HostKeeper, host: string, change: HostChange): Promise<void> {
-  const said = keptSaid(host, await keeper.commit(change));
+  const said = notKeptSaid(host, chosenOf(change), await keeper.commit(change));
   if (said !== undefined) {
     await tell(said);
   }
@@ -253,8 +247,15 @@ async function askHostOf(keeper: HostKeeper, host: string): Promise<void> {
   }
 }
 
-/** W9: a refusal or a Stop the file did not take. One call site, ONE action: *Save now*. */
-function raiseUnkept(keeper: HostKeeper, subject: string, title: string, cure: string, after: () => void): void {
+/**
+ * What a press of *Save now* that came to `full` or `damaged` says, in W6's words. An `unwritten` press is told by the keeper, as W9, with its new
+ * reason. `host` is the notice's: a Stop has none, and W6's "full" sentence names a host.
+ */
+const pressSaid = (host: string | undefined, result: Committed): string | undefined =>
+  (result.kind === 'full' && host === undefined ? undefined : notKeptSaid(host ?? '', 'no', result));
+
+/** W9: a refusal or a Stop the file did not take. One call site, ONE action: *Save now*; `after` is given what the press came to. */
+function raiseUnkept(keeper: HostKeeper, subject: string, title: string, cure: string, after: (result: Committed) => void): void {
   void notifyThen({
     as: 'warning',
     class: 'outcome',
@@ -266,7 +267,7 @@ function raiseUnkept(keeper: HostKeeper, subject: string, title: string, cure: s
     action: SAVE_NOW,
   }, (button) => {
     if (button === SAVE_NOW) {
-      void keeper.saveWaiting().then(after);
+      void keeper.saveWaiting().then((result) => after(result));
     }
   });
 }
@@ -333,6 +334,17 @@ async function setReadsKey(sessions: RemoteSessions): Promise<void> {
   void vscode.commands.executeCommand('setContext', READS_KEY, lastKey);
 }
 
+/** After a press of *Save now*: W9's torn cure when a note that could not be read was removed, and W6's words when the file or the list is not whole. */
+function afterPress(live: HostKeeper, host: string | undefined, result: Committed): void {
+  if (live.savedTorn()) {
+    raiseUnkept(live, 'accounts-round', HOSTS_SAID.unkeptStop('elsewhere', sideLabel()), HOSTS_SAID.cureTorn, () => undefined);
+  }
+  const said = pressSaid(host, result);
+  if (said !== undefined) {
+    void tell(said);
+  }
+}
+
 /** The keeper of this window over the profile's state and the folder of this side's refusals file. */
 function keeperOf(context: vscode.ExtensionContext, folder: string, changed: () => void): HostKeeper {
   const store = refusalsStore(refusalsDiskOver(folder, { file: REFUSED_FILE, markerPrefix: MARKER_PREFIX }, thisMachine), Date.now);
@@ -347,11 +359,7 @@ function keeperOf(context: vscode.ExtensionContext, folder: string, changed: () 
     unkept: (host, why, marked) => {
       const live = keeperRef.current as HostKeeper;
       const title = host === undefined ? HOSTS_SAID.unkeptStop(why, sideLabel()) : HOSTS_SAID.unkeptHost(host, why as UnkeptWhy, sideLabel());
-      raiseUnkept(live, host ?? 'accounts-round', title, marked ? HOSTS_SAID.cureMarked : HOSTS_SAID.cureUnmarked, () => {
-        if (live.savedTorn()) {
-          raiseUnkept(live, 'accounts-round', HOSTS_SAID.cureTorn, HOSTS_SAID.cureMarked, () => undefined);
-        }
-      });
+      raiseUnkept(live, host ?? 'accounts-round', title, marked ? HOSTS_SAID.cureMarked : HOSTS_SAID.cureUnmarked, (result) => afterPress(live, host, result));
     },
   });
   keeperRef.current = keeper;

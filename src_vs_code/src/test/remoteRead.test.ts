@@ -807,3 +807,15 @@ test('A1-T12: the road is given no list to write, and a refusals file is no chan
   const change: RefusalChange = file;
   assert.ok(withWrite !== undefined && change !== undefined);
 });
+
+test('S3-R9: a "no" that the file did not take is a "no" for the door; W6\'s third sentence is for a Read or a Forget', async () => {
+  const turnedOff = `Reading the Claude session on “${H}” is turned off. Only the text you copied can be sent; turn it on in CoAI: hosts read over ssh.`;
+  const no = world({ list: [], answer: 'no' });
+  no.w.disk.lock = { token: 'hung' };
+  const refused = await remoteRoad(no.seams, NAME, 'question');
+  assert.equal(refusal(refused), turnedOff, 'an unsaved "Not this host" said that the answer could not be saved');
+  assert.equal(no.w.runs.length, 0);
+  const yes = world({ list: [], answer: 'yes' });
+  yes.w.disk.lock = { token: 'hung' };
+  assert.equal(refusal(await remoteRoad(yes.seams, NAME, 'question')), HOSTS_SAID.notSaved(H), 'a Read the file did not take did not say so');
+});

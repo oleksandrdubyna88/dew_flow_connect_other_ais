@@ -378,11 +378,6 @@ test('A1-T24: a refusal the file did not take is not reported as kept, and the s
   assert.deepEqual(stop, { kind: 'unwritten', why: 'disk' });
   const b = windowOver(backing, disk);
   assert.equal(await b.keeper.roundStop(), 'stopped', 'the marker did not stop a second window');
-  // No marker either: only this window knows
-  disk.failMark = true;
-  const c = windowOver(new Backing(), new FakeDisk());
-  c.setting.on = true;
-  assert.ok(c);
 });
 
 test('A1-T26: a refusal the file did not take stops the SIDE and outlives the window that took the press', async () => {

@@ -6,7 +6,7 @@ import { oneAtATime } from './oneAtATime';
 import { RemoteCandidate, RemoteRead, TitledSession, UNREADABLE_SAID, Unreadable, readRemote } from './remoteFrame';
 import { FOLDERS_MAX, REMOTE_SCRIPT, RemoteCall, isFolderName, operandsOf } from './remoteScript';
 import type { Committed, Consent, HostStanding } from './remoteHosts';
-import { HOSTS_SAID } from './remoteHostsSaid';
+import { HOSTS_SAID, notKeptSaid } from './remoteHostsSaid';
 import type { RemoteRun } from './remoteSsh';
 import { LiveTerminal, NamedTerminal, oneLiveNamed } from './terminalSource';
 
@@ -304,8 +304,8 @@ interface Trip extends Where {
 const CALLS_MAX = 3;
 
 /** What an answer that was not kept says: the list is full of refusals, cannot be read, or the file did not take it. */
-function notKept(host: string, result: Committed): string {
-  return result.kind === 'full' ? HOSTS_SAID.fullOfRefusals(host) : result.kind === 'damaged' ? HOSTS_SAID.cannotRead : HOSTS_SAID.notSaved(host);
+function notKept(host: string, answer: 'yes' | 'no', result: Committed): string {
+  return notKeptSaid(host, answer, result) ?? SAID.turnedOff(host);
 }
 
 /** The person's answer, asked once for a host that has none; the refusal when the host is not to be read, else nothing. */
@@ -322,7 +322,7 @@ async function asked(seams: RoadSeams, host: string): Promise<string | undefined
 function sayKept(host: string, answer: 'yes' | 'no', result: Committed): string | undefined {
   const kept = result.kind === 'written' || result.kind === 'kept';
 
-  return kept ? (answer === 'yes' ? undefined : SAID.turnedOff(host)) : notKept(host, result);
+  return kept ? (answer === 'yes' ? undefined : SAID.turnedOff(host)) : notKept(host, answer, result);
 }
 
 const DOORS: Readonly<Record<Consent, (seams: RoadSeams, host: string) => PromiseLike<string | undefined> | string | undefined>> = {

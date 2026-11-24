@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { HOSTS_SAID } from '../remoteHostsSaid';
+import { HOSTS_SAID, notKeptSaid } from '../remoteHostsSaid';
+import type { Committed } from '../remoteHosts';
 import { dayOf } from '../remoteHosts';
 import { sourceFiles, sourceOf } from './sourceReading';
 
@@ -128,4 +129,29 @@ test('A1-T14/B25/B27: the host raises the notice of an unsaved refusal, and the 
   assert.ok(door.includes('rm(join(folder, REFUSED_FILE)') && door.includes('writeFile(join(folder, REFUSED_FILE)'), 'restore does not put the refusals file back');
   assert.match(door, /await state\.update\(TERMINAL_HOSTS_KEY, before\.list\);\n {4}if \(before\.file === undefined\) \{\n {6}await rm\(/u, 'restore does not put the file back in the step after the list');
   assert.ok(door.includes('MARKER_PREFIX') && door.includes('forgetHeld()'), 'restore leaves markers or what the window holds');
+});
+
+test('R9: W6\'s third sentence is for a Read or a Forget, and the torn cure of W9 has a W9 title', () => {
+  const none = (kind: 'unwritten'): Committed => ({ kind, why: 'busy' });
+  assert.equal(notKeptSaid('h', 'no', none('unwritten')), undefined, 'an unsaved "no" said W6\'s third sentence');
+  for (const answer of ['yes', 'forget'] as const) {
+    assert.equal(notKeptSaid('h', answer, none('unwritten')), HOSTS_SAID.notSaved('h'));
+  }
+  for (const answer of ['yes', 'no', 'forget'] as const) {
+    assert.equal(notKeptSaid('h', answer, { kind: 'full' }), HOSTS_SAID.fullOfRefusals('h'));
+    assert.equal(notKeptSaid('h', answer, { kind: 'damaged' }), HOSTS_SAID.cannotRead);
+    assert.equal(notKeptSaid('h', answer, { kind: 'written', row: undefined, evicted: [] }), undefined);
+  }
+  assert.ok(!host.includes("case 'unwritten'"), 'the host has its own table of what was not kept');
+});
+
+test('R8: the torn cure is raised with the title of W9 and its own cure', () => {
+  assert.ok(!host.includes('HOSTS_SAID.cureTorn, HOSTS_SAID.cureMarked'), 'W9\'s torn cure is passed as the title, with the marked cure as its cure');
+  assert.match(host, /raiseUnkept\(live, 'accounts-round', HOSTS_SAID\.unkeptStop\('elsewhere', sideLabel\(\)\), HOSTS_SAID\.cureTorn/u, 'the torn notice has not the title of W9 and the torn cure');
+});
+
+test('R7: the host tells the person what "Save now" came to', () => {
+  assert.match(host, /saveWaiting\(\)\.then\(\(result\) => after\(result\)\)/u, 'the result of "Save now" is dropped');
+  assert.match(host, /pressSaid\(host, result\)/u, 'the result of "Save now" is not turned into W6\'s words');
+  assert.equal(countIn(host, /notKeptSaid\(/gu), 2, 'what was not kept is said in more than the change and the press');
 });

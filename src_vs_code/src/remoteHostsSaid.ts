@@ -1,5 +1,5 @@
 import { dayOf } from './remoteHosts';
-import type { HostStanding } from './remoteHosts';
+import type { Committed, HostStanding } from './remoteHosts';
 
 /**
  * The words of the hosts store (E1.S1, § S1.8), English, in one table, so a unit test holds them. The CODES of the notices stay
@@ -99,3 +99,15 @@ export const HOSTS_SAID = {
   startUnwritten: 'The start could not be saved, so the accounts round is still stopped. Choose this row again in a moment.',
   stoppedElsewhere: 'The accounts round is stopped. Choose this row to start it.',
 } as const;
+
+/**
+ * W6: what an answer that the store did not keep says, or nothing. `answer` is what the person chose. The third sentence is for a *Read* or a
+ * *Forget* that the file did not take: a "no" that the file did not take stands, and W9 says it is not saved yet.
+ */
+const NOT_KEPT: Readonly<Partial<Record<Committed['kind'], (host: string, answer: 'yes' | 'no' | 'forget') => string | undefined>>> = {
+  full: (host) => HOSTS_SAID.fullOfRefusals(host),
+  damaged: () => HOSTS_SAID.cannotRead,
+  unwritten: (host, answer) => (answer === 'no' ? undefined : HOSTS_SAID.notSaved(host)),
+};
+
+export const notKeptSaid = (host: string, answer: 'yes' | 'no' | 'forget', result: Committed): string | undefined => NOT_KEPT[result.kind]?.(host, answer);
