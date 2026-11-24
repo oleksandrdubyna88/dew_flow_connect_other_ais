@@ -1,3 +1,4 @@
+import { byCodeUnit } from '../codeUnitOrder';
 import type { Claim } from '../chatStoreLock';
 import type { HostKeeper, KeeperSeams } from '../remoteKeeper';
 import { hostKeeper } from '../remoteKeeper';
@@ -139,7 +140,7 @@ export class FakeDisk implements RefusalsDisk {
     return text === undefined ? undefined : JSON.parse(text);
   };
 
-  refusedHosts = (): readonly string[] => (this.file()?.refused ?? []).map((one) => one.host).sort();
+  refusedHosts = (): readonly string[] => (this.file()?.refused ?? []).map((one) => one.host).sort(byCodeUnit);
 }
 
 /** The pause between tries, as the tests have it: a macrotask, so the other writers of one test run through their steps meanwhile. */

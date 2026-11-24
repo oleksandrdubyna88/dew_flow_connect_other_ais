@@ -1,7 +1,7 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { ACCOUNTS_UNREADABLE_SAID, ACCOUNTS_SECONDS, MANAGER_WORDS } from '../remoteAccountsReply';
+import { ACCOUNTS_UNREADABLE_SAID, ACCOUNTS_SECONDS, MANAGER_WORDS, readAccounts } from '../remoteAccountsReply';
 import type { AccountsRead, ClaudeUsage, CodexUsage } from '../remoteAccountsReply';
 import type { AccountsState, HostMemory, Memory } from '../remoteAccountsRound';
 import { INSTALL_JQ, NO_MANAGER_SAID, USAGE_OFF_SAID, accountsRows, forList, noticesDue } from '../remoteAccountsRows';
@@ -9,6 +9,7 @@ import type { AccountsView, Row } from '../remoteAccountsRows';
 import { HOSTS_SAID } from '../remoteHostsSaid';
 import { dayOf } from '../remoteHosts';
 import type { HostStanding } from '../remoteHosts';
+import { frame, ok } from './accountsFrames';
 import { sourceOf } from './sourceReading';
 
 /**
@@ -468,6 +469,34 @@ test('A4-T12: an email that holds $( reaches a separator as $ (, and a failure s
   assert.ok(separators(rows).some((one) => one.includes('x$ (zap)@example.test')), 'an icon a VM chose was drawn');
   assert.ok(!text.includes('$(') && !text.includes(bidi), 'an icon from ssh\'s stderr was drawn');
   assert.ok(hostRow(rows, 'hB').description.endsWith('$ (zap)'), hostRow(rows, 'hB').description);
+});
+
+/**
+ * The unit twin of the host scenario A4-H1: the SAME reply the scenario's fake call answers (a Claude account, the usage skipped, no other vendor),
+ * through the real parser and into the rows. The scenario cannot run here; this is what it stands on. Its reply holds a "$(" in the organization,
+ * which reaches the separator written "$ (" — and one in an email, which the parser does not keep: it judges an email after `plainValue`, and the
+ * space that `plainValue` writes makes it "not known", so the group is named by its host. That is the S2 value table, not a defect of the list.
+ */
+const twin = (email: string, org: string): readonly Row[] => {
+  const read = readAccounts(ok(frame('COAI-JQ found', 'COAI-VENDOR claude found', `:email ${email}`, `:org ${org}`, ':version 2.1.326', 'COAI-USAGE claude skipped', 'COAI-VENDOR codex absent', 'COAI-VENDOR agy absent')), 'no-claude-usage', NOW);
+  assert.equal(read.kind, 'read', 'the reply of the host scenario is not a reading');
+
+  return rowsOf({ memory: memoryOf(['hA', seen(read as Reading, 1)]), hosts: ['hA'], standings: [auto('hA')] });
+};
+
+test('A4-H1 twin: a parsed reading with an account and no usage numbers draws its group, then the Hosts separator and one row for the host', () => {
+  const rows = twin('someone@example.test', 'Example$(zap) Org');
+
+  assert.deepEqual(separators(rows), ['Claude Code · someone@example.test · Example$ (zap) Org', '── Hosts ──']);
+  assert.equal(usageRows(rows).length, 1, 'the group has no row');
+  assert.deepEqual(rows.filter((row) => row.kind === 'host').map((row) => row.label), [hostRow(rows, 'hA').label]);
+});
+
+test('A4-H1 twin: an email that holds $( is not an account the parser keeps, and its group is named by its host', () => {
+  const rows = twin('x$(zap)@example.test', 'Example Org');
+
+  assert.deepEqual(separators(rows), ['Claude Code · hA', '── Hosts ──']);
+  assert.ok(!allText(rows).includes('$('), 'an icon a VM chose was drawn');
 });
 
 /** The spans of the argument lists of every `forList(` in a text, as [start, end) indices. */

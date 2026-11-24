@@ -1,3 +1,4 @@
+import { byCodeUnit } from './codeUnitOrder';
 import type { KeyValueStore } from './sideSettings';
 
 /**
@@ -152,7 +153,7 @@ const standingOf = (row: HostAnswer): HostStanding => ({ host: row.host, answer:
 /** Each host's standing from the list alone, by host name; over a damaged list, the rows that can be read. */
 export function standingsOf(value: unknown): readonly HostStanding[] {
   const rows = hostsOf(value).rows;
-  const hosts = [...new Set(rows.map((row) => row.host))].sort();
+  const hosts = [...new Set(rows.map((row) => row.host))].sort(byCodeUnit);
 
   return hosts.map((host) => standingOf(strongest(rows, host) as HostAnswer));
 }
@@ -179,7 +180,7 @@ export function listedHosts(value: unknown, liveHosts: readonly string[]): reado
     return known;
   }
   const have = new Set(known.map((one) => one.host));
-  const extra = [...new Set(liveHosts)].filter((host) => !have.has(host)).sort().map((host) => ({ host, standing: undefined }));
+  const extra = [...new Set(liveHosts)].filter((host) => !have.has(host)).sort(byCodeUnit).map((host) => ({ host, standing: undefined }));
 
   return [...known, ...extra];
 }
