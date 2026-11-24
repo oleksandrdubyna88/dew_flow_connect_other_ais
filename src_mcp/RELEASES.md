@@ -3,6 +3,13 @@
 > The next release of coai-mcp is 2.0.0, requested by hand with a `Release-As: 2.0.0` footer: the v1 data migration runs only from major version 2 (v2 epoch 1, E5).
 > What changes for a person is in `RELEASE_NOTES_2.0.md` at the repository root.
 
+## [2.0.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.66.1...mcp-v2.0.0) (2026-11-24)
+
+
+### Miscellaneous Chores
+
+* **release:** coai v2.0 integration ([#1036](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/1036)) ([0ccaed6](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/0ccaed6d7965ca5863b8f96994c555af442d510c))
+
 ## [0.66.1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.66.0...mcp-v0.66.1) (2026-11-24)
 
 
