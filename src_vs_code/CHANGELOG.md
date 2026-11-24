@@ -1,5 +1,16 @@
 # Changelog
 
+## Team server 0.16.4 — 2026-11-24
+
+**The Team server's agy hook knows its own folder (#1023).** The Team server answers agy's tool-call hook with its own binary and
+the same library as coai-mcp, so it gets the fixes in Server 0.66.1 below. It now takes its hook folder from where agy starts the
+hook, not from the working-folder name in agy's call, which is the first folder in sorted order. On today's server that name
+already was the hook folder, because `/root/.local/share/…` sorts before `/tmp/coai-server-job-…`, so no read was being denied
+wrongly. A job folder that sorted first would have lost every read. The Windows rules do not apply to a Linux server. A job folder
+on a network mount is not supported.
+
+**Rollback:** re-dispatch `deploy-server.yml` with 0.16.3.
+
 ## Server 0.66.1 — 2026-11-24
 
 **Fixed: an Antigravity reader in a folder that sorts before coai's own folder can read again (#1023).** agy sorts the folders it
