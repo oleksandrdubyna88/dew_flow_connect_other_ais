@@ -94,7 +94,7 @@ export class InstallWork {
 
       return;
     }
-    const now = JSON.stringify(failures.map((one) => [one.cli, one.result, one.reason]).sort());
+    const now = JSON.stringify(failures.map((one) => JSON.stringify([one.cli, one.result, one.reason])).sort((a, b) => a.localeCompare(b)));
     if (now !== this.told) {
       this.told = now;
       await this.ports.say(failuresNotice(failures));
