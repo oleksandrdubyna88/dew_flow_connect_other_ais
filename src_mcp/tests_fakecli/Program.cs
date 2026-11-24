@@ -404,6 +404,10 @@ switch (args0)
     case ["lease-hold", var leaseFile, var leaseMs]:
         return CoaiMcp.FakeCli.LeaseHoldVerb.Run(leaseFile, int.Parse(leaseMs));
 
+    // Epoch 3 E2 s7: the key pool's lock file held by a child for the given time (FileShare.None; the kernel frees it when the child dies or is killed). Prints `held` once it holds it; 75 when busy.
+    case ["pool-lock-hold", var poolLock, var poolLockMs]:
+        return CoaiMcp.FakeCli.PoolLockVerb.Run(poolLock, int.Parse(poolLockMs));
+
     // Epoch 3 E1 s1 (A14): a memory hog, and a small parent that starts it as its child and writes the child's exit code — the shape of a runner and the CLI it owns.
     case ["alloc", var allocMb, var allocLog]:
         return CoaiMcp.FakeCli.AllocVerbs.Alloc(int.Parse(allocMb), allocLog);
