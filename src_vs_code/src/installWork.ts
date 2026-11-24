@@ -9,8 +9,8 @@ import { failuresNotice, setupClients, type ClientFailure, type SetupOutcome, ty
  * ({@link InstallWork.serverInstalled}): the binary changed, and a new server may register itself differently — a run that finds nothing to do is silent.</p>
  *
  * <p><b>Nothing here throws and nothing here asks.</b> Each step is its own unit: one that fails is logged and the next one still runs. The only
- * thing a person is ever told is a client that was refused or failed — ONE notification for the whole activation, with the server's reason, however often the mode
- * runs again — and the update offer, which is the old code's own question, moved and not changed.</p>
+ * thing a person is ever told is a client that was refused or failed — ONE notification for a failure that stands, with the server's reason, however often the mode
+ * runs again (a different set of failed clients or a new reason is a new one) — and the update offer, which is the old code's own question, moved and not changed.</p>
  *
  * <p>Pure of the editor: every seam is in {@link InstallPorts}, so the order and the once-ness are tested without a host (`installWork.test.ts`).</p>
  */
@@ -33,8 +33,8 @@ export class InstallWork {
   private started: Promise<void> | undefined;
   /** Runs of the mode follow one another: two never overlap, and a late one waits for the one before it. */
   private chain: Promise<void> = Promise.resolve();
-  /** Whether the one notification of this activation has been shown. */
-  private toldThePerson = false;
+  /** What the last notification of this activation said (the failed clients and their reasons), or `undefined` when none was shown or the failures went away since. */
+  private told: string | undefined;
 
   constructor(private readonly ports: InstallPorts) {}
 
@@ -84,10 +84,19 @@ export class InstallWork {
     }
   }
 
-  /** Once per activation, however often the mode runs again (every install or update in this window runs it): a refusal that stands is the same news, and a loop of toasts is not a notice. */
+  /**
+   * ONE notification for a failure that stands, however often the mode runs again (every install or update in this window runs it): the same set of clients with the same reasons is the same news, and a loop of
+   * toasts is not a notice. A different set, or a reason that reads differently, is news; so is a failure that went away and came back.
+   */
   private async tellTheFailures(failures: readonly ClientFailure[]): Promise<void> {
-    if (failures.length > 0 && !this.toldThePerson) {
-      this.toldThePerson = true;
+    if (failures.length === 0) {
+      this.told = undefined;
+
+      return;
+    }
+    const now = JSON.stringify(failures.map((one) => [one.cli, one.result, one.reason]).sort());
+    if (now !== this.told) {
+      this.told = now;
       await this.ports.say(failuresNotice(failures));
     }
   }

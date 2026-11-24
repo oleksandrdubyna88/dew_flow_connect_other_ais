@@ -187,3 +187,38 @@ test('a reload is a new activation and tells once more', async () => {
   assert.equal(w.said.length, 1);
   assert.equal(again.said.length, 1, 'a new activation is a new work: the person is told once more, as the notice\'s cure says');
 });
+
+/** The server answers one report, then the next, and the last one for every run after (a refusal that stands, then a different one). */
+function sequence(...reports: readonly string[]): SpawnServer {
+  let at = 0;
+
+  return () => { const output = reports[Math.min(at, reports.length - 1)] ?? ''; at += 1; return Promise.resolve({ code: /"result":"(refused|failed)"/u.test(output) ? 78 : 0, output }); };
+}
+
+test('a NEW notification when the set of failed clients or a reason changes within one activation; none for the same failure again', async () => {
+  const other = report({ cli: 'claude', result: 'refused', reason: STDIN_REASON }, { cli: 'codex', result: 'failed', reason: '`codex mcp add` exited 1: boom' });
+  const reworded = report({ cli: 'claude', result: 'failed', reason: 'a different sentence' }, { cli: 'codex', result: 'changed' });
+  const w = world({ spawns: sequence(STILL_REFUSED, STILL_REFUSED, other, other, reworded) });
+
+  await w.work.start();
+  await w.work.serverInstalled();
+  assert.equal(w.said.length, 1, 'the same failure twice is one notice');
+  await w.work.serverInstalled();
+  assert.equal(w.said.length, 2, 'another client failed: a new notice');
+  await w.work.serverInstalled();
+  assert.equal(w.said.length, 2, 'unchanged again: silent');
+  await w.work.serverInstalled();
+  assert.equal(w.said.length, 3, 'the reason text changed: a new notice');
+  assert.match(w.said[2]?.title ?? '', /a different sentence/u);
+});
+
+test('a failure that went away and came back is news again', async () => {
+  const clean = report({ cli: 'claude', result: 'changed' });
+  const w = world({ spawns: sequence(STILL_REFUSED, clean, STILL_REFUSED) });
+
+  await w.work.start();
+  await w.work.serverInstalled();
+  await w.work.serverInstalled();
+
+  assert.equal(w.said.length, 2);
+});

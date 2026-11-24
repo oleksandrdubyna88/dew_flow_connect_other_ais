@@ -1,7 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using CoaiMcp.Install;
-using CoaiMcp.Runners.Processes;
 using FluentAssertions;
 using Xunit;
 
@@ -47,19 +46,39 @@ public sealed class AnOldClaudeReadsAddJsonFromItsArgumentTests
     }
 
     [Fact]
-    public async Task AnOldHelp_AndAnEntryWithoutEnvironment_IsUpdatedThroughTheArgument_WithItsArgumentsKept()
+    public async Task AnOldHelp_AndAnEntryWithoutEnvironmentOrArguments_IsUpdatedThroughTheArgument()
     {
         using var world = InstallWorld.Create(codex: false);
         world.Steer(Client.Claude, oldAddJson: true, version: OldVersion);
-        world.Put(world.ClaudeJson, """{ "numStartups": 3, "mcpServers": { "coai": { "type": "stdio", "command": "/old/coai/versions/1.0.0/coai-mcp", "args": ["--x"] } } }""");
+        world.Put(world.ClaudeJson, """{ "numStartups": 3, "mcpServers": { "coai": { "type": "stdio", "command": "/old/coai/versions/1.0.0/coai-mcp", "args": [] } } }""");
 
         var (code, _, err) = await world.RunAsync("--binary", world.Binary);
 
         code.Should().Be(0, err);
         var entry = InstallOutput.ClaudeEntry(world.ClaudeJsonText)!;
         entry["command"]!.GetValue<string>().Should().Be(world.Binary);
-        entry["args"]!.AsArray().Select(one => one!.GetValue<string>()).Should().Equal("--x");
         world.Calls.Should().ContainSingle(line => line.StartsWith("claude mcp remove --scope user coai", StringComparison.Ordinal));
+    }
+
+    /// <summary>Plan review 2026-11-24, finding 2: an argument may hold a secret too (a token after a flag), and a command line is readable by every process of the account — the argument road needs EMPTY args.</summary>
+    [Fact]
+    public async Task AnOldHelp_AndAnEntryWithArguments_IsRefusedWithTheStdinReason_BeforeAnyRemove()
+    {
+        using var world = InstallWorld.Create(codex: false);
+        world.Steer(Client.Claude, oldAddJson: true, version: OldVersion);
+        var before = $$"""
+            { "numStartups": 3, "mcpServers": { "coai": { "type": "stdio", "command": "/old/coai/versions/1.0.0/coai-mcp", "args": ["--x", "--token", "{{Sentinel}}"] } } }
+            """;
+        world.Put(world.ClaudeJson, before);
+
+        var (code, output, err) = await world.RunAsync("--binary", world.Binary);
+
+        code.Should().Be(78, err);
+        output.Target("claude", "mcp").GetProperty("reason").GetString().Should().Be(StdinRefusal(OldVersion));
+        world.ClaudeJsonText.Should().Be(before);
+        world.Calls.Should().NotContain(line => line.StartsWith("claude mcp remove", StringComparison.Ordinal) || line.Contains(Sentinel));
+        AddJsonCalls(world).Should().BeEmpty();
+        ManifestTarget(world)["state"]!.GetValue<string>().Should().Be("refused");
     }
 
     [Fact]
@@ -182,77 +201,5 @@ public sealed class AnOldClaudeReadsAddJsonFromItsArgumentTests
 
         output.Target("claude", "hook").GetProperty("action").GetString().Should().NotBe("none", "the hook is still done");
         output.Client("claude").GetProperty("reason").GetString().Should().Be(StdinRefusal(OldVersion), "the sentence a person is shown holds the refusal and nothing about the targets that worked");
-    }
-
-    [Fact]
-    public async Task AWindowsShapedPathAndQuotes_SurviveTheArgument_AsOneArgumentTheClientReadsBack()
-    {
-        Assert.SkipWhen(OperatingSystem.IsWindows(), "the stand-in's .cmd wrapper re-parses a quote; the argument list itself is asserted below on every platform that can run the shell stand-in");
-        using var world = InstallWorld.Create(codex: false);
-        world.Steer(Client.Claude, oldAddJson: true, version: OldVersion);
-        const string WindowsPath = """C:\Users\Test User\AppData\Local\coai\data""";
-        const string Quoted = "say \"hi\" \\\"there\\\"";
-        world.Put(world.ClaudeJson, new JsonObject
-        {
-            ["mcpServers"] = new JsonObject
-            {
-                ["coai"] = new JsonObject
-                {
-                    ["type"] = "stdio",
-                    ["command"] = "/old/coai/versions/1.0.0/coai-mcp",
-                    ["args"] = new JsonArray("--x", WindowsPath, Quoted),
-                },
-            },
-        }.ToJsonString());
-        var launcher = new RecordingLauncher(new ProcessLauncher());
-
-        var (code, _, err) = await world.RunAsync(world.Deps() with { Launcher = launcher }, "setup-clients", "--binary", world.Binary);
-
-        code.Should().Be(0, err);
-        var add = launcher.Requests.Single(request => request.Arguments.Contains("add-json") && !request.Arguments.Contains("--help"));
-        add.Arguments.Take(5).Should().Equal("mcp", "add-json", "--scope", "user", "coai");
-        add.Arguments.Should().HaveCount(6, "the JSON is ONE argument, whatever it holds");
-        add.StdIn.Should().BeEmpty();
-        var sent = JsonNode.Parse(add.Arguments[5])!;
-        sent["command"]!.GetValue<string>().Should().Be(world.Binary);
-        sent["args"]!.AsArray().Select(one => one!.GetValue<string>()).Should().Equal("--x", WindowsPath, Quoted);
-        InstallOutput.ClaudeEntry(world.ClaudeJsonText)!["args"]!.AsArray().Select(one => one!.GetValue<string>()).Should().Equal("--x", WindowsPath, Quoted);
-    }
-
-    [Fact]
-    public async Task AWindowsShapedBinaryPath_IsOneArgument_WithItsBackslashesEscapedInTheJson()
-    {
-        // The entry's own command is replaced by the registered binary, so the Windows-shaped command comes in through an update of the args: the JSON text holds the path with doubled backslashes.
-        using var world = InstallWorld.Create(codex: false);
-        world.Steer(Client.Claude, oldAddJson: true, version: OldVersion);
-        const string WindowsPath = """C:\Users\Test User\AppData\Local\coai\versions\2.0.0\coai-mcp.exe""";
-        world.Put(world.ClaudeJson, new JsonObject
-        {
-            ["mcpServers"] = new JsonObject
-            {
-                ["coai"] = new JsonObject { ["type"] = "stdio", ["command"] = "/old/coai/versions/1.0.0/coai-mcp", ["args"] = new JsonArray(WindowsPath) },
-            },
-        }.ToJsonString());
-        var launcher = new RecordingLauncher(new ProcessLauncher());
-
-        var (code, _, err) = await world.RunAsync(world.Deps() with { Launcher = launcher }, "setup-clients", "--binary", world.Binary);
-
-        code.Should().Be(0, err);
-        var json = launcher.Requests.Single(request => request.Arguments.Contains("add-json") && !request.Arguments.Contains("--help")).Arguments[^1];
-        json.Should().Contain(WindowsPath.Replace("\\", "\\\\", StringComparison.Ordinal), "a backslash is doubled in JSON text and nothing else touches it");
-        JsonNode.Parse(json)!["args"]![0]!.GetValue<string>().Should().Be(WindowsPath);
-    }
-
-    /// <summary>Passes every launch on and keeps the request, so a test reads the argument LIST — which a log line that joins it with spaces cannot show.</summary>
-    private sealed class RecordingLauncher(IProcessLauncher inner) : IProcessLauncher
-    {
-        internal List<ProcessRequest> Requests { get; } = [];
-
-        public Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default)
-        {
-            Requests.Add(request);
-
-            return inner.RunAsync(request, ct);
-        }
     }
 }

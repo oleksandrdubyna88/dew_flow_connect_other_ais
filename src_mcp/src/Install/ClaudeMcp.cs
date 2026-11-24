@@ -127,15 +127,15 @@ internal sealed class ClaudeMcp : McpTarget
         return _readsStdin.Value;
     }
 
-    private static readonly string[] OnlyProgramAndArguments = ["type", "command", "args", "env"];
+    private static readonly string[] OnlyTheProgram = ["type", "command", "args", "env"];
 
     /// <summary>
-    /// Whether the entry is only the program path and its arguments: no environment value and no other key (a header, a token) that could hold one. The one condition under which the JSON may be an
-    /// ARGUMENT of <c>claude mcp add-json</c> — a command line is readable by every process of the account, so a value never goes there.
+    /// Whether the entry is only the program path: no environment value, NO argument (an argument can carry a secret too — a token after a flag) and no other key (a header) that could hold one. The one
+    /// condition under which the JSON may be an ARGUMENT of <c>claude mcp add-json</c> — a command line is readable by every process of the account, so nothing that could be a value goes there.
     /// </summary>
     private static bool CarriesNoValue(McpEntry entry)
     {
-        if (entry.Env.Count > 0)
+        if (entry.Env.Count > 0 || entry.Args.Count > 0)
         {
             return false;
         }
@@ -148,8 +148,9 @@ internal sealed class ClaudeMcp : McpTarget
         try
         {
             return JsonNode.Parse(entry.RawJson) is JsonObject body
-                && body.All(pair => OnlyProgramAndArguments.Contains(pair.Key, StringComparer.Ordinal))
-                && (body["env"] is null || body["env"] is JsonObject { Count: 0 });
+                && body.All(pair => OnlyTheProgram.Contains(pair.Key, StringComparer.Ordinal))
+                && (body["env"] is null || body["env"] is JsonObject { Count: 0 })
+                && (body["args"] is null || body["args"] is JsonArray { Count: 0 });
         }
         catch (JsonException)
         {
@@ -165,12 +166,26 @@ internal sealed class ClaudeMcp : McpTarget
         return $"claude {(version.Length > 0 ? version + " " : string.Empty)}cannot read `mcp add-json` from stdin; update Claude Code (claude update)";
     }
 
+    /// <summary>
+    /// A <c>.cmd</c> or <c>.bat</c> file is run by Windows through cmd.exe, which re-parses the JSON argument and can run shell syntax (<c>&amp;</c>, <c>%VAR%</c>, <c>^</c>) BEFORE the read-back sees anything —
+    /// so the argument road is not taken through one, whatever the entry holds.
+    /// </summary>
+    private static bool IsShell(string cliPath) =>
+        Path.GetExtension(cliPath.Trim()) is { } extension && (extension.Equals(".cmd", StringComparison.OrdinalIgnoreCase) || extension.Equals(".bat", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Why the argument road may not carry <paramref name="entry"/> to this claude, or empty when it may. A shim's reason comes first: it holds for any entry.</summary>
+    private static string ArgumentRoadRefusal(McpEntry entry, ApplyContext context) =>
+        IsShell(context.CliPath)
+            ? $"claude at {context.CliPath} is a .cmd/.bat shim; coai will not pass the entry on its command line; update Claude Code (claude update) so it reads stdin"
+            : CarriesNoValue(entry) ? string.Empty : StdinRefusal(context);
+
     protected override async Task<string> RefusalBeforeAnyStepAsync(PlannedTarget plan, ApplyContext context, CancellationToken ct) =>
-        plan.After is { } after && !await ReadsStdinAsync(context, ct) && !CarriesNoValue(after) ? StdinRefusal(context) : string.Empty;
+        plan.After is { } after && !await ReadsStdinAsync(context, ct) ? ArgumentRoadRefusal(after, context) : string.Empty;
 
     /// <summary>
-    /// The three roads: stdin when the CLI says it reads it (the road measured on 2.1.330, unchanged); the JSON as the one <c>&lt;json&gt;</c> argument when it does not and the entry carries no value
-    /// (<see cref="System.Diagnostics.ProcessStartInfo.ArgumentList"/> quotes it — the launcher never joins a string); otherwise nothing is run, and the answer says why.
+    /// The three roads: stdin when the CLI says it reads it (the road measured on 2.1.330, unchanged); the JSON as the one <c>&lt;json&gt;</c> argument when it does not,
+    /// (<see cref="System.Diagnostics.ProcessStartInfo.ArgumentList"/> quotes it — the launcher never joins a string) the entry is only the program path (no env, no args) and claude is not a <c>.cmd</c>/<c>.bat</c> shim;
+    /// otherwise nothing is run, and the answer says why.
     /// </summary>
     protected override async Task<VendorAnswer> AddAsync(McpEntry entry, ApplyContext context, CancellationToken ct)
     {
@@ -180,9 +195,9 @@ internal sealed class ClaudeMcp : McpTarget
             return await context.Vendor.RunAsync(context.CliPath, ["mcp", "add-json", "--scope", "user", "coai", "-"], json, ct);
         }
 
-        return CarriesNoValue(entry)
-            ? await context.Vendor.RunAsync(context.CliPath, ["mcp", "add-json", "--scope", "user", "coai", json], string.Empty, ct)
-            : new VendorAnswer(false, StdinRefusal(context));
+        return ArgumentRoadRefusal(entry, context) is { Length: > 0 } refusal
+            ? new VendorAnswer(false, refusal)
+            : await context.Vendor.RunAsync(context.CliPath, ["mcp", "add-json", "--scope", "user", "coai", json], string.Empty, ct);
     }
 
     public override string Via(PlanAction action) => action switch
