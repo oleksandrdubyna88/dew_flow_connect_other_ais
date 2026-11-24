@@ -1329,9 +1329,10 @@ same numbers (parent § *Security*); 9–13 are this story's own.
 12. **With the setting on, the first contact comes before any telling.** That is F1 and the owner's decision; this
     story does not change it.
 13. **A side with a refusal that is not written reads no host at all** — every window of it, for as long as the
-    file cannot be written. One hung window's lock, or a disk that is full, stops the accounts list of the whole
-    side until the write lands or a person presses *Save now*. It errs to not contacting, and W9 and W12 say it in
-    every window. (Entry 1.2's text stopped one window; the re-review's finding 0 made it the side.)
+    file cannot be written, when a marker was made. One hung window's lock stops the accounts list of the whole
+    side until the write lands or a person presses *Save now* — when a marker was made. When NO marker could be made (a
+    disk that is full or read-only) only the pressing window stops reading, and its W9 notice says that other windows of
+    the side may still read hosts. It errs to not contacting, and W9 and W12 say it. (Entry 1.2's text stopped one window; the re-review's finding 0 made it the side.)
 
 **`SECURITY.md`** is S5's (stories document, S5 item 5). From this spec it takes: the merge and the cap; the
 refusals file — where it is, that it is kept for each side, its one writer and its lock, that only a person's press

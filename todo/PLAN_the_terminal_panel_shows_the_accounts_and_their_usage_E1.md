@@ -1287,7 +1287,7 @@ and about the install of `jq` (C1) are written after E2 and C1, from what was se
 > each round, with no press, and reads one host at a time over your own `ssh` with one fixed, read-only script. **Refresh now**
 > reads at once (not within a minute of the last round); **Stop the accounts round** stops the reads in every window of the
 > same side of the machine until you start them again from the list. Codex does not state an account name, so its group says
-> so; agy states neither an account nor a usage, so only its version and whether it is signed in are read. Nothing of a reading
+> so; agy states neither an account nor a usage, so only its version and whether its sign-in file is there are read. Nothing of a reading
 > is stored: after a reload the next round brings it back.
 >
 > **Security: a host nobody was asked about is now read, by a terminal's name.** Until now CoAI asked once, in a question, before
@@ -1304,8 +1304,8 @@ and about the install of `jq` (C1) are written after E2 and C1, from what was se
 > the help: the script CoAI sends writes nothing on a host.
 >
 > **Limits:** a "no" given in a window of an older build is only a copy until a window of this build reads
-> it; a disk that takes no write keeps a refusal in one window, and then no window of that side reads a host until you press
-> **Save now**; `SECURITY.md`, *The extension's outward ssh calls*, lists all thirteen. **Not changed:** the ssh options, the pick list of the session
+> it; a refusal the file did not take stops every window of that side only when its marker was made, and then no window of the side reads a host until you press
+> **Save now**; with no marker (a full disk, say) only the pressing window stops reading, and its notice says other windows may still read; `SECURITY.md`, *The extension's outward ssh calls*, lists all thirteen. **Not changed:** the ssh options, the pick list of the session
 > reader, the MCP server and the Team server.
 
 (Each sentence of the Security paragraph says what CoAI PASSES, not what ssh then does: the refusal of an unknown host key on a
