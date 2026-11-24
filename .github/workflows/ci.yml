@@ -559,6 +559,14 @@ jobs:
         working-directory: src_vs_code
         run: npm ci
 
+      # The accounts script is run for real by `remoteAccountsRuns.test.ts`, with false vendor programs and the REAL jq:
+      # its three jq programs are what keeps a credential and the person's activity on the VM. The runner image has
+      # carried jq so far; this step makes that a fact of this job, not of the image, and prints the version it tested.
+      - name: jq for the accounts script tests
+        run: |
+          command -v jq >/dev/null || { sudo apt-get update && sudo apt-get install -y --no-install-recommends jq; }
+          jq --version
+
       # Before the tests: a lint failure is read in a second and a suite failure in a minute. The
       # config lives in the package, so this step says nothing about which rules are in force and
       # cannot drift from what a developer runs locally.
