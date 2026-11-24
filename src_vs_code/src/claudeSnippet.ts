@@ -40,7 +40,7 @@ import { QUESTION_RULE } from './generated/questionRule';
 export const SNIPPET_VERSION = 6;
 
 /** The snippet body's hash, so the version above cannot silently stop meaning anything. */
-export const SNIPPET_BODY_SHA = 'a94ba2fef37a8826';
+export const SNIPPET_BODY_SHA = 'edc9eea979fd2b2d';
 
 /**
  * The revision of the ARTEFACT — the composed text that actually goes on the clipboard.
@@ -67,7 +67,7 @@ export const SNIPPET_BODY_SHA = 'a94ba2fef37a8826';
  * A DERIVED number was tried first and refused on the plan round; the guard reproduces that refuted
  * design, and `research/PLAN_the_menu_names_the_clipboards_version.md` records why.</p>
  */
-export const ARTEFACT_VERSION = 19;
+export const ARTEFACT_VERSION = 20;
 
 /**
  * Where a repository is allowed to keep the block, in the order a reader should believe them.
@@ -172,12 +172,16 @@ export const CONSULTANT_VERSION = 4;
  * v3 is <c>.agents/conventions/common/coai-feature-gate.md</c>, and it says what the server does — one
  * round is the budget, a second only on a reviewer failure, a `blocking` finding or the person's
  * request — where v2 still promised a reopen the server refuses. v4 (conventions #182) says what the feature
- * gate does under policy `auto`: an unreviewed round is `not_reviewed`, and only the first two grounds remain.</p>
+ * gate does under policy `auto`: an unreviewed round is `not_reviewed`, and only the first two grounds remain.
+ * v5 (conventions #185, release c598a11) says a `blocking` finding that `good_enough` carries at the cap under `auto` is
+ * verified like any other finding: a true one lands as a NEW pull request and is named in the summary, a false one is
+ * rejected with its reason — v4 said to land it. It ships in extension 0.89.2: #1027 merged as `chore`, which
+ * release-please does not release, so a separate `Release-As: 0.89.2` commit cut it (the #605 shape).</p>
  *
  * <p>Not cosmetic: a copy pasted before it carries no feature marker, and the AI obeying it never calls
  * `review_feature` — the whole feature is then released having only ever been reviewed in slices.</p>
  */
-export const FEATURE_VERSION = 4;
+export const FEATURE_VERSION = 5;
 
 /**
  * The QUESTION half's version — ask the consultants before the person.

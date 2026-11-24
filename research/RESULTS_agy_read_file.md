@@ -121,6 +121,9 @@ what the hook is handed, the three routes measured again, and the rule that clos
 - `workspacePaths` holds the agy cwd first, then each `--add-dir` root. All entries are absolute.
 - `cwd` is the folder coai owns, the one that holds `.agents/hooks.json`. The hook process runs there too: its working
   directory is `<coai folder>/.agents`. It is never a granted root.
+  - *(Note 2026-11-18, §7: the two bullets above hold only while the coai folder sorts first. agy SORTS `workspacePaths` and sends `cwd`
+    = its first entry, so a granted root that sorts before the coai folder is `cwd`. The coai folder is the parent of the hook's own
+    working folder, and `cwd` names nothing. The two lines above stay as they were written.)*
 - `toolCall.args.Path` is the model's own text. In 6 of 7 calls it was absolute. Once it was relative, and agy itself
   then rejected it. `..` and links arrive unresolved.
 - An environment variable set on agy reaches the hook process. The rule does not use that: it reads the roots from the
@@ -140,6 +143,11 @@ that points at it. All three read, 3 of 3. The hook allowed each call by name al
   reads nothing. Any failure denies; the check never falls back to the spelling.
 - A path outside gets its own reason, `coai: this consultation reads only inside the folders it was given`. The
   tool-name reason is unchanged. Neither names the path.
+
+*(Note 2026-11-18, §7: three steps of this list changed. "Not inside the resolved `cwd`, the coai folder" is now "not inside the
+resolved coai folder, which the hook knows from where it runs; the payload's `cwd` is validated and names nothing". "Every entry must
+resolve" now also means every resolved path must be local: a network or device path is never looked up. On Windows a `Path` with a
+`.` or `..` segment is denied. The list above is kept as the rule of 2026-11-16.)*
 
 Limits are in `SECURITY.md`, "What the sites guarantee": a link swapped between the check and agy's open is not closed,
 and a hard link or a bind mount is not seen.
@@ -171,11 +179,245 @@ inside and read outside, if agy allows that read (not measured on Windows). (W2)
 hook looks it up over SMB: that can send the user's NTLM credentials to that host, or stall past the hook's 10 s timeout. Neither applies on
 Linux, the Team server or WSL. Not measured on a Windows machine: both are read from the code and the Win32 rules.
 
+*(Note 2026-11-18: closed by `todo/PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text.md` and its epic E1. Both gaps were measured on a
+Windows machine and are described in §7: W1 was confirmed in the real hook, and W2 is closed by a reader that looks at no path that is
+not local. The paragraph above is kept as it was written.)*
+
+## 7. Windows, and the payload's cwd (2026-11-18)
+
+Found by step 1 of `todo/PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text.md`, which measured agy on Windows for the first time
+and, in the same runs, found that §6 had read agy's `cwd` wrong. This section carries the measurement, the W3 finding on both
+operating systems, and what the change does about each. The rule and its tests are the specs of the plan's epic E1
+(`todo/PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text_E1.md` and its three story specs). Where §6 says otherwise, this section
+supersedes it. The text of §6 stays as written.
+
+**Harness.** This machine's Windows host (Windows build 10.0.26300), agy 1.5.11, `gemini-4-hydrogen-low`, `--mode plan --agent
+coai-reader`, one agy run per probe. The hook folder held coai's own `hooks.json` and agent file. For the payload captures its
+script logged the payload and allowed the call. For the W1 run its script handed the payload to the installed `coai-mcp.exe` 0.66.0
+(`--agy-hook`). The raw payloads and event streams are kept in the session's scratchpad (`winprobe/`).
+
+### The payload on Windows
+
+The fields are the same as on Linux (§6). `Path` is absolute, with backslashes and an uppercase `C:`, and it is the model's own text.
+The reader tool is `read_file`. `cwd`, `workspacePaths` and `transcriptPath` use backslashes too.
+
+### agy's own boundary on Windows
+
+- A read of `C:\Users\strug\…`, the user profile, outside every granted root: agy denied it itself. The denial is in agy's own
+  `denied_actions` (`permission check failed for read_file … user denied permission`).
+- A read under the temp folder outside the granted roots: agy allowed it and returned the file. This is the `/tmp` rule of §3 on Windows.
+- So the temp folder is the place where only the hook stands between a reader and an outside file.
+
+### The model's `.` and `..`
+
+In 11 runs the model sent no `.` and no `..` in any ordinary path. The `..` paths of the W1 runs were asked for in the prompt, with
+"do not change or normalize it".
+
+### W1: `..` after a junction, in the real hook
+
+`RealPath` applies `..` to the path resolved so far, which is the Unix rule. Win32 folds `.` and `..` as TEXT before it follows a link.
+Measured on 2026-11-18:
+
+- Layout: the granted root `R`, a junction `R\nm\foo` → `R\deep\a\b\c\d\e\f\g`, and a marker file `secret.txt` in a folder outside `R`.
+- `Path` = `R\nm\foo\` and 7 `..` segments, then the outside file. Win32 folds it as text to `C:\Users\strug\coai-winprobe-outside\secret.txt`.
+- `cmd /c type` of that path printed the outside marker. So Windows does read outside the root by that spelling.
+- The real hook (0.66.0) **allowed** it. The hook judged `R\deep\…`, inside `R`. W1 is confirmed.
+- agy then denied the read itself, because the folded target lay in the user profile. So W1 was not exploitable end to end in
+  that run. A W1 target under the temp folder, which agy reads by itself, was not measured by that run. The real run below is meant to measure it.
+
+### W2: network and device paths, and why the timings prove little
+
+The hook (0.66.0) denied each of these within about 60 ms, process start-up included:
+
+- `\\127.0.0.1\…`, `//127.0.0.1/…`, `\\?\C:\…`, `\\.\C:\…` and `\\?\UNC\127.0.0.1\…`;
+- `D:\…`, another local drive.
+
+**The limit of that evidence.** The decision is `deny` whether or not the hook looked the path up, and a lookup that fails fast on the
+loopback address looks like no lookup. Timing cannot show that no SMB request was made. The proof is structural: the hook's reader
+refuses a path that is not local before any I/O, and a recording reader in the tests shows it was never asked (spec S2). A packet
+capture on TCP 445 would be the wire evidence; it could not be taken (`pktmon` needs administrator rights, see the real run below).
+
+### What Windows folds (spec S3, section 1)
+
+Measured with `[IO.Path]::GetFullPath` in Windows PowerShell 5.1, which calls `GetFullPathName` (build 10.0.26300):
+
+| Spelling | Windows makes it | So |
+|---|---|---|
+| `C:\Windows\..\System32` | `C:\System32` | an exact `..` leaves its folder |
+| `C:\Windows\.. \System32` | unchanged | `.. ` in the middle is a name |
+| `C:\Windows\.. ` at the end | `C:\Windows\` | trimmed to the folder itself |
+| `C:\Windows\...\System32` | unchanged | a name |
+| `C:\Windows\.. .\System32` | `C:\Windows\.. \System32` | one dot taken off; still a name |
+| `C:\Windows\System32.\drivers`, `…\drivers.`, `…\drivers ` | `C:\Windows\System32\drivers` | another spelling of the same entry |
+
+Only a segment that is exactly `..` leaves its folder. The other spellings stay in the folder they are written in.
+
+### W3: agy sorts `workspacePaths`, and `cwd` is its first entry
+
+§6 said that `workspacePaths` "holds the agy cwd first" and that `cwd` "is the folder coai owns". Both held only while the coai folder
+sorted first. What agy does: it SORTS `workspacePaths` and sets the payload's `cwd` to the first entry. Its own process folder and the
+`cwd` of its `init` event stay the coai folder.
+
+**Windows, agy 1.5.11.** The order is ordinal, uppercase before lowercase. The coai-like folder is the probe's own, the folder agy runs in.
+
+| Probe | `workspacePaths`, as sent | `cwd` as sent |
+|---|---|---|
+| coai-like folder `coaip`, root `rootp` | `[…\coaip, …\rootp]` | `…\coaip` |
+| coai-like folder `coaip`, root `zzz` | `[…\coaip, …\zzz]` | `…\coaip` |
+| coai-like folder `coaip`, root `aaa` | `[…\aaa, …\coaip]` | `…\aaa` |
+| coai-like folder `coaip`, root `R` | `[…\R, …\coaip]` | `…\R` |
+| coai-like folder `0coaic`, root `R` | `[…\0coaic, …\R]` | `…\0coaic` |
+
+**Linux, agy 1.5.9.** A probe folder under `/tmp/…` (the scratchpad `sortprobe` folder, the folder agy ran in) and one root,
+`/home/jinx/.cache/coai-sortprobe-root`, gave `"cwd":"/home/jinx/.cache/coai-sortprobe-root"` and
+`"workspacePaths":["/home/jinx/.cache/coai-sortprobe-root","/tmp/…/sortprobe"]`. The root sorts before the folder agy ran in, so it was `cwd`.
+
+**What this broke.** The hook of §6 took `cwd` for the coai folder, denied a path inside it, and counted every other entry as a root.
+When a granted root sorts before the coai folder, the hook took that root for the coai folder and denied every read in it. Replayed
+through the real 0.66.0 hook on Windows, such a payload was denied with `coai: this consultation reads only inside the folders it was
+given`. The same hook would have ALLOWED a read of the coai folder's own files, because the real coai folder then counted as a root.
+
+**Who is hit.** No deployment of today: here the coai folder `/home/jinx/.local/share/coai-agy/…` sorts before `/home/jinx/git/…` and
+`/tmp/…`, and on the Team server `/root/.local/share/…` sorts before `/tmp/coai-server-job-…`. A root at `/data/…`, `/code/…` or
+`~/.cache/…`, or one at `C:\Projects\…` or under the Windows temp folder, is hit. The shipped hook (mcp 0.65.4 and 0.66.0, Team server 0.16.3) has the defect.
+
+### What the change does about each
+
+The hook of this change knows three things by itself, and the payload's `cwd` is not one of them.
+
+| Step | Rule | Answers |
+|---|---|---|
+| D3 | the payload's `cwd` must be a string, fully qualified, and resolve. It is validated and names nothing | W3 |
+| D6 | a path inside the resolved coai folder is denied, wherever that folder stands in `workspacePaths`, and under a wider root too | W3 |
+| D8 | the coai folder must be known, fully qualified and resolvable, or every read is denied | W3 |
+| D9 | the hook looks at no path that is not local. One guarded reader refuses it before any I/O, and every resolved path must be local | W2 |
+| D10 | where the OS folds `.` and `..` as text (Windows), a `Path` with a segment that is exactly `.` or `..` is denied | W1 |
+
+- **W3 (S1).** The coai folder is the parent of the hook's own working folder. agy starts the hook's relative command (`sh ./coai-hook.sh`,
+  `.\coai-hook.cmd`) in the folder's `.agents` subfolder, so the hook asks where it runs. It does not compute the folder from
+  `DefaultBase` and `HookHandler.Key()`: the hook process does not see the launcher's environment on the Team server (each vendor slot
+  has its own `HOME` and `XDG_DATA_HOME`) and on a question row (no `XDG_DATA_HOME`), so that folder would be another one. Every
+  entry of `workspacePaths` is a root, and D6 keeps the coai folder out of them. A hook that does not run from a folder named
+  `.agents`, or whose folder does not resolve, denies every read and writes one constant line to standard error.
+- **W2 (S2, the cornerstone).** No network or device path is ever looked up: not `Path`, a root, the payload's `cwd`, the coai folder,
+  nor the target of a link met on the way. A junction inside a granted local root can point at a share, so the guard sits on the reader
+  where the disk is touched, not on the spelling. A path is local when its drive letter is a local drive (not `Network`, `Unknown`
+  or `NoRootDirectory`), or, on Unix, when it is rooted, does not start with `//`, and is not under `/net/`, `/misc/` or `/Network/`.
+  A `Path` that starts with two separators is denied on every OS by its spelling, before it is resolved. A network root is not
+  supported: the payload is denied whole.
+- **W1 (S3).** On Windows a `Path` with a `.` or `..` segment is denied, before anything is resolved. `RealPath`'s own `..` rule does
+  not change, because other sites rely on it. Off Windows the kernel is the walk, and nothing changes. The rule covers `Path` only: roots,
+  `cwd` and the coai folder are text from coai and agy. A dot segment in a link's own text was first written down as "left to the kernel"; **that is wrong for Windows (correction 2026-11-18, review of E1)**: NT folds a relative link's text as text, while `RealPath` walks it with the Unix rule, so a relative symbolic link inside a root whose text holds `..` (`R\a` to `b\..\..\outside\secret.txt`, with `R\b` another link to `deep\er`) is judged inside and read outside. This is the probable escape of SECURITY.md, not measured on a real machine; the follow-up plan is `todo/PLAN_the_agy_hook_on_windows_judges_a_links_dot_text.md`. On Unix the kernel is the walk and the Unix rule agrees with it.
+
+**Tests.** Rows are named in the specs and listed in `research/module_tests.md`. The classes are
+`TheAgyHookKnowsItsOwnFolderTests` (F1-F14, F13 and F14 added by the review fixes of 2026-11-18; M1-M4 and S7-S9 with the built binaries), `TheAgyHookLooksOnlyAtLocalPathsTests` (N1-N25, N16 added by the review fixes;
+M5 and S10) and `TheAgyHookRefusesDotSegmentsWhereTextFoldsTests` (T1-T8; M6 and S11), on the shared fixture `AgyHookFixture`.
+
+
+### The real Linux run on the branch build
+
+2026-11-18, WSL, agy 1.5.9, `gemini-4-hydrogen-low`, `--mode plan --agent coai-reader`. Each hook folder held the same
+`hooks.json` and agent file coai writes, with `coai-hook.sh` starting the binary under test. One agy run per probe.
+
+- **W3, the run that shows the fix.** The coai-like folder was under `/tmp/…/w3-<build>/`. The one granted root,
+  `/home/jinx/.cache/coai-e1-root`, sorts BEFORE it, so agy's payload names that root as `cwd`.
+
+  | Hook binary | `Path` the model sent (`read_file`, 2 calls) | Hook decision | Marker read |
+  |---|---|---|---|
+  | the installed `coai-mcp 0.66.0` (shipped) | `/home/jinx/.cache/coai-e1-root/inside.txt` | `denied by pre-tool hook: coai: this consultation reads only inside the folders it was given` | no |
+  | the branch's Release `coai-mcp` | the same | allowed | yes |
+
+- **The parent's `/tmp` escapes on the branch build.** Same hook folder. Two job folders `/tmp/coai-probe-job-*`, one granted;
+  `leak.txt` in the granted one is a link to the other's `secret.txt`.
+
+  | Probe | `Path` the model sent | Hook decision | Marker read |
+  |---|---|---|---|
+  | in-root | `…/coai-probe-job-QZvN7L/inside.txt` | allowed | the inside marker, yes |
+  | absolute | `…/coai-probe-job-3G9kxs/secret.txt` | denied, the same sentence | no |
+  | `..` | `…/coai-probe-job-QZvN7L/../coai-probe-job-3G9kxs/secret.txt` | denied | no |
+  | link | `…/coai-probe-job-QZvN7L/leak.txt` | denied | no |
+
+The secret marker appears in none of the outputs.
+
+### The real Windows run on the branch build
+
+2026-11-18. Windows 10.0.26300, agy 1.5.11, `gemini-4-hydrogen-low`. The hook binary was the branch's `coai-mcp.exe`, built from the
+working tree at 82fc734e: `dotnet publish src_mcp/src -c Release -r win-x64 --self-contained -p:PublishAot=false -p:PublishSingleFile=true`.
+It is NOT NativeAOT, because AOT cannot cross-compile from Linux; the release build is AOT.
+
+The hook folders were built by hand, byte for byte: coai's `AgentFile`, `HooksFile(windows: true)` and `CmdScript`, under
+`…\Temp\coai-e1\zz-coai\`. The binary cannot be told to prepare one outside the real `LOCALAPPDATA`. The root `R` (`…\coai-e1\q1\…\R`)
+sorts BEFORE the coai folder. It holds:
+- `inside.txt`;
+- `deep\a\…\g\walk.txt`;
+- a real junction `nm\foo` → `R\deep\a\b\c\d\e\f\g`.
+
+The outside marker was in `…\coai-e1\outside\secret.txt`. That is in the temp folder, which agy reads by itself, so the hook is the
+only guard. One agy run per probe. The `Path` the model sent equals the payload's `Path` in every run, and no run has a
+`denied_actions` entry, so each denial below is the hook's.
+
+| Probe | `Path` the model sent | Hook decision | Marker |
+|---|---|---|---|
+| in-root, root sorts first (W3) | `…\R\inside.txt` (payload `cwd` = `R`) | allowed | read |
+| in-root, root sorts after | `…\zzz-R\inside.txt` | allowed | read |
+| an honest junction | `…\R\nm\foo\walk.txt` | allowed | read |
+| the coai folder | `…\zz-coai\hlog\.agents\hooks.json` | denied: `tool call denied by pre-tool hook: coai: this consultation reads only inside the folders it was given` | — |
+| **W1, branch hook**, root first and root after | `…\R\nm\foo\..\..\..\..\..\..\..\outside\secret.txt` | denied, the same sentence | not read |
+| **W1, the shipped 0.66.0 hook** (control) | the same 7-`..` path, root after | **allowed** | **read: `MARK-OUTSIDE-SECRET-b81e44`** |
+| `..` inside the root | `…\R\deep\..\inside.txt` | denied | — |
+| `.` inside the root | `…\R\.\inside.txt` | denied | — |
+| W2 | `\\127.0.0.1\nonexistent\x` | denied | — |
+| W2 | `\\127.0.0.1\c$\Windows\win.ini` | denied | — |
+
+The premise of W1 was checked first. `[IO.Path]::GetFullPath` folds the 7-`..` path to `…\coai-e1\outside\secret.txt`, outside `R`,
+and `cmd /c type` printed the marker. coai's walk would have judged it `R\deep\outside\secret.txt`, inside.
+
+**W1 was exploitable end to end with the shipped hook.** The 0.66.0 control read the outside file through a junction and `..` under
+the temp folder. The branch hook denies the same read.
+
+**A direct replay through the bare hook.** It ran from the folder's `.agents`, with allowed controls first: `R\inside.txt`, and the
+honest junction's `walk.txt`. Each of the following was denied with the place sentence:
+- the 7-`..` path, `R\deep\..\inside.txt` and `R\.\inside.txt`;
+- `\\127.0.0.1\nonexistent\x`, `//127.0.0.1/nonexistent/x` and `\\?\C:\…\outside\secret.txt`;
+- the coai folder's `hooks.json`;
+- the plain outside path;
+- a payload whose `workspacePaths` held a UNC entry.
+
+A payload whose `cwd` named `R` still allowed `R\inside.txt`: the payload's `cwd` is ignored. `write_to_file` got the read-only
+sentence. Run from outside any `.agents` folder, the hook said on stderr `coai --agy-hook: denied, this hook does not run from its
+own .agents folder` and denied.
+
+**Not run, because both need administrator rights, which this session does not have:**
+- A junction or symbolic link to a UNC target. `mklink /D … \\127.0.0.1\c$` answered `You do not have sufficient privilege to
+  perform this operation`, and `mklink /J` answered `Local volumes are required to complete the operation`. That case rests on the
+  reader-seam tests (N-rows of `TheAgyHookLooksOnlyAtLocalPathsTests`) and the Windows CI job.
+- A packet capture. `pktmon` answered `Failed to communicate with the PktMon driver: Access is denied`. "No SMB handshake" therefore
+  rests on the recording reader in the tests, not on the wire.
+
+Logs: the session scratchpad `winprobe/e1/` (`logs/*.ndjson`, `logs/payloads.log`, `replay-bare-hook.txt`). Every probe folder and
+junction was removed afterwards.
+
+### Limits of this section
+
+- **A network checkout is not supported.** A root on a UNC path, a mapped network drive, `\\wsl$\…` or, on Unix, under `/net/`,
+  `/misc/` or `/Network/` has every agy read denied. A consult grants the person's own checkout, so one kept in such a place loses
+  agy's reads.
+- **A network file system mounted into the Unix tree** (nfs or cifs at an ordinary folder) is spelled like a local path and is not
+  detected. A custom autofs map on another root is not detected either.
+- **A harmless `..` is lost on Windows.** The model can send the path again without it.
+- **Another spelling of one entry** (an 8.3 short name, a trailing dot or space, an NTFS stream name) is a different string. Under a
+  wide root it can name the coai folder's own files without being seen as inside it. The folder holds no secret.
+- **A dot segment in a link's own text** is not judged, and on Windows that is a probable escape (correction 2026-11-18, review of E1; the first text read "What NT does with an absolute link target that holds `..` is not measured", which is still true of the absolute case): a relative symbolic link inside a root whose text holds `..` is walked with the Unix rule and read by NT with the text folded. Not measured on a real machine. Follow-up: `todo/PLAN_the_agy_hook_on_windows_judges_a_links_dot_text.md`.
+- **Whether agy cleans a path before it opens it** is not measured. The rule does not depend on it.
+- **One Windows build** was measured. Microsoft's description of path normalisation says the same.
+- **The wire.** That Windows sends no NTLM handshake is shown by the recording reader in the tests, not by a packet capture: the real run above could not take one (`pktmon` needs administrator rights).
+- **It trusts where agy starts the hook.** If a later agy starts it elsewhere, every read is denied and the standard-error line says why.
+
 ## Not measured
 
 - **agy 1.5.8 or older with the fix.** The 1.5.8 binary is no longer on this machine. The fix keeps `view_file`
   allowed, so a launch that offers it behaves as before.
-- **Windows.**
+- **Windows.** *(Note 2026-11-18: measured on agy 1.5.11, see §7. What §7 does not measure is listed there.)*
 - **Whether `view_file` read `/tmp` on 1.5.8.** So whether the `/tmp` allowance is new in 1.5.9 is unknown.
 - **The Team server's agy version.** The server shares `CoaiMcp.Runners`, so the fix reaches it with the next server
   release.

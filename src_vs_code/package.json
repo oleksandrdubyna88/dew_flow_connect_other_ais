@@ -2,7 +2,7 @@
   "name": "connect-other-ais",
   "displayName": "ConnectOtherAIs",
   "description": "Your AI writes the code; other vendors' models review it — the plan before it is built, the diff after. A gate that holds until they agree, or until you decide.",
-  "version": "0.89.1",
+  "version": "0.89.2",
   "publisher": "remsoftdev",
   "license": "MIT",
   "repository": {
@@ -229,7 +229,7 @@
       },
       {
         "command": "coai.copyClaudeSnippet",
-        "title": "Copy the CLAUDE.md snippet (v19)",
+        "title": "Copy the CLAUDE.md snippet (v20)",
         "category": "ConnectOtherAIs"
       },
       {

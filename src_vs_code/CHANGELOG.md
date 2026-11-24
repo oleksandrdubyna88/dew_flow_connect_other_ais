@@ -1,5 +1,49 @@
 # Changelog
 
+## Server 0.66.1 — 2026-11-24
+
+**Fixed: an Antigravity reader in a folder that sorts before coai's own folder can read again (#1023).** agy sorts the folders it
+is given and names the first one as its working folder in every tool-call hook. The read-only hook in Server 0.65.4 to 0.66.0 took
+that name for coai's own hook folder. A granted folder that sorts before it, such as `/data/…`, `~/.cache/…`, `C:\Projects\…` or a
+folder under `%TEMP%`, was then treated as coai's folder, and every read in it was denied. This was measured on agy 1.5.9 on Linux
+and agy 1.5.11 on Windows. The hook now takes its own folder from where agy starts it, the folder's `.agents` subfolder, and ignores
+the name in the call. If it cannot tell, it denies, and says so once on standard error.
+
+**Fixed (Windows): the hook looks up no network or device path.** The hook resolved the path it was asked about before it judged
+it. A `\\host\share\…` path, or a junction inside a granted folder that points at one, made Windows contact that host, which can
+send the user's NTLM credentials to it or stall past the hook's 10-second timeout. Now every path the hook looks at is checked
+first: the target, each granted folder, and every link met on the way. Anything not on a local drive is refused before any lookup,
+whether UNC, `//`, a device path (`\\?\`, `\\.\`) or a mapped network drive. A path that starts with two separators is denied by
+its spelling, on every OS.
+
+**Fixed (Windows): a `..` after a junction no longer reads outside the folder.** Windows folds `.` and `..` as text before it
+follows a junction, while coai's resolver applies `..` after following it. A real run showed the hook in 0.66.0 allow a path made
+of a junction followed by seven `..` segments, and agy then read a file outside the granted folder under `%TEMP%`. On Windows, a
+path with a `.` or `..` segment is now denied. Linux is unchanged.
+
+**Not changed:** only `read_file` and `view_file` run, and every other tool is denied with the same reason as before. The deny
+sentence for a path outside is the same. agy's own checks still run after the hook allows a call.
+
+**Limits** (full list in `SECURITY.md`, "What the sites guarantee"):
+- A checkout on a mapped drive, a UNC path or `\\wsl$` loses agy reads. So does a folder under `/net`, `/misc` or `/Network` on Unix.
+- On Windows the `.`/`..` rule reads the requested path only. A symbolic link inside a granted folder whose own text holds `..`
+  can probably still be followed outside. This is not measured, and it needs Developer Mode, administrator rights or a checkout
+  with `core.symlinks=true`. It is the next plan: `todo/PLAN_the_agy_hook_on_windows_judges_a_links_dot_text.md`.
+- A junction to a UNC target and a packet capture were not run on a real machine, because both need administrator rights. The
+  tests show that the hook makes no lookup.
+
+**Rollback:** 0.66.0 brings back all three defects above.
+
+## Extension 0.89.2 — 2026-11-19
+
+**The CLAUDE.md snippet is now v20: its feature half is `coai-feature` v5.** The text your AI reads comes from the conventions release `c598a11`; one rule changed in it, and the clipboard moved from v19 to v20 with it.
+
+What the feature half now says, for an AI that reads it: under policy Auto, at the cap, a `good_enough` verdict can carry a `blocking` finding the second round did not clear. v4 said to land it as a new pull request like the rest. v5 says to **verify it like any other finding**: land a true one as a NEW pull request and name it in the summary, reject a false one with its reason. The summary still says what was taken and what was declined.
+
+A paste reads `older` until it is pasted again, and a mounted rule until its repository's pin bump (move the pin, don't paste); nothing is rewritten for you. The menu says "Copy the CLAUDE.md snippet (v20)".
+
+Nothing else in the extension changed: the help, in five languages, and the README never said a blocking finding is always landed, so they stay as they are. The MCP server to pair it with is `coai-mcp` 0.66.0, unchanged.
+
 ## Extension 0.89.1 — 2026-11-19
 
 **The CLAUDE.md snippet now speaks policy Auto: the clipboard is v19.** The text your AI reads — the gate, the document gate, the feature gate and the question rule, from the conventions release `5d2d5ec` — says what a server running Auto does, so a repository that pastes it, or mounts it, no longer tells its AI to wait for a person the gate will never ask.

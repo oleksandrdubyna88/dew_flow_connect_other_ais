@@ -4200,7 +4200,7 @@ So `src_vs_code/src/consultantRule.md` is ours, `prepare-gate.mjs` emits it besi
 one of the 24 rule bodies the conventions repository hashed against its migration baseline, so its
 `<!-- coai-snippet v5 -->` could not be raised and the gate half sat at v5; that freeze ended on
 2026-09-15 (conventions `747887d`), and the gate half moved to v6 with E3 of the auto plan (the words for
-policy `auto`, conventions `25d551b8`, artefact v19). The halves stay separate files each with a marker of
+policy `auto`, conventions `25d551b8`, artefact v19; the feature half moved to v5 and the artefact to v20 with conventions release `c598a11`: a `blocking` `good_enough` finding at the cap under `auto` is verified like any other, not always landed). The halves stay separate files each with a marker of
 its own (merging some back is the conventions' manuals plan's step 4). A change that arrives as a whole
 new half therefore brings a marker of its own —
 `coai-document`, `coai-caller`, `coai-consultant`, each at v1 when it arrived, and each raised since
@@ -4314,6 +4314,24 @@ version disagree*, and a story must be committable with its tests green. `SNIPPE
 (frozen) and `CALLER_VERSION` stays 2: only the halves whose rule changed move. The
 `ARTEFACT_VERSION` docblock that said the two numbers "differ by one" was corrected in passing — it
 had been false since 8 against 5.
+
+### A pin bump that regenerates the snippet must be a releasing commit (2026-11-19)
+
+The snippet is generated from the mounted rules at build time (`scripts/prepare-gate.mjs` → `src/generated/*.ts`), so a
+conventions pin bump that moves a marker IS an extension change: the paste a person copies differs. It reaches anyone
+only through an extension release, and release-please releases the extension only for a releasing commit type (`feat`,
+`fix`, `perf`, `revert`, or `!`) that touches `src_vs_code` with something other than documentation.
+
+- **Title such a bump `fix(extension): …`** (as #1024 did for v19). On 2026-11-19 the v20 bump (#1027, `coai-feature` v5)
+  was squash-merged as `chore(rules): …`; release-please's dispatch then opened no release pull request.
+- **A CHANGELOG line does not repair it.** A `fix(extension):` that changes only `src_vs_code/CHANGELOG.md` is refused by
+  `.github/scripts/docs-only-title.mjs` — documentation alone never opens a release, the operator's rule (#1028, closed).
+- **The repair is a `Release-As` commit** that touches only `src_vs_code` code (a docblock sentence beside
+  `FEATURE_VERSION`, #1029) and whose squash body carries `Release-As: <version>`, the #605 shape of
+  [PLAN_the_release_guards_contradict.md](PLAN_the_release_guards_contradict.md). It opened #1030 (0.89.2).
+- **Check the release head before merging the release pull request:** the full suite, and a VSIX built from that head
+  whose bundled JavaScript carries the new marker and clause and not the old one (done for 0.89.2, and again on the
+  published asset).
 
 ### The Consultant section: who a stuck AI asks, and the one box that is a FILE (2026-09-13)
 
