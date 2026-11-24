@@ -1406,7 +1406,7 @@ question is the hold's own notice (`kind: notice`) and applies in `resolve` — 
 `humanDecision` argument no longer decides anything: it is a claim the server refuses, with a sentence naming the card, when it
 would have changed the outcome. The claim this makes is the PROTOCOL road: the answer file is writable by any process running as
 the user and nothing verifies who wrote it (follow-up: `todo/PLAN_a_signed_answer_releases_the_gate.md`). `npm run test:seam`
-holds the two halves to each other with a real binary (`scripts/seam-held-gate.mjs`).
+holds the two halves to each other with a real binary (the leg `scripts/seam-held-gate.mjs` was deleted on 2026-11-24, epoch 3 E1, PR #1037: the v2 server deletes held gates and `call_human`, so no plan round can end in a held gate).
 
 Both directions of the clock are stated rather than hoped: an older extension draws an expired card until it
 is answered or swept; a newer extension against an older server sees no status and draws every card, as

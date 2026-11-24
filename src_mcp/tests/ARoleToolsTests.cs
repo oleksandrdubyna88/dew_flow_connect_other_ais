@@ -59,7 +59,7 @@ public sealed class ARoleToolsTests
     private static void WaitForState(Rig rig, string id, Func<RoleJobRecord, bool> reached, string what, int seconds = 30) =>
         RoleJobWorld.WaitFor(() => rig.World.Store.Read(id) is { } job && reached(job), what, seconds);
 
-    private static DetachedLauncher LauncherThatStartsNothing(int exit = 0) => new(new NothingStarted(exit));
+    private static DetachedLauncher LauncherThatStartsNothing(int exit = 0) => new(new NothingStarted(exit), NoRunnerStarted.For(exit));
 
     private sealed class NothingStarted(int exit) : IProcessLauncher
     {
@@ -82,9 +82,9 @@ public sealed class ARoleToolsTests
         RoleJobIds.IsValid(Id(answer)).Should().BeTrue();
         answer.GetProperty("state").GetString().Should().BeOneOf(RoleJobStates.Queued, RoleJobStates.Starting, RoleJobStates.Running);
         answer.GetProperty("route").ValueKind.Should().Be(JsonValueKind.Array);
-        answer.GetProperty("launcher").GetString().Should().Be("setsid");
+        answer.GetProperty("launcher").GetString().Should().Be(SetsidTool.Road, "the setsid road, or the one it falls to on a host with no setsid");
         WaitForState(rig, Id(answer), job => job.State == RoleJobStates.Running, "the runner to be running");
-        rig.World.Store.Read(Id(answer))!.Launcher.Should().Be("setsid", "the road is recorded in the job");
+        rig.World.Store.Read(Id(answer))!.Launcher.Should().Be(SetsidTool.Road, "the road is recorded in the job");
         await rig.Cancel(Id(answer));
     }
 

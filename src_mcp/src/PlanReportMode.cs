@@ -38,7 +38,7 @@ internal static class PlanReportMode
 
     private static readonly JsonWriterOptions WriterOptions = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
-        /// <summary>One folder of the feature.</summary>
+    /// <summary>One folder of the feature.</summary>
     internal sealed record Item(string Path, string Parent, string Kind, string Name);
 
     /// <summary>One attributed row of the database, reduced to what the report totals.</summary>

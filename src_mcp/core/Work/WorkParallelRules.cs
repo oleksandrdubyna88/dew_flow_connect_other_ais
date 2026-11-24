@@ -84,7 +84,8 @@ internal static class WorkParallelRules
     {
         foreach (var left in a)
         {
-            foreach (var right in b.Where(right => Contains(left, right) || Contains(right, left)))
+            var right = b.FirstOrDefault(candidate => Contains(left, candidate) || Contains(candidate, left));
+            if (right is not null)
             {
                 return $"'{left}' and '{right}'";
             }
