@@ -473,6 +473,13 @@ const actsOnOurPicker = (row: Contribution): boolean => (row.when ?? '').include
  * or not, by a person.</p>
  */
 const ACTS_INSIDE_A_CHAT: readonly string[] = ['coai.backToSource'];
+
+/**
+ * Commands offered from the terminal's title bar that open NO chat (E1.S4 of the accounts plan): the accounts icon lists the AI accounts of the
+ * open `Creds:` terminals. An ALLOW-LIST by name, like the one above, and kept honest by the test after it: each is offered from the terminal
+ * title bar and its registration holds no `noteChatDoor(`.
+ */
+const OPENS_NO_CHAT: readonly string[] = ['coai.terminalAccounts'];
 const OUR_CHAT = "webviewId == 'coaiChat'";
 const OUR_CHAT_ACTIVE = "activeWebviewPanelId == 'coaiChat'";
 // The road back's chord is the SAME chord as go-to from a terminal, so it must never fire under terminal focus (E3.S2, O1).
@@ -487,7 +494,7 @@ function doorCommands(): readonly string[] {
   const fromMenus = [...(menus['webview/context'] ?? []), ...(menus['editor/context'] ?? []), ...fromTerminalTitle];
   const offered = [...fromMenus, ...MANIFEST.contributes.keybindings.filter((one) => !actsOnOurPicker(one))]
     .map((one) => one.command ?? '')
-    .filter((one) => one.length > 0 && !ACTS_INSIDE_A_CHAT.includes(one));
+    .filter((one) => one.length > 0 && !ACTS_INSIDE_A_CHAT.includes(one) && !OPENS_NO_CHAT.includes(one));
 
   return [...new Set(offered)];
 }
@@ -519,6 +526,24 @@ test('a command that acts inside an open chat is scoped to the chat, and everyth
     assert.ok(ACTS_INSIDE_A_CHAT.includes(command),
       command + ' is offered from the chat page and is neither allow-listed nor counted — classify it, door or not');
   }
+});
+
+test('A4-T16: the commands that open no chat are offered from the terminal title bar and record no door, and the census does not count them', () => {
+  const titleRows = (MANIFEST.contributes.menus['view/title'] ?? []).filter((one) => /\bview == terminal\b/u.test(one.when ?? ''));
+  const doors = doorCommands();
+  for (const command of OPENS_NO_CHAT) {
+    assert.ok(titleRows.some((one) => one.command === command), command + ' is on the no-chat list and is not offered from the terminal title bar — the list is watching a command that moved');
+    assert.ok(!doors.includes(command), command + ' is still counted as a door');
+    const handler = ['extension.ts', 'remoteAccountsHost.ts', 'remoteSessionHost.ts']
+      .map((file) => read(join('src', file)))
+      .map((source) => ({ source, at: source.indexOf("registerCommand('" + command + "'") }))
+      .find((one) => one.at !== -1);
+    assert.ok(handler !== undefined, command + ' is registered by nothing');
+    const next = handler.source.indexOf('registerCommand(', handler.at + 20);
+    assert.ok(!handler.source.slice(handler.at, next === -1 ? handler.source.length : next).includes('noteChatDoor('), command + ' records itself as a door although it opens no chat');
+  }
+  assert.ok(doors.includes('coai.askFromTerminal'), 'the census lost the terminal door, so the filter above may be hiding everything');
+  assert.ok(OPENS_NO_CHAT.every((one) => !ACTS_INSIDE_A_CHAT.includes(one)), 'a command is on both lists');
 });
 
 test('a keybinding scoped to our own picker is not a door, and nothing that is a door hides behind that scope', () => {

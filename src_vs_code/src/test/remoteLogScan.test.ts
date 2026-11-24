@@ -211,3 +211,15 @@ test('A3-T28: the plain rule stands in ONE file, and the two older copies call i
   }
   assert.ok(!/from\s*'\.\/remote(?:Ssh|Read)'/u.test(sourceOf('remoteAccountsReply.ts')), 'remoteAccountsReply.ts imports a file that imports it: an import circle');
 });
+
+// ───────────────── A4-T19: the scan reaches the files of the accounts list (E1.S4) ─────────────────
+
+test('A4-T19: the log scan reaches the rows and the host of the accounts list, and both are clean', () => {
+  const files = remoteFiles();
+  for (const wanted of ['remoteAccountsRows.ts', 'remoteAccountsHost.ts']) {
+    assert.ok(files.includes(wanted), `the name pattern does not find ${wanted}`);
+    assert.deepEqual(logLeaks(sourceOf(wanted)), [], `${wanted} writes stdout, an operand or an error's message to a log or a notice`);
+  }
+  assert.ok(/\bnotify\(/u.test(sourceOf('remoteAccountsHost.ts')), 'the host has no notify( call, so the scan of its notices matches nothing');
+  assert.ok(/\bdefaultRemoteSeams\(\)\.log\(/u.test(sourceOf('remoteAccountsHost.ts')), 'the host writes no log line, so the scan of its log matches nothing');
+});

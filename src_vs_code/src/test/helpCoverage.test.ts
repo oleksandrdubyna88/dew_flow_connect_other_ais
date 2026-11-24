@@ -917,3 +917,21 @@ test('S3-T11 every language’s chat article says what Add does for the skip lis
     assert.ok(!text.includes(epochOne[language]), `${where}: it still has the E1 sentence that only names coai.askFromTerminal`);
   }
 });
+
+test('A4-T17: the accounts list has an article in all five languages with five sections each, and every language names the command and its two title buttons', () => {
+  const article = HELP_ARTICLES.find((one) => one.id === 'ai-accounts-and-usage');
+  assert.ok(article !== undefined, 'the article ai-accounts-and-usage does not exist');
+  assert.ok(article.en.title.includes('AI accounts and usage'), 'the English title does not name the command');
+
+  for (const language of HELP_LANGUAGES) {
+    const { body, fallback } = bodyFor(article, language);
+    assert.equal(fallback, false, `untranslated: ai-accounts-and-usage/${language}`);
+    for (const [section, text] of Object.entries(body)) {
+      assert.ok(text.trim().length > (section === 'title' ? 10 : 60), `ai-accounts-and-usage/${language}: "${section}" is too short to be an answer`);
+    }
+    const said = Object.values(body).join(' ');
+    for (const word of ['**AI accounts and usage**', '**Refresh now**', '**Stop the accounts round**', '`coai.terminalAccountsAllowNewHosts`']) {
+      assert.ok(said.includes(word), `the ${language} article never names ${word}`);
+    }
+  }
+});

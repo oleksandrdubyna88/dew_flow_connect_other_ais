@@ -77,3 +77,48 @@ export async function theAccountsRoundCallsEachHostOnceAndStopsWithItsTerminals(
     await sessions.restore(before);
   }
 }
+
+/**
+ * A4-H1 of the accounts plan (E1.S4): the list in a real editor. The command `coai.terminalAccounts` is among `vscode.commands.getCommands`; with the
+ * fake call answering a reply whose email holds a "$(", one round is run, the command is executed, and `lastItems()` holds the group's separator with that
+ * email written "$ (", a `── Hosts ──` separator and one row for each host. The QuickPick is hidden in the `finally`.
+ *
+ * <p><b>What this cannot see, and what it checked (U10; the plan's K3).</b> What VS Code DRAWS for a "$(" in a label: no extension API reads a drawn
+ * row — checked in the locked type definitions, where `QuickPick` and `QuickPickItem` carry no such read and nothing else is offered. What it
+ * checked instead is the text handed to the list: the reply's email as the parser kept it (RAW, already plain: the parser calls `plainValue`) and the
+ * label of the separator as the list drew it. U10 stays open.</p>
+ */
+const RAW = 'x$(zap)@example.test';
+
+const REPLY = [
+  'COAI-ACCOUNTS 1', 'COAI-JQ found', 'COAI-VENDOR claude found', `:email ${RAW}`, ':org Example Org', ':version 2.1.326', 'COAI-USAGE claude skipped',
+  'COAI-VENDOR codex absent', 'COAI-VENDOR agy absent', 'COAI-ACCOUNTS-END', '',
+].join('\n');
+
+export async function theAccountsListShowsTheGroupsAndTheHosts(): Promise<void> {
+  const { accounts, sessions } = await doorsOf();
+  const before = await sessions.stored();
+  assert.ok((await vscode.commands.getCommands(true)).includes('coai.terminalAccounts'), 'coai.terminalAccounts is not a registered command');
+  accounts.replaceCall(() => Promise.resolve<RemoteRun>({ kind: 'answered', code: 0, stdout: REPLY }));
+  const name = `Creds: ${HOST_A} / s1`;
+  const terminal = vscode.window.createTerminal({ name });
+  try {
+    await until(() => vscode.window.terminals.some((one) => one.name === name), 'the terminal did not open');
+    assert.ok((await accounts.runRoundNow('timer')) !== undefined, 'the round did not run');
+
+    await vscode.commands.executeCommand('coai.terminalAccounts');
+    await until(() => accounts.lastItems().some((one) => one.kind === 'separator' && one.label === '── Hosts ──'), 'the list was never given its items');
+
+    const items = accounts.lastItems();
+    const group = items.find((one) => one.kind === 'separator' && one.label.startsWith('Claude Code'));
+    assert.ok(group !== undefined, `no Claude Code separator among ${items.map((one) => one.label).join(' | ')}`);
+    assert.ok(group.label.includes('x$ (zap)@example.test') && !group.label.includes('$(zap)'), `the label handed to the list is ${group.label}, raw email ${RAW}`);
+    const hostsAt = items.findIndex((one) => one.kind === 'separator' && one.label === '── Hosts ──');
+    assert.deepEqual(items.slice(hostsAt + 1).map((one) => one.label), [HOST_A], 'the Hosts part is not one row for each host');
+  } finally {
+    await vscode.commands.executeCommand('workbench.action.closeQuickOpen');
+    terminal.dispose();
+    accounts.replaceCall(undefined);
+    await sessions.restore(before);
+  }
+}

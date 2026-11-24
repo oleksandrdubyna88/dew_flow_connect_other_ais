@@ -302,6 +302,12 @@
         "category": "ConnectOtherAIs"
       },
       {
+        "command": "coai.terminalAccounts",
+        "title": "AI accounts and usage",
+        "category": "ConnectOtherAIs",
+        "icon": "$(account)"
+      },
+      {
         "command": "coai.chatNow",
         "title": "CoAI: default",
         "category": "ConnectOtherAIs"
@@ -1221,6 +1227,11 @@
           "command": "coai.askFromTerminal",
           "when": "view == terminal",
           "group": "navigation@90"
+        },
+        {
+          "command": "coai.terminalAccounts",
+          "when": "view == terminal",
+          "group": "navigation@91"
         },
         {
           "command": "coai.takeFromTerminal",

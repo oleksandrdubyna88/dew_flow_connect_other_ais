@@ -1,10 +1,11 @@
+import type { CopyDecision } from './copyText';
 import { agoWords } from './gaugeWords';
 import { ACCOUNTS_SECONDS, ACCOUNTS_UNREADABLE_SAID, plainValue } from './remoteAccountsReply';
 import type { ManagerWord } from './remoteAccountsReply';
 import { claudeAccountKey } from './remoteAccountsRound';
-import type { AccountsState, HostMemory, Memory } from './remoteAccountsRound';
+import type { AccountsState, HostMemory, Memory, StateChange } from './remoteAccountsRound';
 import { dayOf } from './remoteHosts';
-import type { HostStanding } from './remoteHosts';
+import type { Committed, HostStanding } from './remoteHosts';
 import { HOSTS_SAID } from './remoteHostsSaid';
 import { claudeLine, codexLine, weekResets } from './usageWords';
 import type { ClaudeWindowLike } from './usageWords';
@@ -429,3 +430,90 @@ const firstDue = (state: AccountsState, standings: readonly HostStanding[], firs
  */
 export const noticesDue = (state: AccountsState, standings: readonly HostStanding[], firstRoundEnded: boolean, nowMs: number): { readonly autoHosts: readonly string[]; readonly first: readonly string[] } =>
   ({ autoHosts: autoDue(state, standings, nowMs), first: firstDue(state, standings, firstRoundEnded) });
+
+/** What the notices need of the window. `state` is `undefined` over a state row that cannot be read: then nobody is told and nothing is written. */
+export interface NoticeSeams {
+  readonly state: () => AccountsState | undefined;
+  readonly standings: () => Promise<readonly HostStanding[]>;
+  readonly nowMs: () => number;
+  /** The daily notice: these hosts were allowed by the round itself. */
+  readonly allowed: (hosts: readonly string[]) => void;
+  /** The first-round notice: these hosts, which the person allowed before, are now read every 10 minutes. */
+  readonly everyTen: (hosts: readonly string[]) => void;
+  /** A field change of the state row. */
+  readonly commit: (change: StateChange) => Promise<unknown>;
+}
+
+/** The daily notice, then its time in the state row. */
+async function dailyNotice(seams: NoticeSeams, hosts: readonly string[]): Promise<void> {
+  if (hosts.length > 0) {
+    seams.allowed(hosts);
+    await seams.commit({ autoNoticed: new Date(seams.nowMs()).toISOString() });
+  }
+}
+
+/** The first-round notice, when it names hosts; its time is written whether or not it did, so an empty list is not asked again. */
+async function firstNotice(seams: NoticeSeams, hosts: readonly string[], due: boolean): Promise<void> {
+  if (!due) {
+    return;
+  }
+  if (hosts.length > 0) {
+    seams.everyTen(hosts);
+  }
+  await seams.commit({ told: new Date(seams.nowMs()).toISOString() });
+}
+
+/** After a round: what is due (`noticesDue`) is told and its time committed. `firstRoundEnded` is true for a round that was not abandoned. */
+export async function tellAfterRound(seams: NoticeSeams, firstRoundEnded: boolean): Promise<void> {
+  const state = seams.state();
+  if (state === undefined) {
+    return;
+  }
+  const due = noticesDue(state, await seams.standings(), firstRoundEnded, seams.nowMs());
+  await dailyNotice(seams, due.autoHosts);
+  await firstNotice(seams, due.first, firstRoundEnded && state.toldUtc === undefined);
+}
+
+// ───────────────── choosing a row, and the copy button ─────────────────
+
+/** What a press needs of the window and the road: all of them ARE the people's own doors. */
+export interface ChooseSeams {
+  readonly change: (host: string) => Promise<void>;
+  readonly ask: (host: string) => Promise<void>;
+  /** The press that takes a lock over and lands what waits (S1 X21): bound by the host to the one call that may. */
+  readonly save: () => Promise<Committed>;
+  readonly start: () => Promise<boolean>;
+  readonly refresh: () => Promise<unknown>;
+}
+
+const PRESS: Readonly<Record<HostPress, (host: string, seams: ChooseSeams) => Promise<void>>> = {
+  change: (host, seams) => seams.change(host),
+  ask: (host, seams) => seams.ask(host),
+  save: async (_host, seams) => {
+    if ((await seams.save()).kind === 'written') {
+      await seams.refresh();
+    }
+  },
+};
+
+const started = async (seams: ChooseSeams): Promise<'start-failed' | undefined> => ((await seams.start()) ? undefined : 'start-failed');
+
+/** What choosing a row does: a host row by its press; the start row starts the round; any other row nothing. Answers `start-failed` for a start that was not saved. */
+export async function choose(row: Row, seams: ChooseSeams): Promise<'start-failed' | undefined> {
+  if (row.kind === 'host') {
+    await PRESS[row.press](row.host, seams);
+
+    return undefined;
+  }
+
+  return row.kind === 'info' && row.action === 'start' ? started(seams) : undefined;
+}
+
+/** The copy button of a row: exactly the row's own `copy`, never a text built from a reply; a row with none copies nothing. */
+export function copyDecisionFor(row: Row): CopyDecision {
+  if (row.kind !== 'host' || row.copy === undefined) {
+    return { kind: 'refused', said: 'There is no command to copy on this row.' };
+  }
+
+  return { kind: 'copy', text: row.copy, done: 'The command is copied.', failed: 'The command could not be copied.' };
+}

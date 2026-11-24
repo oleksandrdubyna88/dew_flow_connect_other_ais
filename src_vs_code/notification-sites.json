@@ -4,12 +4,12 @@
     "The plan, the todo/README row and the Definition of Done quote THIS file, so that a call",
     "site added tomorrow turns a test red instead of making three documents quietly wrong."
   ],
-  "sites": 186,
+  "sites": 188,
   "direct": 0,
   "modal": 27,
-  "events": 159,
+  "events": 161,
   "inTheFunnel": 3,
-  "routed": 186,
+  "routed": 188,
   "byApi": {
     "showInformationMessage": 0,
     "showWarningMessage": 0,
@@ -19,6 +19,8 @@
   "codes": [
     "a-catalog-edit-refused",
     "a-review-is-waiting",
+    "accounts-hosts-allowed",
+    "accounts-read-every-ten-minutes",
     "add-a-server-that-could-not-be-checked",
     "adopt-a-data-directory",
     "answer-not-written",

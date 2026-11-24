@@ -59,7 +59,8 @@ test('A1-T18: the host half is wired as written', () => {
   assert.match(host, /registerCommand\('coai\.terminalHosts', \(\) =>/u, 'the handler of the command takes a parameter');
   assert.equal(countIn(host, /'person'\s*\)|take: 'person'/gu) === 0, true, 'the host passes the person take itself');
   assert.equal(countIn(host, /saveWaiting\(\)/gu) >= 1, true);
-  for (const file of ['remoteAccountsRound.ts', 'remoteAccountsHost.ts']) {
+  // The list's choice binding in remoteAccountsHost.ts is the ONE call site of the accounts modules (E1.S4, A4-T20, in remoteAccountsList.test.ts); the round has none.
+  for (const file of ['remoteAccountsRound.ts']) {
     assert.ok(!(() => { try { return /saveWaiting\(/u.test(readFileSync(join(__dirname, '..', '..', 'src', file), 'utf8')); } catch { return false; } })(), `the round calls saveWaiting: ${file}`);
   }
   assert.equal(countIn(host, /kind: 'mend'/gu), 1, 'kind: mend is written in more than one place of the host file');
