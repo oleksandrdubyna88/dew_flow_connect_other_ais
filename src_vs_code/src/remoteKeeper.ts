@@ -295,6 +295,7 @@ class Keeper implements HostKeeper {
   /** The side as one decision needs it: read, with what waits landed, and the copy-in done. */
   private async sync(): Promise<RefusalsRead> {
     let read = await this.look();
+    await this.dropLanded(read);
     if (this.anyWaiting(read)) {
       await this.landAll(read);
       read = await this.look();

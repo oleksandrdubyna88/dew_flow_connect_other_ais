@@ -109,7 +109,10 @@ export class FakeDisk implements RefusalsDisk {
     this.files.set('refused.json', text);
   };
 
-  sweep: RefusalsDisk['sweep'] = async () => undefined;
+  /** Awaited at the sweep, which comes just before the writer looks at its claim (step 5): a test holds a writer here. */
+  beforeSweep: (() => Promise<void>) | undefined;
+
+  sweep: RefusalsDisk['sweep'] = async () => { await this.beforeSweep?.(); };
 
   mark: RefusalsDisk['mark'] = async (text) => {
     const markers = [...this.files.keys()].filter((name) => name.startsWith('unsure-'));

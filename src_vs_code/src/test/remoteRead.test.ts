@@ -13,6 +13,7 @@ import {
 } from '../remoteRead';
 import type { HostAnswer, HostStanding } from '../remoteHosts';
 import { HOSTS_SAID } from '../remoteHostsSaid';
+import type { RefusalChange, RefusalsFile } from '../remoteRefusals';
 import { Backing, FakeDisk, KEY, windowOver } from './hostsFakes';
 import { RemoteCall, TAIL_MAX, operandsOf } from '../remoteScript';
 import { RemoteRun } from '../remoteSsh';
@@ -758,4 +759,51 @@ test('S3-T19: one session of the name in a scan that did not read everything is 
   await remoteRoad(road.seams, NAME, 'prompts');
   assert.deepEqual(road.w.partials, [true], 'the person was not shown a list that says not every session was read');
   assert.equal(road.w.runs.length, 2, 'the one session of a cut scan was read before the person chose it');
+});
+
+const AUTO_ROW = [{ host: H, answer: 'yes', askedUtc: '2026-11-20T00:00:00.000Z', how: 'auto' }];
+
+test('A1-T12: the session doors — the setting, the automatic row, and what each answer writes', async () => {
+  // setting on, an automatic row: no question, one run
+  const on = world({ list: AUTO_ROW, answer: 'no' });
+  assert.equal((await remoteRoad(on.seams, NAME, 'question')).kind, 'lines');
+  assert.deepEqual([on.w.asks.length, on.w.runs.length], [0, 1], 'an automatically allowed host was asked about with the setting on');
+  // no row: one question
+  const none = world({ list: [], answer: 'yes' });
+  await remoteRoad(none.seams, NAME, 'question');
+  assert.equal(none.w.asks.length, 1);
+  // setting off, an automatic row: one question, and the person's Read makes a row with no `how`
+  const off = world({ list: AUTO_ROW, answer: 'yes' });
+  off.w.setting.on = false;
+  await remoteRoad(off.seams, NAME, 'question');
+  assert.deepEqual([off.w.asks.length, off.w.runs.length], [1, 1], 'an automatically allowed host was read without a question with the setting off');
+  const rows = off.w.backing.values.get(KEY) as { how?: string; answer: string }[];
+  assert.deepEqual([rows.length, rows[0]?.how, rows[0]?.answer], [1, undefined, 'yes']);
+  // Not this host
+  const no = world({ list: AUTO_ROW, answer: 'no' });
+  no.w.setting.on = false;
+  await remoteRoad(no.seams, NAME, 'question');
+  assert.equal(no.w.runs.length, 0);
+  assert.equal(await no.w.keeper.consent(H), 'no');
+  // Escape: the row is still the automatic one, nothing written, nothing run
+  const escape = world({ list: AUTO_ROW, answer: undefined });
+  escape.w.setting.on = false;
+  const refused = await remoteRoad(escape.seams, NAME, 'question');
+  assert.equal(refused.kind, 'refused');
+  assert.deepEqual([escape.w.view.updates.length, escape.w.runs.length], [0, 0]);
+  assert.deepEqual(escape.w.backing.values.get(KEY), AUTO_ROW);
+  // a person's yes with the setting off: no question
+  const person = world({ answer: 'no' });
+  person.w.setting.on = false;
+  await remoteRoad(person.seams, NAME, 'question');
+  assert.deepEqual([person.w.asks.length, person.w.runs.length], [0, 1]);
+});
+
+test('A1-T12: the road is given no list to write, and a refusals file is no change of the file', () => {
+  // @ts-expect-error — a store that takes a list to write is not a RoadSeams store
+  const withWrite: RoadSeams['store'] = { consent: async () => 'yes', answer: async () => ({ kind: 'kept', row: undefined }), write: async () => undefined };
+  const file: RefusalsFile = { v: 1, gen: 1, by: 'x', refused: [] };
+  // @ts-expect-error — the writer of the file takes a change, never a content
+  const change: RefusalChange = file;
+  assert.ok(withWrite !== undefined && change !== undefined);
 });

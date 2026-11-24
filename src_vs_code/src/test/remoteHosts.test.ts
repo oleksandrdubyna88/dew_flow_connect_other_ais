@@ -2,8 +2,9 @@ import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { HostChange, HostStanding, commit, consentOf, dayOf, hostMerge, listedHosts, readableOf, standingsOf } from '../remoteHosts';
-import { EMPTY_FILE, RefusalsRead } from '../remoteRefusals';
-import { Backing, FakeDisk, KEY, row, view, windowOver } from './hostsFakes';
+import type { KeeperSeams } from '../remoteKeeper';
+import { EMPTY_FILE, RefusalsRead, refusalsStore, textOf } from '../remoteRefusals';
+import { Backing, FakeDisk, KEY, instant, row, view, windowOver } from './hostsFakes';
 
 /**
  * The store of the hosts (E1.S1): the rows, the merge, the cap, the damage rule, the keeper over both. Pure: a fake `globalState` that
@@ -528,4 +529,276 @@ test('words: dayOf and the standing', () => {
   assert.equal(dayOf('x'), 'an unknown day');
   const standing: HostStanding = { host: 'h', answer: 'yes', how: 'auto', askedUtc: NOW };
   assert.deepEqual(standingsOf([row('h', 'yes', NOW, 'auto')]), [standing]);
+});
+
+// ───────────────────────── the sub-cases and the checks the first pass left out ─────────────────────────
+
+const SIDE_STATE = 'coai.terminalAccountsState';
+
+test('A1-T15: the door of the round never asks, and names no member for damage', async () => {
+  const base = {
+    state: view(new Backing()), key: KEY, refusals: refusalsStore(new FakeDisk(), () => 0, instant), now: () => NOW, allowNew: () => true,
+    changed: () => undefined, unkept: () => undefined,
+  };
+  // @ts-expect-error — a seam that asks a person is not a KeeperSeams
+  const withAsk: KeeperSeams = { ...base, ask: async () => 'yes' };
+  // @ts-expect-error — a seam for a notice of damage is not a KeeperSeams (a damaged list or file has no notice of its own)
+  const withDamaged: KeeperSeams = { ...base, damaged: () => undefined };
+  assert.ok(withAsk !== withDamaged);
+  assert.ok(!Object.keys(base).some((name) => name.toLowerCase().includes('ask')), 'a member of the seams holds "ask"');
+  for (const on of [true, false]) {
+    const w = windowOver(new Backing(), new FakeDisk(), { on });
+    for (let n = 0; n < 100; n += 1) {
+      const admission = await w.keeper.admit(`new${n}`);
+      assert.ok(admission.kind === 'read' || admission.kind === 'not-asked' || admission.kind === 'full', `the door answered ${admission.kind}`);
+    }
+    assert.deepEqual(w.unkept, [], 'the door of the round raised something');
+  }
+});
+
+test('A1-T3 (b) and (d): no then auto with a fresh view, and a stale commitKey erases the copy', async () => {
+  const backing = new Backing();
+  const disk = new FakeDisk();
+  const a = windowOver(backing, disk, { mode: 'whole-state' });
+  const b = windowOver(backing, disk, { mode: 'whole-state' });
+  await a.keeper.commit({ kind: 'person', host: 'h', answer: 'no' });
+  b.view.sync();
+  assert.equal((await b.keeper.admit('h')).kind, 'refused', '(b) no, then auto, with a fresh view');
+  // (d) B is stale again (a window opened before A's write) and writes the state row: the whole object goes out
+  const stale = windowOver(new Backing(), disk, { mode: 'whole-state' });
+  await stale.keeper.commitKey(SIDE_STATE, { n: 1 }, () => ({ next: { value: { n: 1 } }, result: 1 }));
+  backing.values.clear();
+  backing.values.set(KEY, []);
+  for (const w of [a, b, stale]) {
+    w.view.sync();
+    assert.equal((await w.keeper.admit('h')).kind, 'refused', '(d) h was read after a stale write of another key');
+  }
+});
+
+test('A1-T6 (b2), (c2), (d), (e): the sub-cases of a lift inside the lag', async () => {
+  // (b2) Read in B while A is stale: A copies the old "no" back into the file (residual 4)
+  const backing = new Backing();
+  const disk = new FakeDisk();
+  const a = windowOver(backing, disk);
+  const b = windowOver(backing, disk);
+  await a.keeper.commit({ kind: 'person', host: 'h', answer: 'no' });
+  b.view.sync();
+  await b.keeper.commit({ kind: 'person', host: 'h', answer: 'yes' });
+  assert.deepEqual(disk.refusedHosts(), []);
+  assert.equal((await a.keeper.admit('h')).kind, 'refused', '(b2) the stale view did not copy the old no in');
+  assert.deepEqual(disk.refusedHosts(), ['h']);
+  a.view.sync();
+  assert.equal((await a.keeper.admit('h')).kind, 'refused');
+  assert.equal((await b.keeper.admit('h')).kind, 'refused');
+  await a.keeper.commit({ kind: 'person', host: 'h', answer: 'yes' });
+  assert.equal((await b.keeper.admit('h')).kind, 'read', 'one more Read after the sync did not lift it');
+  assert.deepEqual(disk.refusedHosts(), []);
+  // (c2) Forget in B, A reads inside the lag
+  const backing2 = new Backing();
+  const disk2 = new FakeDisk();
+  const c = windowOver(backing2, disk2);
+  const d = windowOver(backing2, disk2);
+  await c.keeper.commit({ kind: 'person', host: 'k', answer: 'no' });
+  d.view.sync();
+  await d.keeper.commit({ kind: 'forget', host: 'k' });
+  assert.equal((await c.keeper.admit('k')).kind, 'refused', '(c2) the refusal did not come back inside the lag');
+  // (d) Forget in A with an admit of A queued behind it
+  const backing3 = new Backing();
+  const disk3 = new FakeDisk();
+  const e = windowOver(backing3, disk3);
+  await e.keeper.commit({ kind: 'person', host: 'm', answer: 'no' });
+  const forget = e.keeper.commit({ kind: 'forget', host: 'm' });
+  const next = e.keeper.admit('m');
+  await forget;
+  assert.deepEqual(await next, { kind: 'read', how: 'auto', allowedNow: true }, '(d) the lift was met half-way by the queued admit');
+  assert.deepEqual(disk3.refusedHosts(), []);
+  // (e) an old no is put back by a stale whole-state write
+  backing3.values.set(KEY, [row('m', 'no')]);
+  e.view.sync();
+  assert.equal((await e.keeper.admit('m')).kind, 'refused', '(e) the old no put back was read');
+  assert.deepEqual(disk3.refusedHosts(), ['m']);
+  await e.keeper.commit({ kind: 'person', host: 'm', answer: 'yes' });
+  assert.equal((await e.keeper.admit('m')).kind, 'read');
+});
+
+test('A1-T9: a refusal that lands after the first read and before the answer still stops the call', async () => {
+  const backing = new Backing();
+  const disk = new FakeDisk();
+  const w = windowOver(backing, disk);
+  const inner = w.view;
+  const refusing = windowOver(backing, disk);
+  // The automatic row's write is the moment another window refuses the host.
+  const original = inner.update;
+  inner.update = async (key, value) => {
+    await original(key, value);
+    await refusing.keeper.commit({ kind: 'person', host: 'h', answer: 'no' });
+  };
+  assert.equal((await w.keeper.admit('h')).kind, 'refused', 'a “no” given between two calls did not stop the second');
+});
+
+test('A1-T10: the admission does not resolve before the automatic row is stored', async () => {
+  const backing = new Backing();
+  const w = windowOver(backing, new FakeDisk());
+  let release: () => void = () => undefined;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  const original = w.view.update;
+  w.view.update = async (key, value) => { await gate; await original(key, value); };
+  const seen: string[] = [];
+  const pending = w.keeper.admit('h').then((admission) => seen.push(admission.kind));
+  for (let n = 0; n < 20; n += 1) {
+    await new Promise<void>((resolve) => { setImmediate(resolve); });
+  }
+  assert.deepEqual(seen, [], 'the host was answered “read” before its row was stored');
+  release();
+  await pending;
+  assert.deepEqual(seen, ['read']);
+});
+
+test('A1-T24 (the rest): no marker either; a closed window; a Read for a held host', async () => {
+  // No marker either: only this window knows (residual 5d)
+  const disk = new FakeDisk();
+  disk.lock = { token: 'hung' };
+  disk.failMark = true;
+  const a = windowOver(new Backing(), disk);
+  assert.deepEqual(await a.keeper.commit({ kind: 'person', host: 'h', answer: 'no' }), { kind: 'unwritten', why: 'busy' });
+  assert.deepEqual(a.unkept, [{ host: 'h', why: 'busy', marked: false }]);
+  assert.equal((await a.keeper.admit('g')).kind, 'unwritten');
+  assert.equal(disk.markers().length, 0);
+  assert.equal((await windowOver(new Backing(), disk).keeper.admit('g')).kind, 'read', 'residual 5d: another window of the side reads on');
+  // The window is closed while it holds one, with its marker made: after a reload with the lock free the first admit lands it
+  const disk2 = new FakeDisk();
+  disk2.lock = { token: 'hung' };
+  const backing2 = new Backing();
+  await windowOver(backing2, disk2).keeper.commit({ kind: 'person', host: 'h', answer: 'no' });
+  assert.equal(disk2.markers().length, 1);
+  disk2.ownerAlive = false;
+  const reloaded = windowOver(backing2, disk2);
+  assert.equal((await reloaded.keeper.admit('g')).kind, 'read');
+  assert.deepEqual(disk2.refusedHosts(), ['h'], 'the file has no h after a reload');
+  // A Read for a held host leaves the memory and removes its marker
+  const disk3 = new FakeDisk();
+  disk3.lock = { token: 'hung' };
+  const c = windowOver(new Backing(), disk3);
+  await c.keeper.commit({ kind: 'person', host: 'h', answer: 'no' });
+  assert.equal(await c.keeper.held(), 1);
+  assert.deepEqual(await c.keeper.commit({ kind: 'person', host: 'h', answer: 'yes' }), { kind: 'unwritten', why: 'busy' }, 'a lift under a held lock is not written');
+  disk3.lock = undefined;
+  await c.keeper.commit({ kind: 'person', host: 'h', answer: 'yes' });
+  assert.equal(await c.keeper.held(), 0);
+  assert.equal(disk3.markers().length, 0, 'the marker of a lifted refusal stayed');
+  assert.equal((await c.keeper.admit('g')).kind, 'read');
+  assert.deepEqual(disk3.refusedHosts(), [], 'a lifted refusal was written later');
+});
+
+test('A1-T25 (the rest): a refused copy-in, a deleted file, a damaged list, the two sides', async () => {
+  const backing = new Backing();
+  const disk = new FakeDisk();
+  backing.values.set(KEY, [row('n1', 'no')]);
+  disk.failReplace = true;
+  const a = windowOver(backing, disk);
+  assert.equal((await a.keeper.admit('z')).kind, 'unwritten', 'a copy-in the disk refuses was not held');
+  assert.ok(a.unkept.some((one) => one.host === 'n1' && one.why === 'disk'));
+  assert.equal(disk.markers().length, 1);
+  assert.equal((await a.keeper.consent('n1')), 'no', 'the row did not count as a copy');
+  disk.failReplace = false;
+  assert.equal((await a.keeper.admit('z')).kind, 'read', 'the next admit did not try again');
+  assert.deepEqual(disk.refusedHosts(), ['n1']);
+  assert.deepEqual(backing.values.get(KEY), [row('n1', 'no'), { host: 'z', answer: 'yes', askedUtc: new Date(disk.now).toISOString(), how: 'auto' }], 'the copy-in changed the shared list');
+  // a file deleted after the first copy-in
+  disk.files.delete('refused.json');
+  assert.equal((await a.keeper.admit('z')).kind, 'read');
+  assert.deepEqual(disk.refusedHosts(), ['n1'], 'the deleted file was not written again');
+  // a damaged list: no copy-in; after the mend the copy-in runs
+  const b2 = new Backing();
+  const d2 = new FakeDisk();
+  b2.values.set(KEY, [row('n2', 'no'), 'junk']);
+  const w = windowOver(b2, d2);
+  assert.equal((await w.keeper.admit('z')).kind, 'damaged');
+  assert.equal(d2.file(), undefined, 'a damaged list was copied in');
+  await w.keeper.commit({ kind: 'mend', host: 'q', answer: 'yes' });
+  await w.keeper.admit('z');
+  assert.ok(d2.refusedHosts().includes('n2'), 'the copy-in did not run after the mend');
+  // two sides: the copy lost BEFORE the other side has read (residual 2), then Forget and Read per side
+  const shared = new Backing();
+  const side1 = new FakeDisk();
+  const side2 = new FakeDisk();
+  const s1 = windowOver(shared, side1, { mode: 'whole-state' });
+  const s2 = windowOver(shared, side2, { mode: 'whole-state' });
+  await s1.keeper.commit({ kind: 'person', host: 'q', answer: 'no' });
+  shared.values.set(KEY, []);
+  s2.view.sync();
+  assert.equal((await s1.keeper.admit('q')).kind, 'refused');
+  assert.equal((await s2.keeper.admit('q')).kind, 'read', 'residual 2 was not asserted');
+  const t1 = windowOver(new Backing(), new FakeDisk());
+  const back = new Backing();
+  const d1 = new FakeDisk();
+  const dd2 = new FakeDisk();
+  const x1 = windowOver(back, d1);
+  const x2 = windowOver(back, dd2);
+  assert.ok(t1);
+  await x1.keeper.commit({ kind: 'person', host: 'h', answer: 'no' });
+  x2.view.sync();
+  assert.equal((await x2.keeper.admit('h')).kind, 'refused');
+  await x2.keeper.commit({ kind: 'forget', host: 'h' });
+  assert.equal((await x2.keeper.admit('h')).kind, 'read', 'Forget on side 2 did not allow it there');
+  assert.equal((await x1.keeper.admit('h')).kind, 'refused', 'Forget on side 2 reached side 1');
+  await x1.keeper.commit({ kind: 'person', host: 'h', answer: 'yes' });
+  assert.equal((await x1.keeper.admit('h')).kind, 'read');
+});
+
+test('A1-T26 (the rest): the cap of markers, a marker already in the file, a disk that refuses the file', async () => {
+  const disk = new FakeDisk();
+  disk.lock = { token: 'hung' };
+  for (let n = 0; n < 32; n += 1) {
+    disk.files.set(`unsure-${n}.json`, JSON.stringify({ v: 1, kind: 'refuse', host: `m${n}`, utc: NOW }));
+  }
+  const w = windowOver(new Backing(), disk);
+  assert.equal((await w.keeper.admit('g')).kind, 'unwritten', 'the side is stopped by the 32 markers already there');
+  await w.keeper.commit({ kind: 'person', host: 'x', answer: 'no' });
+  assert.deepEqual(w.unkept.find((one) => one.host === 'x'), { host: 'x', why: 'busy', marked: false }, 'the 33rd marker was made');
+  // a marker whose change is already in the file stops nothing and is removed
+  const d2 = new FakeDisk();
+  const store = refusalsStore(d2, () => d2.now, instant);
+  await store.commit({ kind: 'refuse', host: 'h', utc: NOW });
+  d2.files.set('unsure-a.json', JSON.stringify({ v: 1, kind: 'refuse', host: 'h', utc: NOW }));
+  const w2 = windowOver(new Backing(), d2);
+  assert.equal((await w2.keeper.admit('g')).kind, 'read');
+  assert.equal(d2.markers().length, 0, 'a marker whose change is in the file was not removed');
+  // the disk refuses the file and takes the marker
+  const d3 = new FakeDisk();
+  d3.failReplace = true;
+  const bk = new Backing();
+  const w3 = windowOver(bk, d3);
+  await w3.keeper.commit({ kind: 'person', host: 'h', answer: 'no' });
+  assert.equal(d3.markers().length, 1);
+  assert.equal((await windowOver(bk, d3).keeper.admit('g')).kind, 'unwritten');
+  d3.failReplace = false;
+  assert.equal((await windowOver(bk, d3).keeper.admit('g')).kind, 'read');
+  assert.deepEqual(d3.refusedHosts(), ['h']);
+});
+
+test('A1-T27 (the keeper half): a writer that woke up after a take-over loses nobody\'s refusal', async () => {
+  const disk = new FakeDisk();
+  const backing = new Backing();
+  const b = windowOver(backing, disk, { mode: 'whole-state' });
+  const c = windowOver(backing, disk, { mode: 'whole-state' });
+  await b.keeper.commit({ kind: 'person', host: 'h', answer: 'no' });
+  await c.keeper.admit('probe');
+  const written = disk.file() as { gen: number };
+  // a stale writer renames a file of the same gen and another writer over it: it holds g and not h
+  disk.files.set('refused.json', textOf({ v: 1, gen: written.gen, by: 'woke-up', refused: [{ host: 'g', utc: NOW }] }));
+  assert.equal((await b.keeper.admit('h')).kind, 'refused', 'the remembered refusal did not count between the rename and the union');
+  assert.deepEqual(disk.refusedHosts(), ['g', 'h'], 'the union was not written');
+  // B is closed before its next read; a third window that had read the newer file writes the union
+  assert.equal((await c.keeper.admit('probe')).kind, 'read');
+  disk.files.set('refused.json', textOf({ v: 1, gen: written.gen, by: 'woke-up-too', refused: [{ host: 'g', utc: NOW }] }));
+  assert.equal((await c.keeper.admit('probe')).kind, 'read');
+  assert.deepEqual(disk.refusedHosts(), ['g', 'h'], 'a window that saw the newer file did not write the union');
+  // no window that saw it: the copy is gone too, the host is read (residual 5b, asserted so that it is seen)
+  const d = new FakeDisk();
+  const bk = new Backing();
+  await windowOver(bk, d).keeper.commit({ kind: 'person', host: 'h', answer: 'no' });
+  d.files.set('refused.json', textOf({ v: 1, gen: 9, by: 'woke-up', refused: [] }));
+  bk.values.set(KEY, []);
+  assert.equal((await windowOver(bk, d).keeper.admit('h')).kind, 'read', 'residual 5b: nothing remembered and no copy');
 });
