@@ -97,6 +97,23 @@ sequenceDiagram
 | `ICitedPaths`, `CitedAsWritten`, `ReviewerInvocation.Citations` | `Reviewers/LaunchTurn.cs`, `ReviewerRuntime.cs` | how a reviewer's cited file becomes the repository's: `ReviewSnapshot` maps an absolute path under its root back through its manifest; `ReviewerExecutor.Cited` applies it to every finding after the parse; set by the roster, never by an adapter |
 | `VibeRuntime`, `VibeLaunch`, `VibeModels`, `VibeHome`, `VibePluginStarters`, `VibeHomeManifest`, `VibeHomeTurns`, `VibeExport`, `VibeStdout` | `Vibe/*.cs` | Mistral Vibe as a reviewer (S2, 2026-10-13) — the section *The Vibe reviewer* below |
 
+**The agy hook's own folder, local-only reads and dot rule (2026-11-18, `todo/PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text.md`; the `AntigravityReadOnly` row above is the state of 2026-11-16).**
+- `Reviewers/HookSite.cs`: `HookSite(CoaiFolder, Read, IsLocal, FoldsDotsAsText)` is what one hook process knows by itself and never takes from
+  the payload. `OfThisProcess()` never throws: its coai folder is `CoaiFolderOf(Directory.GetCurrentDirectory())`, the parent of a working
+  folder named `.agents` (text only), else null; `Read` is `RealPath.Lstat`; `IsLocal` is `Junctions.IsLocal` with this OS's drive table;
+  `FoldsDotsAsText` is `OperatingSystem.IsWindows()`. `AntigravityReadOnly.Decide(payload, site, log)` and `RunHook(..., site)` take it.
+  The payload's `cwd` is validated and names nothing, because agy sorts `workspacePaths` and its first entry is `cwd`. A null or unresolvable
+  coai folder denies every read, with one constant line to standard error.
+- `Reviewers/AgyHookPlaces.cs`: the place check, moved out of `AntigravityReadOnly`. It names no file-system type. Its one
+  `RealPath.Resolve` call gets `Guarded(site.Read, site.IsLocal)`, which throws an `IOException` with a constant message for a path that is
+  not local before it calls the inner reader, and a resolve that is `Ok` counts only when its result is local. `HasDotSegment` is the
+  Windows rule: `Path` has no segment that is exactly `.` or `..`. A `Path` that starts with two separators is denied on every OS.
+- `Files/Junctions.cs`: `IsLocal(target, driveType, windows)`, the overload the hook uses; the one-argument forms pass this OS. The Unix arm is text
+  only (rooted by `/`, not `//`, not under `/net/`, `/misc/`, `/Network/`).
+- `Files/RealPath.cs`: a remark says its `..` rule is the Unix kernel's; Win32 folds `..` as text, so a caller that authorises a spelling for
+  another program to open on Windows refuses dot segments itself. The rule is unchanged.
+
+
 ## The decisions a reader needs
 
 - **Neutral shared instructions are part of the review sample.** `RuleFiles` includes

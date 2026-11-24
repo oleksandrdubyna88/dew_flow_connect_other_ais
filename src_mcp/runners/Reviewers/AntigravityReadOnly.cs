@@ -28,7 +28,7 @@ namespace CoaiMcp.Runners.Reviewers;
 /// a quoted absolute path in the hook's own command broke under <c>cmd /c</c> on Windows (the probe's first run). Inside
 /// a script the quotes are ordinary.</para>
 /// <para><b>The hook checks the place too.</b> A reader is allowed only on a file inside a folder the launch was given — the
-/// <c>workspacePaths</c> of the payload, resolved through links — and never inside the coai folder (the payload's <c>cwd</c>);
+/// <c>workspacePaths</c> of the payload, resolved through links — and never inside the coai folder, which the hook knows from where it runs (the parent of its own <c>.agents</c> working folder), not from the payload's <c>cwd</c>;
 /// see <see cref="Decide"/>.</para>
 /// </remarks>
 public static class AntigravityReadOnly
@@ -217,23 +217,29 @@ public static class AntigravityReadOnly
     /// this code does not understand never lets a write or a read outside through. Never throws.
     /// </summary>
     /// <param name="payload">The text on the hook's standard input.</param>
-    /// <param name="read">How one entry is looked at; the real file system when null (the seam <see cref="RealPath.Resolve"/> has).</param>
+    /// <param name="site">What this hook process knows by itself: the coai folder (where the hook runs), and how an entry is looked at (the seam <see cref="RealPath.Resolve"/> has).</param>
     /// <param name="log">Where the one line a caught exception leaves goes — its type only; standard error when null.</param>
     /// <remarks>
     /// <para>Read from the payload's own <c>toolCall.name</c>, never by searching its text: a tool's ARGUMENTS can
     /// contain any string, the name of an allowed tool included.</para>
     /// <para><b>The place</b> (research/PLAN_the_agy_hook_checks_the_path.md, S1): <c>toolCall.args.Path</c>, <c>cwd</c> and every entry of
-    /// <c>workspacePaths</c> must be fully qualified — so the hook process's own directory, which is the coai folder, is no base —
-    /// and are resolved with <see cref="RealPath"/>, root-down, links followed, the last name included. The target must be inside one
-    /// resolved entry and NOT inside the resolved <c>cwd</c> (the coai folder: the hook script, the agent file). A payload with two
+    /// <c>workspacePaths</c> must be fully qualified — so the hook process's own directory is no base — and are resolved with
+    /// <see cref="RealPath"/>, root-down, links followed, the last name included. The target must be inside one resolved entry and NOT
+    /// inside the resolved coai folder (the hook script, the agent file), which the hook knows from where it runs
+    /// (<see cref="HookSite.CoaiFolder"/>), never from the payload: agy sends the first of its sorted <c>workspacePaths</c> as <c>cwd</c>, and that
+    /// is a granted root whenever one sorts before the coai folder. The payload's <c>cwd</c> is validated and names nothing. A payload with two
     /// spellings of <c>Path</c>, a duplicate property, or any entry that does not resolve is denied whole. Both denials are constants:
     /// <see cref="DenyReason"/> for the tool, <see cref="DenyOutsideReason"/> for the place; neither quotes the model's path.</para>
+    /// <para><b>Local paths only, and no dot segment where text folds</b> (research/PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text.md): every look at the disk goes
+    /// through a reader that refuses a path that is not local before any I/O (looking at a share offers the user's credentials to its host), and every resolved path
+    /// must be local too; a <c>Path</c> that starts with two separators is denied by its spelling on every OS; where the OS folds <c>.</c> and <c>..</c> as text
+    /// (<see cref="HookSite.FoldsDotsAsText"/>, Windows) a <c>Path</c> with such a segment is denied.</para>
     /// </remarks>
-    public static string Decide(string payload, EntryReader? read = null, TextWriter? log = null)
+    public static string Decide(string payload, HookSite site, TextWriter? log = null)
     {
         try
         {
-            return Decision(payload, read, log);
+            return Decision(payload, site, log);
         }
         catch (Exception e)
         {
@@ -244,17 +250,19 @@ public static class AntigravityReadOnly
         }
     }
 
-    private static string Decision(string payload, EntryReader? read, TextWriter? log) =>
+    private static string Decision(string payload, HookSite site, TextWriter? log) =>
         Parse(payload) is not { } call || !HookAllowedTools.Contains(ToolName(call), StringComparer.Ordinal)
             ? Deny(DenyReason)
-            : ReadsInside(call, read, log) ? """{"decision":"allow"}""" : Deny(DenyOutsideReason);
+            : ReadsInside(call, site, log) ? """{"decision":"allow"}""" : Deny(DenyOutsideReason);
 
     /// <summary>One line on standard error (or <paramref name="log"/>): the exception's TYPE only — its message can quote the model's path.</summary>
-    private static void Report(Exception e, TextWriter? log)
+    private static void Report(Exception e, TextWriter? log) => WriteLine($"coai {HookArgument}: denied after {e.GetType().Name}", log);
+
+    private static void WriteLine(string line, TextWriter? log)
     {
         try
         {
-            (log ?? Console.Error).WriteLine($"coai {HookArgument}: denied after {e.GetType().Name}");
+            (log ?? Console.Error).WriteLine(line);
         }
         catch (Exception logging) when (logging is IOException or ObjectDisposedException)
         {
@@ -279,15 +287,15 @@ public static class AntigravityReadOnly
     private static string ToolName(JsonObject call) =>
         call["toolCall"] is JsonObject tool && Text(tool["name"]) is { } name ? name : string.Empty;
 
-    private static string? Text(JsonNode? node) =>
+    internal static string? Text(JsonNode? node) =>
         node is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;
 
     /// <summary>The one place the process edge catches everything: a handler that answers nothing let a write through on Windows (research/RESULTS_agy_write_block.md).</summary>
-    private static bool ReadsInside(JsonObject call, EntryReader? read, TextWriter? log)
+    private static bool ReadsInside(JsonObject call, HookSite site, TextWriter? log)
     {
         try
         {
-            return Placed(call, read) is { } places && places.Allows();
+            return KnowsItsFolder(site, log) && AgyHookPlaces.Allows(call, site);
         }
         catch (Exception e)
         {
@@ -297,51 +305,29 @@ public static class AntigravityReadOnly
         }
     }
 
-    /// <summary>What the place check compares, every one of them resolved.</summary>
-    private sealed record Places(string Target, string Cwd, IReadOnlyList<string> Roots)
+    /// <summary>
+    /// What a hook that cannot determine its coai folder says, once, to standard error: without it a hook that denies everything is silent. A constant — no path, no type —
+    /// for a hook that does not run from its own <c>.agents</c> folder AND for one whose folder is named right but does not resolve (the disk cannot look at it, or it is not local).
+    /// </summary>
+    internal const string UnknownFolderLine = $"coai {HookArgument}: denied, this hook does not run from its own .agents folder";
+
+    private static bool KnowsItsFolder(HookSite site, TextWriter? log)
     {
-        public bool Allows() =>
-            !RealPath.IsInside(Cwd, Target, DocumentId.Comparison)
-            && Roots.Any(root => RealPath.IsInside(root, Target, DocumentId.Comparison));
-    }
-
-    private static Places? Placed(JsonObject call, EntryReader? read) =>
-        Real(PathText(call), read) is { } target
-        && Real(Qualified(call["cwd"]), read) is { } cwd
-        && Roots(call["workspacePaths"], read) is { } roots
-            ? new Places(target, cwd, roots)
-            : null;
-
-    /// <summary>The <c>Path</c> argument: the ONE property of <c>args</c> whose name is <c>Path</c> without regard to case, and spelled <c>Path</c>.</summary>
-    private static string? PathText(JsonObject call) =>
-        call["toolCall"]?["args"] is JsonObject args
-        && args.Where(pair => string.Equals(pair.Key, "Path", StringComparison.OrdinalIgnoreCase)).ToList() is [{ Key: "Path", Value: var value }]
-            ? Qualified(value)
-            : null;
-
-    private static string? Qualified(JsonNode? node) =>
-        Text(node) is { } text && Path.IsPathFullyQualified(text) ? text : null;
-
-    private static string? Real(string? text, EntryReader? read) =>
-        text is not null && RealPath.Resolve(text, read: read) is { Ok: true } real ? real.Path : null;
-
-    /// <summary>Every entry of <c>workspacePaths</c>, resolved; null when it is not an array or ONE element is not a resolvable full path.</summary>
-    private static IReadOnlyList<string>? Roots(JsonNode? node, EntryReader? read)
-    {
-        if (node is not JsonArray entries)
+        if (AgyHookPlaces.CoaiFolderOf(site).Ok)
         {
-            return null;
+            return true;
         }
 
-        var roots = entries.Select(entry => Real(Qualified(entry), read)).ToList();
+        WriteLine(UnknownFolderLine, log);
 
-        return roots.All(root => root is not null) ? roots.OfType<string>().ToList() : null;
+        return false;
     }
 
     /// <summary>The hook mode: the payload on <paramref name="input"/>, the decision on <paramref name="output"/>, exit 0.</summary>
-    public static int RunHook(TextReader input, TextWriter output)
+    /// <param name="site">Where this hook runs; <see cref="HookSite.OfThisProcess"/> when null.</param>
+    public static int RunHook(TextReader input, TextWriter output, HookSite? site = null)
     {
-        output.Write(Decide(input.ReadToEnd()));
+        output.Write(Decide(input.ReadToEnd(), site ?? HookSite.OfThisProcess()));
         output.Flush();
 
         return 0;

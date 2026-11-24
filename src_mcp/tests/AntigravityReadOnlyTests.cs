@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using CoaiMcp.Core.QuestionConsult;
 using CoaiMcp.Runners.Consultation;
+using CoaiMcp.Runners.Files;
 using CoaiMcp.Runners.Processes;
 using CoaiMcp.Runners.Reviewers;
 using CoaiMcp.Server;
@@ -32,11 +33,14 @@ public sealed class AntigravityReadOnlyTests : IDisposable
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
     }
 
+    /// <summary>A site whose folder is unknown: the payloads of these tests never reach the place check.</summary>
+    private static HookSite Unplaced => new(null, RealPath.Lstat, _ => true, false);
+
     private static string Payload(string name, string args = "{}") =>
         $$"""{"toolCall":{"name":"{{name}}","args":{{args}}},"stepIdx":3,"conversationId":"c"}""";
 
     private static string Decision(string payload) =>
-        JsonDocument.Parse(AntigravityReadOnly.Decide(payload)).RootElement.GetProperty("decision").GetString()!;
+        JsonDocument.Parse(AntigravityReadOnly.Decide(payload, Unplaced)).RootElement.GetProperty("decision").GetString()!;
 
     [Fact]
     public void OnlyTheFileReaders_ViewFileAndReadFile_AreAllowed_AndEveryOtherTool_OrAPayloadNotUnderstood_IsDenied()
@@ -53,7 +57,7 @@ public sealed class AntigravityReadOnlyTests : IDisposable
         // The ARGUMENTS can carry any text, the allowed tool's own name included — the decision reads the call's name.
         Decision(Payload("write_to_file", """{"Content":"\"name\":\"view_file\""}""")).Should().Be("deny");
         Decision(Payload("write_to_file", """{"Content":"\"name\":\"read_file\""}""")).Should().Be("deny");
-        var reason = JsonDocument.Parse(AntigravityReadOnly.Decide(Payload("write_to_file"))).RootElement.GetProperty("reason").GetString();
+        var reason = JsonDocument.Parse(AntigravityReadOnly.Decide(Payload("write_to_file"), Unplaced)).RootElement.GetProperty("reason").GetString();
         reason.Should().Be(AntigravityReadOnly.DenyReason);
         reason.Should().Be("coai: this consultation is read-only; only view_file or read_file runs", "the model is told both names");
     }
@@ -89,38 +93,119 @@ public sealed class AntigravityReadOnlyTests : IDisposable
         ["workspacePaths"] = new JsonArray(cwd, root),
     }.ToJsonString();
 
-    [Fact]
-    public async Task TheBuiltBinary_AnswersTheHook_AsTheChildProcessAgyStarts()
+    /// <summary>The same payload with the entries listed as given, <c>cwd</c> as given: agy sets <c>cwd</c> to the first of its sorted entries.</summary>
+    private static string ReaderCallOf(string path, string cwd, params string[] entries) => new JsonObject
     {
-        // What agy runs for every tool call: coai-mcp with the hook argument, the payload on stdin.
-        var dll = Path.Combine(AppContext.BaseDirectory, "coai-mcp.dll");
-        var launcher = new ProcessLauncher();
+        ["cwd"] = cwd,
+        ["hookEventName"] = "PreToolUse",
+        ["toolCall"] = new JsonObject { ["args"] = new JsonObject { ["Path"] = path }, ["id"] = "call-1", ["name"] = "read_file" },
+        ["workspacePaths"] = new JsonArray([.. entries.Select(entry => (JsonNode?)JsonValue.Create(entry))]),
+    }.ToJsonString();
+
+    /// <summary>The folders of the built-binary tests: <c>home/.agents</c> is where agy starts the hook, <c>aaa</c> a root that sorts before <c>home</c>.</summary>
+    private sealed record Folders(string Home, string Root, string Sibling, string Aaa, string Inside)
+    {
+        public string AgysCwd => Path.Combine(Home, ".agents");
+    }
+
+    private Folders Made()
+    {
         var home = Directory.CreateDirectory(Path.Combine(_base, "home", ".agents")).Parent!.FullName;
         var root = Directory.CreateDirectory(Path.Combine(_base, "job-1")).FullName;
         var sibling = Directory.CreateDirectory(Path.Combine(_base, "job-10")).FullName;
+        Directory.CreateDirectory(Path.Combine(root, "sub"));
+        var aaa = Directory.CreateDirectory(Path.Combine(_base, "aaa")).FullName;
         File.WriteAllText(Path.Combine(root, "inside.txt"), "inside");
         File.WriteAllText(Path.Combine(sibling, "secret.txt"), "secret");
-        var inside = Path.Combine(root, "inside.txt");
+        File.WriteAllText(Path.Combine(aaa, "inside.txt"), "aaa");
+        File.WriteAllText(Path.Combine(home, ".agents", "hooks.json"), "{}");
 
-        async Task<(string Decision, string Reason)> Answer(string payload, string workingDirectory)
-        {
-            var said = (await launcher.RunAsync(
-                new ProcessRequest("dotnet", [dll, AntigravityReadOnly.HookArgument], workingDirectory) { StdIn = payload, Timeout = TimeSpan.FromSeconds(60) },
-                TestContext.Current.CancellationToken)).StdOut;
-            var answer = JsonDocument.Parse(said).RootElement;
+        return new Folders(home, root, sibling, aaa, Path.Combine(root, "inside.txt"));
+    }
 
-            return (answer.GetProperty("decision").GetString()!, answer.TryGetProperty("reason", out var reason) ? reason.GetString()! : string.Empty);
-        }
+    /// <summary>What agy runs for every tool call: coai-mcp with the hook argument, the payload on stdin, from the working folder given.</summary>
+    private static async Task<ProcessResult> RunTheHook(string payload, string workingDirectory) =>
+        await new ProcessLauncher().RunAsync(
+            new ProcessRequest("dotnet", [Path.Combine(AppContext.BaseDirectory, "coai-mcp.dll"), AntigravityReadOnly.HookArgument], workingDirectory) { StdIn = payload, Timeout = TimeSpan.FromSeconds(60) },
+            TestContext.Current.CancellationToken);
 
-        var agysCwd = Path.Combine(home, ".agents");
-        (await Answer(ReaderCall("write_to_file", inside, home, root), agysCwd)).Should().Be(("deny", AntigravityReadOnly.DenyReason));
-        (await Answer(ReaderCall("view_file", inside, home, root), agysCwd)).Decision.Should().Be("allow");
-        (await Answer(ReaderCall("read_file", inside, home, root), agysCwd)).Decision.Should().Be("allow");
-        (await Answer(ReaderCall("read_file", Path.Combine(sibling, "secret.txt"), home, root), agysCwd))
+    private static (string Decision, string Reason) Said(ProcessResult run)
+    {
+        var answer = JsonDocument.Parse(run.StdOut).RootElement;
+
+        return (answer.GetProperty("decision").GetString()!, answer.TryGetProperty("reason", out var reason) ? reason.GetString()! : string.Empty);
+    }
+
+    [Fact]
+    public async Task TheBuiltBinary_AnswersTheHook_AsTheChildProcessAgyStarts()
+    {
+        var at = Made();
+        async Task<(string Decision, string Reason)> Answer(string payload, string workingDirectory) => Said(await RunTheHook(payload, workingDirectory));
+
+        (await Answer(ReaderCall("write_to_file", at.Inside, at.Home, at.Root), at.AgysCwd)).Should().Be(("deny", AntigravityReadOnly.DenyReason));
+        (await Answer(ReaderCall("view_file", at.Inside, at.Home, at.Root), at.AgysCwd)).Decision.Should().Be("allow");
+        (await Answer(ReaderCall("read_file", at.Inside, at.Home, at.Root), at.AgysCwd)).Decision.Should().Be("allow");
+        (await Answer(ReaderCall("read_file", Path.Combine(at.Sibling, "secret.txt"), at.Home, at.Root), at.AgysCwd))
             .Should().Be(("deny", AntigravityReadOnly.DenyOutsideReason), "a sibling job is not a root");
-        // Only a child process can show that its own directory is no base: a bare name is not read as a file of the root.
-        (await Answer(ReaderCall("read_file", "inside.txt", home, root), root))
+    }
+
+    [Fact]
+    public async Task M1_TheBuiltBinary_ReadsARootThatSortsBeforeTheCoaiFolder()
+    {
+        var at = Made();
+
+        Said(await RunTheHook(ReaderCallOf(Path.Combine(at.Aaa, "inside.txt"), at.Aaa, at.Aaa, at.Home), at.AgysCwd)).Decision.Should().Be("allow");
+    }
+
+    [Fact]
+    public async Task M2_TheBuiltBinary_DeniesTheCoaiFolder_WhereverThePayloadsCwdIs()
+    {
+        var at = Made();
+
+        Said(await RunTheHook(ReaderCallOf(Path.Combine(at.Aaa, "inside.txt"), at.Aaa, at.Aaa, at.Home), at.AgysCwd)).Decision.Should().Be("allow", "the control: the same payload shape, a file inside a root");
+        Said(await RunTheHook(ReaderCallOf(Path.Combine(at.Home, ".agents", "hooks.json"), at.Aaa, at.Aaa, at.Home), at.AgysCwd))
+            .Should().Be(("deny", AntigravityReadOnly.DenyOutsideReason), "the coai folder is where the hook runs, not the payload's cwd");
+    }
+
+    [Fact]
+    public async Task M3_TheBuiltBinary_ThatDoesNotRunFromAnAgentsFolder_DeniesAndSaysWhy()
+    {
+        var at = Made();
+
+        var run = await RunTheHook(ReaderCall("read_file", at.Inside, at.Home, at.Root), at.Home);
+
+        Said(run).Should().Be(("deny", AntigravityReadOnly.DenyOutsideReason));
+        run.StdErr.Should().Contain("coai --agy-hook: denied, this hook does not run from its own .agents folder");
+    }
+
+    [Fact]
+    public async Task M4_TheBuiltBinary_NeverCompletesARelativePath_FromItsOwnFolder()
+    {
+        var at = Made();
+
+        // From home/.agents the spelling ../../job-1/inside.txt would reach the file inside the root, were it completed.
+        Said(await RunTheHook(ReaderCall("read_file", Path.Combine("..", "..", "job-1", "inside.txt"), at.Home, at.Root), at.AgysCwd))
             .Should().Be(("deny", AntigravityReadOnly.DenyOutsideReason), "a path that is not fully qualified is never completed from the process directory");
+    }
+
+    [Fact]
+    public async Task M5_TheBuiltBinary_DeniesAPathOnANetworkPlace()
+    {
+        var at = Made();
+        var remote = Path.Combine(OperatingSystem.IsWindows() ? @"\\coai-no-such-host\share" : "/net/coai-no-such-host/share", "x.txt");
+
+        Said(await RunTheHook(ReaderCall("read_file", remote, at.Home, at.Root), at.AgysCwd))
+            .Should().Be(("deny", AntigravityReadOnly.DenyOutsideReason), "this only keeps the routing honest: a child process cannot show that no look was made");
+    }
+
+    [Fact]
+    public async Task M6_TheBuiltBinary_DeniesADotDotWhereTheOsFoldsText_AndAllowsItElsewhere()
+    {
+        var at = Made();
+
+        var answer = Said(await RunTheHook(ReaderCall("read_file", Path.Combine(at.Root, "sub", "..", "inside.txt"), at.Home, at.Root), at.AgysCwd));
+
+        answer.Should().Be(OperatingSystem.IsWindows() ? ("deny", AntigravityReadOnly.DenyOutsideReason) : ("allow", string.Empty), "it shows the real flag reaches the rule");
     }
 
     [Fact]

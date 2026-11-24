@@ -53,12 +53,24 @@ delete may touch — go through `src_mcp/runners/Files/RealPath.cs`. A few other
 - **`WorktreePaths.Real` and `Same`** (git's `realpath` against a spelled path): `Real` throws `IOException` for a path
   that cannot be resolved; `Same`, a predicate, answers `false`. Neither falls back to the spelling.
 - **The agy hook's path check** (`AntigravityReadOnly.Decide`, answered by `coai-mcp --agy-hook` and `coai-server --agy-hook`; measured in
-  `research/RESULTS_agy_read_file.md` §6): a `read_file` or `view_file` call is allowed only when its `Path` is fully qualified
+  `research/RESULTS_agy_read_file.md` §6 and §7): a `read_file` or `view_file` call is allowed only when its `Path` is fully qualified
   and its real path (`RealPath.Resolve`, links and `..` followed) is inside the real path of a granted root from the payload's
-  `workspacePaths`, and not inside the real path of the payload's `cwd`, the folder coai owns. A relative path, a missing or
+  `workspacePaths`, and not inside the real path of the coai folder. A relative path, a missing or
   malformed field, a second spelling of `Path`, a duplicate JSON property and any resolution failure deny. It fails closed and never
   falls back to the spelling. The reason does not echo the path. On the Team server this keeps one job's reviewer out of another
-  job's folder under `/tmp`, which agy's own boundary allows. Limits:
+  job's folder under `/tmp`, which agy's own boundary allows. Since 2026-11-18 (the plan `todo/PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text.md`):
+  - **The hook knows its own folder.** The coai folder is the parent of the hook process's own working folder, which agy sets to the
+    `.agents` folder that holds the hook script. The payload's `cwd` names nothing: agy sorts `workspacePaths` and sends its first entry as
+    `cwd`, so `cwd` can be a granted root. A hook that does not run from a folder named `.agents`, or whose folder does not resolve,
+    denies every read and writes one constant line to standard error.
+  - **No network or device path is ever looked up.** Every look at the disk goes through one guarded reader that refuses a path that is
+    not local before any I/O, and every resolved path must be local. That covers `Path`, every root, `cwd`, the coai folder and the target
+    of any link met on the way, so a junction inside a granted root that points at a share is not followed to the network. A `Path`
+    that starts with two separators is denied by its spelling.
+  - **On Windows a `Path` with a `.` or `..` segment is denied**, because Win32 folds those as text before it follows a link. The rule
+    covers `Path` only. Roots, `cwd` and the coai folder are text from coai and agy.
+
+  Limits:
   - A link swapped between the hook's check and agy's open is not closed. The check is at one moment.
   - Hard links and bind mounts are not seen by any path check.
   - Inside a granted root nothing is narrowed: `.git` and credential-looking files stay readable by agy's reader, though coai's own
@@ -66,17 +78,50 @@ delete may touch — go through `src_mcp/runners/Files/RealPath.cs`. A few other
   - Only `Path` is read. Whether any agy reader takes a second file argument is not measured, nor is `view_file`'s argument name on
     agy before 1.5.9. A call without `Path` is denied.
   - An agy older than 1.5.9, whose payload lacks `Path`, `cwd` or `workspacePaths`, has every read denied.
-  - Every `workspacePaths` entry other than `cwd` counts as a root. agy builds them from coai's `--add-dir` arguments. If agy added a folder
-    of its own, it would be a root.
-  - Windows: an 8.3 short name is a different string, so it is refused wrongly. Case is ignored, as `DocumentId.Comparison` does, so in a
-    directory made case-sensitive a sibling that differs only by case would be accepted. agy on Windows is not measured. On macOS a
-    different case is refused wrongly.
-  - Windows, not closed here (follow-up plan `todo/PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text.md`): (a) `..` after a link or
-    junction. `RealPath` applies `..` to the path resolved so far, the Unix rule. Win32 folds `..` as text before it follows links. A
-    path such as `<root>\node_modules\junction\..\..\..\..\Users\me\.ssh\id_rsa` can pass the hook and be read outside the root, if
-    agy itself allows that read (not measured on Windows). (b) A UNC or device `Path` (`\\host\share\x`, `//host/share/x`) is resolved
-    before it is judged, so the hook looks it up over SMB. That can send the user's NTLM credentials to that host or run past the hook's
-    10 s timeout. Neither applies on Linux, the Team server or WSL.
+  - Every `workspacePaths` entry is a root, and the coai folder is kept out of them by the rule above. agy builds the entries from coai's
+    `--add-dir` arguments. If agy added a folder of its own, it would be a root.
+  - It trusts where agy starts the hook (the hooks file's folder). If a later agy starts it elsewhere, every read is denied, and the line on
+    standard error says why. That is the safe side.
+  - **A checkout on a network place loses agy's reads.** A root on a UNC path, a mapped network drive or `\\wsl$\…`, and on Unix a root
+    under `/net/`, `/misc/` or `/Network/`, is not supported: every agy read under it is denied. A consult grants the person's own
+    checkout, so one kept in such a place gets no agy reads.
+  - A network file system mounted into the Unix tree at an ordinary folder (nfs, cifs) is spelled like a local path and is not detected.
+    Its credentials are the mount's own. A custom autofs map on another root is not detected either.
+  - The dot rule covers `Path` only, and only on Windows. A harmless `..` in a Windows `Path` is denied too, and the model can resend the
+    path without it.
+  - **A dot segment in a link's own text is not judged, and on Windows that is a probable escape (found by the Opus review of epic E1,
+    2026-11-18; not measured on a real machine).** On Windows a relative SYMBOLIC link inside a granted root whose stored text contains `..`
+    is walked by coai's resolver with the Unix rule: `..` goes to the parent of the path resolved so far, so the hook judges the target
+    inside the root. NT folds the same link text as text, so it reads outside. Example: `R\a` is a symlink to `b\..\..\outside\secret.txt`
+    and `R\b` is another symlink, to `deep\er`. The resolver walks `R\b` to `R\deep\er`, applies the two `..` to that, and lands inside `R`;
+    NT applies them to the text `b\..\..` and lands above `R`. Preconditions: symbolic links (not junctions: a junction cannot hold a
+    relative or dotted text) inside the root, which need Developer Mode or administrator rights, or a git checkout with
+    `core.symlinks=true` that holds such a link. The follow-up plan is
+    `todo/PLAN_the_agy_hook_on_windows_judges_a_links_dot_text.md`. History, kept: until 2026-11-18 this limit read "A dot segment in a
+    link's own text is not judged. What NT does with an absolute link target that holds `..` is not measured." The absolute-target case is
+    still not measured.
+  - **Another spelling of one entry** (an 8.3 short name, a trailing dot or space, an NTFS stream name) is a different string, and it
+    fails in one of two directions. An 8.3 alias of a ROOT is refused, which is a false denial. An alias of the COAI FOLDER under a wide
+    root (for example `home.`, an 8.3 name, or `::$INDEX_ALLOCATION`) is not seen as inside the coai folder, so that folder's files can be
+    read. The folder holds no secret. Neither spelling leaves a root.
+  - Case is ignored, as `DocumentId.Comparison` does, so on Windows in a directory made case-sensitive a sibling that differs only by case
+    would be accepted. On macOS a different case is refused wrongly.
+  - Windows measured 2026-11-18 on one build (10.0.26300) with agy 1.5.11: the payload has the same fields as on Linux, agy denies a read
+    in the user profile by itself and allows a read under the temp folder, and the model sent no `.` or `..` in 11 ordinary runs. Whether
+    agy cleans a path before it opens it is not measured. That Windows sends no NTLM handshake is shown by a recording reader in the tests;
+    no packet capture was taken (`pktmon` needs administrator rights; the real run in `research/RESULTS_agy_read_file.md` §7 says so).
+  - **Windows, closed by the plan `todo/PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text.md` (2026-11-18), see `research/RESULTS_agy_read_file.md` §7.**
+    Before it, this item read (kept as history): "Windows, not closed here: (a) `..` after a link or junction. `RealPath` applies `..` to the
+    path resolved so far, the Unix rule. Win32 folds `..` as text before it follows links. A path such as
+    `<root>\node_modules\junction\..\..\..\..\Users\me\.ssh\id_rsa` can pass the hook and be read outside the root, if agy itself allows
+    that read (not measured on Windows). (b) A UNC or device `Path` (`\\host\share\x`, `//host/share/x`) is resolved before it is judged,
+    so the hook looks it up over SMB. That can send the user's NTLM credentials to that host or run past the hook's 10 s timeout. Neither
+    applies on Linux, the Team server or WSL." Also in that text: the rule said "not inside the real path of the payload's `cwd`, the folder coai owns" (see the first bullet above for why that was wrong), "agy on Windows is not measured" (now measured, above) and "Every
+    `workspacePaths` entry other than `cwd` counts as a root" (the payload's `cwd` is no longer trusted, see above). W1 was confirmed in
+    the real 0.66.0 hook and was exploitable end to end under the temp folder (RESULTS §7: the 0.66.0 control read the outside marker); the
+    branch hook denies it on real Windows. W2 is closed by the guarded reader: a direct UNC, `//` or `\\?\` `Path` was denied on real
+    Windows. A junction to a UNC target was not run there (`mklink` to a UNC target needs administrator rights) and rests on the
+    reader-seam tests and the Windows CI job.
   - Hook denials are not in agy's `denied_actions`, so coai's read follow-up does not fire for them.
   - agy's own checks still run after an allow. The hook only narrows.
   - The hook always answers and exits 0. What agy does when a hook times out is not ours.
