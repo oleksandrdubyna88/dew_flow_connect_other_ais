@@ -1,4 +1,6 @@
+import { readFileSync } from 'node:fs';
 import { readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { hostname } from 'node:os';
 import { join } from 'node:path';
 import { makeDataDirectory } from './dataDirMaker';
 import { refuseUnderMissingRootOnceSettled } from './findingsBoard';
@@ -94,26 +96,42 @@ export function lockName(id: string): string {
 
 /** What a claim came to. `held` is somebody else mutating this conversation, still, after the wait. */
 export type Claim =
-  | { readonly kind: 'claimed'; readonly release: () => Promise<void> }
+  | { readonly kind: 'claimed'; readonly release: () => Promise<void>; readonly token: string; readonly path: string }
   | { readonly kind: 'held' }
   | { readonly kind: 'failed'; readonly reason: string };
 
 /** What is written INTO a lock: who, when, a token the release checks, and what the holder is doing. Everything is UTC. */
-interface LockNote {
+export interface LockNote {
   readonly pid: number;
   readonly at: string;
   readonly token: string;
   readonly doing: string;
+  /** The machine's name. Written by every claim; the chat store's rule does not read it. */
+  readonly host?: string;
+  /** The id of the machine's present boot where the platform has one; else absent. */
+  readonly boot?: string;
 }
 
 /**
  * What a lock on disk looks like to a breaker: when it was taken, and a SIGNATURE that changes when
  * it is replaced — the token when the note reads, the `mtime` when it is torn.
  */
-interface LockSeen {
+export interface LockSeen {
   readonly at: number;
   readonly signature: string;
+  /** The note, when it can be read. */
+  readonly note?: LockNote;
 }
+
+/**
+ * Whether a lock that is held may be taken over, asked of the lock as it was just read. The answer is the phrase for the log line
+ * ("older than 30s was broken") when yes, and `undefined` when no. The chat store's rule is `agedOut`; a rule of another file
+ * (the refusals file) never asks the lock's age.
+ */
+export type TakeRule = (lock: LockSeen, now: number) => string | undefined;
+
+/** Today's rule of the chat store, moved and not changed: a lock older than `LOCK_STALE_MS` is presumed abandoned. */
+export const agedOut: TakeRule = (lock, now) => (now - lock.at > LOCK_STALE_MS ? `older than ${LOCK_STALE_MS / 1000}s was broken` : undefined);
 
 /** Which claim this is, within this process — the token's second half, so two claims from one pid differ. */
 let claimSequence = 0;
@@ -139,6 +157,8 @@ function noteFrom(text: string): LockNote | undefined {
       at: row.at,
       token: row.token,
       doing: typeof row.doing === 'string' ? row.doing : '',
+      ...(typeof row.host === 'string' ? { host: row.host } : {}),
+      ...(typeof row.boot === 'string' ? { boot: row.boot } : {}),
     };
   } catch {
     return undefined;
@@ -167,12 +187,12 @@ async function seen(path: string): Promise<LockSeen | undefined> {
   }
   const stamped = note === undefined ? Number.NaN : Date.parse(note.at);
   if (note !== undefined && Number.isFinite(stamped)) {
-    return { at: stamped, signature: `token:${note.token}` };
+    return { at: stamped, signature: `token:${note.token}`, note };
   }
   try {
     const { mtimeMs } = await stat(path);
 
-    return { at: mtimeMs, signature: note === undefined ? `mtime:${mtimeMs}` : `token:${note.token}` };
+    return { at: mtimeMs, signature: note === undefined ? `mtime:${mtimeMs}` : `token:${note.token}`, ...(note === undefined ? {} : { note }) };
   } catch {
     return undefined;
   }
@@ -206,9 +226,10 @@ async function tryCreate(path: string, note: LockNote): Promise<boolean> {
  * and that throw would be read as "not stale", wedging the conversation for good instead of for
  * thirty seconds. Defence, against a one-word cost. (The third round.)</p>
  */
-async function breakIfStale(path: string, now: number): Promise<boolean> {
+async function breakIfStale(path: string, now: number, what: string, mayTake: TakeRule): Promise<boolean> {
   const aged = await seen(path);
-  if (aged === undefined || now - aged.at <= LOCK_STALE_MS) {
+  const phrase = aged === undefined ? undefined : mayTake(aged, now);
+  if (aged === undefined || phrase === undefined) {
     return false;
   }
   const again = await seen(path);
@@ -217,11 +238,11 @@ async function breakIfStale(path: string, now: number): Promise<boolean> {
   }
   try {
     await rm(path, { force: true, recursive: true });
-    console.error(`ConnectOtherAIs: a conversation lock older than ${LOCK_STALE_MS / 1000}s was broken: ${path}`);
+    console.error(`ConnectOtherAIs: a ${what} lock ${phrase}: ${path}`);
 
     return true;
   } catch (reason) {
-    console.error(`ConnectOtherAIs: a stale conversation lock could not be removed: ${path}`, reason);
+    console.error(`ConnectOtherAIs: a stale ${what} lock could not be removed: ${path}`, reason);
 
     return false;
   }
@@ -283,10 +304,32 @@ async function releaseOwn(path: string, token: string): Promise<void> {
  * @param now the clock's reading when the claim began, an argument so a test can pin it; it stamps
  *   the note, and anchors the running clock the wait ages a rival's lock against.
  */
-export async function claimConversation(dir: string, id: string, doing: string, now = Date.now()): Promise<Claim> {
+export function claimConversation(dir: string, id: string, doing: string, now = Date.now()): Promise<Claim> {
+  return claimFile(dir, id, doing, now, 'conversation', agedOut);
+}
+
+/** The id of this machine's present boot, where the platform gives one without starting a program (Linux); else nothing. */
+const bootId = ((): string | undefined => {
+  try {
+    const text = readFileSync('/proc/sys/kernel/random/boot_id', 'utf8').trim();
+
+    return text.length > 0 ? text : undefined;
+  } catch {
+    return undefined;
+  }
+})();
+
+/**
+ * The claim of any file's lock: `claimConversation`'s body with `what` in its sentences and `mayTake` where the lock's age was
+ * asked. `mayTake` decides when a HELD lock may be taken over; the chat store passes `agedOut`.
+ */
+export async function claimFile(dir: string, id: string, doing: string, now: number, what: string, mayTake: TakeRule): Promise<Claim> {
   const path = join(dir, lockName(id));
   claimSequence += 1;
-  const note: LockNote = { pid: process.pid, at: new Date(now).toISOString(), token: `${process.pid}:${claimSequence}`, doing };
+  const note: LockNote = {
+    pid: process.pid, at: new Date(now).toISOString(), token: `${process.pid}:${claimSequence}`, doing, host: hostname(),
+    ...(bootId === undefined ? {} : { boot: bootId }),
+  };
   const began = Date.now();
   const clock = (): number => now + (Date.now() - began);
   try {
@@ -294,13 +337,13 @@ export async function claimConversation(dir: string, id: string, doing: string, 
     await refuseUnderMissingRootOnceSettled(dir);
     const made = await makeDataDirectory(dir);
     if (!made.made) {
-      console.error(`ConnectOtherAIs: a conversation lock could not be created: ${made.sentence}`);
+      console.error(`ConnectOtherAIs: a ${what} lock could not be created: ${made.sentence}`);
 
-      return { kind: 'failed', reason: 'the conversation could not be locked' };
+      return { kind: 'failed', reason: `the ${what} could not be locked` };
     }
     for (let attempt = 1; ; attempt += 1) {
-      if (await tryCreate(path, note) || (await breakIfStale(path, clock()) && await tryCreate(path, note))) {
-        return { kind: 'claimed', release: () => releaseOwn(path, note.token) };
+      if (await tryCreate(path, note) || (await breakIfStale(path, clock(), what, mayTake) && await tryCreate(path, note))) {
+        return { kind: 'claimed', release: () => releaseOwn(path, note.token), token: note.token, path };
       }
       if (attempt >= HELD_TRIES) {
         return { kind: 'held' };
@@ -308,9 +351,56 @@ export async function claimConversation(dir: string, id: string, doing: string, 
       await pause(HELD_PAUSE_MS * attempt);
     }
   } catch (reason) {
-    console.error(`ConnectOtherAIs: a conversation lock could not be created: ${path}`, reason);
+    console.error(`ConnectOtherAIs: a ${what} lock could not be created: ${path}`, reason);
     const code = codeOf(reason);
 
-    return { kind: 'failed', reason: code.length > 0 ? `the conversation could not be locked (${code})` : 'the conversation could not be locked' };
+    return { kind: 'failed', reason: code.length > 0 ? `the ${what} could not be locked (${code})` : `the ${what} could not be locked` };
+  }
+}
+
+/** What the owner rule needs of the machine, as a seam: its name, its boot id where it has one, and a probe for a process number. */
+export interface OwnerSeam {
+  readonly host: () => string;
+  readonly boot: () => string | undefined;
+  /** `process.kill(pid, 0)`: returns when a process answers, throws what the system says otherwise. */
+  readonly alive: (pid: number) => void;
+}
+
+/** The real machine: its name, its boot id (Linux), and `process.kill(pid, 0)`. */
+export const thisMachine: OwnerSeam = { host: hostname, boot: () => bootId, alive: (pid) => { process.kill(pid, 0); } };
+
+/**
+ * The rule of a lock that is never taken over by its age: it asks whether the OWNER is gone. True in two cases only, and both need a
+ * note that can be read and whose `host` is this machine's: the note has a `boot`, this machine has one, and they differ; or
+ * `process.kill(pid, 0)` throws `ESRCH`. Every other answer — another host, `EPERM`, any other error, a process that answers, a note
+ * that cannot be read — is "not gone". The claim ASKS this; it does not prove that a stale writer cannot write.
+ */
+export const ownerGone = (seam: OwnerSeam): TakeRule => (lock) => {
+  const note = lock.note;
+  if (note === undefined || note.host !== seam.host()) {
+    return undefined;
+  }
+  const mine = seam.boot();
+  if (note.boot !== undefined && mine !== undefined && note.boot !== mine) {
+    return 'was taken over: its owner is gone (another boot)';
+  }
+  try {
+    seam.alive(note.pid);
+  } catch (reason) {
+    return codeOf(reason) === 'ESRCH' ? 'was taken over: its owner is gone' : undefined;
+  }
+
+  return undefined;
+};
+
+/** The rule of a person's press: a held lock is taken over whatever its owner. */
+export const takenByPerson: TakeRule = () => 'was taken over by a person\'s press';
+
+/** Whether the lock on the disk still carries this token. */
+export async function lockHolds(path: string, token: string): Promise<boolean> {
+  try {
+    return noteFrom(await readFile(path, 'utf8'))?.token === token;
+  } catch {
+    return false;
   }
 }
