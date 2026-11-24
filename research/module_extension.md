@@ -4330,7 +4330,7 @@ only through an extension release, and release-please releases the extension onl
   `FEATURE_VERSION`, #1029) and whose squash body carries `Release-As: <version>`, the #605 shape of
   [PLAN_the_release_guards_contradict.md](PLAN_the_release_guards_contradict.md). It opened #1030 (0.89.2).
 - **Check the release head before merging the release pull request:** the full suite, and a VSIX built from that head
-  whose bundled `extension.js` carries the new marker and clause and not the old one (done for 0.89.2, and again on the
+  whose bundled JavaScript carries the new marker and clause and not the old one (done for 0.89.2, and again on the
   published asset).
 
 ### The Consultant section: who a stuck AI asks, and the one box that is a FILE (2026-09-13)
