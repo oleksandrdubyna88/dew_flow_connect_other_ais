@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 import type { CoaiExports } from '../../extension';
 import type { AccountsMode } from '../../remoteAccountsScript';
 import type { RemoteRun } from '../../remoteSsh';
-import { until } from './hostHelpers';
+import { until, activated } from './hostHelpers';
 
 /**
  * A3-H1 of the accounts plan (E1.S3): the round in a real editor. With the call replaced through the test door by a fake that answers a
@@ -24,7 +24,7 @@ const HOST_B = 'hB';
 async function doorsOf(): Promise<{ readonly accounts: NonNullable<CoaiExports['terminalAccounts']>; readonly sessions: NonNullable<CoaiExports['remoteSessions']> }> {
   const extension = vscode.extensions.getExtension<CoaiExports>('remsoftdev.connect-other-ais');
   assert.ok(extension !== undefined, 'the extension under test is not installed in this host');
-  const exported = await extension.activate();
+  const exported = await activated(extension);
   assert.ok(exported.terminalAccounts !== undefined, 'the extension did not hand out its accounts test door in test mode, so nothing below is about the bound round');
   assert.ok(exported.remoteSessions !== undefined, 'the extension did not hand out its road test door in test mode');
 

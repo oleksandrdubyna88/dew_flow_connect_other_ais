@@ -93,7 +93,7 @@ const GLOBAL = vscode.ConfigurationTarget.Global;
 async function doorOf(): Promise<NonNullable<CoaiExports['remoteSessions']>> {
   const extension = vscode.extensions.getExtension<CoaiExports>('remsoftdev.connect-other-ais');
   assert.ok(extension !== undefined, 'the extension under test is not installed in this host');
-  const door = (await extension.activate()).remoteSessions;
+  const door = (await activated(extension)).remoteSessions;
   assert.ok(door !== undefined, 'the extension did not hand out its test door in test mode');
 
   return door;

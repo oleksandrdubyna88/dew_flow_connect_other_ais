@@ -694,6 +694,8 @@ jqTest('A2-T11: claude --version — the same rule', async (shell) => {
   const banner = tree({ jq: true });
   claudeFixtures(banner);
   put(banner, 'claude.version', 'Welcome VERSION-MARK\n2.1.326\n');
+  // The tree's agy prints a version of its own; with that line gone, any `:version` line left is the claude one.
+  put(banner, 'agy.version', 'unknown\n');
   const second = await read(shell, banner, 'no-claude-usage');
   assert.ok(!second.outcome.stdout.includes('VERSION-MARK') && !second.outcome.stdout.includes(':version '), 'a banner line first leaves no version');
 });
