@@ -1,5 +1,4 @@
 import type { KeyValueStore } from './sideSettings';
-import type { RefusalsRead } from './remoteRefusals';
 
 /**
  * The store of the hosts the extension may read over ssh (E1.S1): one pure module holds the rows, the ONE function that says whether
@@ -20,6 +19,14 @@ export interface HostAnswer {
   /** Only on a "yes" the round's door wrote. A person's row has no `how`. */
   readonly how?: 'auto';
 }
+
+/**
+ * What `consentOf` needs of the refusals file as it was just read: its refused hosts, or the fact that it cannot be read. The file's own
+ * `RefusalsRead` (`remoteRefusals.ts`) fits it; it is declared here so this module imports nothing from that one.
+ */
+export type SideSeen =
+  | { readonly kind: 'file'; readonly file: { readonly refused: readonly { readonly host: string }[] } }
+  | { readonly kind: 'damaged' };
 
 export type Consent = 'yes' | 'no' | 'ask' | 'damaged';
 
@@ -115,7 +122,7 @@ function strongest(rows: readonly HostAnswer[], host: string): HostAnswer | unde
  * just read from the disk. In this order: a refusal in the file or a readable "no" in the list is `no`; a file or a list that cannot
  * be read is `damaged`; a person's "yes" is `yes`; an automatic "yes" is `yes` only when `allowNew`, else `ask`; no row is `ask`.
  */
-export function consentOf(file: RefusalsRead, value: unknown, host: string, allowNew: boolean): Consent {
+export function consentOf(file: SideSeen, value: unknown, host: string, allowNew: boolean): Consent {
   const list = hostsOf(value);
   const row = strongest(list.rows, host);
   if (isRefused(file, row, host)) {
@@ -128,15 +135,15 @@ export function consentOf(file: RefusalsRead, value: unknown, host: string, allo
   return row === undefined ? 'ask' : yesOf(row, allowNew);
 }
 
-const isRefused = (file: RefusalsRead, row: HostAnswer | undefined, host: string): boolean =>
+const isRefused = (file: SideSeen, row: HostAnswer | undefined, host: string): boolean =>
   row?.answer === 'no' || (file.kind === 'file' && file.file.refused.some((one) => one.host === host));
 
-const cannotRead = (file: RefusalsRead, list: Hosts): boolean => file.kind === 'damaged' || list.damaged;
+const cannotRead = (file: SideSeen, list: Hosts): boolean => file.kind === 'damaged' || list.damaged;
 
 const yesOf = (row: HostAnswer, allowNew: boolean): Consent => (row.how === 'auto' && !allowNew ? 'ask' : 'yes');
 
 /** Whether the terminal's two overflow items are shown: a host that is not answered "no". Used with a read file. */
-export const refusedBy = (file: RefusalsRead, value: unknown, host: string): boolean => consentOf(file, value, host, true) === 'no';
+export const refusedBy = (file: SideSeen, value: unknown, host: string): boolean => consentOf(file, value, host, true) === 'no';
 
 const byAsked = (a: HostAnswer, b: HostAnswer): number => Number(a.askedUtc > b.askedUtc) - Number(a.askedUtc < b.askedUtc) || Number(a.host > b.host) - Number(a.host < b.host);
 
