@@ -781,7 +781,8 @@ approval, and no entry is added.
 - **E3, the conventions text:** the four coai gate rules speak `auto` (snippet v6, document v4, feature v4, question v2),
   conventions #182 and #183, `release` `5d2d5ec`, nine pin bumps (#1024 here), extension 0.89.1 (snippet v19).
 - **The feature review** of the three epics: `proceed`, 0 findings.
-- **The follow-ups, P7 and P2, closed** by conventions `c598a11` (#185): `coai-feature` v5 and the epoch `by nobody`; here
+- **The follow-ups, P7 and P2, closed** by the conventions release whose `release` ref was promoted to `c598a11` on
+  2026-11-19 (#185; the conventions have no version numbers, the promoted sha is the release): `coai-feature` v5 and the epoch `by nobody`; here
   the pin bump #1027 and extension 0.89.2 (#1029, #1030), snippet v20.
 - **Post-deploy item 3 met** at `main` `8ff658d5`: Claude and Codex read all four coai gate rules completely.
 - **The owner's machine** runs 0.89.2 (installed by hand on 2026-11-24, see below).
