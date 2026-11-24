@@ -297,7 +297,9 @@ export function remoteSessionsOf(keeper: HostKeeper, run: RoadSeams['run'] = run
   return {
     read: (terminal, purpose) => latch(terminal, () => remoteRoad(seamsOf(terminal), terminal.name, purpose, picked.get(terminal))),
     forget: (terminal) => { picked.delete(terminal); },
-    pickedOf: (terminal) => picked.get(terminal),
+    pickedOf(terminal) {
+      return picked.get(terminal);
+    },
     commitHost: (change) => keeper.commit(change),
     commitKey: keeper.commitKey,
     admitHost: (host) => keeper.admit(host),

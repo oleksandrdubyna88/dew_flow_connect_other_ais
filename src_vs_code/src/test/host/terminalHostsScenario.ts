@@ -87,3 +87,66 @@ export async function theConsentOfAHostIsKeptInTheRealGlobalState(): Promise<voi
     terminal.dispose();
   }
 }
+
+const GLOBAL = vscode.ConfigurationTarget.Global;
+
+async function doorOf(): Promise<NonNullable<CoaiExports['remoteSessions']>> {
+  const extension = vscode.extensions.getExtension<CoaiExports>('remsoftdev.connect-other-ais');
+  assert.ok(extension !== undefined, 'the extension under test is not installed in this host');
+  const door = (await extension.activate()).remoteSessions;
+  assert.ok(door !== undefined, 'the extension did not hand out its test door in test mode');
+
+  return door;
+}
+
+/**
+ * A1-H1 of the accounts plan (E1.S1): the store in a real editor. The automatic "yes", a person's "no" with its copy in the list and
+ * its entry in the refusals file on the real disk, the Stop, and a profile that is put back as it was found — the list and the file's
+ * text. It cannot run on a machine without `libnss3`; CI runs it.
+ */
+export async function theHostsStoreWritesTheListAndTheRefusalsFile(): Promise<void> {
+  const door = await doorOf();
+  const before = await door.stored();
+  try {
+    const first = await door.admit('h1');
+    assert.deepEqual(first, { kind: 'read', how: 'auto', allowedNow: true }, `a host with no answer was not allowed by itself: ${JSON.stringify(first)}`);
+    assert.equal(((await door.stored()).list as { host: string; how?: string }[]).find((row) => row.host === 'h1')?.how, 'auto', 'the automatic row is not in globalState');
+    await door.commit({ kind: 'person', host: 'h1', answer: 'no' });
+    assert.equal((await door.admit('h1')).kind, 'refused', 'a "no" did not refuse the host');
+    const stored = await door.stored();
+    assert.equal((stored.list as { host: string; how?: string }[]).find((row) => row.host === 'h1')?.how, undefined, 'the person\'s row carries `how`');
+    assert.ok(stored.file !== undefined && (JSON.parse(stored.file) as { refused: { host: string }[] }).refused.some((one) => one.host === 'h1'), 'the refusals file on the real disk does not hold the host');
+    await door.stopRound();
+    assert.equal(await door.roundStop(), 'stopped');
+    await door.startRound();
+    assert.equal(await door.roundStop(), 'running');
+  } finally {
+    await door.restore(before);
+    assert.deepEqual(await door.stored(), before, 'the profile was not left as it was found');
+  }
+}
+
+/**
+ * A1-H2: the setting through the real configuration. If the editor refuses to write the user-level key, this FAILS and says so: the
+ * claim that only the user layer decides must not rest on a skipped check.
+ */
+export async function theSettingReachesTheDoorThroughTheRealConfiguration(): Promise<void> {
+  const door = await doorOf();
+  const before = await door.stored();
+  const config = (): vscode.WorkspaceConfiguration => vscode.workspace.getConfiguration('coai');
+  try {
+    await config().update('terminalAccountsAllowNewHosts', false, GLOBAL).then(undefined, (reason: unknown) => {
+      throw new Error(`the editor refused to write the user-level key, so A1-H2 cannot judge the setting: ${String(reason)}`);
+    });
+    console.info(`A1-H2: inspect() answers ${JSON.stringify(config().inspect('terminalAccountsAllowNewHosts'))}`);
+    assert.equal((await door.admit('h2')).kind, 'not-asked', 'the setting off did not stop an automatic allow');
+    assert.equal(((await door.stored()).list as { host: string }[] | undefined)?.some((row) => row.host === 'h2') ?? false, false, 'a row was stored with the setting off');
+  } finally {
+    await config().update('terminalAccountsAllowNewHosts', undefined, GLOBAL);
+  }
+  try {
+    assert.equal((await door.admit('h2')).kind, 'read', 'the setting back to its default did not allow the host');
+  } finally {
+    await door.restore(before);
+  }
+}

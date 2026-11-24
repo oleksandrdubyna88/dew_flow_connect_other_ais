@@ -65,9 +65,9 @@ test('the skip-shell door identifier appears only at its declaration, its bindin
   const text = sourceOf('extension.ts');
   const uses = [...text.matchAll(/\bskipShell\b/gu)];
   const allowed = (at: number): boolean => {
-    const before = text.slice(Math.max(0, at - 60), at);
+    const before = text.slice(Math.max(0, at - 90), at);
 
-    return /readonly $/u.test(before) || /const $/u.test(before) || /remoteSessions: testDoorOf\(remote\), $/u.test(before);
+    return /readonly $/u.test(before) || /const $/u.test(before) || /remoteSessions: testDoorOf\(remote, context\.globalState, hostsFolder\), $/u.test(before);
   };
   const stray = uses.filter((one) => !allowed(one.index ?? 0));
 
