@@ -162,13 +162,17 @@ internal sealed class KeyFolder(string dataDir, KeyFolderSeams seams)
         return (mode & ~allowed) == 0 ? string.Empty : KeyProblems.WideMode;
     }
 
-    /// <summary>Writes <paramref name="text"/> whole or not at all, the file private from its first byte; the read-back mode problem, or empty.</summary>
-    public string WritePrivate(string path, string text)
+    /// <summary>
+    /// Writes <paramref name="text"/> whole or not at all, the file private from its first byte; the read-back mode problem, or empty. <paramref name="durable"/> asks the disk to have it before the answer (a key text: the one
+    /// file a person cannot rebuild); metadata and the cursor are not synced, because they are held under the pool lock and the lock is the bottleneck — measured 2026-11-24, a synced write per file made eight processes
+    /// that added at once wait past the two seconds the lock is waited for.
+    /// </summary>
+    public string WritePrivate(string path, string text, bool durable = false)
     {
         var temp = $"{path}.{Environment.ProcessId}.{Guid.NewGuid():N}.tmp";
         try
         {
-            WriteNew(temp, text);
+            WriteNew(temp, text, durable);
             File.Move(temp, path, overwrite: true);
         }
         catch
@@ -180,7 +184,7 @@ internal sealed class KeyFolder(string dataDir, KeyFolderSeams seams)
         return ModeProblem(path);
     }
 
-    private void WriteNew(string temp, string text)
+    private void WriteNew(string temp, string text, bool durable)
     {
         var options = new FileStreamOptions { Mode = FileMode.CreateNew, Access = FileAccess.Write, Share = FileShare.None };
         if (!OperatingSystem.IsWindows())
@@ -191,7 +195,7 @@ internal sealed class KeyFolder(string dataDir, KeyFolderSeams seams)
         using (var stream = new FileStream(temp, options))
         {
             stream.Write(Encoding.UTF8.GetBytes(text));
-            stream.Flush(true);
+            stream.Flush(durable);
         }
 
         if (!OperatingSystem.IsWindows())

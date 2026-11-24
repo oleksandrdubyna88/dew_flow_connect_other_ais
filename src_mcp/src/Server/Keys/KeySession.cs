@@ -197,7 +197,7 @@ internal sealed class KeySession : IDisposable
     public string SaveRecord(KeyRecord record) => Folder.WritePrivate(Folder.MetaPathOf(record.Id), JsonSerializer.Serialize(record, KeysJson.Default.KeyRecord));
 
     /// <summary>Writes the text of one key: only the text, one line.</summary>
-    public string SaveToken(string id, string text) => Folder.WritePrivate(Folder.KeyPathOf(id), text + "\n");
+    public string SaveToken(string id, string text) => Folder.WritePrivate(Folder.KeyPathOf(id), text + "\n", durable: true);
 
     /// <summary>
     /// THE member that reads a token out of the store: the secret of the key with <paramref name="id"/>, or null when the id is not an id, the file is not there, has a wider mode than the store makes, or does not hash to
