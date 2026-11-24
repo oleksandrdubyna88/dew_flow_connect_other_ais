@@ -126,6 +126,6 @@ test('A1-T14/B25/B27: the host raises the notice of an unsaved refusal, and the 
   assert.match(host, /unkept: \(host, why, marked\) => \{[\s\S]*?raiseUnkept\(live, host \?\? 'accounts-round'/u, 'the keeper\'s unkept seam does not raise the notice');
   const door = host.slice(host.indexOf('export const testDoorOf'));
   assert.ok(door.includes('rm(join(folder, REFUSED_FILE)') && door.includes('writeFile(join(folder, REFUSED_FILE)'), 'restore does not put the refusals file back');
-  assert.match(door, /await state\.update\(TERMINAL_HOSTS_KEY, before\.list\);\n    if \(before\.file === undefined\) \{\n      await rm\(/u, 'restore does not put the file back in the step after the list');
+  assert.match(door, /await state\.update\(TERMINAL_HOSTS_KEY, before\.list\);\n {4}if \(before\.file === undefined\) \{\n {6}await rm\(/u, 'restore does not put the file back in the step after the list');
   assert.ok(door.includes('MARKER_PREFIX') && door.includes('forgetHeld()'), 'restore leaves markers or what the window holds');
 });
