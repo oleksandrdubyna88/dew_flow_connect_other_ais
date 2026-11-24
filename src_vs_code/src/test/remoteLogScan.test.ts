@@ -148,3 +148,45 @@ test('S4-T11 companions: the scan finds the two registrations and the Asked bran
   // The scanner itself reaches this shape: a terminal door's catch that put the error back.
   assert.equal(logLeaks(`registerCommand('coai.takeFromTerminal', () => { takeFromTerminal(a).catch((reason: unknown) => { void notify({ detail: asText(reason) }); }); })`).length, 1, 'the scanner misses a terminal door that logs an error');
 });
+
+// ───────────────── A2-T21: the four accounts modules (E1.S2) ─────────────────
+
+const ACCOUNTS_MODULES = ['remoteFraming.ts', 'remoteAccountsScript.ts', 'remoteAccountsUsage.ts', 'remoteAccountsReply.ts'];
+
+/** What a pure parser module must not hold, each with its name: a log or a notice, a message that carries data, the editor, a process, a file, code built at run time. */
+const FORBIDDEN: ReadonlyArray<readonly [string, RegExp]> = [
+  ['a console call', /\bconsole\./u],
+  ['a notify call', /\bnotify\(/u],
+  ['an error whose message is a template literal', /throw new Error\(`/u],
+  ['an import or require of vscode, node:child_process or node:fs', /(?:from|require\()\s*'(?:vscode|node:child_process|child_process|node:fs|fs|node:fs\/promises)'/u],
+  ['eval', /\beval\(/u],
+  ['new Function', /\bnew Function\b/u],
+];
+
+const forbiddenIn = (text: string): readonly string[] => FORBIDDEN.filter(([, pattern]) => pattern.test(text)).map(([name]) => name);
+
+test('A2-T21: the scan finds each forbidden thing in a sample, so a scan that matches nothing is seen', () => {
+  const samples: Readonly<Record<string, string>> = {
+    'a console call': 'console.error(x);',
+    'a notify call': 'void notify({ title: t });',
+    'an error whose message is a template literal': 'throw new Error(`bad ${x}`);',
+    'an import or require of vscode, node:child_process or node:fs': "import * as vscode from 'vscode';",
+    eval: 'eval(code);',
+    'new Function': 'const f = new Function("a");',
+  };
+  assert.deepEqual(Object.keys(samples).sort(), FORBIDDEN.map(([name]) => name).sort(), 'a forbidden thing has no sample');
+  for (const [name, sample] of Object.entries(samples)) {
+    assert.deepEqual(forbiddenIn(sample), [name], `the scan does not find ${name} in its sample`);
+  }
+  assert.deepEqual(forbiddenIn("import { framed } from './remoteFraming';"), [], 'an ordinary import is not forbidden');
+  assert.deepEqual(forbiddenIn("const fs = require('node:fs');").length, 1, 'a require of node:fs is forbidden');
+});
+
+test('A2-T21: the name pattern finds the four accounts modules, and they hold no log, notice, editor, process, file or run-time code', () => {
+  const files = remoteFiles();
+  for (const wanted of ACCOUNTS_MODULES) {
+    assert.ok(files.includes(wanted), `the name pattern does not find ${wanted}`);
+    assert.deepEqual(logLeaks(sourceOf(wanted)), [], `${wanted} writes stdout, an operand or an error's message to a log`);
+    assert.deepEqual(forbiddenIn(sourceOf(wanted)), [], `${wanted} holds something a pure parser module must not`);
+  }
+});
