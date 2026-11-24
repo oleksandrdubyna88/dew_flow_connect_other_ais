@@ -14,13 +14,13 @@ internal sealed record EntryRecord(string Command, string[] Args, Dictionary<str
     internal McpEntry ToEntry() => new(Command ?? string.Empty, Args ?? [], (Env ?? []).ToDictionary(pair => pair.Key, pair => pair.Value ?? string.Empty, StringComparer.Ordinal), Raw ?? string.Empty);
 }
 
-/// <summary>One file's line in a manifest: what it was, what the install made it, and how far the install got.</summary>
-internal sealed record TargetRecord(string Cli, string Kind, string File, string Sha256Before, EntryRecord? Before, EntryRecord? After, string State);
+/// <summary>One file's line in a manifest: what it was, what the install made it, how far the install got, and — when it did not end done — why (the redacted sentence of the report; a manifest of before 2.0 has none).</summary>
+internal sealed record TargetRecord(string Cli, string Kind, string File, string Sha256Before, EntryRecord? Before, EntryRecord? After, string State, string Reason = "");
 
 /// <summary>What one run planned and did, written before the first change and rewritten at every step — the reason a killed run can be finished.</summary>
 internal sealed record ManifestRecord(string Id, string Binary, string StartedUtc, TargetRecord[] Targets);
 
-/// <summary>The states of a manifest line. The first four are the contract; the rest say how a line ended when it did not simply verify.</summary>
+/// <summary>The states of a manifest line. The first four are the contract; the rest say how a line ended when it did not simply verify (a line that did not end done also holds its reason).</summary>
 internal static class ManifestStates
 {
     internal const string Planned = "planned";
@@ -36,6 +36,9 @@ internal static class ManifestStates
 
     /// <summary>A later run finished what this one left half done.</summary>
     internal const string Superseded = "superseded";
+
+    /// <summary>The target was refused before anything was run for it: the file is as it was, and the reason says why.</summary>
+    internal const string Refused = "refused";
 }
 
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase, WriteIndented = true, DefaultIgnoreCondition = JsonIgnoreCondition.Never)]

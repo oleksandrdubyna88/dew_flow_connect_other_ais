@@ -77,6 +77,16 @@ internal sealed partial class InstallBackup
         ManifestFile.Write(Dir, _manifest);
     }
 
+    /// <summary>Records, on disk, why one target did not end done — the same redacted sentence the report carries. Never an environment value: the sentence comes from <see cref="VendorCommands"/>'s scrub or from this installer's own words.</summary>
+    internal void SetReason(Client cli, string kind, string reason)
+    {
+        _manifest = _manifest with
+        {
+            Targets = [.. _manifest.Targets.Select(target => target.Cli == cli.Word() && target.Kind == kind ? target with { Reason = reason } : target)],
+        };
+        ManifestFile.Write(Dir, _manifest);
+    }
+
     /// <summary>The backups on disk, newest first (their names sort by time), each with its manifest when it can be read.</summary>
     internal static IReadOnlyList<(string Dir, ManifestRecord? Manifest)> All(InstallHost host) =>
         !Directory.Exists(host.BackupsDir)

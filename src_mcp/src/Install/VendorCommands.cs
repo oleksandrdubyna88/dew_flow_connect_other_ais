@@ -8,6 +8,9 @@ internal sealed record VendorAnswer(bool Ok, string Reason)
     internal static VendorAnswer Success { get; } = new(true, string.Empty);
 }
 
+/// <summary>What a read-only vendor command printed, when it ran and exited 0.</summary>
+internal sealed record VendorText(bool Ok, string Text);
+
 /// <summary>
 /// Runs the clients' own commands (<c>claude mcp add-json</c>, <c>codex mcp add</c>, …) on this side, with the host's four variables as the child's and a bounded time (30 s).
 /// </summary>
@@ -18,6 +21,24 @@ internal sealed record VendorAnswer(bool Ok, string Reason)
 internal sealed class VendorCommands(InstallHost host, IProcessLauncher launcher, TimeSpan timeout, IReadOnlyCollection<string> secrets)
 {
     internal static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// Asks a client a question that changes nothing — <c>claude mcp add-json --help</c> — with the same runner, environment and time limit as every other vendor command, and answers what it printed
+    /// (stdout and stderr both: a CLI may write its help to either). It starts no server. A command that fails, hangs or cannot start answers <see cref="VendorText.Ok"/> false and no text.
+    /// </summary>
+    internal async Task<VendorText> ReadAsync(string executable, IReadOnlyList<string> args, CancellationToken ct)
+    {
+        try
+        {
+            var answer = await launcher.RunAsync(new ProcessRequest(executable, args, WorkingDirectory()) { Environment = host.VendorEnvironment, Timeout = timeout }, ct);
+
+            return answer is { TimedOut: false, ExitCode: 0 } ? new VendorText(true, $"{answer.StdOut}\n{answer.StdErr}") : new VendorText(false, string.Empty);
+        }
+        catch (Exception e) when (e is System.ComponentModel.Win32Exception or IOException or InvalidOperationException)
+        {
+            return new VendorText(false, string.Empty);
+        }
+    }
 
     internal async Task<VendorAnswer> RunAsync(string executable, IReadOnlyList<string> args, string stdin, CancellationToken ct)
     {

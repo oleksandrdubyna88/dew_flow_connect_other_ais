@@ -7,9 +7,12 @@ namespace CoaiMcp.Install;
 
 /// <summary>
 /// Claude Code's user-scope MCP entry: <c>mcpServers.coai</c> in <c>${CLAUDE_CONFIG_DIR:-$HOME}/.claude.json</c>, changed ONLY by <c>claude mcp add-json --scope user coai -</c>
-/// (the JSON on stdin) and <c>claude mcp remove --scope user coai</c> — that file is live state the running client rewrites, so nothing here edits it.
+/// (the JSON on stdin; or, on a claude whose help says nothing of stdin and for an entry that holds no value, the JSON as the argument) and <c>claude mcp remove --scope user coai</c> — that file is live
+/// state the running client rewrites, so nothing here edits it.
 /// </summary>
 /// <remarks>
+/// <para>Measured 2026-11-24 on claude 2.1.310 (the owner's Windows) and 2.1.331: only the newer one reads the JSON from stdin — the older one says "&lt;name&gt; &lt;json&gt;" in its help and a run that
+/// sent <c>-</c> was rolled back four times without a word. The capability is therefore READ (<see cref="ReadsStdinAsync"/>) before anything is written.</para>
 /// <para>Measured 2026-11-22 on claude 2.1.330: an existing name makes <c>add-json</c> exit 1 and change nothing, so an update is a remove and an add — the window a killed run
 /// leaves, which the manifest's <c>removed</c> state closes. <c>claude mcp get</c> and <c>list</c> start the server for a health check and are never called here: the file is READ.</para>
 /// </remarks>
@@ -104,8 +107,83 @@ internal sealed class ClaudeMcp : McpTarget
         return Encoding.UTF8.GetString(buffer.ToArray());
     }
 
-    protected override Task<VendorAnswer> AddAsync(McpEntry entry, ApplyContext context, CancellationToken ct) =>
-        context.Vendor.RunAsync(context.CliPath, ["mcp", "add-json", "--scope", "user", "coai", "-"], entry.RawJson.Length > 0 ? entry.RawJson : NewEntry(entry.Command).RawJson, ct);
+    /// <summary>Whether this claude reads <c>add-json</c>'s JSON from stdin — asked once per run, of the CLI itself. <see langword="null"/> until asked.</summary>
+    private bool? _readsStdin;
+
+    /// <summary>
+    /// Reads the capability from <c>claude mcp add-json --help</c> (bounded like every vendor command, starts no server) rather than from a version number: 2.1.310 prints
+    /// "&lt;name&gt; &lt;json&gt;" and nothing of stdin, 2.1.331 adds "or - to read it from stdin". A help that cannot be read is "no stdin" — the road that never puts a value on argv, or refuses.
+    /// </summary>
+    private async Task<bool> ReadsStdinAsync(ApplyContext context, CancellationToken ct)
+    {
+        if (_readsStdin is { } known)
+        {
+            return known;
+        }
+
+        var help = await context.Vendor.ReadAsync(context.CliPath, ["mcp", "add-json", "--help"], ct);
+        _readsStdin = help.Ok && help.Text.Contains("stdin", StringComparison.OrdinalIgnoreCase);
+
+        return _readsStdin.Value;
+    }
+
+    private static readonly string[] OnlyProgramAndArguments = ["type", "command", "args", "env"];
+
+    /// <summary>
+    /// Whether the entry is only the program path and its arguments: no environment value and no other key (a header, a token) that could hold one. The one condition under which the JSON may be an
+    /// ARGUMENT of <c>claude mcp add-json</c> — a command line is readable by every process of the account, so a value never goes there.
+    /// </summary>
+    private static bool CarriesNoValue(McpEntry entry)
+    {
+        if (entry.Env.Count > 0)
+        {
+            return false;
+        }
+
+        if (entry.RawJson.Length == 0)
+        {
+            return true;
+        }
+
+        try
+        {
+            return JsonNode.Parse(entry.RawJson) is JsonObject body
+                && body.All(pair => OnlyProgramAndArguments.Contains(pair.Key, StringComparer.Ordinal))
+                && (body["env"] is null || body["env"] is JsonObject { Count: 0 });
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>The sentence of a refusal: the version asked of the CLI (its first word, empty when it said none), the thing it cannot do, and the cure.</summary>
+    private static string StdinRefusal(ApplyContext context)
+    {
+        var version = context.CliVersion.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? string.Empty;
+
+        return $"claude {(version.Length > 0 ? version + " " : string.Empty)}cannot read `mcp add-json` from stdin; update Claude Code (claude update)";
+    }
+
+    protected override async Task<string> RefusalBeforeAnyStepAsync(PlannedTarget plan, ApplyContext context, CancellationToken ct) =>
+        plan.After is { } after && !await ReadsStdinAsync(context, ct) && !CarriesNoValue(after) ? StdinRefusal(context) : string.Empty;
+
+    /// <summary>
+    /// The three roads: stdin when the CLI says it reads it (the road measured on 2.1.330, unchanged); the JSON as the one <c>&lt;json&gt;</c> argument when it does not and the entry carries no value
+    /// (<see cref="System.Diagnostics.ProcessStartInfo.ArgumentList"/> quotes it — the launcher never joins a string); otherwise nothing is run, and the answer says why.
+    /// </summary>
+    protected override async Task<VendorAnswer> AddAsync(McpEntry entry, ApplyContext context, CancellationToken ct)
+    {
+        var json = entry.RawJson.Length > 0 ? entry.RawJson : NewEntry(entry.Command).RawJson;
+        if (await ReadsStdinAsync(context, ct))
+        {
+            return await context.Vendor.RunAsync(context.CliPath, ["mcp", "add-json", "--scope", "user", "coai", "-"], json, ct);
+        }
+
+        return CarriesNoValue(entry)
+            ? await context.Vendor.RunAsync(context.CliPath, ["mcp", "add-json", "--scope", "user", "coai", json], string.Empty, ct)
+            : new VendorAnswer(false, StdinRefusal(context));
+    }
 
     public override string Via(PlanAction action) => action switch
     {

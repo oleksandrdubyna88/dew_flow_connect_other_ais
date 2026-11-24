@@ -6,7 +6,7 @@ internal enum OutcomeKind
     /// <summary>The file holds what was wanted, read back.</summary>
     Done,
 
-    /// <summary>Nothing was changed, and the reason is the OS's or the file's own.</summary>
+    /// <summary>Nothing was changed, and the reason is the OS's, the file's or the client's own (a claude that cannot take the entry on any road that keeps a value off argv).</summary>
     Refused,
 
     /// <summary>A step failed after the backup; the file was put back as far as it could be.</summary>
@@ -51,8 +51,8 @@ internal interface IInstallTarget
     Task<TargetOutcome> ApplyAsync(PlannedTarget plan, ApplyContext context, CancellationToken ct);
 }
 
-/// <summary>What the steps of a target need: the host, the CLI's path, the command runner, and where progress is written down.</summary>
-internal sealed record ApplyContext(InstallHost Host, string CliPath, VendorCommands Vendor, InstallBackup Backup, InstallFaults Faults);
+/// <summary>What the steps of a target need: the host, the CLI's path and the version it answered to <c>--version</c> (empty when it said nothing), the command runner, and where progress is written down.</summary>
+internal sealed record ApplyContext(InstallHost Host, string CliPath, VendorCommands Vendor, InstallBackup Backup, InstallFaults Faults, string CliVersion = "");
 
 /// <summary>
 /// Seams for a test: to END the process between two steps (the killed run of scenario 12), and to change settings.json between the hook target's read and its write (scenario 10; called with the file and the attempt, from 1). Production holds none: <see cref="None"/> does nothing.

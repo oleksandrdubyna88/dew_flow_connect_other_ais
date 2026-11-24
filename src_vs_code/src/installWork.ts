@@ -1,5 +1,5 @@
 import type { Notice } from './notice';
-import { failuresNotice, setupClients, type SetupOutcome, type SpawnServer } from './setupClients';
+import { failuresNotice, setupClients, type ClientFailure, type SetupOutcome, type SpawnServer } from './setupClients';
 
 /**
  * The install module's work after the first `menuReady` (v2 E4, story s5-install-module): the binary check, `coai-mcp --setup-clients`, then the offer of a newer server.
@@ -9,8 +9,8 @@ import { failuresNotice, setupClients, type SetupOutcome, type SpawnServer } fro
  * ({@link InstallWork.serverInstalled}): the binary changed, and a new server may register itself differently — a run that finds nothing to do is silent.</p>
  *
  * <p><b>Nothing here throws and nothing here asks.</b> Each step is its own unit: one that fails is logged and the next one still runs. The only
- * thing a person is ever told is a client that was refused or failed — one notification — and the update offer, which is the old code's own question,
- * moved and not changed.</p>
+ * thing a person is ever told is a client that was refused or failed — ONE notification for the whole activation, with the server's reason, however often the mode
+ * runs again — and the update offer, which is the old code's own question, moved and not changed.</p>
  *
  * <p>Pure of the editor: every seam is in {@link InstallPorts}, so the order and the once-ness are tested without a host (`installWork.test.ts`).</p>
  */
@@ -33,6 +33,8 @@ export class InstallWork {
   private started: Promise<void> | undefined;
   /** Runs of the mode follow one another: two never overlap, and a late one waits for the one before it. */
   private chain: Promise<void> = Promise.resolve();
+  /** Whether the one notification of this activation has been shown. */
+  private toldThePerson = false;
 
   constructor(private readonly ports: InstallPorts) {}
 
@@ -77,8 +79,16 @@ export class InstallWork {
   private async tell(outcome: SetupOutcome): Promise<void> {
     if (outcome.kind === 'unread') {
       this.ports.log(`--setup-clients: ${outcome.why}`);
-    } else if (outcome.kind === 'done' && outcome.failures.length > 0) {
-      await this.ports.say(failuresNotice(outcome.failures));
+    } else if (outcome.kind === 'done') {
+      await this.tellTheFailures(outcome.failures);
+    }
+  }
+
+  /** Once per activation, however often the mode runs again (every install or update in this window runs it): a refusal that stands is the same news, and a loop of toasts is not a notice. */
+  private async tellTheFailures(failures: readonly ClientFailure[]): Promise<void> {
+    if (failures.length > 0 && !this.toldThePerson) {
+      this.toldThePerson = true;
+      await this.ports.say(failuresNotice(failures));
     }
   }
 

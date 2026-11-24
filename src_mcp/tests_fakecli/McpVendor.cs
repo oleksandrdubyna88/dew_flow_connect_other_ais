@@ -26,6 +26,7 @@ internal static class McpVendor
         var verb = argv switch
         {
             ["--version"] => "version",
+            ["mcp", "add-json", .., "--help"] => "help",
             ["mcp", var v, ..] => v,
             _ => "unknown",
         };
@@ -62,7 +63,8 @@ internal static class McpVendor
             writer.WriteLine(line);
         }
 
-        return File.ReadAllLines(path).Count(one => one.StartsWith($"{which} ", StringComparison.Ordinal) && one.StartsWith($"{which} mcp {verb} ", StringComparison.Ordinal));
+        // A help read is a question about the CLI, not a call of the verb: it is logged, and it is never counted against an `add-json:1` steering.
+        return File.ReadAllLines(path).Count(one => one.StartsWith($"{which} mcp {verb} ", StringComparison.Ordinal) && !one.Contains(" --help | ", StringComparison.Ordinal));
     }
 
     private static bool Steered(string variable, string verb, int calls)
@@ -89,8 +91,10 @@ internal static class McpVendor
         switch (verb)
         {
             case "version":
-                Console.Out.WriteLine("2.1.330 (Claude Code)");
+                Console.Out.WriteLine(((Environment.GetEnvironmentVariable("FAKECLI_CLAUDE_VERSION") is { Length: > 0 } version) ? version : "2.1.330") + " (Claude Code)");
                 return 0;
+            case "help":
+                return ClaudeAddJsonHelp();
             case "add-json":
                 return ClaudeAdd(argv);
             case "remove":
@@ -103,6 +107,26 @@ internal static class McpVendor
                 return 1;
         }
     }
+
+    /// <summary>
+    /// <c>claude mcp add-json --help</c>, as MEASURED: 2.1.310 (the owner's Windows) has no word of stdin; 2.1.331 says "or - to read it from stdin". <c>FAKECLI_CLAUDE_ADDJSON=argv</c>
+    /// makes the stand-in the old one — and then it REFUSES a <c>-</c> as the JSON, as the real old one reads it as the JSON text and cannot parse it.
+    /// </summary>
+    private static int ClaudeAddJsonHelp()
+    {
+        var old = OldAddJson();
+        Console.Out.WriteLine("Usage: claude mcp add-json [options] <name> <json>");
+        Console.Out.WriteLine();
+        Console.Out.WriteLine(old ? "Add an MCP server (stdio, SSE, HTTP, or WebSocket) with a JSON string" : "Add an MCP server (stdio, SSE, HTTP, or WebSocket) with a JSON string, or - to read it from stdin");
+        Console.Out.WriteLine();
+        Console.Out.WriteLine("Options:");
+        Console.Out.WriteLine("  -s, --scope <scope>  Configuration scope (local, user, or project) (default: \"local\")");
+        Console.Out.WriteLine("  -h, --help           display help for command");
+
+        return 0;
+    }
+
+    private static bool OldAddJson() => Environment.GetEnvironmentVariable("FAKECLI_CLAUDE_ADDJSON") == "argv";
 
     private static JsonObject? ReadClaude(string file, out bool corrupted)
     {
@@ -139,6 +163,14 @@ internal static class McpVendor
         }
 
         var name = rest[0];
+        if (OldAddJson() && rest[1] == "-")
+        {
+            // The old CLI takes the argument as the JSON text itself; the stand-in is no more forgiving.
+            Console.Error.WriteLine("error: Invalid JSON: Unexpected token '-'");
+
+            return 1;
+        }
+
         var json = rest[1] == "-" ? Console.In.ReadToEnd() : rest[1];
         var file = ClaudeFile();
         if (ReadClaude(file, out _) is not { } root)

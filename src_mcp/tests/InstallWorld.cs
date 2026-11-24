@@ -152,9 +152,10 @@ internal sealed class InstallWorld : IDisposable
     }
 
     /// <summary>Steers one vendor stand-in: <c>fail: "add-json:1"</c> fails its first <c>add-json</c>; <c>hang</c> sleeps past the installer's timeout. Rewrites the wrapper.</summary>
-    internal void Steer(Client cli, string fail = "", string hang = "", bool echo = false)
+    internal void Steer(Client cli, string fail = "", string hang = "", bool echo = false, bool oldAddJson = false, string version = "")
     {
-        _steering[cli] = $"FAKECLI_MCP_FAIL='{fail}' FAKECLI_MCP_HANG='{hang}' FAKECLI_MCP_ECHO='{(echo ? "1" : "0")}'";
+        // oldAddJson: a claude whose `mcp add-json --help` says nothing of stdin (2.1.310, measured), and which reads a `-` as the JSON text; version: what `--version` answers.
+        _steering[cli] = $"FAKECLI_MCP_FAIL='{fail}' FAKECLI_MCP_HANG='{hang}' FAKECLI_MCP_ECHO='{(echo ? "1" : "0")}' FAKECLI_CLAUDE_ADDJSON='{(oldAddJson ? "argv" : "stdin")}' FAKECLI_CLAUDE_VERSION='{version}'";
         WriteWrappers();
     }
 

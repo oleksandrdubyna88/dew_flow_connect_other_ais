@@ -23,6 +23,10 @@ Measured time from the command to the usable menu on the integration branch: Lin
 lines on this machine (Claude Code, Codex, agy), writes the `coai` MCP entry for each, and finishes an update that stopped
 half way. You can run the same thing by hand: `coai-mcp --install` on a clean machine, `coai-mcp --setup-clients --dry-run`
 to look first, `--remove` or `--restore` to undo. A client that cannot be set up is one notification, not a failure of the rest.
+It reads what your Claude Code can do before it writes: an older Claude Code (2.1.310 measured) cannot read `claude mcp add-json` from stdin (2.1.330 can), so
+for an entry with no environment values the JSON is passed as the argument; an entry with environment values is refused, never put on a
+command line, with the sentence "claude <version> cannot read `mcp add-json` from stdin; update Claude Code (claude update)". Run
+`claude update`, then reload the window. Every client that is not set up now has its reason in the backup manifest and in the report.
 
 **Roles.** The new `roles` tool (and a SessionStart hook) tells an AI which main AI is set, which models serve each role in
 order, which model band fits a task of complexity 0 to 10, and how the work method is set. `review_*`, `cons` and `consask`

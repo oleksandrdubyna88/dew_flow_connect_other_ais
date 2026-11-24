@@ -101,7 +101,7 @@ internal sealed class SetupRun(string mode, SetupArgs args, InstallHost host, Se
         return Report(output, binary.View, new BackupView(backup.Id, backup.Dir), done, ExitOf(done, failed: done.SelectMany(run => run.Targets).Any(target => target.Status == "failed")));
     }
 
-    private static async Task<ClientRun> ApplyClientAsync(ClientRun run, ApplyContext context, InstallBackup backup, CancellationToken ct)
+    private async Task<ClientRun> ApplyClientAsync(ClientRun run, ApplyContext context, InstallBackup backup, CancellationToken ct)
     {
         var applied = new List<TargetRun>();
         foreach (var target in run.Targets)
@@ -115,7 +115,7 @@ internal sealed class SetupRun(string mode, SetupArgs args, InstallHost host, Se
             TargetOutcome outcome;
             try
             {
-                outcome = await target.Target.ApplyAsync(target.Plan, context with { CliPath = run.Found.Path }, ct);
+                outcome = await target.Target.ApplyAsync(target.Plan, context with { CliPath = run.Found.Path, CliVersion = run.Found.Version }, ct);
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {
@@ -126,11 +126,34 @@ internal sealed class SetupRun(string mode, SetupArgs args, InstallHost host, Se
             {
                 InstallBackup.SupersedeInterrupted(context.Host, target.Plan.Client, target.Plan.Kind, backup.Id);
             }
+            else
+            {
+                Explain(backup, target, outcome);
+            }
 
             applied.Add(target with { Status = outcome.Kind.ToString().ToLowerInvariant(), Reason = outcome.Reason.Length > 0 ? outcome.Reason : target.Plan.Reason });
         }
 
         return run with { Targets = applied };
+    }
+
+    /// <summary>
+    /// A target that did not end done says why in the two places a person looks: the manifest line (on disk, after the run) and the terminal (one line on stderr, for a run started by hand). The sentence is
+    /// the outcome's own — a vendor's first stderr line through the redaction, or this installer's words — never an environment value.
+    /// </summary>
+    private void Explain(InstallBackup backup, TargetRun target, TargetOutcome outcome)
+    {
+        var reason = outcome.Reason.Length > 0 ? outcome.Reason : target.Plan.Reason;
+        try
+        {
+            backup.SetReason(target.Plan.Client, target.Plan.Kind, reason);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // The report still carries the reason; a manifest that cannot be rewritten is the next run's to read as it is.
+        }
+
+        note($"{target.Plan.Client.Word()} {target.Plan.Kind}: {outcome.Kind.ToString().ToLowerInvariant()}: {reason}");
     }
 
     private static IReadOnlyList<InstallBackup.Subject> Subjects(IReadOnlyList<ClientRun> runs) =>
@@ -277,8 +300,19 @@ internal sealed class SetupRun(string mode, SetupArgs args, InstallHost host, Se
 
         return new ClientView(
             run.Found.Cli.Word(), run.Found.Found, run.Found.Path, run.Found.Version, ResultOf(run),
-            run.Found.Found ? string.Join("; ", targets.Select(target => target.Reason).Where(reason => reason.Length > 0).Distinct()) : run.Found.Reason,
+            run.Found.Found ? ReasonOf(run, targets) : run.Found.Reason,
             targets);
+    }
+
+    /// <summary>
+    /// The client's one sentence: the reasons of the targets that did NOT end done (refused or failed) when there are any — what a person is shown must not bury the refusal under the plans
+    /// of the targets that worked — else every target's reason, as it always was.
+    /// </summary>
+    private static string ReasonOf(ClientRun run, IReadOnlyList<TargetView> views)
+    {
+        var notDone = run.Targets.Select((target, index) => (target, index)).Where(one => one.target.Status is "refused" or "failed" || one.target.Plan.Action == PlanAction.Refuse).Select(one => views[one.index]).ToList();
+
+        return string.Join("; ", (notDone.Count > 0 ? notDone : views).Select(target => target.Reason).Where(reason => reason.Length > 0).Distinct());
     }
 
     private static string ResultOf(ClientRun run)

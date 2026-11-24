@@ -147,3 +147,43 @@ test('an update the person took runs the mode once more with the new binary, and
   assert.equal(runs, 3, 'the first run, the install the offer reported, and the install the command reported: each is a run, and they follow one another');
   assert.equal(overlapped, false);
 });
+
+const STDIN_REASON = 'claude 2.1.310 cannot read `mcp add-json` from stdin; update Claude Code (claude update)';
+const STILL_REFUSED = report({ cli: 'claude', result: 'refused', reason: STDIN_REASON }, { cli: 'codex', result: 'changed' });
+
+test('an old claude that cannot take the entry is ONE notification with the server\'s reason in it, never a modal and never a button', async () => {
+  const w = world({ code: 78, output: STILL_REFUSED });
+
+  await w.work.start();
+
+  assert.equal(w.said.length, 1);
+  assert.equal(w.said[0]?.code, 'clients-not-set-up');
+  assert.equal(w.said[0]?.modal, undefined, 'a toast, not a question');
+  assert.equal(w.said[0]?.action, undefined);
+  assert.equal(w.said[0]?.actions, undefined);
+  assert.ok((w.said[0]?.title ?? '').includes(`claude (refused: ${STDIN_REASON})`), w.said[0]?.title);
+});
+
+test('the notification is once per activation: the mode runs again after an install, finds the same refusal, and says nothing a second time', async () => {
+  let installed: () => void = () => undefined;
+  const w = world({ code: 78, output: STILL_REFUSED, offer: (taken) => { installed = taken; return Promise.resolve(); } });
+
+  await w.work.start();
+  installed();
+  await w.work.serverInstalled();
+  await w.work.serverInstalled();
+
+  assert.equal(w.events.filter((one) => one.startsWith('spawn')).length, 4, 'the mode did run again each time: only the telling is once');
+  assert.equal(w.said.length, 1, 'one notification for the whole activation');
+});
+
+test('a reload is a new activation and tells once more', async () => {
+  const w = world({ code: 78, output: STILL_REFUSED });
+  await w.work.start();
+  const again = world({ code: 78, output: STILL_REFUSED });
+
+  await again.work.start();
+
+  assert.equal(w.said.length, 1);
+  assert.equal(again.said.length, 1, 'a new activation is a new work: the person is told once more, as the notice\'s cure says');
+});

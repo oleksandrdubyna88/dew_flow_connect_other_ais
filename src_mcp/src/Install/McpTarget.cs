@@ -29,8 +29,22 @@ internal abstract class McpTarget : IInstallTarget
 
     protected abstract Task<VendorAnswer> RemoveAsync(ApplyContext context, CancellationToken ct);
 
+    /// <summary>
+    /// What the client's own command needs to know BEFORE anything is removed or written — the sentence that refuses the target, or empty. Asked of the client (a read that changes nothing),
+    /// so a plan stays pure and a dry run runs nothing.
+    /// </summary>
+    protected virtual Task<string> RefusalBeforeAnyStepAsync(PlannedTarget plan, ApplyContext context, CancellationToken ct) => Task.FromResult(string.Empty);
+
     public async Task<TargetOutcome> ApplyAsync(PlannedTarget plan, ApplyContext context, CancellationToken ct)
     {
+        if (await RefusalBeforeAnyStepAsync(plan, context, ct) is { Length: > 0 } refusal)
+        {
+            // Before the first step: the old entry is still in the file, and it stays — removing it first and then failing to add would be the damage the refusal exists to avoid.
+            context.Backup.SetState(Cli, Kind, ManifestStates.Refused);
+
+            return new TargetOutcome(OutcomeKind.Refused, refusal);
+        }
+
         var failure = await StepsAsync(plan, context, plan.File, ct);
         if (failure.Length == 0)
         {
