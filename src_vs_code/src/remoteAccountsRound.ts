@@ -280,13 +280,19 @@ type Gate = { readonly kind: 'ok' } | { readonly kind: 'abandon' } | { readonly 
  * forgotten in flight fails (a) first, so (c) never runs for it and cannot write an automatic row where a person just took one away.
  */
 async function checked(context: Context, host: string): Promise<Gate> {
-  if (context.seams.generation() !== context.token || (await context.seams.stopped())) {
+  if (moved(context) || (await context.seams.stopped())) {
     return { kind: 'abandon' };
   }
-  const door = await context.seams.admit(host);
 
-  return door.kind === 'read' ? { kind: 'ok' } : { kind: 'refused', admission: door.kind };
+  return afterDoor(context, await context.seams.admit(host));
 }
+
+/** A Stop, a refusal or a Forget since the round started: the generation is not the round's. */
+const moved = (context: Context): boolean => context.seams.generation() !== context.token;
+
+/** The door's answer — unless the generation moved while it was awaited: then nothing is published, whatever the door said. */
+const afterDoor = (context: Context, door: Admission): Gate =>
+  (moved(context) ? { kind: 'abandon' } : door.kind === 'read' ? { kind: 'ok' } : { kind: 'refused', admission: door.kind });
 
 /** A result that failed a check is dropped and logged once: a Stop ends the round, a refusal keeps the kind the door answered. */
 function droppedStep(seams: RoundSeams, state: RoundState, host: string, gate: Exclude<Gate, { readonly kind: 'ok' }>): Step {
@@ -295,11 +301,14 @@ function droppedStep(seams: RoundSeams, state: RoundState, host: string, gate: E
   return gate.kind === 'abandon' ? { kind: 'abandoned', state } : { kind: 'skipped', state: withAdmission(state, host, gate.admission) };
 }
 
+/** A host whose terminal closed in flight: its result is dropped; a Stop that came meanwhile still ends the round. */
+const closedStep = (context: Context, state: RoundState): Step => ({ kind: moved(context) ? 'abandoned' : 'skipped', state });
+
 /** The call is back: a closed host is dropped; a result that fails a check is dropped, once logged; else it is published. */
 async function settled(context: Context, state: RoundState, host: string, mode: AccountsMode, run: RemoteRun): Promise<Step> {
   const { seams } = context;
   if (!hostLive(seams, host)) {
-    return { kind: 'skipped', state };
+    return closedStep(context, state);
   }
   const gate = await checked(context, host);
   if (gate.kind !== 'ok') {
@@ -312,20 +321,30 @@ async function settled(context: Context, state: RoundState, host: string, mode: 
   return { kind: 'published', state: next, read };
 }
 
+/** What ends a step before its door: a Stop or a moved generation ends the round; a host with no terminal is skipped. */
+async function beforeCall(context: Context, state: RoundState, host: string): Promise<Step | undefined> {
+  if (moved(context) || (await context.seams.stopped())) {
+    return { kind: 'abandoned', state };
+  }
+
+  return hostLive(context.seams, host) ? undefined : { kind: 'skipped', state };
+}
+
 /** One call to one host: the Stop, the terminal, the door, the call, then `settled`. */
 async function hostStep(context: Context, state: RoundState, host: string, call: 'first' | 'usage'): Promise<Step> {
   const { seams } = context;
-  if (await seams.stopped()) {
-    return { kind: 'abandoned', state };
-  }
-  if (!hostLive(seams, host)) {
-    return { kind: 'skipped', state };
+  const early = await beforeCall(context, state, host);
+  if (early !== undefined) {
+    return early;
   }
   const door = await seams.admit(host);
   if (door.kind !== 'read') {
     seams.landed();
 
     return { kind: 'skipped', state: withAdmission(state, host, door.kind) };
+  }
+  if (moved(context)) {
+    return { kind: 'abandoned', state };
   }
   const mode = modeFor(call);
 
@@ -344,8 +363,9 @@ async function hostRound(context: Context, state: RoundState, host: string): Pro
   return second ? hostStep(context, first.state, host, 'usage') : first;
 }
 
-const finished = (seams: RoundSeams, state: RoundState, abandoned: boolean): RoundResult => ({
-  memory: state.memory, allowedNow: state.allowedNow, endedMs: seams.now(), abandoned,
+/** The round's end. A generation that moved by now abandons it: its memory is never stored over what a Stop cleared. A closed host's older entry goes. */
+const finished = (context: Context, state: RoundState, abandoned: boolean): RoundResult => ({
+  memory: liveOnly(state.memory, accountsHosts(context.seams.live())), allowedNow: state.allowedNow, endedMs: context.seams.now(), abandoned: abandoned || moved(context),
 });
 
 /**
@@ -360,11 +380,11 @@ export async function runRound(seams: RoundSeams, memory: Memory, round: number,
     const step = await hostRound(context, state, host);
     state = step.state;
     if (step.kind === 'abandoned') {
-      return finished(seams, state, true);
+      return finished(context, state, true);
     }
   }
 
-  return finished(seams, state, false);
+  return finished(context, state, false);
 }
 
 // ───────────────── the timer, as decisions ─────────────────
@@ -386,6 +406,34 @@ export function armFor(input: { readonly eligible: boolean; readonly armed: bool
 }
 
 const refusedIn = (standings: readonly HostStanding[], host: string): boolean => standings.some((one) => one.host === host && one.answer === 'no');
+
+/**
+ * A host that was newly refused keeps an entry that says so — its older reading goes, the kind the door will answer is kept — instead of being
+ * deleted: the entry is what the list reads, and a round that ends later cannot bring the older reading back.
+ */
+export const withRefusals = (memory: Memory, refused: ReadonlySet<string>): Memory =>
+  new Map([...memory].map(([host, one]): [string, HostMemory] => [host, refused.has(host) ? { ...one, reading: undefined, admission: 'refused' } : one]));
+
+/**
+ * One round, and what follows it, in a window. A round that failed — a seam rejected — is logged once through `failed`, and the timer is still set
+ * (`schedule` is given nothing): rounds never stop silently. A `schedule` that fails too falls back to `fallback`, which sets the plain gap.
+ */
+export async function settleRound<T>(work: () => Promise<T>, schedule: (done: T | undefined) => Promise<void>, fallback: () => void, failed: () => void): Promise<T | undefined> {
+  let done: T | undefined;
+  try {
+    done = await work();
+  } catch {
+    failed();
+  }
+  try {
+    await schedule(done);
+  } catch {
+    failed();
+    fallback();
+  }
+
+  return done;
+}
 
 /** The hosts the list says "no" to. */
 export const refusedHosts = (standings: readonly HostStanding[]): ReadonlySet<string> => new Set(standings.filter((one) => one.answer === 'no').map((one) => one.host));
@@ -442,9 +490,9 @@ export function refreshAnswer(input: { readonly running: boolean; readonly lastE
 export const openStarts = (input: { readonly running: boolean; readonly lastEndMs: number | undefined; readonly now: number; readonly unreadHost: boolean }): boolean =>
   input.unreadHost && refreshAnswer(input) === 'start';
 
-const hasAnswer = (one: HostMemory | undefined): boolean => [one?.reading, one?.failure, one?.unreadable].some((held) => held !== undefined);
+const hasAnswer = (one: HostMemory | undefined): boolean => [one?.reading, one?.failure].some((held) => held !== undefined);
 
-/** A host that is not refused and has neither a reading nor a failure (an unreadable reply is an answer too). */
+/** A host that is not refused and has neither a reading nor a failure. */
 export const unreadHost = (hosts: readonly string[], memory: Memory, standings: readonly HostStanding[]): boolean =>
   eligibleOf(hosts, standings).some((host) => !hasAnswer(memory.get(host)));
 

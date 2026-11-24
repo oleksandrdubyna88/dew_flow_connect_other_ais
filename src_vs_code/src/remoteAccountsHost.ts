@@ -3,7 +3,7 @@ import { oneAtATime } from './oneAtATime';
 import { readAccounts } from './remoteAccountsReply';
 import {
   AccountsCall, Memory, RoundResult, RoundSeams, STATE_KEY, TimerAction, Trigger, accountsHosts, armFor, callFor, droppedLine, eligibleOf, isStopped, liveOnly, logGate,
-  memoryAfter, nextAfterRound, openStarts, refreshAnswer, refusedHosts, runRound, standingsBump, startTheRound, stopTheRound, timerFor, unreadHost,
+  ROUND_GAP_MS, memoryAfter, nextAfterRound, openStarts, refreshAnswer, refusedHosts, runRound, settleRound, standingsBump, startTheRound, stopTheRound, timerFor, unreadHost, withRefusals,
 } from './remoteAccountsRound';
 import type { RemoteSessions } from './remoteSessionHost';
 import { ACCOUNTS_LIMITS, defaultRemoteSeams, runAccounts } from './remoteSsh';
@@ -136,31 +136,35 @@ class AccountsWindow implements TerminalAccounts {
     this.apply(timerFor(await this.decision(this.armed), this.test));
   };
 
-  /** One round, if none runs. A failed round is one fixed line and nothing else: the next round is the timer's. */
+  /**
+   * One round, if none runs. A round that fails is one fixed line and nothing else, and the timer is still set from now (`settleRound`):
+   * rounds never stop silently.
+   */
   runNow(trigger: Trigger): Promise<RoundResult | undefined> {
     return this.latch(async () => {
       this.running = true;
       try {
-        return await this.oneRound(trigger);
-      } catch {
-        defaultRemoteSeams().log(ROUND_FAILED_LINE);
-
-        return undefined;
+        return await settleRound(
+          () => runRound(this.seams, this.memoryNow, this.round, trigger),
+          (done) => this.afterRound(done),
+          () => { this.apply(timerFor({ kind: 'at', atMs: Date.now() + ROUND_GAP_MS }, this.test, Date.now())); },
+          () => { defaultRemoteSeams().log(ROUND_FAILED_LINE); },
+        );
       } finally {
         this.running = false;
       }
     });
   }
 
-  private async oneRound(trigger: Trigger): Promise<RoundResult> {
-    const result = await runRound(this.seams, this.memoryNow, this.round, trigger);
-    this.memoryNow = memoryAfter(this.memoryNow, result);
-    this.round += 1;
-    this.lastEndMs = result.endedMs;
-    const next = nextAfterRound({ stopped: await this.stoppedNow(), eligible: await this.eligibleNow(), endedMs: result.endedMs });
+  /** After a round, or after one that failed (`done` is nothing): the memory it left, and the next timer, counted from its end or from now. */
+  private async afterRound(done: RoundResult | undefined): Promise<void> {
+    if (done !== undefined) {
+      this.memoryNow = memoryAfter(this.memoryNow, done);
+      this.round += 1;
+      this.lastEndMs = done.endedMs;
+    }
+    const next = nextAfterRound({ stopped: await this.stoppedNow(), eligible: await this.eligibleNow(), endedMs: done?.endedMs ?? Date.now() });
     this.apply(timerFor(next, this.test, Date.now()));
-
-    return result;
   }
 
   /** A terminal closed: a host with none left is dropped from memory. */
@@ -169,7 +173,7 @@ class AccountsWindow implements TerminalAccounts {
     void this.rearm();
   };
 
-  /** The change signal of the list: a refusal or a Forget bumps the generation; a refused host loses its reading at once. */
+  /** The change signal of the list: a refusal or a Forget bumps the generation; a refused host keeps an entry with no reading and the kind `refused`. */
   changedList = async (): Promise<void> => {
     const standings = await this.sessions.hostStandings();
     if (standingsBump(this.known, this.refused, standings)) {
@@ -177,7 +181,7 @@ class AccountsWindow implements TerminalAccounts {
     }
     this.known = new Set(standings.map((one) => one.host));
     this.refused = refusedHosts(standings);
-    this.memoryNow = new Map([...this.memoryNow].filter(([host]) => !this.refused.has(host)));
+    this.memoryNow = withRefusals(this.memoryNow, this.refused);
     this.landed.fire();
     await this.rearm();
   };

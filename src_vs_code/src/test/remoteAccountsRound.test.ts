@@ -4,9 +4,9 @@ import test from 'node:test';
 import {
   FIRST_DELAY_MS, HOURLY_MS, ROUND_GAP_MS, REFRESH_FLOOR_MS, USAGE_POLICY, STUB_SENTENCE,
   accountsHosts, armFor, blockedAfter, callFor, claudeAccountKey, due, eligibleOf, logGate, memoryAfter, modeFor, needsSecondCall,
-  nextAfterRound, openStarts, refreshAnswer, roundOrder, runRound, standingsBump, timerFor, unreadHost,
+  nextAfterRound, openStarts, refreshAnswer, roundOrder, runRound, settleRound, standingsBump, timerFor, unreadHost, withRefusals,
 } from '../remoteAccountsRound';
-import type { ArmDecision, HostMemory, Memory, RoundSeams } from '../remoteAccountsRound';
+import type { ArmDecision, HostMemory, Memory, RoundResult, RoundSeams } from '../remoteAccountsRound';
 import type { Admission, HostStanding } from '../remoteHosts';
 import type { RemoteRun } from '../remoteSsh';
 import {
@@ -326,9 +326,9 @@ test('A3-T19: a closed host is dropped, and a result in flight too', async () =>
       return undefined;
     },
   });
-  const late = await roundOf(flight, new Map(), 0, 'timer', OFF);
+  const late = await roundOf(flight, memoryOf(['b', remembered('b', 'x@example.test')]), 0, 'timer', OFF);
   assert.deepEqual(callsOf(flight), ['a N', 'b N']);
-  assert.equal(late.memory.get('b')?.reading, undefined, 'a closed terminal\'s host kept its reading');
+  assert.equal(late.memory.has('b'), false, 'a closed terminal\'s host kept its older entry, and memoryAfter would bring it back');
   assert.equal(flight.landed.count, 1, 'the list was redrawn for a result that was dropped');
   assert.notEqual(late.memory.get('a')?.reading, undefined, 'the companion: an open host keeps its reading');
 });
@@ -385,7 +385,7 @@ test('A3-T22: Refresh now and opening the list', async () => {
   assert.equal(unreadHost(['a'], new Map(), []), true, 'a host with neither a reading nor a failure');
   assert.equal(unreadHost(['a'], memoryOf(['a', reading]), []), false);
   assert.equal(unreadHost(['a'], memoryOf(['a', failed]), []), false);
-  assert.equal(unreadHost(['a'], memoryOf(['a', unreadable]), []), false, 'an unreadable answer is an answer');
+  assert.equal(unreadHost(['a'], memoryOf(['a', unreadable]), []), true, 'the text says neither a reading nor a failure: an unreadable reply is neither');
   assert.equal(unreadHost(['a', 'b'], memoryOf(['a', reading]), []), true);
   assert.equal(unreadHost(['b'], new Map(), [{ host: 'b', answer: 'no', how: 'person', askedUtc: '2026-11-01T00:00:00.000Z' }]), false, 'a refused host counts as unread');
   assert.equal(openStarts({ running: false, lastEndMs: now - 61_000, now, unreadHost: true }), true);
@@ -519,9 +519,11 @@ test('A3-T30: a refusal while a call is held open publishes nothing', async () =
   };
 
   // (1) the generation is bumped and the door now says `refused`: dropped; the round ends.
-  const one = heldRound((asked) => (asked === 0 ? READ_OK : { kind: 'refused' }), (control) => { control.generation += 1; });
+  // The host's change handler runs while the call is held, as stop() does in A3-T29: the newly refused host keeps an entry that says so.
+  let current: Memory = memoryOf(['a', older]);
+  const one = heldRound((asked) => (asked === 0 ? READ_OK : { kind: 'refused' }), (control) => { control.generation += 1; current = withRefusals(current, new Set(['a'])); });
   const first = await one.done;
-  assert.deepEqual([first.memory.get('a')?.failure, first.memory.get('a')?.reading !== older.reading], [undefined, false], 'a refused host\'s result was published');
+  assert.deepEqual(memoryAfter(current, first).get('a'), { ...older, reading: undefined, admission: 'refused' }, 'a refused host\'s older reading was brought back or published');
   assert.deepEqual(one.w.dropped, ['a']);
   assert.equal(one.w.calls.length, 1, 'an extra call was made');
 
@@ -612,4 +614,84 @@ test('A3-T30: a refusal or a Forget shown by the change signal bumps the generat
   assert.equal(standingsBump(known, refused, [row('a', 'yes')]), true, 'a Forget did not bump the generation');
   assert.equal(standingsBump(new Set(), new Set(), [row('a', 'no')]), true, 'a refusal shown to a window that knew nothing did not bump the generation');
   assert.equal(standingsBump(new Set(), new Set(), []), false);
+});
+
+// ───────────────── the review fixes of E1.S3 ─────────────────
+
+test('A3-T29 (F1): a Stop given while the check\'s door is awaited, on the LAST host, publishes nothing', async () => {
+  const w = world({ hosts: ['a'], door: (_host, asked, self) => { if (asked === 1) { self.control.generation += 1; } return READ_OK; } });
+
+  const result = await roundOf(w, new Map(), 0, 'timer', OFF);
+
+  assert.equal(result.abandoned, true, 'a Stop given while the door was awaited was not seen');
+  assert.equal(result.memory.get('a')?.reading, undefined, 'a reading came back after Stop');
+  assert.equal(w.landed.count, 0, 'the list was redrawn for a result that was dropped');
+  assert.deepEqual(w.dropped, ['a']);
+  assert.deepEqual([...memoryAfter(new Map(), result)], [], 'a stopped round\'s memory came back');
+});
+
+test('A3-T29 (F1): a generation that moved by the end of the round abandons it, so its memory is never stored', async () => {
+  // The last host\'s result passed every check; the Stop came after, while the round was finishing.
+  const w = world({ hosts: ['a'] });
+  const seams = { ...w.seams, landed: () => { w.control.generation += 1; } };
+
+  const result = await runRound(seams, new Map(), 0, 'timer', OFF);
+
+  assert.equal(result.abandoned, true, 'a Stop given as the round ended did not abandon it');
+  assert.deepEqual([...memoryAfter(new Map(), result)], [], 'a stopped round\'s memory came back');
+});
+
+test('A3-T29 (F2): no ssh call starts after a Stop', async () => {
+  const before = world({ hosts: ['a', 'b'], door: (_host, asked, self) => { if (asked === 0) { self.control.generation += 1; } return READ_OK; } });
+  const result = await roundOf(before, new Map(), 0, 'timer', OFF);
+  assert.equal(before.calls.length, 0, 'an ssh call started after a Stop was given while the door was awaited');
+  assert.equal(result.abandoned, true);
+
+  // A terminal that closed during its call, and a Stop: the round ends, it does not go on to the next host.
+  const closed = world({
+    hosts: ['a', 'b'],
+    hold: (host, _mode, self) => {
+      if (host === 'a') {
+        self.control.terminals = self.control.terminals.filter((one) => !one.name.includes(' a '));
+        self.control.generation += 1;
+      }
+
+      return undefined;
+    },
+  });
+  const ended = await roundOf(closed, new Map(), 0, 'timer', OFF);
+  assert.deepEqual(callsOf(closed), ['a N'], 'a host was called after a Stop that came while a closed host\'s call ran');
+  assert.equal(ended.abandoned, true);
+});
+
+test('A3-T22 (F3): a round that fails is settled: logged once, and the timer is still set', async () => {
+  const failing = world({ hosts: ['a'], door: () => { throw new Error('a seam failed'); } });
+  const log: string[] = [];
+  const scheduled: (RoundResult | undefined)[] = [];
+  const fallbacks: string[] = [];
+
+  const result = await settleRound<RoundResult>(
+    () => roundOf(failing),
+    (done) => { scheduled.push(done); return Promise.resolve(); },
+    () => { fallbacks.push('fallback'); },
+    () => { log.push('failed'); },
+  );
+
+  assert.equal(result, undefined);
+  assert.deepEqual(log, ['failed'], 'a failed round was not logged exactly once');
+  assert.deepEqual(scheduled, [undefined], 'rounds stopped silently: no timer was asked for after a failed round');
+  assert.equal(fallbacks.length, 0);
+  // The timer that is then set is the planner\'s, from now, and outside test mode it starts.
+  assert.deepEqual(timerFor(nextAfterRound({ stopped: false, eligible: true, endedMs: 5_000 }), false, 5_000), { kind: 'start', ms: ROUND_GAP_MS });
+
+  // A scheduler that fails too: the fallback sets the timer.
+  const both = await settleRound(() => Promise.reject(new Error('x')), () => Promise.reject(new Error('y')), () => { fallbacks.push('fallback'); }, () => { log.push('failed'); });
+  assert.equal(both, undefined);
+  assert.deepEqual(fallbacks, ['fallback'], 'rounds stopped silently: the fallback timer was not set');
+  assert.equal(log.length, 3);
+
+  const seen: unknown[] = [];
+  const fine = await settleRound(() => Promise.resolve(7), (done) => { seen.push(done); return Promise.resolve(); }, () => undefined, () => undefined);
+  assert.equal(fine, 7, 'the companion: a round that finished is returned');
+  assert.deepEqual(seen, [7]);
 });
