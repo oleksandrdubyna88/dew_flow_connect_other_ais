@@ -25,11 +25,11 @@ public sealed class AFeatureSessionIsKeptApartTests
     private const string Plan = "todo/PLAN_feature_review.md";
 
     private static SessionState Fresh(Stage stage = Stage.PlanReview) =>
-        new("s1", "/repo", "main", PanelConfig.Uniform(3, 5, StagePolicy.Human)) { Stage = stage };
+        new("s1", "/repo", "main", PanelConfig.Uniform(3, 5)) { Stage = stage };
 
     /// <summary>A feature session: the same state, under the feature branch, carrying its plan.</summary>
     private static SessionState Feature(Stage stage = Stage.FeatureReview) =>
-        new("s1", "/repo", SessionKey.FeatureBranch, PanelConfig.Uniform(3, 5, StagePolicy.Human)) { Stage = stage, Feature = Plan };
+        new("s1", "/repo", SessionKey.FeatureBranch, PanelConfig.Uniform(3, 5)) { Stage = stage, Feature = Plan };
 
     // ---------- the key ----------
 
@@ -128,12 +128,6 @@ public sealed class AFeatureSessionIsKeptApartTests
             .Should().BeOfType<Transition.Refused>()
             .Which.Sentence.Should().Contain("resolve");
 
-    [Fact]
-    public void AFeatureRound_RefusesWhileAPersonIsBeingWaitedFor() =>
-        RoundMachine.BeginFeatureRound(Feature() with { HumanGate = true })
-            .Should().BeOfType<Transition.Refused>()
-            .Which.Sentence.Should().Contain("ask_human");
-
     /// <summary>A finished review is finished — and the refusal names the door, `again: true`.</summary>
     [Fact]
     public void AFinishedFeatureReview_RefusesAndNamesTheDoor() =>
@@ -141,38 +135,30 @@ public sealed class AFeatureSessionIsKeptApartTests
             .Should().BeOfType<Transition.Refused>()
             .Which.Sentence.Should().Contain("again: true").And.Contain("review_feature");
 
-    /// <summary>Four refusals, four different sentences — nobody is sent to fix the wrong thing.</summary>
+    /// <summary>Three refusals, three different sentences — nobody is sent to fix the wrong thing.</summary>
     [Fact]
-    public void TheFourRefusals_AreFourDifferentSentences()
+    public void TheThreeRefusals_AreThreeDifferentSentences()
     {
         var sentences = new[]
         {
             RoundMachine.BeginFeatureRound(Fresh()),
-            RoundMachine.BeginFeatureRound(Feature() with { HumanGate = true }),
             RoundMachine.BeginFeatureRound(Feature() with { AwaitingResolve = true }),
             RoundMachine.BeginFeatureRound(Feature(Stage.Done)),
         }.Select(t => t.Should().BeOfType<Transition.Refused>().Subject.Sentence).ToList();
 
-        sentences.Distinct().Should().HaveCount(4);
+        sentences.Distinct().Should().HaveCount(3);
     }
-
-    /// <summary>The held gate is asked BEFORE the finished stage: un-ticking nothing reopens a person's decision.</summary>
-    [Fact]
-    public void AHeldGate_OutranksAFinishedStage() =>
-        RoundMachine.BeginFeatureRound(Feature(Stage.Done) with { HumanGate = true })
-            .Should().BeOfType<Transition.Refused>()
-            .Which.Sentence.Should().Contain("ask_human");
 
     // ---------- again ----------
 
     /// <summary>
-    /// D23: <c>again</c> reopens a finished review for its SECOND round, on the person's ground, keeping
+    /// D23: <c>again</c> reopens a finished review for its SECOND round, on a recorded ground, keeping
     /// the count — a fresh budget is what a NEW base gets (<c>FreshFeatureReview</c>), never the same one.
     /// </summary>
     [Fact]
     public void Again_ReopensAFinishedFeatureReview_ForItsSecondRound_KeepingTheCount()
     {
-        var finished = Feature(Stage.Done) with { RoundsRunThisStage = 1, AdvanceOnResolve = true, SecondRound = SecondRoundGround.PersonAsked };
+        var finished = Feature(Stage.Done) with { RoundsRunThisStage = 1, AdvanceOnResolve = true, SecondRound = SecondRoundGround.ReviewerFailure };
 
         var reopened = RoundMachine.BeginFeatureRoundAgain(finished)
             .Should().BeOfType<Transition.Moved>().Subject.State;
@@ -204,10 +190,8 @@ public sealed class AFeatureSessionIsKeptApartTests
     }
 
     [Fact]
-    public void Again_StillRefusesAHeldGate_AnUnresolvedRound_AndTheWrongKindOfSession()
+    public void Again_StillRefusesAnUnresolvedRound_AndTheWrongKindOfSession()
     {
-        RoundMachine.BeginFeatureRoundAgain(Feature(Stage.Done) with { HumanGate = true })
-            .Should().BeOfType<Transition.Refused>().Which.Sentence.Should().Contain("ask_human");
         RoundMachine.BeginFeatureRoundAgain(Feature(Stage.Done) with { AwaitingResolve = true })
             .Should().BeOfType<Transition.Refused>().Which.Sentence.Should().Contain("resolve");
         RoundMachine.BeginFeatureRoundAgain(Fresh(Stage.Done) with { PlanProceeded = true })
@@ -261,7 +245,7 @@ public sealed class AFeatureSessionIsKeptApartTests
     // ---------- the store, the claim and the record ----------
 
     private static PersistedSession FeatureFile(string repo, string plan = Plan) =>
-        new(new SessionState("f1", repo, SessionKey.FeatureBranch, new PanelConfig(OnExhausted: StagePolicy.Human)) { Feature = plan, Stage = Stage.FeatureReview }, [])
+        new(new SessionState("f1", repo, SessionKey.FeatureBranch, new PanelConfig()) { Feature = plan, Stage = Stage.FeatureReview }, [])
         {
             OpenedUtc = DateTime.UtcNow,
             PlanText = "# the plan",

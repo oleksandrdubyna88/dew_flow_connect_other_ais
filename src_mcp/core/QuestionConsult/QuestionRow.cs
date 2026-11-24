@@ -31,7 +31,7 @@ public sealed record QuestionRow(
     bool Enabled,
     string Row = "");
 
-/// <summary>What <c>COAI_QCONSULT_ROWS</c> turned out to be: the rows, the complaints, and whether it could be read at all.</summary>
+/// <summary>What <c>COAI_CONSASK_ROWS</c> turned out to be: the rows, the complaints, and whether it could be read at all.</summary>
 /// <param name="Unreadable">The whole value could not be parsed — the tool refuses by name rather than running nobody.</param>
 public sealed record QuestionRowsSetting(
     IReadOnlyList<QuestionRow> Rows,
@@ -56,7 +56,7 @@ internal sealed record QuestionRowDto(
     JsonElement? Row = null);
 
 /// <summary>
-/// The parser of <c>COAI_QCONSULT_ROWS</c>: a JSON array of rows, at most <see cref="MaxActive"/> of them on.
+/// The parser of <c>COAI_CONSASK_ROWS</c>: a JSON array of rows, at most <see cref="MaxActive"/> of them on.
 /// </summary>
 /// <remarks>
 /// <para>Every refusal is a sentence naming the row and the cure, and never half a list: a row with no
@@ -90,7 +90,7 @@ public static partial class QuestionRows
         {
             return new QuestionRowsSetting(
                 [],
-                [$"COAI_QCONSULT_ROWS could not be read ({e.Message.Split(" LineNumber:")[0].Trim()}) — the question consultant refuses until it is fixed"],
+                [$"COAI_CONSASK_ROWS could not be read ({e.Message.Split(" LineNumber:")[0].Trim()}) — consask refuses until it is fixed"],
                 Unreadable: true);
         }
     }
@@ -121,12 +121,12 @@ public static partial class QuestionRows
         var id = dto.Id?.Trim() ?? string.Empty;
         if (!WellFormedId().IsMatch(id))
         {
-            return (null, $"COAI_QCONSULT_ROWS: a row has the id '{id}', which is not one a record can be named by — letters, digits, dot, dash and underscore, up to 64");
+            return (null, $"COAI_CONSASK_ROWS: a row has the id '{id}', which is not one a record can be named by — letters, digits, dot, dash and underscore, up to 64");
         }
 
         if (accepted.Any(r => string.Equals(r.Id, id, StringComparison.OrdinalIgnoreCase)))
         {
-            return (null, $"COAI_QCONSULT_ROWS: the row id '{id}' appears twice — one id is one row, and the second was dropped");
+            return (null, $"COAI_CONSASK_ROWS: the row id '{id}' appears twice — one id is one row, and the second was dropped");
         }
 
         return Fields(dto, id);
@@ -138,7 +138,7 @@ public static partial class QuestionRows
         var prompt = dto.Prompt?.Trim() ?? string.Empty;
         if (vendor.Length == 0 || prompt.Length == 0)
         {
-            return (null, $"COAI_QCONSULT_ROWS: the row '{id}' names {(vendor.Length == 0 ? "no vendor" : "no prompt")} — a row is a model and exactly one base prompt");
+            return (null, $"COAI_CONSASK_ROWS: the row '{id}' names {(vendor.Length == 0 ? "no vendor" : "no prompt")} — a row is a model and exactly one base prompt");
         }
 
         return (new QuestionRow(
@@ -168,7 +168,7 @@ public static partial class QuestionRows
             var on = row.Enabled && ++active <= MaxActive;
             if (row.Enabled && !on)
             {
-                complaints.Add($"COAI_QCONSULT_ROWS: the row '{row.Id}' is the {Ordinal(active)} active row and at most {MaxActive} may be on — it was switched off; disable another row to run it");
+                complaints.Add($"COAI_CONSASK_ROWS: the row '{row.Id}' is the {Ordinal(active)} active row and at most {MaxActive} may be on — it was switched off; disable another row to run it");
             }
 
             capped.Add(row with { Enabled = on });

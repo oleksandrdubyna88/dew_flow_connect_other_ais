@@ -81,7 +81,7 @@ public sealed class ConsultantModesCliScenarioTests : IDisposable
 
         info.Environment["COAI_DATA_DIR"] = _data;
         info.Environment["COAI_CONSULTANTS"] = Consultants();
-        info.Environment["COAI_CONSULT_ENABLED"] = "true";
+        info.Environment["COAI_CONS_ENABLED"] = "true";
         info.Environment["COAI_REVIEWER_TIMEOUT_MINUTES"] = "2";
         info.Environment["FAKECLI_MODE"] = "vendor";
         info.Environment["FAKECLI_RECORD_DIR"] = _record;

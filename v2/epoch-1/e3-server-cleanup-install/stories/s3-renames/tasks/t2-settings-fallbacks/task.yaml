@@ -1,0 +1,14 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t2-settings-fallbacks
+title: "Read COAI_CONS_* / COAI_CONSASK_*, falling back to COAI_CONSULT_* / COAI_QCONSULT_*"
+kind: code
+complexity: 3
+dependsOn:
+  - t1-tool-renames
+parallel: false
+files:
+  - src_mcp/src/Server/PanelSettings.cs
+  - src_mcp/src/Server/QuestionConsult/QuestionConsultSettings.cs
+dod:
+  - id: d1
+    item: "the new key wins when both are set"

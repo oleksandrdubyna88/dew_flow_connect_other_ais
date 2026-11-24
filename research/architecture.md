@@ -1,16 +1,18 @@
 # ConnectOtherAIs — architecture
 
-> The system **as it is**. All six epics and the escalation tail shipped on 2026-08-31: the server
-> runs the loop from any MCP client, the extension installs it, and `ask_human` reaches a person in
-> VS Code ([PLAN_escalation_loopback.md](PLAN_escalation_loopback.md); since 2026-10-03 only for the GATE's own question —
-> the AI's own come back `ask_in_conversation`, [module_server.md](module_server.md) *Two doors*) — observed end to end, a
-> question asked by the installed binary and answered in the installed extension.
+> The system **as it is**. All six epics shipped on 2026-08-31: the server runs the loop from any MCP client and the
+> extension installs it. **From 2026-11-22 (v2, epoch 1 E1) the gate has four outcomes and never waits for a person** —
+> `proceed`, `revise`, `good_enough`, `not_reviewed`; there is no held gate, no escalation card and no `ask_human` wait
+> (`ask_human` stays registered and answers `ask_in_conversation`) — and a data folder an older build wrote is migrated
+> by `coai-mcp --migrate-v2` and by the first start of a v2 server. See *v2: four outcomes, and the migration* below and
+> [module_server.md](module_server.md). Sections that describe the escalation loopback, cards, `call_human` or
+> `ask_human` waiting are marked *Superseded in v2* and kept as history.
 
 ## What this is
 
 A multi-model review gate. The main AI writes the plan and the code; secondary vendor CLIs review
-both in rounds until the de-duplicated count of blocking+major findings drops under a threshold, or
-a human is escalated to. Design record: [PLAN_connect_other_ais.md](PLAN_connect_other_ais.md)
+both in rounds until the de-duplicated count of blocking+major findings drops under a threshold, or the rounds are
+spent and the agent takes what is true (`good_enough`; v1 escalated to a person here). Design record: [PLAN_connect_other_ais.md](PLAN_connect_other_ais.md)
 until implemented, then promoted here.
 
 ## Containers
@@ -26,7 +28,7 @@ C4Container
   title ConnectOtherAIs — containers
   Person(dev, "Developer")
   System_Boundary(coai, "ConnectOtherAIs") {
-    Container(ext, "VS Code extension", "TypeScript", "Settings, rounds view, escalation modal, install button")
+    Container(ext, "VS Code extension", "TypeScript", "Settings, rounds view, install button (its escalation modal has no card to show since v2)")
     Container(mcp, "coai-mcp", "C# Native AOT, stdio", "Round state machine, CLI fan-out, finding normalisation, verdict")
     Container(srv, "coai-server", "C# Native AOT, HTTPS", "The Team server: company sign-in, sessions, the vendor allowlist, the account slots and the review queue on one VM")
   }
@@ -46,8 +48,8 @@ C4Container
   Rel(mcp, gem, "spawn as the coai-reader agent (tools: view_file), plan mode, from the read-only folder")
   Rel(gem, mcp, "--agy-hook child before every tool call: allow view_file or read_file only inside the granted roots and outside the coai folder (agy 1.5.9), deny the rest")
   Rel(mcp, creds, "creds --help probe, then creds config - with the key on stdin, once per start, in the background")
-  Rel(mcp, ext, "loopback: settings, round events, escalation")
-  Rel(dev, ext, "configures, answers escalations")
+  Rel(mcp, ext, "files the extension watches: settings, round events, consultations, server notices")
+  Rel(dev, ext, "configures")
   Rel(ext, srv, "Microsoft sign-in, then a session token; and a CHAT turn, as a job with no role")
   Rel(ext, codex, "spawn — a CHAT, in an empty directory of its own")
   Rel(ext, gem, "spawn — a CHAT, in an empty directory of its own")
@@ -212,8 +214,8 @@ as claims, the gate's history of the work, the rules at the full budget, and an 
 file with the changed members' hunks — which now get a third of the 168 KB first, so a wide feature is no
 longer reviewed from its outline alone (the S8 notices: 0 → 302 hunks). Credential-shaped files are
 withheld from the pack and every file's content is redacted, as the source resolver already did. A plan
-of fewer epics, or nobody ticked, is a recorded skip that does not block; every reviewer failing still
-calls a person. `resolve`, `status` and `ask_human` find the review by its plan (`feature`). Nothing
+of fewer epics, or nobody ticked, is a recorded skip that does not block; every reviewer failing
+ends as `good_enough` after one retry (`not_reviewed` when nobody answered). `resolve` and `status` find the review by its plan (`feature`). Nothing
 crosses a new container: no Team server, no extension surface (the vendor tick, the log's skipped row and
 the snippet came in S3.3 — *Four gates, not three*, below). See [module_server.md](module_server.md), [module_core.md](module_core.md),
 [module_runners.md](module_runners.md) and [module_tests.md](module_tests.md).
@@ -250,7 +252,6 @@ flowchart LR
   code -->|"the next epic"| code
   code -->|"every epic built,<br/>plan of 3+ epics"| feature["review_feature<br/>the whole feature, once"]
   feature -->|"proceed, or skipped"| release["release"]
-  feature -->|"call_human"| person["a person"]
   document["review_document<br/>a document; beside the others"]
 ```
 
@@ -260,8 +261,7 @@ history of this work, the project's rules, and an OUTLINE of every changed file 
 no bodies, changed members marked, with the changed members' hunks. Its session is keyed by the
 PLAN's repository-relative path under the branch `:feature`, so it needs no `open`, and the head it
 reviews moves as fix pull requests land. A plan of fewer epics, nobody ticked for features, or the
-stage switched off is a recorded `skipped` round that does NOT block; every reviewer failing still
-calls a person.
+stage switched off is a recorded `skipped` round that does NOT block; a reviewer failing buys one retry, then `good_enough` (`not_reviewed` when nobody answered).
 
 What crosses the containers:
 
@@ -349,6 +349,43 @@ build, side, settings and client environment — for every server on the data di
 `consultations/health/` and the extension does not read it. Details: [module_server.md](module_server.md), *A start
 answers `initialize` at once*.
 
+## v2: four outcomes, and the migration of what v1 left (2026-11-22, epoch 1 E1)
+
+**The gate never waits for a person.** A round ends as `proceed`, `revise`, `good_enough` or `not_reviewed`; the round machine has no hold, `ask_human` is a stub that
+answers `ask_in_conversation`, no card is written, and the settings that chose a policy (`COAI_ON_EXHAUSTED`, `COAI_ESCALATION_MINUTES`, `COAI_ESCALATION_SECONDS`) are removed.
+Where v1 called a person, v2 ends the round: nobody answered is `not_reviewed`, rounds spent is `good_enough` ([module_core.md](module_core.md), *v2: four outcomes*; [module_server.md](module_server.md),
+*v2: the gate has four outcomes and never waits*).
+
+**The migration of an older data folder** crosses the containers only through files, as every other seam here does:
+
+```mermaid
+flowchart LR
+  v1["data folder of a v1 build<br/>held sessions · open cards · qphase/ cadence/ · settings keys"] --> mig["coai-mcp<br/>--migrate-v2 [--apply]<br/>or the first start of a v2 build"]
+  mig --> sess["sessions/: hold left, note 'good_enough — converted…'"]
+  mig --> cards["escalations/archive/: open cards withdrawn_v2"]
+  mig --> arch["migrations/v1-archive/: qphase, cadence"]
+  mig --> set["settings.v1-removed.json: the removed keys"]
+  mig --> notice["server-notices.jsonl: v2-converted-answered-hold"]
+  mig --> marker["migrations/v2.done + v2.journal"]
+  notice --> ext["VS Code extension: shows the server notice"]
+  load["a load of a still-held session"] --> sess
+```
+
+- **Three doors, one conversion.** The one-shot `--migrate-v2` (dry run by default, `--apply` writes), the automatic run at the start of a v2 server (major version ≥ 2, marker absent or made by other
+  tables) with a sweep of late v1 cards at every v2 start, and the convert-on-load of a session that is still held when it is read. All three call the same functions, so a session converted by a
+  client request and one converted by the migration are the same bytes.
+- **Restart-safe by construction.** Every step is decided from the object, never from the journal; a kill at any boundary is resumed by reading the objects; the marker is written only when nothing was
+  deferred and nothing was unreadable; one lease file (`claims/migrate-v2.lease`, an OS lock the kernel releases on a kill) keeps two migrations apart.
+- **A person's unapplied answer is announced first.** A held session whose card a person had answered becomes `good_enough` — and a durable notice (`server-notices.jsonl`, `v2-converted-answered-hold`,
+  one per card id) is written and read back from the file BEFORE the session is converted.
+- **What moves with the data folder.** `migrations/v1-archive/` is the only copy of the archived stores and moves (`shared/data-inventory.json`, the extension's `DATA_TO_MOVE`); the marker, the journal and
+  the lease are about THIS folder and stay.
+- **The extension (until its own v2 epoch) is unchanged:** its escalation modal and watcher remain, find no card (v2 writes none, the migration archives the open ones), and its settings page may still
+  write the removed keys at every activation — the server ignores them, and the next migration run moves them again.
+
+The contract and the numbered scenarios: `v2/epoch-1/e1-gate-simplify/stories/s4-migrate-v2/SPEC.md`; the live proof on copies of real data: [RESULTS_v2_gate_core.md](RESULTS_v2_gate_core.md); the module detail:
+[module_server.md](module_server.md), *The v2 data migration*.
+
 ## Module map
 
 | Module | Doc | Status |
@@ -362,6 +399,7 @@ answers `initialize` at once*.
 | The panel ASKS which models exist | [module_extension.md](module_extension.md) · [PLAN_the_models_are_asked_rather_than_listed.md](PLAN_the_models_are_asked_rather_than_listed.md) | **shipped 2026-09-16** (issue #301). The panel now has a fifth discovery, and the first one whose peer is a CLI rather than a file or an HTTP catalogue: `panelProvider` → `claudeCli` (which binary, from reviewer rows AND consultant definitions) → `claudeProbe` → `versionProbe.capture` → the Claude CLI, with the answer kept in `<dataDir>/claude-models.json` for a week and keyed to that CLI's `--version`. It crosses into the CHAT as well: the discovery snapshot under `coai.chatDiscoveredModels` carries the probe, so a conversation's Claude list says what the panel's says. **The boundary is two-sided and the CLI ships on its own clock** — a family this build does not list is not offered, a candidate the CLI has never heard of stays UNVERIFIED rather than absent, and a version it no longer matches is withheld rather than presented as confirmed. The table is in the plan |
 | Team server (`coai-server`) | [module_team_server.md](module_team_server.md) · [PLAN_team_server.md](PLAN_team_server.md) | **epics 1–3 complete, 2026-09-06** — the host, company sign-in, sessions, the vendor catalog, the account slots, `login`, the job queue with the review endpoints, and per-person usage with the admin company view; every route has an `http/` contract. The client runtime (`remote`, `--ask-remote`) and the *Team servers* settings (a tab of the Settings editor tab since 2026-09-28), add-a-reviewer and spending block are in; a sign-in belongs to a SIDE of the machine, and the *MCP server* tab shows the address read-only with the server's version beside it. The container, the host edge and the release are epic 4 — and since 2026-09-08 a `server-v*` tag publishes six Native AOT binaries on a GitHub Release beside the image, with [deploy-server.yml](../.github/workflows/deploy-server.yml) driving `deploy/systemd-release.sh` on the host; the per-PERSON spending view — the admin-only **Team server** tab, `GET /api/people`, `models[]` and `daily` — is being built by [../todo/PLAN_team_usage_by_person.md](../todo/PLAN_team_usage_by_person.md) (epics 1–2 done, 2026-10-10) |
 | Measurement bench (`coai-bench`) | [module_bench.md](module_bench.md) · [../src_bench/README.md](../src_bench/README.md) | **shipped 2026-09-04** — drives the published server over stdio, records whole, judges separately |
+| The v2 gate and the data migration | [module_server.md](module_server.md) · [module_core.md](module_core.md) · [../v2/epoch-1/e1-gate-simplify/stories/s4-migrate-v2/SPEC.md](../v2/epoch-1/e1-gate-simplify/stories/s4-migrate-v2/SPEC.md) | **epoch 1 E1, 2026-11-22** — four outcomes and no hold (E1.S1); `--migrate-v2`, the automatic run, convert-on-load, the late-card sweep, the journal, the marker and the answered-hold notices (E1.S4); measured on copies of real data in [RESULTS_v2_gate_core.md](RESULTS_v2_gate_core.md) |
 | Tests: the harness, its flows, its gaps | [module_tests.md](module_tests.md) | **recorded 2026-09-06** — three suites in-repo, the flow catalogue derived from the tool registry, and the two gaps named (no extension host, no real vendor in CI) |
 | One migration runner for both databases (`CoaiMcp.Storage`) | [module_server.md](module_server.md) · [PLAN_who_holds_a_key.md](PLAN_who_holds_a_key.md) | **story 1 shipped 2026-09-17.** `SqliteMigrator` — ordered steps, `user_version`, one transaction per step, WAL and a busy timeout — moved out of `RoundsDb` into a project BOTH binaries reference, because `coai-bugs.db` reached a host at `user_version = 0` and the gate ruled against a second copy. **2026-11-05:** `busy_timeout` is now set BEFORE `journal_mode=WAL`, not after — the switch to WAL needs the EXCLUSIVE lock, and with no busy handler any other connection's SHARED lock made it fail at once, after which Microsoft.Data.Sqlite released every lock, slept a fixed 150 ms and ran it again; openers that began together met again every 150 ms until the 5 s budget was gone and both failed with `database is locked` (CI runs 39661513211 and 41895449249; reproduced with hot readers on the file: 28 of 30 rounds before, 0 of 30 after). The budget, the step order and the transactions are unchanged. Deliberately not in `CoaiMcp.Core`, which is declared pure and holds no filesystem. `coai-bugs` gained `CorpusSchema.Steps` with step 1 frozen against the released SQL, `last_seen_month` and `admin_audit`, a per-KEY rate limit that is a setting, and one-server-per-directory enforced by a lock file; the promise it makes about contributors is now scoped and rewritten in `module_server.md` and `deploy/bugs/README.md` |
 | The rounds log leaves as a file | [module_extension.md](module_extension.md) · [module_server.md](module_server.md) · [PLAN_a_round_leaves_as_a_file.md](PLAN_a_round_leaves_as_a_file.md) | **all six stories shipped, 2026-09-14.** An **Export** button on every round and tick boxes for a bulk one, writing a CSV with the table's own columns plus every finding and its accept/decline mark; the **Took** column showing how long the DECIDING took beside how long the reviewers ran; and a bulk export that is ONE process rather than one per round, through a new one-shot server mode `--findings-many`. Phase 0 fixed a latent defect it found while tracing: `RecordDecisions` bound the ordinal to the loop index, so an out-of-order or partial `resolve` wrote its marks onto the wrong findings — exactly the data the export publishes |
@@ -469,7 +507,7 @@ paths this product already had, which is why the container diagram gains no arro
 
 **While it runs: a FILE the extension watches.** `<dataDir>/consultations/<id>.json` is published
 atomically by the server and polled by `ConsultationWatcher` on the extension side, exactly as
-`escalations/*.json` has been since escalation shipped. One difference, and it is deliberate: an
+`escalations/*.json` was until v2 removed the cards. One difference, and it was deliberate: an
 escalation BLOCKS a round, so it gets a modal and a status-bar item; a consultation blocks nothing, so
 it appears in the sidebar where a person is already looking and nowhere else.
 
@@ -559,6 +597,8 @@ vocabulary is a shared catalogue like the failure kinds (`shared/consult-check-w
 
 ## The panel is two surfaces: the sidebar and a Settings tab (2026-09-28)
 
+> **Superseded in part (2026-11-23, v2 E2/E4):** the sidebar's first paint is now the shell's native menu, and this panel provider takes the view only after `menuReady`; see *Activation and module interaction in the extension* below.
+
 The sidebar `coai.panel` shows what is happening now — the open question, **Notifications**, **Active
 rounds** (running rounds and the consultations being had), **Phrases**, **Bugz** — and everything
 configured once moved into a **Settings** editor tab, opened by a `$(gear)` beside the help button
@@ -604,6 +644,37 @@ ship on their own clocks: a new server paired with an extension that still draws
 an old server paired with one that draws a tab, both send the person somewhere that exists. The stale
 *Server* section those messages named has been called *MCP server* since 2026-09-07, and the old
 *Server-section Team-server block* the module-map row above describes was removed the same day.
+
+## Activation and module interaction in the extension (2026-11-23, v2 epoch 1, E2 and E4)
+
+> What runs now. The Containers section and the panel sections above describe the extension as one activation; the code they describe still runs, as the `legacy` module below. Detail and tests: [module_extension.md](module_extension.md) (*The shell and its modules*); design: [../v2/architecture/extension.md](../v2/architecture/extension.md).
+
+The extension host calls `activate` in a 16 KiB entry that only registers (commands, the `coai.panel` view provider, the `coaiChat` serializer, the URI handler). Every registration is a thunk that loads a module on first use. There are six bundles and one rule between them: a module reaches another module or shared state only through the loader's handle, never by importing it.
+
+```mermaid
+flowchart LR
+  Host[Extension host] -->|activate: register only| Entry[entry: shell/entry.ts]
+  Entry -->|view resolved| Sidebar[sidebar: native menu]
+  Entry -->|chat command, coaiChat restore| Chat[chat]
+  Entry -->|coai.installServer| Install[install]
+  Entry -->|every other command, URI, fallback view| Legacy[legacy: old activate]
+  Sidebar -->|after menuReady: same view + opened sections| Legacy
+  Sidebar -->|after menuReady| Chat
+  Sidebar -->|after menuReady| Install
+  Entry -->|after the first command| Install
+  Chat -->|250 ms after a restore| Install
+  Chat -.state.-> Runtime[runtime: once per host]
+  Legacy -.state.-> Runtime
+  Legacy -->|bug Chat button via loader handle| Chat
+```
+
+**Order in time.** A person opens the sidebar: the entry loads `sidebar` only, which paints the real menu and waits for the page's `menuReady` (the end of the cold start, limit 2 s on Linux, 3 s on Windows). After that, off the critical path, it loads `legacy` and gives it the same view (live data replaces "loading..."), starts `chat` (so its context keys exist) and starts `install` (binary check, `--setup-clients`, update offer). A command loads its owner module; the first command to answer also asks for `install`. A window restored with only a chat tab loads `chat` through the serializer and asks for `install` 250 ms after the restore settled. `install.start` is once per activation, so any two askers are one run.
+
+**Failure paths.** A sidebar module that cannot load: `legacy` resolves the view alone, as before. A failed hand-over: the view shows a failed page and the console says why. A module load that throws is not remembered, so the next call retries; a chat or install start that rejects is reported on the console with its context by whoever asked, and never changes what the command answered.
+
+**Shared state.** The `runtime` module holds what must exist once per host (notification suppressor and ledger gap, data root, findings board). The loader memoises it and publishes a handle on `globalThis`; `legacy`, `chat` and the others read the same object by reference. The old code registers through `src/shellBridge.ts`, which gives a registration to the module that owns the id, so VS Code sees each id once.
+
+**Guards.** `entryPurity.test.ts`, `entry-firewall.mjs` (inputs, external imports, byte budgets, files a bundle must not contain) and the cold-start measurement (`research/RESULTS_v2_start.md`) hold this shape: a call in `activate`, a heavy import in the entry, or a second copy of the runtime fails a check.
 
 ## The extension gained two arrows of its own (2026-09-09)
 
@@ -1361,6 +1432,8 @@ sequenceDiagram
 
 ### The question card gained a status and the consultants' answers (2026-10-02, S3 of the question consultant)
 
+> **Superseded in v2 (E1.S1, 2026-11-22) — history only.** Escalation cards were removed; nothing writes or reads them any more except the v2 migration, which archives the open ones.
+
 `escalations/<id>.json` has been the one file neither container owns since escalation shipped: `coai-mcp`
 writes it, the extension watches it, and neither is the other's caller. S3 added to it, and only to it, what
 the gate in front of `ask_human` decides ([module_server.md](module_server.md), *The door to the person*; since
@@ -1375,6 +1448,8 @@ row's answer to the card as it settles (`consultantAnswers`), beside `consultId`
 which is every file written before S3) and draws nothing more yet; the card that folds the answers is S4's.
 
 ### Only an answer on the notice card releases a held gate (2026-10-22)
+
+> **Superseded in v2 (E1.S1, 2026-11-22) — history only.** Escalation cards were removed; nothing writes or reads them any more except the v2 migration, which archives the open ones.
 
 The same two files carry the person's decision, and the contract between the halves gained one field each way
 ([module_server.md](module_server.md), *Only an answer on the notice card releases the gate*; [module_extension.md](module_extension.md),

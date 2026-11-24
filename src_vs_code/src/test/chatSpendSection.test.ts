@@ -169,7 +169,7 @@ test('the two ledgers stack in a narrow panel and sit side by side in a wide one
 
   assert.match(grid, /<\/section>\s*<hr class="ledgers">\s*<section/, 'the stacked separator is not between the halves');
 
-  const styled = roundsLogHtml([], [], 'n0nce', html);
+  const styled = roundsLogHtml([], 'n0nce', html);
 
   assert.match(styled, /\.ledgers-grid \{[^}]*grid-template-columns: minmax\(0, 1fr\)/,
     'one column is not the default, so a narrow panel would try to fit both');

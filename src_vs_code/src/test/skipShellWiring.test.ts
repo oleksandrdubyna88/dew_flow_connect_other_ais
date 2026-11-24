@@ -51,29 +51,35 @@ test('the host only supplies seams: the check, its texts and its memory key are 
 });
 
 test('the skip-shell test door is built only behind the test-mode check', () => {
-  const text = sourceOf('extension.ts');
-  const built = [...text.matchAll(/skipShell\s*\}\s*:\s*\{\}/gu)];
+  // Built by the chat module since v2 E4 (`index.ts`); `CoaiExports`, the type other code reads, is still `extension.ts`'s.
+  const text = sourceOf('../shell/modules/chat/index.ts');
+  const built = [...text.matchAll(/skipShell\s*:\s*registered\.skipShell/gu)];
 
   assert.equal(built.length, 1, `the scan expected ONE place that hands out the door, found ${built.length}`);
-  const before = text.slice(Math.max(0, (built[0]?.index ?? 0) - 200), built[0]?.index ?? 0);
+  const before = text.slice(Math.max(0, (built[0]?.index ?? 0) - 400), built[0]?.index ?? 0);
   assert.match(before, /extensionMode\s*===\s*vscode\.ExtensionMode\.Test\s*\?\s*\{[^}]*$/u, 'the skip-shell test door is reachable outside test mode');
-  assert.match(text, /readonly skipShell\?:\s*SkipShellTestDoor/u, 'the field of CoaiExports is not optional, so production would have to supply it');
-  assert.equal([...text.matchAll(/bindSkipShell\(/gu)].length, 1, 'the check is not bound exactly once');
+  assert.match(sourceOf('extension.ts'), /readonly skipShell\?:\s*SkipShellTestDoor/u, 'the field of CoaiExports is not optional, so production would have to supply it');
+  assert.equal([...sourceOf('extension.ts').matchAll(/bindSkipShell\(/gu)].length, 0, 'the old activation binds the check again, beside the chat module');
+  assert.equal([...sourceOf('../shell/modules/chat/register.ts').matchAll(/bindSkipShell\(/gu)].length, 1, 'the check is not bound exactly once');
 });
 
 test('the skip-shell door identifier appears only at its declaration, its binding and inside the test-mode ternary', () => {
-  const text = sourceOf('extension.ts');
-  const uses = [...text.matchAll(/\bskipShell\b/gu)];
-  const allowed = (at: number): boolean => {
-    const before = text.slice(Math.max(0, at - 90), at);
+  // The door's life since v2 E4: declared and bound in the chat registration (`register.ts`: the field, the binding, the shorthand it returns), and handed
+  // out in one place, the test-mode ternary of the chat module (`index.ts`). The old activation must not name it at all, except in the `CoaiExports` type.
+  // A use is allowed on a line that is plumbing: the field, the binding, the destructuring of what `bindThisSide` made, the returns that carry it to
+  // `index.ts`. `index.ts` hands it out in one place, `skipShell: registered.skipShell`, behind the test-mode ternary (the test above).
+  const plumbing = /readonly skipShell: SkipShellTestDoor|const skipShell = bindSkipShell\(|const \{[^}]*\bskipShell\b[^}]*\} = bindThisSide\(|return \{[^}]*\bskipShell\b[^}]*\};|\): ChatRegistration \{|function bindThisSide\(|skipShell: registered\.skipShell/u;
+  for (const [file, atLeast] of [['../shell/modules/chat/register.ts', 3], ['../shell/modules/chat/index.ts', 1]] as const) {
+    const text = sourceOf(file);
+    const lines = text.split('\n').filter((line) => /\bskipShell\b/u.test(line) && !/^\s*(\/\/|\*|\/\*)/u.test(line));
+    const stray = lines.filter((line) => !plumbing.test(line));
 
-    return /readonly $/u.test(before) || /const $/u.test(before) || /remoteSessions: testDoorOf\(remote, context\.globalState, hostsFolder\), $/u.test(before);
-  };
-  const stray = uses.filter((one) => !allowed(one.index ?? 0));
-
-  // The scan's own proof: it finds the three allowed uses, so a reformat cannot empty it and pass for ever.
-  assert.equal(uses.length - stray.length, 3, `the scan expected three allowed uses of skipShell in extension.ts, found ${uses.length - stray.length}`);
-  assert.deepEqual(stray.map((one) => text.slice(Math.max(0, (one.index ?? 0) - 40), (one.index ?? 0) + 20)), [], 'skipShell is used outside its declaration, its binding and the test-mode ternary: the door can leave test mode');
+    // The scan's own proof: it finds the plumbing, so a reformat cannot empty it and pass for ever.
+    assert.ok(lines.length >= atLeast, `the scan found only ${lines.length} uses of skipShell in ${file}`);
+    assert.deepEqual(stray, [], `skipShell is used outside its declaration, its binding and the test-mode ternary in ${file}: the door can leave test mode`);
+  }
+  const old = sourceOf('extension.ts');
+  assert.deepEqual([...old.matchAll(/\bskipShell\b/gu)].map((one) => old.slice(Math.max(0, (one.index ?? 0) - 10), one.index)), [' readonly '], 'the old activation names skipShell outside the type of its exports');
 });
 
 test('the check runs only in a focused window: activation and the setting listener both go through the focus gate', () => {

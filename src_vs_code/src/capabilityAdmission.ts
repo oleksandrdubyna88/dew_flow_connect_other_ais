@@ -78,7 +78,7 @@ export function admit(runtime: string, capability: string): Admission {
   }
   const row = rowOf(runtime, capability);
   if (row === undefined) {
-    return refused('', `'${runtime}' is not a runtime the question consultant can launch for '${capability}' — `
+    return refused('', `'${runtime}' is not a runtime consask can launch for '${capability}' — `
       + `it launches on: ${RUNTIMES.join(', ')}`);
   }
 

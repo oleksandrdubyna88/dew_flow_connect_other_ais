@@ -15,7 +15,7 @@ namespace CoaiMcp.Server;
 /// <para><b>Sharing is half of it.</b> Measured in this repository twice over: with the reader
 /// sharing delete and the rename retried ten times over half a second, hot readers still starved
 /// the writer. So a POLLING reader in this directory pairs this with <see cref="SessionTurn"/>,
-/// which <see cref="SessionStore"/> and <c>Escalations</c> both do — this alone shortens the window
+/// which <see cref="SessionStore"/> does — this alone shortens the window
 /// and does not close it.</para>
 /// </remarks>
 internal static class SharedRead

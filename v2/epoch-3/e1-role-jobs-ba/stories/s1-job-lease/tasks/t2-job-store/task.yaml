@@ -1,0 +1,17 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t2-job-store
+title: "RoleJobStore: lease, generation, heartbeat, cancel, sweep; RoundsDb step 26"
+kind: code
+complexity: 7
+dependsOn: []
+parallel: true
+files:
+  - src_mcp/src/Server/RoleJobs/RoleJobStore.cs
+  - src_mcp/src/Store
+  - shared/data-inventory.json
+  - src_mcp/tests/ARoleJobLeaseTests.cs
+dod:
+  - id: d1
+    item: "scenarios A2 to A5 and A16 pass"
+  - id: d2
+    item: "an unwritable database changes no job result"

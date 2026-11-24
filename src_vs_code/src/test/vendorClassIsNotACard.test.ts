@@ -54,7 +54,6 @@ function state(): PanelState {
     side: '',
     perSide: false,
     latestServerVersion: '',
-    questions: [],
     sessions: [session],
     openSections: ['rounds'],
     usage: [],

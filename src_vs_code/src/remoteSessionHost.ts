@@ -18,6 +18,7 @@ import { allowsNewHosts, ignoredLayerFor } from './sideConfig';
 import { ALLOW_NEW_HOSTS_KEY } from './modelKeys';
 import { runRemote } from './remoteSsh';
 import { liveTerminals } from './terminalHost';
+import { registerCommand } from './shellBridge';
 
 /**
  * The `vscode` seams of the road to a terminal's remote Claude session (E2.S3, contract C4). Host code: every decision is
@@ -387,7 +388,7 @@ export function bindRemoteSessions(context: vscode.ExtensionContext, folder: str
     changes,
     vscode.window.onDidChangeActiveTerminal(() => { void setReadsKey(sessions); }),
     vscode.window.onDidCloseTerminal((closed) => { sessions.forget(closed); }),
-    vscode.commands.registerCommand('coai.terminalHosts', () => sessions.changeHosts()),
+    registerCommand('coai.terminalHosts', () => sessions.changeHosts()),
   );
 
   return sessions;

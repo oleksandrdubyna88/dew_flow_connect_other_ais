@@ -68,7 +68,7 @@ public sealed class ConsultScenarioTests : ConsultScenarioBase
         // And the cap itself still holds on the third.
         Answer("0198-third", Advice);
         Refusal(await Consult(service, "a third thing entirely"))
-            .Should().Contain("consult calls, the cap");
+            .Should().Contain("cons calls, the cap");
     }
 
     [Fact]
@@ -137,7 +137,7 @@ public sealed class ConsultScenarioTests : ConsultScenarioBase
 
         var refused = await Consult(service, "turn three", id);
 
-        Refusal(refused).Should().Contain("all 2 of its turns are used").And.Contain("COAI_CONSULT_TURNS");
+        Refusal(refused).Should().Contain("all 2 of its turns are used").And.Contain("COAI_CONS_TURNS");
     }
 
     // ---------- how it ended (issue #309) ----------
@@ -263,7 +263,7 @@ public sealed class ConsultScenarioTests : ConsultScenarioBase
 
         var refused = await Consult(service, "one call too many");
 
-        Refusal(refused).Should().Contain("COAI_CONSULT_CALLS_PER_SESSION").And.Contain("ask the person");
+        Refusal(refused).Should().Contain("COAI_CONS_CALLS_PER_SESSION").And.Contain("ask the person");
     }
 
     [Fact]
@@ -537,7 +537,7 @@ public sealed class ConsultScenarioTests : ConsultScenarioBase
 
         var refusal = Refusal(await Consult(Service(enabled: false), "The parser returns 3 where 4 is expected."));
 
-        refusal.Should().Contain("switched off").And.Contain("COAI_CONSULT_ENABLED").And.Contain("ConnectOtherAIs > Consultant");
+        refusal.Should().Contain("switched off").And.Contain("COAI_CONS_ENABLED").And.Contain("ConnectOtherAIs > Cons");
         Refusal(await Consult(Service(enabled: false), "   ")).Should().Contain("switched off",
             "an off feature answers for being off, not for the shape of a call nobody is going to make");
         // The tree is DIRTY here on purpose — the uncommitted change is what a consultation sends —
@@ -605,7 +605,7 @@ public sealed class ConsultScenarioTests : ConsultScenarioBase
             .And.Contain("remsoftdev-codex")
             .And.Contain("'remote'")
             .And.Contain(string.Join(", ", ConsultantResolution.Consulting), "the allowlist is named so the cure is on screen")
-            .And.Contain("ConnectOtherAIs > Consultant");
+            .And.Contain("ConnectOtherAIs > Cons");
         new ConsultationStore(_data).All().Should().BeEmpty("nothing was built, so nothing was recorded");
         (await Status()).Should().Be(before, "a refusal touches nothing in the checkout");
     }

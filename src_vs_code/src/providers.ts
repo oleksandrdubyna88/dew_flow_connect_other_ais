@@ -124,7 +124,7 @@ export type VaultState = 'read' | 'unreadable' | 'not-reported';
 
 /** One refused setting the server named by kind — the shape `--providers` prints under `settingProblems`. */
 export interface SettingProblem {
-  /** The settings-file key — `COAI_QCONSULT_ROOTS`. */
+  /** The settings-file key — `COAI_CONSASK_ROOTS` (`COAI_QCONSULT_ROOTS` from a coai-mcp older than 2.0). */
   readonly key: string;
   /** `missing-folder` or `unreadable-folder` today; a kind this build does not know is kept and marks nothing. */
   readonly kind: string;

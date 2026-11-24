@@ -95,11 +95,11 @@ test('S2-T10 companions: the scan finds the three S2 modules, and the one consol
 
 // ───────────────── S4-T11: the doors' catches and the Asked hook, scanned with the same scanner (X10) ─────────────────
 
-/** A command's registration in `extension.ts`: from its `registerCommand('<id>'` to the next registration. */
+/** A command's registration in the chat module's `register.ts` (v2 E4): from its `registerCommand('<id>'` to the next registration. */
 function registrationOf(command: string): string {
-  const text = sourceOf('extension.ts');
+  const text = sourceOf('../shell/modules/chat/register.ts');
   const at = text.indexOf(`registerCommand('${command}'`);
-  assert.ok(at >= 0, `extension.ts registers no ${command}, so the scan has nothing to look at`);
+  assert.ok(at >= 0, `the chat registration registers no ${command}, so the scan has nothing to look at`);
   const next = text.indexOf('registerCommand(', at + 20);
 
   return text.slice(at, next < 0 ? text.length : next);

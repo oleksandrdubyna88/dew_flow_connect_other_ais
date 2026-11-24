@@ -1,0 +1,13 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t3-outcome-share
+title: "Share of good_enough/not_reviewed vs the v1 call_human share from RoundsDb"
+kind: measure
+complexity: 3
+dependsOn:
+  - t1-live-gates
+parallel: false
+files:
+  - research/RESULTS_v2_gate_core.md
+dod:
+  - id: d1
+    item: "both shares recorded with the query used"

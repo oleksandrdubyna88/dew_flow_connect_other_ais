@@ -8,7 +8,7 @@ import { panelState } from './panelPageHarness';
 import { pageTree, type PageNode } from './pageTree';
 
 // The census the other way round from helpTooltips.test.ts: there, every tooltip must sit on a control;
-// here, every control of the Consultant tab and the consultation cadence must carry its "?"
+// here, every control of the Consultant tab must carry its "?"
 // (research/PLAN_consult_limits_kinds_and_help.md, story 3). The operator's words: a "?" on every new setting.
 // Read off the Settings page as it is DRAWN (research/PLAN_one_model_catalog.md E5.3) — the tab a person opens.
 
@@ -35,7 +35,7 @@ const LABELS: readonly { readonly name: string; readonly words: string; readonly
 // clicked — so it is measured in a real browser (scripts/measure-help-clicks.mjs), not asserted over this
 // text: a new behavioural assertion over page text is refused (.agents/PROJECT.md).
 
-test('every consultant and cadence setting has a "?" that explains it', () => {
+test('every consultant setting has a "?" that explains it', () => {
   const bare = LABELS.filter((label) => label.help === undefined).map((label) => label.name);
 
   assert.deepEqual(bare, [], `settings with no "?": ${bare.join(', ')}`);
@@ -52,7 +52,7 @@ test('each caller\'s pick is named in words a person reads, and carries the "?" 
 
 test('the census covers every control it is about, so an empty list of labels cannot pass it', () => {
   for (const id of ['consultEnabled', 'consult-row-claude', 'consultTurns', 'consultCallsPerSession', 'consultIdleMinutes',
-    'consultPrompt', 'cadenceEvery', 'cadenceRiskThreshold', 'cadenceRiskMax']) {
+    'consultPrompt']) {
     assert.ok(LABELS.some((label) => label.name === id), `${id} has no label in the census`);
   }
 });

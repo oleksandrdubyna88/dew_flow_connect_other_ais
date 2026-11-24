@@ -1,0 +1,5 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: s4-chat-carried
+title: "Chat carried unchanged: one registration, one lazy instance, init and teardown"
+dependsOn:
+  - s1-shell-core

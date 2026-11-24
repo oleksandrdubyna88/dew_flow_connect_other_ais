@@ -1,0 +1,12 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: epoch-2
+title: "Hub, devices, update everywhere"
+proves: "one Windows window sees and controls every device"
+dependsOn:
+  - epoch-1
+epics:
+  - e1-hub-slice
+  - e2-vm-shared
+  - e3-device-agent-sync
+  - e4-update-rollout
+  - e5-kit-devices-page

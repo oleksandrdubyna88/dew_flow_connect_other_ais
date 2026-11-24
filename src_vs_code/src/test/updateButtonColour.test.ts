@@ -35,7 +35,6 @@ function css(): string {
     side: '',
     perSide: false,
     latestServerVersion: '',
-    questions: [],
     sessions: [],
     openSections: [],
     usage: [],

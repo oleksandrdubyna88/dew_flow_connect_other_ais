@@ -5,7 +5,8 @@ using ModelContextProtocol.Server;
 namespace CoaiMcp;
 
 /// <summary>
-/// The one MCP prompt: the PERSON asking for a consultation, in their own words.
+/// The one MCP prompt: the PERSON asking for a consultation, in their own words. Named <c>cons</c> since v2; the v1 name
+/// <c>consult</c> is a hidden alias (<see cref="RenamedTools"/>) that hands out the same message.
 /// </summary>
 /// <remarks>
 /// <para>Four of the five triggers in <c>PLAN_consultant.md</c> are the assistant's own to notice —
@@ -14,7 +15,7 @@ namespace CoaiMcp;
 /// a chat is a weak carrier for it: it competes with everything else in the conversation, and it
 /// says nothing about which repository or what the tool is called.</para>
 /// <para>A prompt is the protocol's own answer to that. The client lists it —
-/// <c>/mcp__coai__consult</c> in Claude Code — and what comes back is a message addressed to the
+/// <c>/mcp__coai__cons</c> in Claude Code — and what comes back is a message addressed to the
 /// assistant, in the imperative, naming the tool and the two rules that make advice usable. It calls
 /// nothing itself: a prompt is text, the assistant decides, and the caps and the invariant still
 /// apply to whatever it decides.</para>
@@ -25,7 +26,7 @@ namespace CoaiMcp;
 /// </remarks>
 internal static class Prompts
 {
-    internal const string ConsultName = "consult";
+    internal const string ConsultName = "cons";
 
     internal static IEnumerable<McpServerPrompt> All()
     {
@@ -38,14 +39,26 @@ internal static class Prompts
             {
                 Name = ConsultName,
                 Title = "Ask another vendor's model about what you are stuck on",
-                Description = """
-                    Hand the problem to the consultant configured for this kind of caller. Give it the
-                    problem in your own words, or nothing at all and the assistant states what it is
-                    stuck on. The consultant reads this checkout READ-ONLY with its uncommitted change
-                    and answers advice to verify — it is never told to change anything.
-                    """,
+                Description = Described,
+            });
+
+        // The v1 name, for a client that learned it: the same message (hidden from prompts/list by RenamedTools).
+        yield return McpServerPrompt.Create(
+            (string problem = "") => Ask(problem),
+            new McpServerPromptCreateOptions
+            {
+                Name = RenamedTools.OldConsult,
+                Title = "Ask another vendor's model about what you are stuck on",
+                Description = $"{RenamedTools.NoteFor(ConsultName)}. {Described}",
             });
     }
+
+    private const string Described = """
+        Hand the problem to `cons`, the model the person configured for this kind of caller. Give it the
+        problem in your own words, or nothing at all and the assistant states what it is
+        stuck on. It reads this checkout READ-ONLY with its uncommitted change
+        and answers advice to verify — it is never told to change anything.
+        """;
 
     /// <summary>
     /// What the assistant is handed. An instruction, not a question: the person has already decided.
@@ -111,7 +124,7 @@ internal static class Prompts
         var stated = Stated(raw);
 
         return $"""
-            Consult another vendor's model about this, with the `consult` tool of the `coai` server.
+            Consult another vendor's model about this, with the `cons` tool of the `coai` server.
 
             {(stated.Length > 0
                 ? $"The problem, in the person's own words — send it as `problem` without rewriting it:\n\n{stated}"
@@ -129,7 +142,7 @@ internal static class Prompts
                plainly when it is wrong.
             2. **Report the verification back.** A follow-up on the same `consultationId` must say
                what you tried and what it produced; the server refuses a turn that merely repeats the
-               question, because a consultant told nothing new can only repeat itself.
+               question, because a model told nothing new can only repeat itself.
             """;
     }
 }

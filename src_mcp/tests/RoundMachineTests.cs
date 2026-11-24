@@ -10,7 +10,7 @@ namespace CoaiMcp.Tests;
 public sealed class RoundMachineTests
 {
     private static SessionState Fresh(PanelConfig? config = null) =>
-        new("s-1", "D:/repo", "feature/x", config ?? new PanelConfig(OnExhausted: StagePolicy.Human));
+        new("s-1", "D:/repo", "feature/x", config ?? new PanelConfig());
 
     private static Finding F(string title = "finding") =>
         new(Severity.Major, Category.Security, "src/A.cs", 1, title, "why it breaks", "fix", ["codex"]);
@@ -70,40 +70,54 @@ public sealed class RoundMachineTests
             .Which.Sentence.Should().Contain("without a reason");
     }
 
-    [Theory]
-    [InlineData(StagePolicy.Continue, typeof(RoundVerdict.ContinueAnyway))]
-    [InlineData(StagePolicy.Human, typeof(RoundVerdict.CallHuman))]
-    [InlineData(StagePolicy.Escalate, typeof(RoundVerdict.Escalated))]
-    public void MaxRounds_ReachedWithFindings_YieldsTheConfiguredOutcome(StagePolicy policy, Type verdict)
-    {
-        var s = Fresh(PanelConfig.Uniform(1, 2, policy));
+    // The four outcomes a round can end in — the whole verdict set of v2. Each test below fails if its branch is deleted
+    // (checked by breaking the branch in RoundMachine / AutoVerdicts, then restoring it).
 
-        RoundMachine.CompleteRound(s, Failing(), AllSix).Should().BeOfType<Transition.Ok>()
-            .Which.Verdict.Should().BeOfType(verdict);
+    private static PanelConfig Patient(int rounds = 3) =>
+        new(new Dictionary<string, RoleGate> { ["PlanCritique"] = new(rounds, 2) });
+
+    [Fact]
+    public void UnderTheThreshold_IsProceed_AndTheStageAdvancesOnResolve()
+    {
+        var ok = (Transition.Ok)RoundMachine.CompleteRound(Fresh(), Passing(), AllSix);
+
+        ok.Verdict.Should().BeOfType<RoundVerdict.Proceed>();
+        ok.State.AdvanceOnResolve.Should().BeTrue();
+        ok.State.AwaitingResolve.Should().BeTrue();
     }
 
     [Fact]
-    public void EscalationSteps_FireInLadderOrder_ThenAHuman()
+    public void OverTheThreshold_WithRoundsLeft_IsRevise_AndTheStageStays()
     {
-        var s = Fresh(PanelConfig.Uniform(1, 2, StagePolicy.Escalate));
+        var ok = (Transition.Ok)RoundMachine.CompleteRound(Fresh(Patient()), Failing(), AllSix);
 
-        var steps = new List<EscalationStep>();
-        for (var i = 0; i < 3; i++)
-        {
-            var ok = (Transition.Ok)RoundMachine.CompleteRound(s, Failing(), AllSix);
-            steps.Add(((RoundVerdict.Escalated)ok.Verdict).Step);
-            s = ((Transition.Moved)RoundMachine.Resolve(ok.State, [])).State;
-        }
+        var revise = ok.Verdict.Should().BeOfType<RoundVerdict.Revise>().Subject;
+        revise.RoundsLeft.Should().Be(2);
+        ok.State.AdvanceOnResolve.Should().BeFalse("a revise asks for another round, it does not end the stage");
+        ok.State.RoundsRunThisStage.Should().Be(1);
+    }
 
-        steps.Should().Equal(
-            EscalationStep.ReviewerEffortUp,
-            EscalationStep.ReviewerModelUp,
-            EscalationStep.ArbiterModelUp);
+    [Fact]
+    public void RoundsSpent_WithFindingsStillGating_IsGoodEnough_AndNobodyIsWaitedFor()
+    {
+        var s = Fresh(PanelConfig.Uniform(1, 2));
 
-        // The ladder is exhausted: there is nothing left to raise, so a person decides.
-        RoundMachine.CompleteRound(s, Failing(), AllSix).Should().BeOfType<Transition.Ok>()
-            .Which.Verdict.Should().BeOfType<RoundVerdict.CallHuman>()
-            .Which.Reason.Should().Contain("ladder is exhausted");
+        var ok = RoundMachine.CompleteRound(s, Failing(), AllSix).Should().BeOfType<Transition.Ok>().Subject;
+
+        ok.Verdict.Should().BeOfType<RoundVerdict.GoodEnough>().Which.Reason.Should().Contain("3 finding(s) still gate after 1 round(s)");
+        ok.State.AdvanceOnResolve.Should().BeTrue("the stage moves on resolve; there is no hold");
+    }
+
+    [Fact]
+    public void ARoundOverTheThresholdOnTheLastRound_IsGoodEnough_NotARevise()
+    {
+        var s = Fresh(Patient(2));
+        var first = (Transition.Ok)RoundMachine.CompleteRound(s, Failing(), AllSix);
+        first.Verdict.Should().BeOfType<RoundVerdict.Revise>();
+        var again = ((Transition.Moved)RoundMachine.Resolve(first.State, [])).State;
+
+        RoundMachine.CompleteRound(again, Failing(), AllSix).Should().BeOfType<Transition.Ok>()
+            .Which.Verdict.Should().BeOfType<RoundVerdict.GoodEnough>();
     }
 
     [Fact]
@@ -116,8 +130,9 @@ public sealed class RoundMachineTests
 
         var ok = (Transition.Ok)RoundMachine.CompleteRound(Fresh(), Passing(), nobody);
 
-        ok.Verdict.Should().BeOfType<RoundVerdict.CallHuman>()
-            .Which.Reason.Should().Contain("no reviewer");
+        var notReviewed = ok.Verdict.Should().BeOfType<RoundVerdict.NotReviewed>().Subject;
+        notReviewed.Reason.Should().Contain("no reviewer answered");
+        ok.State.AdvanceOnResolve.Should().BeTrue("nobody is waited for: the stage proceeds on resolve, said out loud");
     }
 
     [Fact]
@@ -130,89 +145,13 @@ public sealed class RoundMachineTests
     }
 
     [Fact]
-    public void AfterCallHuman_ThePersonsProceed_AdvancesTheStage()
-    {
-        // The gap the first live run exposed: rounds exhausted, verdict call_human, the person
-        // says "go" — and the machine had no way to hear it. Now it hears the PERSON'S decision,
-        // read from their card by the server, never a flag the caller sets.
-        var s = Fresh(PanelConfig.Uniform(1, 2, StagePolicy.Human));
-        var ok = (Transition.Ok)RoundMachine.CompleteRound(s, Failing(), AllSix);
-        ok.Verdict.Should().BeOfType<RoundVerdict.CallHuman>();
-
-        var moved = RoundMachine.Resolve(ok.State, [], HumanDecision.Proceed)
-            .Should().BeOfType<Transition.Moved>().Subject;
-
-        moved.State.Stage.Should().Be(Stage.CodeReview);
-        moved.State.PlanProceeded.Should().BeTrue();
-    }
-
-    [Fact]
-    public void TheHumanOverride_IsRefused_WhileRoundsRemain()
-    {
-        // Before exhaustion the gate decides, not the flag: a model must not skip the loop by
-        // claiming permission it was never given.
-        // The config is explicit because the rule is "while rounds REMAIN": on the shipped
-        // single-round default there are none left after the first, and the override is then
-        // legitimately honoured rather than refused. Stating the budget is what keeps this test
-        // about the override instead of about a default.
-        var patient = new PanelConfig(new Dictionary<string, RoleGate> { ["PlanCritique"] = new(3, 2) }, StagePolicy.Human);
-        var awaiting = ((Transition.Ok)RoundMachine.CompleteRound(Fresh(patient), Failing(), AllSix)).State;
-
-        RoundMachine.Resolve(awaiting, [], callerClaimsProceed: true)
-            .Should().BeOfType<Transition.Refused>()
-            .Which.Sentence.Should().Contain("call_human");
-    }
-
-    [Fact]
-    public void TheHumanOverride_IsRefused_WhenTheExhaustedStageEscalatesInstead()
-    {
-        // The code gate's own review of this file found it, and it is the sharper half of the
-        // override rule: "no rounds left" is NOT "a human was asked". An escalated stage whose
-        // rounds are also spent would have passed the old round-count check, and honouring the
-        // flag there skips the ladder the operator configured.
-        var s = Fresh(PanelConfig.Uniform(1, 2, StagePolicy.Escalate));
-        var ok = (Transition.Ok)RoundMachine.CompleteRound(s, Failing(), AllSix);
-        ok.Verdict.Should().BeOfType<RoundVerdict.Escalated>();
-        var spent = ok.State with { RoundsRunThisStage = ok.State.Config.For(Stage.PlanReview).MaxRounds };
-
-        RoundMachine.Resolve(spent, [], callerClaimsProceed: true)
-            .Should().BeOfType<Transition.Refused>()
-            .Which.Sentence.Should().Contain("call_human");
-    }
-
-    [Fact]
-    public void ARedundantOverride_IsIgnored_NotRefused()
-    {
-        // The gate already said proceed. The flag adds nothing — and refusing the resolve over a
-        // redundant argument would discard a whole round's recorded decisions.
-        var ok = (Transition.Ok)RoundMachine.CompleteRound(Fresh(), Passing(), AllSix);
-
-        RoundMachine.Resolve(ok.State, [], callerClaimsProceed: true)
-            .Should().BeOfType<Transition.Moved>()
-            .Which.State.Stage.Should().Be(Stage.CodeReview);
-    }
-
-    [Fact]
-    public void TheOverrideDoorCloses_BehindThePersonWhoWalkedThrough()
-    {
-        // One call_human verdict authorises ONE override. Left open, a later resolve in a fresh
-        // stage would still be carrying permission granted for a decision already made.
-        var s = Fresh(PanelConfig.Uniform(1, 2, StagePolicy.Human));
-        var ok = (Transition.Ok)RoundMachine.CompleteRound(s, Failing(), AllSix);
-        var moved = (Transition.Moved)RoundMachine.Resolve(ok.State, [], HumanDecision.Proceed);
-
-        moved.State.HumanGate.Should().BeFalse();
-    }
-
-    [Fact]
     public void PartialReviewerFailures_StillAdvance_AndSaySo()
     {
         var partial = new ReviewerSummary(6, 4, ["gemini/perf: timeout", "codex/security: rate limited"]);
 
         // A round must remain for the verdict to be Revise at all — with the shipped one-round
-        // budget the stage is spent and escalates, which says nothing about partial failures.
-        var patient = new PanelConfig(new Dictionary<string, RoleGate> { ["PlanCritique"] = new(3, 2) }, StagePolicy.Human);
-        var ok = (Transition.Ok)RoundMachine.CompleteRound(Fresh(patient), Failing(), partial);
+        // budget the stage is spent and ends good enough, which says nothing about partial failures.
+        var ok = (Transition.Ok)RoundMachine.CompleteRound(Fresh(Patient()), Failing(), partial);
 
         var revise = ok.Verdict.Should().BeOfType<RoundVerdict.Revise>().Subject;
         revise.Reviewers.Sentence.Should().Contain("4 of 6").And.Contain("timeout");
@@ -255,12 +194,10 @@ public sealed class RoundMachineTests
     }
 
     [Fact]
-    public void AskingAgain_StillRefusesAHeldGate_AndAnUnresolvedRound()
+    public void AskingAgain_StillRefusesAnUnresolvedRound()
     {
         var done = RoundTrip(RoundTrip(Fresh(), Passing()), Passing());
 
-        RoundMachine.BeginCodeRoundAgain(done with { HumanGate = true }).Should().BeOfType<Transition.Refused>()
-            .Which.Sentence.Should().Be(RoundMachine.GateHeld);
         RoundMachine.BeginCodeRoundAgain(done with { AwaitingResolve = true }).Should().BeOfType<Transition.Refused>()
             .Which.Sentence.Should().Be(RoundMachine.Unresolved);
     }

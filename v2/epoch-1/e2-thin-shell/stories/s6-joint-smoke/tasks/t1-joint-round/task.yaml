@@ -1,0 +1,12 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t1-joint-round
+title: "Install the shell VSIX with the E1 binary; one real round shown; no hold/card path runs"
+kind: measure
+complexity: 4
+dependsOn: []
+parallel: false
+files:
+  - research/RESULTS_v2_start.md
+dod:
+  - id: d1
+    item: "round shown in the sidebar; no card or hold code reached"

@@ -1,0 +1,18 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t1-ba-contract
+title: "ba-output schema, prompt, descriptor, YAML emitter"
+kind: code
+complexity: 5
+dependsOn: []
+parallel: false
+files:
+  - shared/ba-output.schema.json
+  - src_mcp/src/Roles/prompts/ba.md
+  - src_mcp/core/Work/WorkPlanYaml.cs
+  - src_mcp/core/Roles/RoleDescriptors.cs
+  - src_mcp/tests
+dod:
+  - id: d1
+    item: "emit then read gives equal nodes for every v2 task file"
+  - id: d2
+    item: "a changed limit shows in the built prompt"

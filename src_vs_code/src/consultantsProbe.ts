@@ -7,7 +7,7 @@ import { dataRootKnown, missingRootRefusal, refusedDataRoot, refusedDataRootOnce
  * `coai-mcp --consultants`, asked by a render and NEVER awaited by one — E5.4 of
  * `research/PLAN_the_consultant_works_on_every_vendor.md`.
  *
- * <p>The `providerHealth` / `CadenceProbes` shape, and for their reason: the mode asks each consultant's CLI for its
+ * <p>The `providerHealth` shape (and the cadence probe it was copied from, since removed), and for their reason: the mode asks each consultant's CLI for its
  * version (and a claude for its `--help`), up to the server's own sixty-second ceiling, and a render that waited on
  * that would be a panel frozen for a minute. {@link ConsultantsProbe.shown} answers from what is already known and
  * starts a spawn for whatever is stale; the spawn asks for a repaint only when what is drawn CHANGED, which with the

@@ -230,11 +230,11 @@ public sealed class RoundsDb : IDisposable
             INSERT INTO consultations (
                 id, caller, caller_kind, repo_path, branch, head_sha, vendor, model, turns, status,
                 reason, outcome, outcome_by, started_utc, ended_utc, seconds, tokens_in, tokens_out, cost_usd, problem, advice, alert,
-                kind, plan, epics, failure_kind, failure_cure, evidence)
+                kind, plan, epics, failure_kind, failure_cure, evidence, work_item)
             VALUES (
                 $id, $caller, $kind, $repo, $branch, $sha, $vendor, $model, $turns, $status,
                 $reason, $outcome, $outcomeBy, $started, $ended, $seconds, $in, $out, $cost, $problem, $advice, $alert,
-                $consultKind, $consultPlan, $consultEpics, $failureKind, $failureCure, $evidence)
+                $consultKind, $consultPlan, $consultEpics, $failureKind, $failureCure, $evidence, $workItem)
             ON CONFLICT(id) DO UPDATE SET
                 turns = excluded.turns, status = excluded.status, reason = excluded.reason,
                 outcome = excluded.outcome, outcome_by = excluded.outcome_by,
@@ -273,6 +273,8 @@ public sealed class RoundsDb : IDisposable
         Bind(write, "$failureKind", row.FailureKind);
         Bind(write, "$failureCure", row.FailureCure);
         Bind(write, "$evidence", row.Evidence);
+        // Frozen with the first turn (schema step 25): the conflict clause above does not rewrite it.
+        Bind(write, "$workItem", row.WorkItem);
         write.ExecuteNonQuery();
     }
 
@@ -856,12 +858,12 @@ public sealed class RoundsDb : IDisposable
                                 started_utc, completed_utc, tokens_in, tokens_out, cost_usd,
                                 plan_text, head_sha, base_ref, caller, agent_log,
                                 caller_vendor, caller_client, caller_client_version, caller_model,
-                                commands, plan_shape, plan_key, epic_number, cadence_note, note, round_key, plan_source)
+                                commands, plan_shape, plan_key, epic_number, cadence_note, note, round_key, plan_source, work_item)
             VALUES ($session, $stage, $number, $subject, $status, $verdict, $gating,
                     $started, $completed, $tokensIn, $tokensOut, $cost,
                     $plan, $sha, $baseRef, $caller, $agentLog,
                     $vendor, $client, $clientVersion, $model,
-                    $commands, $planShape, $planKey, $epicNumber, $cadenceNote, $note, $roundKey, $planSource)
+                    $commands, $planShape, $planKey, $epicNumber, $cadenceNote, $note, $roundKey, $planSource, $workItem)
             ON CONFLICT(session_id, stage, number) DO UPDATE SET
                 subject = excluded.subject, status = excluded.status, verdict = excluded.verdict,
                 gating = excluded.gating, completed_utc = excluded.completed_utc,
@@ -872,7 +874,8 @@ public sealed class RoundsDb : IDisposable
                 caller_client_version = excluded.caller_client_version, caller_model = excluded.caller_model,
                 commands = excluded.commands, plan_shape = excluded.plan_shape,
                 plan_key = excluded.plan_key, epic_number = excluded.epic_number, cadence_note = excluded.cadence_note,
-                note = excluded.note, round_key = excluded.round_key, plan_source = excluded.plan_source
+                note = excluded.note, round_key = excluded.round_key, plan_source = excluded.plan_source,
+                work_item = excluded.work_item
             RETURNING id
             """;
         BindRound(write, state.SessionId, round.Stage, round.Number);
@@ -907,16 +910,14 @@ public sealed class RoundsDb : IDisposable
         Bind(write, "$client", calledBy.Client);
         Bind(write, "$clientVersion", calledBy.ClientVersion);
         Bind(write, "$model", calledBy.Model);
-        // What the round ORDERED (issue #131). `[]` for a round that gave none — the empty string is
-        // the column's default and means a round recorded before this was written down at all.
-        Bind(write, "$commands", JsonSerializer.Serialize(
-            [.. context.Commands.IsDefault ? [] : context.Commands], Server.ServerJsonContext.Default.ListString));
-        Bind(write, "$planShape", context.PlanShape ?? string.Empty);
-        // The epic this round was for and what the cadence said — from the ROUND, which owns them, as
-        // the caller is (research/PLAN_consult_on_a_cadence.md).
-        Bind(write, "$planKey", round.PlanKey);
-        Bind(write, "$epicNumber", round.EpicNumber);
-        Bind(write, "$cadenceNote", round.CadenceNote);
+        // Operator orders are gone in v2: a round orders nothing. The columns stay (a schema step is never undone), written as
+        // a round that gave none writes them — `[]` and empty.
+        Bind(write, "$commands", "[]");
+        Bind(write, "$planShape", string.Empty);
+        // The cadence is gone in v2; the columns stay (a schema step is never undone) and are written empty.
+        Bind(write, "$planKey", string.Empty);
+        Bind(write, "$epicNumber", 0);
+        Bind(write, "$cadenceNote", string.Empty);
         // Why a round did NOT run, with its repeat count — the skip reason of the feature stage (S2.1).
         // The upsert on (session, stage, number) is what makes ten identical skips one row: the record
         // keeps its number and this rewrites its count.
@@ -928,6 +929,9 @@ public sealed class RoundsDb : IDisposable
         Bind(write, "$planSource", round.PlanSource is { } source
             ? JsonSerializer.Serialize(source, Server.ServerJsonContext.Default.PlanSource)
             : string.Empty);
+
+        // Which item of a plan the round was for (schema step 25, E3.S8): from the round; '' = not attributed.
+        Bind(write, "$workItem", round.WorkItem);
 
         return (long)(write.ExecuteScalar() ?? 0L);
     }
@@ -1011,7 +1015,8 @@ public sealed class RoundsDb : IDisposable
             Bind(write, "$gating", finding.IsGating ? 1 : 0);
             Bind(write, "$providers", string.Join(",", finding.Providers));
             Bind(write, "$reRaised", context.WasReRaised(finding) ? 1 : 0);
-            Bind(write, "$security", SecurityFindingStore.Write(finding));
+            // The security lane is gone in v2; the column stays (a schema step is never undone) and is written empty.
+            Bind(write, "$security", string.Empty);
             write.ExecuteNonQuery();
         }
     }

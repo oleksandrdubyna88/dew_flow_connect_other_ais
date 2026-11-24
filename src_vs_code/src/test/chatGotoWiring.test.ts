@@ -62,7 +62,7 @@ test('the command exists, is bound, and is offered in both menus a person alread
 });
 
 test('the command is registered, records its door BEFORE the work, and catches its own edge', () => {
-  const wiring = source('extension.ts');
+  const wiring = source('../shell/modules/chat/register.ts');
   const at = wiring.indexOf(`registerCommand('${GOTO}'`);
   assert.notEqual(at, -1, 'nothing registers the command, so the manifest names one that does not exist');
   const body = wiring.slice(at, at + 900);
@@ -321,7 +321,7 @@ test('restoring binds only when a caller names a tab, and the reload serializer 
     'a restored conversation cannot be bound to a tab, or is always bound to one');
 
   // The serializer passes none, so a reload keeps giving every conversation its own key.
-  const wiring = source('extension.ts');
+  const wiring = source('../shell/modules/chat/register.ts');
   const serializer = wiring.slice(wiring.indexOf('registerWebviewPanelSerializer'));
   assert.doesNotMatch(serializer.slice(0, 1_500), /restoreConversation\([^)]*bindTo/u,
     'the reload serializer binds restored conversations to tabs, which it has no way to identify');
@@ -365,7 +365,7 @@ test('S2-T10c: the offer to start a conversation from a terminal catches its own
   assert.ok(door.includes('.catch('), 'the start of a conversation from a terminal has no catch, so a rejected door is an unhandled rejection');
   assert.ok(door.includes("code: 'terminal-door-failed'"), 'the start of a conversation from a terminal does not say what the registered command says when the door fails');
   // The same sentence the registered command shows, so the person sees one wording whichever way the door was reached.
-  const registered = /registerCommand\('coai\.askFromTerminal'[\s\S]*?title: '([^']*)'/u.exec(source('extension.ts'))?.[1] ?? '';
+  const registered = /registerCommand\('coai\.askFromTerminal'[\s\S]*?title: '([^']*)'/u.exec(source('../shell/modules/chat/register.ts'))?.[1] ?? '';
   assert.ok(registered.length > 0 && door.includes(`title: '${registered}'`), 'the two failure notices of the terminal door say different things');
 });
 

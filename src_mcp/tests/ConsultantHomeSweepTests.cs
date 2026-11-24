@@ -715,7 +715,7 @@ public sealed class ConsultantHomeSweepTests : IAsyncLifetime
         new PanelSettings
         {
             Providers = [],
-            Rounds = PanelConfig.Uniform(3, 2, StagePolicy.Human),
+            Rounds = PanelConfig.Uniform(3, 2),
             DataDir = Data,
             ConsultIdle = Window,
             ConsultantHomesRoot = Homes,

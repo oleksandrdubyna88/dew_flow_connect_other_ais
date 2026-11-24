@@ -24,8 +24,7 @@ public sealed class InputCoverageCharacterizationTests
     private static string Of(bool engine, int? promptBytes, Usage usage) =>
         InputCoverage.Of(
             new ReviewerWork(new("qwen", "redteam-sql", new ProcessRequest("fixture", [], "."), SharedResource: engine ? "engine" : ""),
-                PromptBytes: promptBytes)
-            { IsSecurity = true },
+                PromptBytes: promptBytes),
             new ReviewerOutcome.Ok(new([], []), false, usage));
 
     [Fact]

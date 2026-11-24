@@ -4,13 +4,11 @@ import { escapeHtml } from './escapeHtml';
 import { USE_LABELS } from './modelCardFields';
 import { consultantPicksHtml } from './consultantPicks';
 import {
-  cliButtons, consultantSection, gateBody, keysBody, limitsSection, promptsBody, questionConsultantSection, securityLaneSection,
+  cliButtons, consultantSection, gateBody, keysBody, limitsSection, promptsBody, questionConsultantSection,
   serverBody, sideBody, teamServersSection, type PanelState,
 } from './panelView';
-import { rowLabel, rowsFor } from './catalogPicks';
-import { securityTryHtml } from './securityTry';
+import { rowLabel } from './catalogPicks';
 import { rolesEmbedded } from './rolesEmbed';
-import { commandsEmbedded } from './commandsEmbed';
 import { chatTabHtml } from './chatTabEmbed';
 import { cliTableHtml, mcpClientsHtml, movedFromHtml } from './setupTab';
 import { planPricesHtml } from './planPricesView';
@@ -27,31 +25,23 @@ import type { Vendor } from './vendors';
  */
 
 /**
- * The places whose drawing is not their old section as it is: the prompts section split in two (E4.1), the features that
+ * The places whose drawing is not their old section as it is: the stages (E4.1), the features that
  * pick from the catalog (E4.2), the Review roles tab folded in (E4.3), and Chat (E4.6b).
  */
 const SPLIT: Readonly<Record<string, (state: PanelState) => string>> = {
-  'reviews/commands': (state) => (state.commands === undefined ? '<p class="hint">Reading the commands…</p>' : commandsEmbedded(state.commands)),
   'reviews/roles': (state) => (state.roles === undefined ? '<p class="hint">Reading the roles…</p>' : rolesEmbedded(state.roles, state.settings.roleEnabled)),
-  'reviews/stages': (state) => promptsBody(state, 'stages'),
+  'reviews/stages': promptsBody,
   // Chat, drawn from the rows ticked Chat with the prompt presets inline (E4.6b).
   chat: chatTabHtml,
-  'reviews/prompts': (state) => promptsBody(state, 'prompts'),
   // Each pick with its caller's health block under it, by the one rule (E5.1b).
   'consultants/consultant': (state) => consultantSection(state, consultantPicksHtml(state.settings.consult, state.catalogRows ?? state.vendors, state.consultantHealth)),
   'consultants/qconsult': (state) => questionConsultantSection(state, state.catalogRows ?? state.vendors),
-  security: (state) => {
-    const rows = state.catalogRows ?? state.vendors;
-
-    return `${securityLaneSection(state, rowsFor('security', rows), rows)}\n${securityTryHtml(state.securityTry)}`;
-  },
 };
 
 /** The feature each place serves, for its "used by" strip. */
 const PLACE_USES: Readonly<Record<string, CatalogUse>> = {
   'consultants/consultant': 'consultant',
   'consultants/qconsult': 'qconsult',
-  security: 'security',
   chat: 'chat',
 };
 
@@ -73,8 +63,7 @@ function everyRow(state: PanelState): PanelState {
  * Reviewers tab became Models, which the page builds itself; every other old tab is in {@link SPLIT}.
  */
 const MOVED_SECTIONS: Readonly<Record<string, (state: PanelState) => string>> = {
-  // Its "Edit commands…" a jump to Reviews › Commands here, never the commands page (E5.1 step 1). Its fields in the
-  // page's columns, two on a wide editor; Limits, five numbers one to a row, keeps its one column.
+  // Its fields in the page's columns, two on a wide editor; Limits, five numbers one to a row, keeps its one column.
   'reviews/gate': (state) => cardColumns(gateBody(state)),
   'reviews/limits': limitsSection,
   'setup/keys': (state) => keysBody(everyRow(state)),

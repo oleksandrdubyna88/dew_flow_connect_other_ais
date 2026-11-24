@@ -45,7 +45,7 @@ public sealed class ARowIsOnlyGivenAPromptItCanReadTests : IDisposable
             {
                 DataDir = _data,
                 CodeWorkspace = "none",
-                Rounds = new PanelConfig(Roles: null, StagePolicy.Human) { Catalog = catalog },
+                Rounds = new PanelConfig(Roles: null) { Catalog = catalog },
                 Providers = rows,
             },
             VaultKeys.None("no vault"), default, new Runners.Processes.ProcessLauncher(), Serilog.Core.Logger.None, Noticing.None);
@@ -68,16 +68,10 @@ public sealed class ARowIsOnlyGivenAPromptItCanReadTests : IDisposable
             [RoleCatalog.ArchitectureRole], string.Empty, new string('x', contextBytes), round: 1, stage: Stage.PlanReview,
             readsCheckout: false, codexTiers: CodexTiers.None);
 
-    private static RoundWork CodeRoster(PanelService service, int contextBytes, bool deal = false) =>
+    private static RoundWork CodeRoster(PanelService service, int contextBytes) =>
         service.Roster.BuildWork(
             [Requirements], Scratch(), new string('x', contextBytes), round: 1, stage: Stage.CodeReview, readsCheckout: true,
-            codexTiers: CodexTiers.None, deal: deal);
-
-    /// <summary>The plan stage with its lenses dealt: three lenses of one role across the rows that can read them.</summary>
-    private static RoundWork DealtPlanRoster(PanelService service, int contextBytes, int seed) =>
-        service.Roster.BuildWork(
-            [Brief], string.Empty, new string('x', contextBytes), round: 1, stage: Stage.PlanReview, readsCheckout: false,
-            codexTiers: CodexTiers.None, seed: seed, planPrompts: Lenses, deal: true);
+            codexTiers: CodexTiers.None);
 
     /// <summary>What an UNCAPPED row's first prompt measures for a context of this size — read back from the work, never guessed.</summary>
     private int BytesOf(int contextBytes)
@@ -172,56 +166,12 @@ public sealed class ARowIsOnlyGivenAPromptItCanReadTests : IDisposable
             .Contain("send the document in parts, or raise the row's cap");
     }
 
-    /// <summary>
-    /// Dealing first and excluding in the leaf is the defect this code already fixed once: it cost a custom role its whole round
-    /// (<c>TheRoundSaysWhatItCouldNotAskTests</c>). A lens handed to a row that cannot read it is a lens nobody asked, so the
-    /// deal is made among the rows that CAN — walked over ten seeds, because which row gets which lens is the seed's business.
-    /// </summary>
-    [Fact]
-    public void EveryLensIsAskedOfTheRowThatFits_OnEverySeed_AndTheCappedRowIsNeverLaunched()
-    {
-        var service = ServiceOf(Catalog(), Row("alpha"), Row("beta", capKib: 1));
-
-        foreach (var seed in Enumerable.Range(0, 10))
-        {
-            var work = DealtPlanRoster(service, 5000, seed);
-
-            work.Reviewers.Select(w => w.Prompt).Order().Should().Equal(Lenses, $"seed {seed}: all three lenses are asked");
-            work.Reviewers.Should().OnlyContain(w => w.Invocation.Provider == "alpha", $"seed {seed}: only the row that can read them");
-            work.Excluded.Should().BeEmpty($"seed {seed}: the capped row was never dealt anything, so there is nothing to say it left out");
-        }
-    }
-
-    /// <summary>
-    /// The carrier test measures a prompt BEFORE the leaf asks whether the prompt has any text — and a prompt with no text is
-    /// not a size, it is a sentence the leaf says (<c>TheRoundSaysWhatItCouldNotAskTests</c>). Composing it for the measure threw
-    /// out of the whole roster the moment one row had a cap and one dealt lens had never been written.
-    /// </summary>
-    [Fact]
-    public void ADealtLensWithNoPromptText_IsSaidAsNotAsked_WhenARowHasACap_AndTheRoundIsStillBuilt()
-    {
-        const string unwritten = "brief-unwritten";
-        var catalog = RoleComposition.Compose([
-            new RoleEntry(Brief, Name: "The brief", Stage: RoleStages.Plan,
-                Prompts: [.. ((string[])[.. Lenses, unwritten]).Select(id => new PromptEntry(id, id, "What the brief says."))]),
-        ]);
-        var service = ServiceOf(catalog, Row("alpha"), Row("beta", capKib: 1));
-
-        var work = service.Roster.BuildWork(
-            [Brief], string.Empty, new string('x', 5000), round: 1, stage: Stage.PlanReview, readsCheckout: false,
-            codexTiers: CodexTiers.None, seed: 0, planPrompts: [.. Lenses, unwritten], deal: true);
-
-        work.NotAsked.Should().ContainSingle().Which.Reason.Should().Contain(unwritten).And.Contain("no text");
-        work.Reviewers.Select(w => w.Prompt).Order().Should().Equal(Lenses, "every lens that has text is still asked");
-        work.Reviewers.Should().OnlyContain(w => w.Invocation.Provider == "alpha", "only the row whose cap fits");
-    }
-
     [Fact]
     public void WhenEveryRowIsCappedUnderThePrompt_NoLensSilentlyDisappears_EachRowAndRoleIsNamed()
     {
         var service = ServiceOf(Catalog(), Row("alpha", capKib: 1), Row("beta", capKib: 1));
 
-        var work = CodeRoster(service, 5000, deal: true);
+        var work = CodeRoster(service, 5000);
 
         work.Reviewers.Should().BeEmpty();
         work.Excluded.Select(e => (e.Provider, e.Role)).Should().BeEquivalentTo([("alpha", Requirements), ("beta", Requirements)]);

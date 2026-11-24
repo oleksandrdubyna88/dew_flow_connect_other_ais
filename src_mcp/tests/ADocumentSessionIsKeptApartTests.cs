@@ -23,7 +23,7 @@ namespace CoaiMcp.Tests;
 public sealed class ADocumentSessionIsKeptApartTests
 {
     private static SessionState Fresh(Stage stage = Stage.PlanReview) =>
-        new("s1", "/repo", "main", PanelConfig.Uniform(3, 5, StagePolicy.Human)) { Stage = stage };
+        new("s1", "/repo", "main", PanelConfig.Uniform(3, 5)) { Stage = stage };
 
     /// <summary>A document session: the same state carrying the document it is about.</summary>
     private static SessionState Doc(Stage stage = Stage.DocumentReview) =>
@@ -154,12 +154,6 @@ public sealed class ADocumentSessionIsKeptApartTests
             .Should().BeOfType<Transition.Refused>()
             .Which.Sentence.Should().Contain("resolve");
 
-    [Fact]
-    public void ADocumentRound_RefusesWhileAPersonIsBeingWaitedFor() =>
-        RoundMachine.BeginDocumentRound(Doc() with { HumanGate = true })
-            .Should().BeOfType<Transition.Refused>()
-            .Which.Sentence.Should().Contain("ask_human");
-
     /// <summary>
     /// A finished review is finished — and the refusal carries the door, because a refusal with no
     /// door is a stall and an unchanged policy would otherwise be permanently unreviewable.
@@ -170,18 +164,17 @@ public sealed class ADocumentSessionIsKeptApartTests
             .Should().BeOfType<Transition.Refused>()
             .Which.Sentence.Should().Contain("newReview");
 
-    /// <summary>Three refusals, three different sentences — nobody is sent to fix the wrong thing.</summary>
+    /// <summary>Two refusals, two different sentences — nobody is sent to fix the wrong thing.</summary>
     [Fact]
     public void EachRefusal_SaysSomethingDifferent()
     {
         var sentences = new[]
         {
             RoundMachine.BeginDocumentRound(Doc() with { AwaitingResolve = true }),
-            RoundMachine.BeginDocumentRound(Doc() with { HumanGate = true }),
             RoundMachine.BeginDocumentRound(Doc(Stage.Done)),
         }.Select(t => t.Should().BeOfType<Transition.Refused>().Subject.Sentence);
 
-        sentences.Distinct().Should().HaveCount(3);
+        sentences.Distinct().Should().HaveCount(2);
     }
 
     /// <summary>

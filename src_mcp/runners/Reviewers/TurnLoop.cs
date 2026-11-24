@@ -52,7 +52,6 @@ internal sealed class TurnLoop(
         for (var turn = 1; ; turn++)
         {
             var (outcome, elapsed) = await TurnAsync(work, started, cap, ct);
-            outcome = SecurityAnswerLimit.Apply(work, outcome);
             if (outcome is not ReviewerOutcome.Ok answered)
             {
                 return outcome with { EarlierTurns = _earlier };

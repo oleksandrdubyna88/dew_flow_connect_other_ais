@@ -1,0 +1,13 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t3-sidebar-page-test
+title: "Bundled page test of the sidebar (runs the minified page against a DOM shim)"
+kind: test
+complexity: 4
+dependsOn:
+  - t2-sidebar-module
+parallel: false
+files:
+  - src_vs_code/src/test
+dod:
+  - id: d1
+    item: "deleting the ready post makes the test fail"

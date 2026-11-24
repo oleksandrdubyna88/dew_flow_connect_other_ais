@@ -1,0 +1,2080 @@
+{
+  "feature": {
+    "id": "coai-v2",
+    "title": "coai v2 — one product on every machine, auto only, ≤ 2 s start, deterministic half done by coai",
+    "status": "planned",
+    "plan": "PLAN.md",
+    "architecture": [
+      "architecture/server.md",
+      "architecture/extension.md"
+    ],
+    "workMethod": {
+      "mvpEpics": {
+        "min": 1,
+        "max": 2
+      },
+      "maxEpicsPerEpoch": 5,
+      "minConsultsPerEpoch": 1,
+      "minConsultsPerEpic": 0,
+      "complexityScale": "0-10"
+    },
+    "epochs": [
+      "epoch-1",
+      "epoch-2",
+      "epoch-3",
+      "epoch-4",
+      "epoch-5"
+    ],
+    "taskSchema": {
+      "security": "boolean flag; true routes the task to the important role",
+      "roles": "ordered model lists per role"
+    },
+    "cornerstones": [
+      "epoch-1/e1/s4-migrate-v2",
+      "epoch-1/e3/s6-install",
+      "epoch-2/e1 hub auth + device-document contract",
+      "epoch-2/e2 shared vendor logins + file permissions",
+      "epoch-2/e3 first sync + settings migration, single writer",
+      "epoch-2/e4 binary swap",
+      "epoch-3/e1 router + failover + job lease",
+      "epoch-3/e1 work-plan schema",
+      "epoch-3/e2 plan binding + envelope/report schema",
+      "epoch-3/e5 host slots + merge on candidate SHA"
+    ]
+  },
+  "epochs": [
+    {
+      "dir": "epoch-1",
+      "yaml": {
+        "id": "epoch-1",
+        "title": "Foundation",
+        "proves": "the simplified gate and the new shell work end to end on this machine",
+        "dependsOn": [],
+        "epics": [
+          "e1-gate-simplify",
+          "e2-thin-shell",
+          "e3-server-cleanup-install",
+          "e4-shell-modules",
+          "e5-release-2-0"
+        ]
+      },
+      "epics": [
+        {
+          "dir": "e1-gate-simplify",
+          "yaml": {
+            "id": "e1-gate-simplify",
+            "title": "Gate core: four outcomes, v1 data migrated, live proof",
+            "mvp": true,
+            "half": "server",
+            "dependsOn": [],
+            "parallelWith": [
+              "e2-thin-shell"
+            ],
+            "doneWhen": [
+              "only proceed, revise, good_enough and not_reviewed come out of a round",
+              "the deleted classes are gone and the MCP test executable is green",
+              "--migrate-v2 converts every released fixture exactly once; an interrupted run ends equal to one clean run",
+              "3 real plan→code gates end with 0 person waits; migration on copies of real data: dry-run = apply, second run 0; outcome shares recorded"
+            ]
+          },
+          "stories": [
+            {
+              "dir": "s1-verdicts-and-holds",
+              "yaml": {
+                "id": "s1-verdicts-and-holds",
+                "title": "Remove the policy enum, ladder, held gates, cards and ask_human",
+                "dependsOn": []
+              },
+              "tasks": [
+                {
+                  "id": "t1-policy-ladder",
+                  "title": "Remove StagePolicy/EscalationStep, PanelConfig.OnExhausted/Autonomous, PolicyOf and the ContinueAnyway/CallHuman/Escalated/Ladder/GateHeld verdicts; keep Proceed/Revise/GoodEnough/NotReviewed",
+                  "kind": "code",
+                  "complexity": 7,
+                  "dependsOn": [],
+                  "parallel": false,
+                  "files": [
+                    "src_mcp/core/Rounds/SessionState.cs",
+                    "src_mcp/core/Rounds/RoundMachine.cs",
+                    "src_mcp/src/Server/PanelSettings.cs"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "a round can end only in the four kept outcomes"
+                    },
+                    {
+                      "id": "d2",
+                      "item": "an over-threshold round with budget left returns revise"
+                    },
+                    {
+                      "id": "d3",
+                      "item": "the solution builds with warnings as errors"
+                    }
+                  ]
+                },
+                {
+                  "id": "t2-holds-cards-askhuman",
+                  "title": "Remove RoundEngine.ApplyAnyHumanDecision, Escalations (move AtomicJson and ScratchDirectory out), EscalationRetention, SessionHolds, AskHumanService, AskUnderAuto, EscalationBudget; ask_human becomes an alias reply",
+                  "kind": "code",
+                  "complexity": 6,
+                  "dependsOn": [
+                    "t1-policy-ladder"
+                  ],
+                  "parallel": false,
+                  "files": [
+                    "src_mcp/src/Server/Rounds/RoundEngine.cs",
+                    "src_mcp/src/Server/Escalations.cs",
+                    "src_mcp/src/Server/AskHumanService.cs",
+                    "src_mcp/src/Server/AskUnderAuto.cs",
+                    "src_mcp/src/Tools.cs"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "no code path waits for a person"
+                    },
+                    {
+                      "id": "d2",
+                      "item": "ask_human returns status ask_in_conversation with note 'removed in v2'"
+                    }
+                  ]
+                },
+                {
+                  "id": "t3-verdict-tests",
+                  "title": "Delete tests of removed behaviour; add RoundMachine tests for the four outcomes",
+                  "kind": "test",
+                  "complexity": 5,
+                  "dependsOn": [
+                    "t2-holds-cards-askhuman"
+                  ],
+                  "parallel": false,
+                  "files": [
+                    "src_mcp/tests"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "the MCP test executable is green"
+                    },
+                    {
+                      "id": "d2",
+                      "item": "each kept outcome has a test that fails if its branch is deleted"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "dir": "s4-migrate-v2",
+              "yaml": {
+                "id": "s4-migrate-v2",
+                "title": "--migrate-v2: held sessions, cards, stores, settings keys",
+                "dependsOn": [
+                  "s1-verdicts-and-holds"
+                ]
+              },
+              "tasks": [
+                {
+                  "id": "t1-migrate-mode",
+                  "title": "One-shot --migrate-v2 [--apply], automatic at first 2.0 serve under a lease with marker migrations/v2.done; legacy-hold reader kept",
+                  "kind": "code",
+                  "complexity": 7,
+                  "dependsOn": [],
+                  "parallel": false,
+                  "files": [
+                    "src_mcp/src/Program.cs",
+                    "src_mcp/src/Server/Migrations"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "a held session becomes AwaitingResolve + AdvanceOnResolve with the converted note"
+                    },
+                    {
+                      "id": "d2",
+                      "item": "active cards move to escalations/archive as withdrawn_v2; qphase and cadence stores archived, not deleted"
+                    },
+                    {
+                      "id": "d3",
+                      "item": "removed settings keys land in settings.v1-removed.json"
+                    },
+                    {
+                      "id": "d4",
+                      "item": "a step journal migrations/v2.journal makes every step idempotent across partial writes"
+                    }
+                  ]
+                },
+                {
+                  "id": "t2-migrate-fixtures",
+                  "title": "Fixtures of each released session format migrated twice: one advance, note present, no active card; kill and restart at each step boundary",
+                  "kind": "test",
+                  "complexity": 5,
+                  "dependsOn": [
+                    "t1-migrate-mode"
+                  ],
+                  "parallel": false,
+                  "files": [
+                    "src_mcp/tests"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "second run changes nothing"
+                    }
+                  ]
+                },
+                {
+                  "id": "t3-migrate-docs",
+                  "title": "PROJECT.md one-shot list and shared/data-inventory.json updated for the added and removed modes",
+                  "kind": "docs",
+                  "complexity": 2,
+                  "dependsOn": [
+                    "t1-migrate-mode"
+                  ],
+                  "parallel": true,
+                  "files": [
+                    ".agents/PROJECT.md",
+                    "shared/data-inventory.json"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "every one-shot mode in Program.cs is listed and no removed one is"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "dir": "s6-live-proof",
+              "yaml": {
+                "id": "s6-live-proof",
+                "title": "Live proof: real plan→code gates and migration on copies of real data",
+                "dependsOn": [
+                  "s1-verdicts-and-holds",
+                  "s4-migrate-v2"
+                ]
+              },
+              "tasks": [
+                {
+                  "id": "t1-live-gates",
+                  "title": "Run 3 real plan→code gates on the E1 binary; record 0 person waits and only the four outcomes",
+                  "kind": "measure",
+                  "complexity": 4,
+                  "dependsOn": [],
+                  "parallel": false,
+                  "files": [
+                    "research/RESULTS_v2_gate_core.md"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "3 real gates recorded with verdicts and reviewer counts"
+                    }
+                  ]
+                },
+                {
+                  "id": "t2-migrate-copies",
+                  "title": "--migrate-v2 on a COPY of each real data folder: dry-run counts = apply counts; second run 0 changes",
+                  "kind": "measure",
+                  "complexity": 5,
+                  "dependsOn": [],
+                  "parallel": true,
+                  "files": [
+                    "research/RESULTS_v2_gate_core.md"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "counts recorded per data folder"
+                    }
+                  ]
+                },
+                {
+                  "id": "t3-outcome-share",
+                  "title": "Share of good_enough/not_reviewed vs the v1 call_human share from RoundsDb",
+                  "kind": "measure",
+                  "complexity": 3,
+                  "dependsOn": [
+                    "t1-live-gates"
+                  ],
+                  "parallel": false,
+                  "files": [
+                    "research/RESULTS_v2_gate_core.md"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "both shares recorded with the query used"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "dir": "e2-thin-shell",
+          "yaml": {
+            "id": "e2-thin-shell",
+            "title": "Thin extension shell, ≤ 2 s start, chat carried",
+            "mvp": true,
+            "half": "extension",
+            "dependsOn": [],
+            "parallelWith": [
+              "e1-gate-simplify"
+            ],
+            "doneWhen": [
+              "no onStartupFinished; activate() only registers (entryPurity test)",
+              "entry firewall checks inputs and output imports; byte budgets green",
+              "M2 = command → the REAL sidebar menu (section headers Notifications, Active gates, Active consultations, Phrases, Bugz) painted AND interactive (page posts menuReady; a skeleton or inert snapshot does not count) ≤ 2000 ms in every sample on Linux CI and Remote-WSL (its extension host runs on Linux), ≤ 3000 ms on Windows CI (owner, 2026-11-23); M1 ≤ 100 ms",
+              "v1 baseline and per-step marks of the old activate() recorded",
+              "joint smoke with the E1 binary passes; settings-mirror check done"
+            ]
+          },
+          "stories": [
+            {
+              "dir": "s1-shell-core",
+              "yaml": {
+                "id": "s1-shell-core",
+                "title": "Entry, lazy loader, ids, per-module bundles, firewall, budgets",
+                "dependsOn": []
+              },
+              "tasks": [
+                {
+                  "id": "t1-entry-lazy",
+                  "title": "shell/entry.ts, lazy.ts, ids.ts; activation events onView/onWebviewPanel/onUri and implicit command events",
+                  "kind": "code",
+                  "complexity": 6,
+                  "dependsOn": [],
+                  "parallel": false,
+                  "files": [
+                    "src_vs_code/shell",
+                    "src_vs_code/package.json"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "activate() makes only register* and subscriptions.push calls"
+                    }
+                  ]
+                },
+                {
+                  "id": "t2-bundles",
+                  "title": "scripts/bundle-entries.json and one CommonJS esbuild entry per module and page",
+                  "kind": "code",
+                  "complexity": 5,
+                  "dependsOn": [
+                    "t1-entry-lazy"
+                  ],
+                  "parallel": false,
+                  "files": [
+                    "src_vs_code/scripts",
+                    "src_vs_code/package.json"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "dist/extension.js and dist/modules/*.js are emitted; the packaged VSIX contains every chunk"
+                    }
+                  ]
+                },
+                {
+                  "id": "t3-firewall-budgets",
+                  "title": "entry-firewall.mjs (metafile inputs and outputs[*].imports) + byte budgets + ESLint no-restricted-imports on the shell",
+                  "kind": "code",
+                  "complexity": 5,
+                  "dependsOn": [
+                    "t2-bundles"
+                  ],
+                  "parallel": false,
+                  "files": [
+                    "src_vs_code/scripts/entry-firewall.mjs",
+                    "src_vs_code/eslint.config.mjs"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "a planted require('node:fs') in the entry fails CI"
+                    }
+                  ]
+                },
+                {
+                  "id": "t4-entry-purity",
+                  "title": "entryPurity.test.ts runs the entry against a recording vscode fake",
+                  "kind": "test",
+                  "complexity": 4,
+                  "dependsOn": [
+                    "t1-entry-lazy"
+                  ],
+                  "parallel": true,
+                  "files": [
+                    "src_vs_code/src/test/entryPurity.test.ts"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "the test fails on any call other than register* or subscriptions.push"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "dir": "s2-measure",
+              "yaml": {
+                "id": "s2-measure",
+                "title": "Cold-start measurement M1/M2/M3",
+                "dependsOn": [
+                  "s1-shell-core"
+                ]
+              },
+              "tasks": [
+                {
+                  "id": "t0-v1-baseline",
+                  "title": "Measure the v1 cold start (same harness) and record it as the baseline",
+                  "kind": "measure",
+                  "complexity": 3,
+                  "dependsOn": [],
+                  "parallel": true,
+                  "files": [
+                    "research/RESULTS_v2_start.md"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "v1 M2 recorded on Linux with three samples"
+                    }
+                  ]
+                },
+                {
+                  "id": "t1-measure-launch",
+                  "title": "run-host.mjs measure launch: fresh profile and data dir per sample, isActive false asserted, driver clock, fresh ready ack, M1/M2/M3",
+                  "kind": "code",
+                  "complexity": 6,
+                  "dependsOn": [],
+                  "parallel": false,
+                  "files": [
+                    "src_vs_code/scripts/run-host.mjs",
+                    "src_vs_code/src/test/host/measureScenario.ts",
+                    "src_vs_code/shell/measure.ts"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "a planted 3 s sleep in activation fails the launch"
+                    }
+                  ]
+                },
+                {
+                  "id": "t2-ci-jobs",
+                  "title": "CI jobs: measure on ubuntu (xvfb) and windows-latest",
+                  "kind": "config",
+                  "complexity": 4,
+                  "dependsOn": [
+                    "t1-measure-launch"
+                  ],
+                  "parallel": false,
+                  "files": [
+                    ".github/workflows/ci.yml"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "both jobs required; a missing ack fails the job"
+                    }
+                  ]
+                },
+                {
+                  "id": "t3-remote-wsl",
+                  "title": "scripts/measure-remote-wsl.ps1 + driver VSIX; marks readable with COAI_MEASURE=1 in any mode",
+                  "kind": "code",
+                  "complexity": 5,
+                  "dependsOn": [
+                    "t1-measure-launch"
+                  ],
+                  "parallel": true,
+                  "files": [
+                    "src_vs_code/scripts/measure-remote-wsl.ps1"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "the result names the extension-host location"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "dir": "s6-joint-smoke",
+              "yaml": {
+                "id": "s6-joint-smoke",
+                "title": "Joint smoke: shell VSIX + E1 binary",
+                "dependsOn": [
+                  "s2-measure"
+                ]
+              },
+              "tasks": [
+                {
+                  "id": "t1-joint-round",
+                  "title": "Install the shell VSIX with the E1 binary; one real round shown; no hold/card path runs",
+                  "kind": "measure",
+                  "complexity": 4,
+                  "dependsOn": [],
+                  "parallel": false,
+                  "files": [
+                    "research/RESULTS_v2_start.md"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "round shown in the sidebar; no card or hold code reached"
+                    }
+                  ]
+                },
+                {
+                  "id": "t2-settings-mirror",
+                  "title": "Settings mirror under lazy activation: a window that never opens coai still gives the server current settings, or the gap is closed",
+                  "kind": "test",
+                  "complexity": 5,
+                  "dependsOn": [],
+                  "parallel": true,
+                  "files": [
+                    "src_vs_code/src/test/host"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "result recorded; a gap is fixed or the server reads settings without the mirror"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "dir": "e3-server-cleanup-install",
+          "yaml": {
+            "id": "e3-server-cleanup-install",
+            "title": "Server cleanup, renames, conventions optional, --band-json, install, roles",
+            "half": "server",
+            "dependsOn": [
+              "e1-gate-simplify"
+            ],
+            "parallelWith": [
+              "e4-shell-modules"
+            ],
+            "doneWhen": [
+              "cons, cons_close, consask served; old names answer as aliases",
+              "coai ships and enforces no conventions; a repo that mounts them still has them read",
+              "roles returns main AI, ORDERED model lists per role, complexity bands, Haiku kinds, work method",
+              "--install on a clean WSL box gives a working Claude + Codex (+ agy) MCP setup with the SessionStart roles hook; idempotent; NO AskUserQuestion hook",
+              "--band-json answers phrases, consultations, failures",
+              "each removal story adds its rows to MigrationV2Tables with a fixture; answered/expired cards older than 30 days are archived",
+              "review_*/cons/consask accept workItem; --plan-report gives per-item gates, cons, consask, time"
+            ]
+          },
+          "stories": [
+            {
+              "dir": "s2-remove-modes",
+              "yaml": {
+                "id": "s2-remove-modes",
+                "title": "Remove consask modes, cadence, operator commands, prompts-per-round, security lane",
+                "dependsOn": []
+              },
+              "tasks": [
+                {
+                  "id": "t1-consask-modes",
+                  "title": "Remove AskGateDesk, QuestionPhaseStore, StageRelease, QuestionConsultSettings Mode/FreeBatches",
+                  "kind": "code",
+                  "complexity": 5,
+                  "dependsOn": [],
+                  "parallel": false,
+                  "files": [
+                    "src_mcp/core/QuestionConsult",
+                    "src_mcp/src/Server/QuestionConsult"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "consask answers with no phase or consultId logic"
+                    }
+                  ]
+                },
+                {
+                  "id": "t2-cadence",
+                  "title": "Remove Server/Cadence, core/Cadence, CadenceArgs and the --cadence one-shot",
+                  "kind": "code",
+                  "complexity": 4,
+                  "dependsOn": [
+                    "t1-consask-modes"
+                  ],
+                  "parallel": false,
+                  "files": [
+                    "src_mcp/src/Server/Cadence",
+                    "src_mcp/core/Cadence",
+                    "src_mcp/src/Tools.cs",
+                    "src_mcp/src/Program.cs"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "--cadence exits 64 (unknown mode)"
+                    }
+                  ]
+                },
+                {
+                  "id": "t3-commands-picker",
+                  "title": "Remove CommandsSetting, CommandModelsSetting, core/Commands, shared/command-models.json, the operator flags and PromptsPerRound/DealPlan/CodeLenses",
+                  "kind": "code",
+                  "complexity": 5,
+                  "dependsOn": [
+                    "t2-cadence"
+                  ],
+                  "parallel": false,
+                  "files": [
+                    "src_mcp/src/Server/CommandsSetting.cs",
+                    "src_mcp/core/Commands",
+                    "shared/command-models.json",
+                    "src_mcp/src/Server/PanelSettings.cs"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "one prompt per role by default; variants only as overrides"
+                    }
+                  ]
+                },
+                {
+                  "id": "t4-security-lane",
+                  "title": "Remove the security lane (SecurityLane*, CheckSecurityMode, SecurityPromptTextReadMode, core/Security, shared/security-lane*.json)",
+                  "kind": "code",
+                  "complexity": 4,
+                  "dependsOn": [
+                    "t3-commands-picker"
+                  ],
+                  "parallel": false,
+                  "files": [
+                    "src_mcp/src/Server",
+                    "src_mcp/core/Security",
+                    "shared/security-lane.json"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "--check-security and --security-prompt-text exit 64"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "dir": "s3-renames",
+              "yaml": {
+                "id": "s3-renames",
+                "title": "cons / cons_close / consask with aliases and settings fallbacks",
+                "dependsOn": [
+                  "s2-remove-modes"
+                ]
+              },
+              "tasks": [
+                {
+                  "id": "t1-tool-renames",
+                  "title": "Serve cons, cons_close, consask; keep consult, close_consult, ask_consultants as hidden aliases with a 'renamed' note",
+                  "kind": "code",
+                  "complexity": 4,
+                  "dependsOn": [],
+                  "parallel": false,
+                  "files": [
+                    "src_mcp/src/Tools.cs",
+                    "src_mcp/src/Prompts.cs"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "tools/list shows the new names only; old names still answer"
+                    }
+                  ]
+                },
+                {
+                  "id": "t2-settings-fallbacks",
+                  "title": "Read COAI_CONS_* / COAI_CONSASK_*, falling back to COAI_CONSULT_* / COAI_QCONSULT_*",
+                  "kind": "code",
+                  "complexity": 3,
+                  "dependsOn": [
+                    "t1-tool-renames"
+                  ],
+                  "parallel": false,
+                  "files": [
+                    "src_mcp/src/Server/PanelSettings.cs",
+                    "src_mcp/src/Server/QuestionConsult/QuestionConsultSettings.cs"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "the new key wins when both are set"
+                    }
+                  ]
+                },
+                {
+                  "id": "t3-text-renames",
+                  "title": "Rename consultant / question consultant to cons / consask in tool descriptions, notices and prompt texts",
+                  "kind": "rename",
+                  "complexity": 2,
+                  "dependsOn": [
+                    "t2-settings-fallbacks"
+                  ],
+                  "parallel": false,
+                  "files": [
+                    "src_mcp/src",
+                    "shared"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "no user-visible text says 'question consultant'"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "dir": "s5-conventions-out",
+              "yaml": {
+                "id": "s5-conventions-out",
+                "title": "Conventions optional: stop shipping and enforcing them",
+                "dependsOn": []
+              },
+              "tasks": [
+                {
+                  "id": "t1-stop-enforcing",
+                  "title": "Remove conventions enforcement from the server (ledger/epoch/cadence checks, rule-version notices); keep reading a mounted .agents/conventions as the repo own instructions",
+                  "kind": "code",
+                  "complexity": 4,
+                  "dependsOn": [],
+                  "parallel": true,
+                  "files": [
+                    "src_mcp/runners/Context/StageRules.cs",
+                    "src_mcp/src/Server"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "a repo without the mount gets no missing-rules notice"
+                    },
+                    {
+                      "id": "d2",
+                      "item": "a repo with the mount still has its rules read"
+                    }
+                  ]
+                },
+                {
+                  "id": "t2-fixture",
+                  "title": "Fixture: repo with and without the conventions mount plus an ordinary submodule",
+                  "kind": "test",
+                  "complexity": 3,
+                  "dependsOn": [
+                    "t1-stop-enforcing"
+                  ],
+                  "parallel": false,
+                  "files": [
+                    "src_mcp/tests"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "both cases tested; ordinary submodule populates"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "dir": "s4-band-json",
+              "yaml": {
+                "id": "s4-band-json",
+                "title": "--band-json one-shot",
+                "dependsOn": []
+              },
+              "tasks": [
+                {
+                  "id": "t1-band-json",
+                  "title": "Server one-shot --band-json: phrases, open consultations, open failures from the local data folder",
+                  "kind": "code",
+                  "complexity": 4,
+                  "dependsOn": [],
+                  "parallel": true,
+                  "files": [
+                    "src_mcp/src/Program.cs",
+                    "src_mcp/src/BandJsonMode.cs"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "exit 0 with one JSON object; an unknown flag never exits 64"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "dir": "s6-install",
+              "yaml": {
+                "id": "s6-install",
+                "title": "--install and --setup-clients: find CLIs, write MCP config (cornerstone)",
+                "dependsOn": [
+                  "s3-renames"
+                ]
+              },
+              "tasks": [
+                {
+                  "id": "t1-find-clis",
+                  "title": "Find claude, codex, agy (ExecutablePaths); report versions",
+                  "kind": "code",
+                  "complexity": 4,
+                  "dependsOn": [],
+                  "parallel": false,
+                  "files": [
+                    "src_mcp/src/Install"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "absent CLIs reported, not guessed"
+                    }
+                  ]
+                },
+                {
+                  "id": "t2-write-config",
+                  "title": "Write MCP config through vendor commands (claude mcp add-json --scope user, codex mcp add); agy path measured first; backup + idempotent by command path",
+                  "kind": "code",
+                  "complexity": 7,
+                  "dependsOn": [
+                    "t1-find-clis"
+                  ],
+                  "parallel": false,
+                  "files": [
+                    "src_mcp/src/Install"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "second run changes nothing"
+                    },
+                    {
+                      "id": "d2",
+                      "item": "a backup exists before the first write"
+                    }
+                  ]
+                },
+                {
+                  "id": "t3-clean-box",
+                  "title": "Clean WSL box test (fresh HOME): one command → working MCP setup",
+                  "kind": "test",
+                  "complexity": 5,
+                  "dependsOn": [
+                    "t2-write-config"
+                  ],
+                  "parallel": false,
+                  "files": [
+                    "src_mcp/tests"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "claude and codex list the coai server"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "dir": "s7-roles-hook",
+              "yaml": {
+                "id": "s7-roles-hook",
+                "title": "roles tool + SessionStart hook",
+                "dependsOn": [
+                  "s6-install"
+                ]
+              },
+              "tasks": [
+                {
+                  "id": "t1-roles-tool",
+                  "title": "MCP tool roles + one-shot --roles [--format json|claude-hook]; shared/role-defaults.json with ordered model lists per role and main-AI vendor",
+                  "kind": "code",
+                  "complexity": 6,
+                  "dependsOn": [],
+                  "parallel": false,
+                  "files": [
+                    "src_mcp/src",
+                    "shared/role-defaults.json"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "codex/agy rows only from measured model lists"
+                    }
+                  ]
+                },
+                {
+                  "id": "t2-sessionstart",
+                  "title": "Installer merges the SessionStart → --roles --format claude-hook hook",
+                  "kind": "code",
+                  "complexity": 4,
+                  "dependsOn": [
+                    "t1-roles-tool"
+                  ],
+                  "parallel": false,
+                  "files": [
+                    "src_mcp/src/Install"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "a new Claude session shows the role table"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "dir": "s8-work-item-attribution",
+              "yaml": {
+                "id": "s8-work-item-attribution",
+                "title": "Work-item attribution: every gate, cons and consask call names its plan item",
+                "dependsOn": [
+                  "s3-renames"
+                ]
+              },
+              "tasks": [
+                {
+                  "id": "t1-workitem-param",
+                  "title": "Optional workItem (feature-folder path of an epoch/epic/story/task) on review_plan/code/document/feature, cons, consask; recorded in RoundsDb (new schema step) and in consultation records",
+                  "kind": "code",
+                  "complexity": 5,
+                  "dependsOn": [],
+                  "parallel": false,
+                  "files": [
+                    "src_mcp/src/Tools.cs",
+                    "src_mcp/storage"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "old callers without workItem still work"
+                    },
+                    {
+                      "id": "d2",
+                      "item": "the value is validated as a path inside the repo"
+                    }
+                  ]
+                },
+                {
+                  "id": "t2-plan-report",
+                  "title": "One-shot --plan-report <feature-dir> --json: per item gates run, rounds, cons and consask counts, first/last event, wall time, status",
+                  "kind": "code",
+                  "complexity": 5,
+                  "dependsOn": [
+                    "t1-workitem-param"
+                  ],
+                  "parallel": false,
+                  "files": [
+                    "src_mcp/src"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "listed in PROJECT.md"
+                    },
+                    {
+                      "id": "d2",
+                      "item": "an item with no events reports zeros, not missing"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "dir": "e4-shell-modules",
+          "yaml": {
+            "id": "e4-shell-modules",
+            "title": "Shell modules: sidebar, chat carried, install after ready, dead v1 out",
+            "half": "extension",
+            "dependsOn": [
+              "e2-thin-shell"
+            ],
+            "doneWhen": [
+              "sidebar polls only while visible",
+              "all chat host scenarios pass",
+              "M2 still ≤ 2000 ms on Linux and ≤ 3000 ms on Windows",
+              "no escalation or cadence control or watcher in the bundle",
+              "--setup-clients runs after every activation (after ready) and finishes an interrupted client update",
+              "the sidebar module draws the real interactive menu itself (collapsed section headers) without the legacy bundle; opening a section before the old code is ready shows loading for that section only; menuReady ≤ 2000 ms (Linux) or ≤ 3000 ms (Windows) in every sample"
+            ]
+          },
+          "stories": [
+            {
+              "dir": "s3-sidebar",
+              "yaml": {
+                "id": "s3-sidebar",
+                "title": "Sidebar on the kit: failures, active cons/consask, last rounds",
+                "dependsOn": []
+              },
+              "tasks": [
+                {
+                  "id": "t2-sidebar-module",
+                  "title": "shell/modules/sidebar + pages/sidebar.ts on kit 0.2: skeleton first, ready after paint, data after ready",
+                  "kind": "code",
+                  "complexity": 6,
+                  "dependsOn": [],
+                  "parallel": false,
+                  "files": [
+                    "src_vs_code/shell/modules/sidebar",
+                    "src_vs_code/pages/sidebar.ts",
+                    "src_vs_code/package.json"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "the sidebar polls only while visible"
+                    }
+                  ]
+                },
+                {
+                  "id": "t3-sidebar-page-test",
+                  "title": "Bundled page test of the sidebar (runs the minified page against a DOM shim)",
+                  "kind": "test",
+                  "complexity": 4,
+                  "dependsOn": [
+                    "t2-sidebar-module"
+                  ],
+                  "parallel": false,
+                  "files": [
+                    "src_vs_code/src/test"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "deleting the ready post makes the test fail"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "dir": "s4-chat-carried",
+              "yaml": {
+                "id": "s4-chat-carried",
+                "title": "Chat carried unchanged: one registration, one lazy instance, init and teardown",
+                "dependsOn": [
+                  "s1-shell-core"
+                ]
+              },
+              "tasks": [
+                {
+                  "id": "t1-shared-runtime",
+                  "title": "One runtime module for notify, ledger and data root; other bundles reach it through the shell",
+                  "kind": "code",
+                  "complexity": 5,
+                  "dependsOn": [],
+                  "parallel": false,
+                  "files": [
+                    "src_vs_code/shell/modules/runtime"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "notify state exists once per host"
+                    }
+                  ]
+                },
+                {
+                  "id": "t2-chat-register",
+                  "title": "shell/modules/chat/register.ts: commands and coaiChat serializer registered once by the shell; data root, side models, remote sessions, presets initialised; deactivate forwards heartbeat stop and usage drain",
+                  "kind": "code",
+                  "complexity": 7,
+                  "dependsOn": [
+                    "t1-shared-runtime"
+                  ],
+                  "parallel": false,
+                  "files": [
+                    "src_vs_code/shell/modules/chat",
+                    "src_vs_code/src/extension.ts"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "no chat logic changed (diff touches registration only)"
+                    }
+                  ]
+                },
+                {
+                  "id": "t3-chat-scenarios",
+                  "title": "Host scenarios: cold chat command and restored legacy tab without the sidebar, custom data root, side model, close right after a turn",
+                  "kind": "test",
+                  "complexity": 5,
+                  "dependsOn": [
+                    "t2-chat-register"
+                  ],
+                  "parallel": false,
+                  "files": [
+                    "src_vs_code/src/test/host"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "all existing chat host scenarios pass"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "dir": "s5-install-module",
+              "yaml": {
+                "id": "s5-install-module",
+                "title": "Binary install/update moved after the first ready",
+                "dependsOn": [
+                  "s3-sidebar"
+                ]
+              },
+              "tasks": [
+                {
+                  "id": "t1-install-after-ready",
+                  "title": "shell/modules/install carries installer.ts/coaiInstall.ts; runs only after the first sidebar ready or first command",
+                  "kind": "code",
+                  "complexity": 4,
+                  "dependsOn": [],
+                  "parallel": false,
+                  "files": [
+                    "src_vs_code/shell/modules/install"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "M2 does not include install work"
+                    },
+                    {
+                      "id": "d2",
+                      "item": "after the binary check, runs coai --setup-clients (no --binary unless needed) once per activation, after the first ready; an interrupted Claude update is finished from its manifest (E3 plan-gate decision on finding 5)"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "dir": "s6-dead-v1-out",
+              "yaml": {
+                "id": "s6-dead-v1-out",
+                "title": "Dead v1 watchers and controls out of the bundle",
+                "dependsOn": [
+                  "s4-chat-carried"
+                ]
+              },
+              "tasks": [
+                {
+                  "id": "t1-remove-watchers",
+                  "title": "Remove escalation/consultation/question watchers, cadence and hold controls from the extension",
+                  "kind": "code",
+                  "complexity": 5,
+                  "dependsOn": [],
+                  "parallel": false,
+                  "files": [
+                    "src_vs_code/src"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "no escalation or cadence control or watcher in the bundle"
+                    }
+                  ]
+                },
+                {
+                  "id": "t2-recheck-m2",
+                  "title": "Re-run the measure launch; M2 still ≤ 2000 ms on Linux and ≤ 3000 ms on Windows",
+                  "kind": "measure",
+                  "complexity": 2,
+                  "dependsOn": [
+                    "t1-remove-watchers"
+                  ],
+                  "parallel": false,
+                  "files": [
+                    "research/RESULTS_v2_start.md"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "new M2 recorded"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "dir": "e5-release-2-0",
+          "yaml": {
+            "id": "e5-release-2-0",
+            "title": "Cut-over: dropped code out of the bundle, 2.0 release, post-deploy check",
+            "half": "both",
+            "dependsOn": [
+              "e3-server-cleanup-install",
+              "e4-shell-modules"
+            ],
+            "doneWhen": [
+              "VSIX inspected: new shell, budgets, no dropped modules",
+              "mcp + extension released; the owner's machines run 2.0",
+              "a real plan → code round passes on 2.0",
+              "http/ contract suite live against the deployed Team server; new client vs old server and old extension vs new mcp checked",
+              "mcp released as 2.0.0 (the automatic --migrate-v2 runs only from major 2); release notes say to restart every client"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "dir": "epoch-2",
+      "yaml": {
+        "id": "epoch-2",
+        "title": "Hub, devices, update everywhere",
+        "proves": "one Windows window sees and controls every device",
+        "dependsOn": [
+          "epoch-1"
+        ],
+        "epics": [
+          "e1-hub-slice",
+          "e2-vm-shared",
+          "e3-device-agent-sync",
+          "e4-update-rollout",
+          "e5-kit-devices-page"
+        ]
+      },
+      "epics": [
+        {
+          "dir": "e1-hub-slice",
+          "yaml": {
+            "id": "e1-hub-slice",
+            "title": "Hub slice: boots alone, enrol, device document, applied, one log stream, --hub-sync",
+            "mvp": true,
+            "half": "both",
+            "dependsOn": [],
+            "doneWhen": [
+              "a setting changed from the Windows window is reported applied by a VM user in ≤ 90 s",
+              "stale write = 412; a device token is refused on another device and on Team routes",
+              "hub mode boots alone (own auth, own startup condition)",
+              "endpoints + http/ contracts; 412/428; device token limited to its device; Team session refused on hub routes",
+              "sweeper measures retained bytes and db+WAL size",
+              "deployed on the ionos host"
+            ]
+          }
+        },
+        {
+          "dir": "e2-vm-shared",
+          "yaml": {
+            "id": "e2-vm-shared",
+            "title": "VM shared instance",
+            "mvp": true,
+            "half": "server",
+            "dependsOn": [],
+            "doneWhen": [
+              "UID B runs claude, codex and agy after UID A logged in, also after a token refresh by the other UID",
+              "two UIDs write SQLite at the same time",
+              "shared /var/lib/coai with group coai; existing db/WAL permissions repaired"
+            ]
+          }
+        },
+        {
+          "dir": "e3-device-agent-sync",
+          "yaml": {
+            "id": "e3-device-agent-sync",
+            "title": "Device agent and sync: lease, cache, single writer, outbox, sweeper, v1 → device-document migration, first sync",
+            "half": "both",
+            "dependsOn": [
+              "e1-hub-slice",
+              "e2-vm-shared"
+            ],
+            "doneWhen": [
+              "two VM users and WSL appear on the hub from pasted lines",
+              "settings round-trip with offline cache; single writer; foreign edit put back",
+              "the pasted line downloads, checks the hub-shown sha256, then runs; the single-use key is not left in history or environment",
+              "local outbox ≤ 20 MB per stream with a dropped-N line; delivered lines removed after ack",
+              "first sync: If-None-Match create; 412 with unchanged local → take hub; both changed → apply hub, keep local as conflict file, notify",
+              "the exact pasted bash and PowerShell lines tested: no key in the line, hidden prompt from /dev/tty, script run from the verified file",
+              "migration: user settings AND side overlays backed up, effective values per side, idempotent, v1 keys untouched",
+              "the legacy settings mirror is off on a hub-managed device"
+            ]
+          }
+        },
+        {
+          "dir": "e4-update-rollout",
+          "yaml": {
+            "id": "e4-update-rollout",
+            "title": "Update everywhere and rollout to all devices",
+            "half": "both",
+            "dependsOn": [
+              "e3-device-agent-sync"
+            ],
+            "doneWhen": [
+              "a desired version moves every device; swap survives a kill; last 2 versions kept; rollback works",
+              "shared VM swap needs no root after the first install",
+              "2 VMs (shared), WSL and Windows enrolled; one rollout followed to the end"
+            ]
+          }
+        },
+        {
+          "dir": "e5-kit-devices-page",
+          "yaml": {
+            "id": "e5-kit-devices-page",
+            "title": "Kit 0.3.0 + Devices page (roles → model lists, work method)",
+            "half": "extension",
+            "dependsOn": [
+              "e1-hub-slice"
+            ],
+            "doneWhen": [
+              "kit 0.3.0 released with K1-K6, each with a story, fakeDom and axe test",
+              "Devices: tree VM → user / WSL / Windows, per-device settings and logs, enrolment lines, update everywhere with progress",
+              "412 handled: reload, changed elsewhere, no overwrite"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "dir": "epoch-3",
+      "yaml": {
+        "id": "epoch-3",
+        "title": "Deterministic work",
+        "proves": "an external role does a task that coai routes, checks and keeps green",
+        "dependsOn": [
+          "epoch-1"
+        ],
+        "epics": [
+          "e1-role-jobs-ba",
+          "e2-coder-one-task",
+          "e3-roles-complete",
+          "e4-adapters-coder-hardening",
+          "e5-work-scheduler"
+        ]
+      },
+      "epics": [
+        {
+          "dir": "e1-role-jobs-ba",
+          "yaml": {
+            "id": "e1-role-jobs-ba",
+            "title": "External-role jobs + router + failover + work-plan schema + BA role",
+            "mvp": true,
+            "half": "server",
+            "dependsOn": [],
+            "doneWhen": [
+              "start_role/role_status/role_cancel; detached job with lease + generation",
+              "BA writes the stories and tasks of the next real v2 epic; validate_work passes in ≤ 2 repair turns; the orchestrator changes < 20 % of the task files",
+              "FakeCli refusal / limit / crash → next model; one log line and one notification per switch",
+              "work-plan schema with the security flag; validate_work; workMethod limits from the device config",
+              "complexity 10 or security → the important model list"
+            ],
+            "spec": "SPEC.md"
+          },
+          "stories": [
+            {
+              "dir": "s1-job-lease",
+              "yaml": {
+                "id": "s1-job-lease",
+                "title": "Detached role job: lease, generation, role tools",
+                "cornerstone": true,
+                "dependsOn": []
+              },
+              "tasks": [
+                {
+                  "id": "t1-detach-measure",
+                  "title": "Measure the open detach cases",
+                  "kind": "measure",
+                  "complexity": 3,
+                  "dependsOn": [],
+                  "parallel": true,
+                  "files": [
+                    "v2/spikes/RESULTS_detach.md"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "result recorded: client process tree killed; no user manager; Windows client job object; wsl --terminate"
+                    },
+                    {
+                      "id": "d2",
+                      "item": "the launcher order of spec A is confirmed or corrected"
+                    }
+                  ]
+                },
+                {
+                  "id": "t2-job-store",
+                  "title": "RoleJobStore: lease, generation, heartbeat, cancel, sweep; RoundsDb step 26",
+                  "kind": "code",
+                  "complexity": 7,
+                  "dependsOn": [],
+                  "parallel": true,
+                  "files": [
+                    "src_mcp/src/Server/RoleJobs/RoleJobStore.cs",
+                    "src_mcp/src/Store",
+                    "shared/data-inventory.json",
+                    "src_mcp/tests/ARoleJobLeaseTests.cs"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "scenarios A2 to A5 and A16 pass"
+                    },
+                    {
+                      "id": "d2",
+                      "item": "an unwritable database changes no job result"
+                    }
+                  ]
+                },
+                {
+                  "id": "t3-detached-runner",
+                  "title": "One-shot --role-run and the detached launcher",
+                  "kind": "code",
+                  "complexity": 8,
+                  "dependsOn": [
+                    "t1-detach-measure",
+                    "t2-job-store"
+                  ],
+                  "parallel": false,
+                  "files": [
+                    "src_mcp/runners/Detach",
+                    "src_mcp/src/Server/RoleJobs/RoleRunMode.cs",
+                    "src_mcp/src/Program.cs",
+                    ".agents/PROJECT.md",
+                    "src_mcp/tests"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "A1 and A14 pass; without a user manager the systemd case is skipped with a reason"
+                    },
+                    {
+                      "id": "d2",
+                      "item": "unknown job id exits 65, never 64; mode listed in PROJECT.md"
+                    }
+                  ]
+                },
+                {
+                  "id": "t4-role-tools",
+                  "title": "Tools start_role, role_status, role_cancel; workItem; live-job cap",
+                  "kind": "code",
+                  "complexity": 6,
+                  "dependsOn": [
+                    "t3-detached-runner"
+                  ],
+                  "parallel": false,
+                  "files": [
+                    "src_mcp/src/Tools.cs",
+                    "src_mcp/src/Server/RoleJobs/RoleJobService.cs",
+                    "src_mcp/tests"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "A6 and A15 pass; start_role answers in 2 s or less"
+                    },
+                    {
+                      "id": "d2",
+                      "item": "a role without a descriptor is refused"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "dir": "s2-work-plan-schema",
+              "yaml": {
+                "id": "s2-work-plan-schema",
+                "title": "Work-plan schema, validate_work, limits from the device config",
+                "cornerstone": true,
+                "dependsOn": []
+              },
+              "tasks": [
+                {
+                  "id": "t1-yaml-aot-spike",
+                  "title": "YamlDotNet RepresentationModel under Native AOT",
+                  "kind": "measure",
+                  "complexity": 4,
+                  "dependsOn": [],
+                  "parallel": true,
+                  "files": [
+                    "v2/spikes/RESULTS_yaml_aot.md"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "linux-x64 and win-x64 publish: zero new warnings, no NoWarn; the native binary reads all v2 YAML"
+                    },
+                    {
+                      "id": "d2",
+                      "item": "decision recorded: YamlDotNet or the subset reader"
+                    }
+                  ]
+                },
+                {
+                  "id": "t2-schema-vectors-limits",
+                  "title": "Schema, vectors, work-method.md; two new limits; ba default list [fable, opus]",
+                  "kind": "code",
+                  "complexity": 5,
+                  "dependsOn": [],
+                  "parallel": true,
+                  "files": [
+                    "shared/work-plan.schema.json",
+                    "shared/work-plan-vectors.json",
+                    "shared/work-method.md",
+                    "shared/role-defaults.json",
+                    "src_mcp/src/Roles",
+                    "src_mcp/tests/AWorkMethodLimitTests.cs"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "each error code has one failing and one passing vector"
+                    },
+                    {
+                      "id": "d2",
+                      "item": "roles answers maxStoriesPerEpic and maxTasksPerStory; an unknown key keeps the other keys"
+                    }
+                  ]
+                },
+                {
+                  "id": "t3-validator",
+                  "title": "core/Work: IYamlReader, model, IWorkFolder, WorkPlanValidator",
+                  "kind": "code",
+                  "complexity": 8,
+                  "dependsOn": [
+                    "t1-yaml-aot-spike",
+                    "t2-schema-vectors-limits"
+                  ],
+                  "parallel": false,
+                  "files": [
+                    "src_mcp/core/Work",
+                    "Directory.Packages.props",
+                    "src_mcp/tests"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "B1 to B10 and B13 pass"
+                    },
+                    {
+                      "id": "d2",
+                      "item": "no limit constant in the validator"
+                    }
+                  ]
+                },
+                {
+                  "id": "t4-validate-work-surface",
+                  "title": "One-shot --validate-work and tool validate_work",
+                  "kind": "code",
+                  "complexity": 5,
+                  "dependsOn": [
+                    "t3-validator"
+                  ],
+                  "parallel": false,
+                  "files": [
+                    "src_mcp/src/ValidateWorkMode.cs",
+                    "src_mcp/src/Program.cs",
+                    "src_mcp/src/Tools.cs",
+                    ".agents/PROJECT.md",
+                    "src_mcp/tests"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "B11 and B12 pass"
+                    },
+                    {
+                      "id": "d2",
+                      "item": "the mode makes no data directory"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "dir": "s3-router-failover",
+              "yaml": {
+                "id": "s3-router-failover",
+                "title": "Router and failover; one line and one notice per switch",
+                "cornerstone": true,
+                "dependsOn": [
+                  "s1-job-lease",
+                  "s2-work-plan-schema"
+                ]
+              },
+              "tasks": [
+                {
+                  "id": "t1-stop-signals",
+                  "title": "Record real limit, refusal, crash outputs of claude, codex, agy",
+                  "kind": "measure",
+                  "complexity": 3,
+                  "dependsOn": [],
+                  "parallel": true,
+                  "files": [
+                    "v2/epoch-3/e1-role-jobs-ba/stories/s3-router-failover/SIGNALS.md",
+                    "src_mcp/tests/fixtures/role-stops"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "each fixture is a real output with CLI version and date"
+                    },
+                    {
+                      "id": "d2",
+                      "item": "SIGNALS.md says per vendor if a structured refusal field exists"
+                    }
+                  ]
+                },
+                {
+                  "id": "t2-router",
+                  "title": "Pure RoleRouter and ImportantRule with vectors",
+                  "kind": "code",
+                  "complexity": 5,
+                  "dependsOn": [],
+                  "parallel": true,
+                  "files": [
+                    "src_mcp/core/Roles",
+                    "shared/role-route-vectors.json",
+                    "src_mcp/tests/ARoleIsRoutedTests.cs"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "A12 passes from the vectors"
+                    },
+                    {
+                      "id": "d2",
+                      "item": "no IO; core stays IsAotCompatible"
+                    }
+                  ]
+                },
+                {
+                  "id": "t3-failover-loop",
+                  "title": "Stop classification, attempt loop, switch line and notices",
+                  "kind": "code",
+                  "complexity": 8,
+                  "dependsOn": [
+                    "t1-stop-signals",
+                    "t2-router"
+                  ],
+                  "parallel": false,
+                  "files": [
+                    "src_mcp/src/Server/RoleJobs",
+                    "src_mcp/core/Notices/ServerNoticeCodes.cs",
+                    "src_mcp/tests_fakecli",
+                    "src_mcp/tests"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "A7 to A11 and A13 pass with FakeCli"
+                    },
+                    {
+                      "id": "d2",
+                      "item": "one usage-ledger line for each launch; the new codes pass the redaction test"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "dir": "s4-ba-role",
+              "yaml": {
+                "id": "s4-ba-role",
+                "title": "BA role: structured output, repair turns, change measure",
+                "dependsOn": [
+                  "s2-work-plan-schema",
+                  "s3-router-failover"
+                ]
+              },
+              "tasks": [
+                {
+                  "id": "t1-ba-contract",
+                  "title": "ba-output schema, prompt, descriptor, YAML emitter",
+                  "kind": "code",
+                  "complexity": 5,
+                  "dependsOn": [],
+                  "parallel": false,
+                  "files": [
+                    "shared/ba-output.schema.json",
+                    "src_mcp/src/Roles/prompts/ba.md",
+                    "src_mcp/core/Work/WorkPlanYaml.cs",
+                    "src_mcp/core/Roles/RoleDescriptors.cs",
+                    "src_mcp/tests"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "emit then read gives equal nodes for every v2 task file"
+                    },
+                    {
+                      "id": "d2",
+                      "item": "a changed limit shows in the built prompt"
+                    }
+                  ]
+                },
+                {
+                  "id": "t2-ba-run-repair",
+                  "title": "BA run: overlay validation, 2 repair turns, files, manifest",
+                  "kind": "code",
+                  "complexity": 8,
+                  "dependsOn": [
+                    "t1-ba-contract"
+                  ],
+                  "parallel": false,
+                  "files": [
+                    "src_mcp/src/Server/RoleJobs/BaRun.cs",
+                    "src_mcp/tests_fakecli",
+                    "src_mcp/tests"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "FakeCli: valid at turn 0; valid after 1 repair in the same session; invalid 3 times ends output-invalid, zero files written"
+                    },
+                    {
+                      "id": "d2",
+                      "item": "nothing outside the epic folder changes; an epic with a story is refused before a launch"
+                    }
+                  ]
+                },
+                {
+                  "id": "t3-role-delta",
+                  "title": "One-shot --role-delta",
+                  "kind": "code",
+                  "complexity": 4,
+                  "dependsOn": [
+                    "t2-ba-run-repair"
+                  ],
+                  "parallel": false,
+                  "files": [
+                    "src_mcp/src/RoleDeltaMode.cs",
+                    "src_mcp/src/Program.cs",
+                    ".agents/PROJECT.md",
+                    "src_mcp/tests"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "10 task files: 1 edited = 0.10 pass; 1 edited + 1 deleted = 0.20 fail; an added task counts; a CRLF-only change does not"
+                    },
+                    {
+                      "id": "d2",
+                      "item": "exits 0, 65, 74; never 64"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "dir": "s5-live-proof",
+              "yaml": {
+                "id": "s5-live-proof",
+                "title": "Live proof: the BA writes epoch-3 e2-coder-one-task",
+                "dependsOn": [
+                  "s4-ba-role"
+                ]
+              },
+              "tasks": [
+                {
+                  "id": "t1-ba-real-run",
+                  "title": "Real BA job on e2-coder-one-task",
+                  "kind": "measure",
+                  "complexity": 5,
+                  "dependsOn": [],
+                  "parallel": true,
+                  "files": [
+                    "v2/epoch-3/e2-coder-one-task/stories",
+                    "v2/epoch-3/e1-role-jobs-ba/RESULTS_ba_proof.md"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "validate_work valid in 2 repair turns or fewer; number recorded"
+                    },
+                    {
+                      "id": "d2",
+                      "item": "--role-delta at the commit after the plan gate: changedShare below 0.20"
+                    },
+                    {
+                      "id": "d3",
+                      "item": "2 real runs at most, the second only after a recorded prompt change; both reported"
+                    }
+                  ]
+                },
+                {
+                  "id": "t2-epic-acceptance",
+                  "title": "Acceptance suite on the real binary; tool docs",
+                  "kind": "test",
+                  "complexity": 4,
+                  "dependsOn": [],
+                  "parallel": true,
+                  "files": [
+                    "src_mcp/tests/TheRoleJobsEpicAcceptanceTests.cs",
+                    "ARCHITECTURE.md",
+                    "README.md"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "refusal, limit, crash each go to the next model: 3 switches, 3 log lines, 3 notices"
+                    },
+                    {
+                      "id": "d2",
+                      "item": "the MCP server restarts in mid-job and the job ends succeeded"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "dir": "e2-coder-one-task",
+          "yaml": {
+            "id": "e2-coder-one-task",
+            "title": "Coder: one task to green on this repository",
+            "mvp": true,
+            "half": "server",
+            "dependsOn": [
+              "e1-role-jobs-ba"
+            ],
+            "doneWhen": [
+              "coder is one role case; this repository through .coai/toolchain.yaml; claude only",
+              "green in ≤ 3 fix turns; main-AI tokens and wall time below the baseline; accepted gate findings not higher",
+              "task session inherits the feature plan proceed; write boundary at launch"
+            ]
+          }
+        },
+        {
+          "dir": "e3-roles-complete",
+          "yaml": {
+            "id": "e3-roles-complete",
+            "title": "Roles complete: scout, important/judge, codex + agy rows, review_plan(featureFolder)",
+            "half": "server",
+            "dependsOn": [
+              "e1-role-jobs-ba"
+            ],
+            "doneWhen": [
+              "scout and judge strict JSON outputs",
+              "codex and agy coder sessions resumed",
+              "review_plan(featureFolder) validates first, packs in topological order"
+            ]
+          }
+        },
+        {
+          "dir": "e4-adapters-coder-hardening",
+          "yaml": {
+            "id": "e4-adapters-coder-hardening",
+            "title": "Adapters dotnet + node + coder hardening",
+            "half": "server",
+            "dependsOn": [
+              "e2-coder-one-task"
+            ],
+            "doneWhen": [
+              "golden detection and argv on fixture repos (both trees, base..head diff)",
+              "parsers tested on recorded real output",
+              ".coai/toolchain.yaml override; not_configured is never green",
+              "this repository is a fixture that runs a real test",
+              "same session resumed (claude, codex, agy); caps and no-progress stop; flaky re-run",
+              "write boundary at launch; task session inherits the feature's plan proceed",
+              "job lease with generation; survives an MCP client restart"
+            ]
+          }
+        },
+        {
+          "dir": "e5-work-scheduler",
+          "yaml": {
+            "id": "e5-work-scheduler",
+            "title": "Parallel work scheduler",
+            "half": "server",
+            "dependsOn": [
+              "e2-coder-one-task",
+              "e4-adapters-coder-hardening"
+            ],
+            "doneWhen": [
+              "story 1 = two tasks in parallel; go on only if speedup ≥ 1.3× and peak RAM stays in the WSL limit",
+              "DAG from YAML; host-level slots with atomic RAM reservation; WSL ceiling 2",
+              "checks on the candidate merge SHA before the integration branch advances",
+              "pending resolutions persisted; a run ends partial cleanly",
+              "any content the code round did not see (whole-tree compare) re-runs the code gate on the candidate SHA",
+              "detached run resolves itself (orchestrator-model resolver, 2 retries, 10 min → good_enough + notification); completes when the initiating AI disconnects"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "dir": "epoch-4",
+      "yaml": {
+        "id": "epoch-4",
+        "title": "Operator",
+        "proves": "the person works through coai: questions answered, sessions one click away, everything visible",
+        "dependsOn": [
+          "epoch-1"
+        ],
+        "epics": [
+          "e1-ask-hook",
+          "e2-sessions-creds",
+          "e3-claude-mod",
+          "e4-local-pages",
+          "e5-features-page"
+        ]
+      },
+      "epics": [
+        {
+          "dir": "e1-ask-hook",
+          "yaml": {
+            "id": "e1-ask-hook",
+            "title": "AskUserQuestion hook (spike = story 1)",
+            "mvp": true,
+            "half": "server",
+            "dependsOn": [],
+            "doneWhen": [
+              "spike on the installed Claude Code: updatedInput.answers skips the widget",
+              "first question answered by consask; later ones in 30 min reach the person; fails open",
+              "exit 0 always; one JSON object or nothing; one winner for parallel calls",
+              "the installer writes the hook only when the spike passed for the installed Claude Code version"
+            ]
+          }
+        },
+        {
+          "dir": "e2-sessions-creds",
+          "yaml": {
+            "id": "e2-sessions-creds",
+            "title": "tmux sessions through the creds MCP (spike = story 1)",
+            "mvp": true,
+            "half": "extension",
+            "dependsOn": [],
+            "doneWhen": [
+              "real Windows/WSL spike: disconnect event recorded; PNG round-trip hash matches",
+              "tree VM → user → session; create/attach/resume; reconnect backoff; no retry on 0"
+            ]
+          }
+        },
+        {
+          "dir": "e3-claude-mod",
+          "yaml": {
+            "id": "e3-claude-mod",
+            "title": "Claude mod: phrases, active consults, failures",
+            "half": "extension",
+            "dependsOn": [],
+            "doneWhen": [
+              "mod: phrases, active consults, failures; appends to CLAUDE_CODE_PLUGIN_DIRS in both install orders"
+            ]
+          }
+        },
+        {
+          "dir": "e4-local-pages",
+          "yaml": {
+            "id": "e4-local-pages",
+            "title": "Local pages: Prompts & Commands, Phrases, Rounds (kit 0.3.0)",
+            "half": "extension",
+            "dependsOn": [],
+            "doneWhen": [
+              "each page tested by running its shipped bundle",
+              "prompt overrides and facets (gates, review, documents, cons, consask, chat, roles, coder)"
+            ]
+          }
+        },
+        {
+          "dir": "e5-features-page",
+          "yaml": {
+            "id": "e5-features-page",
+            "title": "Plans page: tree of all plans, status, progress, per-item report",
+            "half": "extension",
+            "dependsOn": [],
+            "doneWhen": [
+              "tree of every plan (feature) → epoch → epic → story → task with status open / in progress / done and progress counts",
+              "per item: gates run, cons and consask counts, execution time (from --plan-report)",
+              "coai sets item status deterministically (task done when green + gate outcome); a remote-only plan through the hub"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "dir": "epoch-5",
+      "yaml": {
+        "id": "epoch-5",
+        "title": "Reach: studio and every listed language",
+        "proves": "video review through extracted frames, and C#/Node/PHP/Rust/Python/Java all work",
+        "dependsOn": [
+          "epoch-3"
+        ],
+        "epics": [
+          "e1-attachments",
+          "e2-studio-roles",
+          "e3-more-adapters",
+          "e4-git-pr-ci"
+        ]
+      },
+      "epics": [
+        {
+          "dir": "e1-attachments",
+          "yaml": {
+            "id": "e1-attachments",
+            "title": "Picture attachments on review_document",
+            "mvp": true,
+            "half": "server",
+            "dependsOn": [],
+            "doneWhen": [
+              "codex attachment measurement recorded",
+              "an image round runs on claude, agy and codex (if measured); others skipped with a note",
+              "frames extracted by the Studio (≤ 8, png/jpg/webp); an unreadable frame is skipped with a note"
+            ]
+          }
+        },
+        {
+          "dir": "e2-studio-roles",
+          "yaml": {
+            "id": "e2-studio-roles",
+            "title": "Studio review roles in jinx_studio (seam first)",
+            "half": "both",
+            "dependsOn": [
+              "e1-attachments"
+            ],
+            "doneWhen": [
+              "text-only seam role measured on the known defects; visual seam role on the known seam plus clean pairs",
+              "findings written to scene_issue as consultant, idempotent"
+            ]
+          }
+        },
+        {
+          "dir": "e3-more-adapters",
+          "yaml": {
+            "id": "e3-more-adapters",
+            "title": "php, rust, python, java adapters",
+            "half": "server",
+            "dependsOn": [],
+            "doneWhen": [
+              "each stack's fixture repo goes green end to end"
+            ]
+          }
+        },
+        {
+          "dir": "e4-git-pr-ci",
+          "yaml": {
+            "id": "e4-git-pr-ci",
+            "title": "Git/PR/CI takeovers",
+            "half": "server",
+            "dependsOn": [],
+            "doneWhen": [
+              "PR body from task.yaml + envelope; CI wait: checks must exist then pass; no-runner re-run once; conflicting PR reported"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

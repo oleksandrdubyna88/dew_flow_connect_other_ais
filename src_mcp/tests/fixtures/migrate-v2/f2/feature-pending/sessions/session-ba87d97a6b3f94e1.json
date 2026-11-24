@@ -1,0 +1,199 @@
+{
+  "state": {
+    "sessionId": "7ca7beb2",
+    "repoPath": "/fixture/repo",
+    "branch": ":feature",
+    "config": {
+      "onExhausted": "Human",
+      "securityLane": {
+        "maxRounds": 2,
+        "threshold": 0,
+        "enabled": false
+      },
+      "roles": {
+        "PlanCritique": {
+          "maxRounds": 2,
+          "threshold": 5,
+          "enabled": true
+        },
+        "Conventions": {
+          "maxRounds": 2,
+          "threshold": 5,
+          "enabled": true
+        },
+        "Architecture": {
+          "maxRounds": 2,
+          "threshold": 5,
+          "enabled": true
+        },
+        "SecurityReliability": {
+          "maxRounds": 2,
+          "threshold": 5,
+          "enabled": true
+        },
+        "UxDxPerformance": {
+          "maxRounds": 2,
+          "threshold": 5,
+          "enabled": true
+        },
+        "DocumentReview": {
+          "maxRounds": 2,
+          "threshold": 5,
+          "enabled": true
+        },
+        "DocumentSummary": {
+          "maxRounds": 2,
+          "threshold": 5,
+          "enabled": true
+        },
+        "FeatureReview": {
+          "maxRounds": 2,
+          "threshold": 5,
+          "enabled": true
+        }
+      }
+    },
+    "stage": "FeatureReview",
+    "roundsRunThisStage": 2,
+    "escalationsUsed": 0,
+    "awaitingResolve": true,
+    "planProceeded": false,
+    "advanceOnResolve": false,
+    "humanGate": true,
+    "holdQuestions": [
+      "13c1b1387697"
+    ],
+    "requestQuestions": [],
+    "rejections": [],
+    "secondRound": "None",
+    "document": "",
+    "isDocumentSession": false,
+    "feature": "todo/PLAN_the_cart.md",
+    "isFeatureSession": true
+  },
+  "rounds": [
+    {
+      "stage": "FeatureReview",
+      "number": 1,
+      "verdict": "revise",
+      "gatingCount": 1,
+      "reviewers": "all 1 reviewers answered",
+      "completedUtc": "2026-11-22T18:34:39.6640883Z",
+      "status": "done",
+      "startedUtc": "2026-11-22T18:34:39.6173959Z",
+      "runnerPid": 334294,
+      "sha": "93a4f6cd5f85694e2824648bd6b03b8cb4895b79",
+      "planKey": "",
+      "epicNumber": 0,
+      "cadenceNote": "",
+      "note": "",
+      "key": "c5685549006be4158c6d45c8eb9ac511",
+      "admittedBy": "",
+      "repeats": 1,
+      "loggedNote": "",
+      "reviewerStates": [
+        {
+          "provider": "codex",
+          "role": "FeatureReview",
+          "status": "done",
+          "findings": 1,
+          "note": "",
+          "seconds": 0,
+          "model": "",
+          "effort": ""
+        }
+      ],
+      "caller": {
+        "vendor": "unknown",
+        "client": "",
+        "clientVersion": "",
+        "model": "claude-opus-5",
+        "phrase": "unknown · claude-opus-5"
+      },
+      "subject": "PLAN — the cart",
+      "tokensIn": 0,
+      "tokensOut": 0,
+      "costNote": "",
+      "usageNote": ""
+    },
+    {
+      "stage": "FeatureReview",
+      "number": 2,
+      "verdict": "call_human",
+      "gatingCount": 1,
+      "reviewers": "all 1 reviewers answered",
+      "completedUtc": "2026-11-22T18:34:39.8125858Z",
+      "status": "done",
+      "startedUtc": "2026-11-22T18:34:39.7622551Z",
+      "runnerPid": 334294,
+      "sha": "704b4f364aa7166784d037a838acb0d75671e82a",
+      "planKey": "",
+      "epicNumber": 0,
+      "cadenceNote": "",
+      "note": "",
+      "key": "7c07e90b14fc5028cd57ef2f819bc87c",
+      "admittedBy": "BlockingFinding",
+      "repeats": 1,
+      "loggedNote": "",
+      "reviewerStates": [
+        {
+          "provider": "codex",
+          "role": "FeatureReview",
+          "status": "done",
+          "findings": 1,
+          "note": "",
+          "seconds": 0,
+          "model": "",
+          "effort": ""
+        }
+      ],
+      "caller": {
+        "vendor": "unknown",
+        "client": "",
+        "clientVersion": "",
+        "model": "claude-opus-5",
+        "phrase": "unknown · claude-opus-5"
+      },
+      "subject": "PLAN — the cart",
+      "tokensIn": 0,
+      "tokensOut": 0,
+      "costNote": "",
+      "usageNote": ""
+    }
+  ],
+  "openedUtc": "2026-11-22T18:34:39.5576039Z",
+  "pending": [
+    {
+      "severity": "Blocking",
+      "category": "Security",
+      "file": "src/Shop.cs",
+      "line": 3,
+      "title": "The till charges before the cart is checked",
+      "why": "a customer pays for an empty cart",
+      "fix": "check the cart first",
+      "providers": [
+        "codex"
+      ],
+      "role": "FeatureReview",
+      "capReason": "",
+      "alsoSeenBy": [],
+      "isGating": true
+    }
+  ],
+  "planText": "# PLAN — the cart\n\nThree epics: prices at the till, the cart, the checkout.\n",
+  "plan": "",
+  "epic": "",
+  "cadenceRepoId": "",
+  "featureBase": "8b460c21058512f714cb5123cc43da99ff311b35",
+  "carried": [],
+  "caller": {
+    "vendor": "unknown",
+    "client": "",
+    "clientVersion": "",
+    "model": "claude-opus-5",
+    "phrase": "unknown · claude-opus-5"
+  },
+  "usedPrompts": [
+    "feature-review"
+  ]
+}

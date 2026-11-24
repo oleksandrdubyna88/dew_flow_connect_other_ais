@@ -4,25 +4,21 @@ using CoaiMcp.Runners.Files;
 namespace CoaiMcp.Server;
 
 /// <summary>
-/// The question consultant's settings — the <c>COAI_QCONSULT_*</c> keys of <c>todo/PLAN_question_consultant.md</c> §4,
+/// The consask settings — the <c>COAI_CONSASK_*</c> keys (<c>COAI_QCONSULT_*</c> before v2, still read when the new key is not set) of <c>todo/PLAN_question_consultant.md</c> §4,
 /// in a record of their own (D12: <c>PanelSettings</c> grows by one property, not eight).
 /// </summary>
 /// <remarks>
-/// Every default is the operator's accepted one: on, <c>require</c>, no rows, the shipped prompts, no roots,
-/// five minutes a row, ten questions a session, two free batches. <see cref="Mode"/> and <see cref="FreeBatches"/>
-/// are READ here so the file has no key the server does not know, and acted on by S3's gate.
+/// Every default is the operator's accepted one: on, no rows, the shipped prompts, no roots,
+/// five minutes a row, ten questions a session.
 /// </remarks>
 public sealed record QuestionConsultSettings
 {
     public bool Enabled { get; init; } = true;
 
-    /// <summary><c>off</c>, <c>remind</c> or <c>require</c> — S3's gate reads it; S2 only keeps it.</summary>
-    public string Mode { get; init; } = Modes.Require;
-
     /// <summary>The rows, at most <see cref="QuestionRows.MaxActive"/> of them on — see <see cref="QuestionRows.Parse"/>.</summary>
     public IReadOnlyList<QuestionRow> Rows { get; init; } = [];
 
-    /// <summary>Whether <c>COAI_QCONSULT_ROWS</c> could not be read at all — the tool then refuses by name.</summary>
+    /// <summary>Whether <c>COAI_CONSASK_ROWS</c> could not be read at all — the tool then refuses by name.</summary>
     public bool RowsUnreadable { get; init; }
 
     /// <summary>The shipped prompts with the person's own after them.</summary>
@@ -43,42 +39,25 @@ public sealed record QuestionConsultSettings
 
     public int QuestionsPerSession { get; init; } = DefaultQuestionsPerSession;
 
-    /// <summary>S3: how many question batches after the plan's <c>proceed</c> go to the person before the consultant is required (A7).</summary>
-    public int FreeBatches { get; init; } = DefaultFreeBatches;
-
     public const int DefaultRowMinutes = 5;
 
     public const int DefaultQuestionsPerSession = 10;
 
-    public const int DefaultFreeBatches = 2;
-
     public static QuestionConsultSettings Default { get; } = new();
-
-    /// <summary>The enforcement words, lower case — the same three the cadence spells.</summary>
-    public static class Modes
-    {
-        public const string Off = "off";
-        public const string Remind = "remind";
-        public const string Require = "require";
-
-        public static IReadOnlyList<string> All { get; } = [Off, Remind, Require];
-    }
 }
 
-/// <summary>What the eight keys turned out to be: the settings, and every sentence a person should read about them.</summary>
+/// <summary>What the six keys turned out to be: the settings, and every sentence a person should read about them.</summary>
 public sealed record QuestionConsultSetting(QuestionConsultSettings Settings, IReadOnlyList<UnrecognisedSetting> Complaints);
 
 /// <summary>The keys, spelled once — a notice groups on the key, and a key recovered from a sentence stops matching when it is reworded.</summary>
 public static class QuestionConsultKeys
 {
-    public const string Enabled = "COAI_QCONSULT_ENABLED";
-    public const string Mode = "COAI_QCONSULT_MODE";
-    public const string Rows = "COAI_QCONSULT_ROWS";
-    public const string Prompts = "COAI_QCONSULT_PROMPTS";
-    public const string Roots = "COAI_QCONSULT_ROOTS";
-    public const string RowMinutes = "COAI_QCONSULT_ROW_MINUTES";
-    public const string QuestionsPerSession = "COAI_QCONSULT_QUESTIONS_PER_SESSION";
-    public const string FreeBatches = "COAI_QCONSULT_FREE_BATCHES";
+    public const string Enabled = "COAI_CONSASK_ENABLED";
+    public const string Rows = "COAI_CONSASK_ROWS";
+    public const string Prompts = "COAI_CONSASK_PROMPTS";
+    public const string Roots = "COAI_CONSASK_ROOTS";
+    public const string RowMinutes = "COAI_CONSASK_ROW_MINUTES";
+    public const string QuestionsPerSession = "COAI_CONSASK_QUESTIONS_PER_SESSION";
 }
 
 /// <summary>
@@ -125,23 +104,23 @@ public sealed record SystemPlaces(string UserProfile, IReadOnlyList<string> Syst
             }.Where(p => p.Length > 0)]);
 }
 
-/// <summary>Reads the eight keys and validates the roots. Pure over <paramref name="env"/>; the disk is asked only whether a root exists.</summary>
+/// <summary>Reads the six keys and validates the roots. Pure over <paramref name="env"/>; the disk is asked only whether a root exists.</summary>
 public static class QuestionConsultReader
 {
     public static QuestionConsultSetting Read(Func<string, string?> env, string dataDir, SystemPlaces places, Func<string, bool>? isDirectory = null)
     {
+        // Asked in the new names; a v1 key (COAI_QCONSULT_*) answers while the new one is unset — whoever calls this, not only PanelSettings.
+        env = PanelSettings.WithRenamedKeys(env);
         var rows = QuestionRows.Parse(env(QuestionConsultKeys.Rows));
         var prompts = QuestionPromptSet.ParseCustom(env(QuestionConsultKeys.Prompts));
         var listed = Listed(env(QuestionConsultKeys.Roots));
         var roots = isDirectory is null
             ? QuestionRoots.Validate(listed, dataDir, places, QuestionRoots.PresenceOf)
             : QuestionRoots.Validate(listed, dataDir, places, isDirectory);
-        var (mode, modeComplaint) = ModeOf(env(QuestionConsultKeys.Mode));
 
         var settings = new QuestionConsultSettings
         {
             Enabled = PanelSettings.NotSwitchedOff(env, QuestionConsultKeys.Enabled),
-            Mode = mode,
             Rows = rows.Rows,
             RowsUnreadable = rows.Unreadable,
             Prompts = QuestionPromptSet.With(prompts.Prompts),
@@ -149,7 +128,6 @@ public static class QuestionConsultReader
             OtherSideRoots = roots.OtherSide,
             RowBudget = TimeSpan.FromMinutes(PanelSettings.IntVar(env, QuestionConsultKeys.RowMinutes, QuestionConsultSettings.DefaultRowMinutes)),
             QuestionsPerSession = PanelSettings.IntVar(env, QuestionConsultKeys.QuestionsPerSession, QuestionConsultSettings.DefaultQuestionsPerSession),
-            FreeBatches = PanelSettings.IntVar(env, QuestionConsultKeys.FreeBatches, QuestionConsultSettings.DefaultFreeBatches),
         };
 
         return new QuestionConsultSetting(settings,
@@ -157,7 +135,6 @@ public static class QuestionConsultReader
             .. rows.Complaints.Select(c => new UnrecognisedSetting(QuestionConsultKeys.Rows, c)),
             .. prompts.Complaints.Select(c => new UnrecognisedSetting(QuestionConsultKeys.Prompts, c)),
             .. roots.Refusals.Select(c => new UnrecognisedSetting(QuestionConsultKeys.Roots, c.Sentence, c.Kind, c.Value)),
-            .. modeComplaint,
         ]);
     }
 
@@ -184,21 +161,6 @@ public static class QuestionConsultReader
         }
 
         return [.. trimmed.Split([';', '\n'], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)];
-    }
-
-    private static (string Mode, IReadOnlyList<UnrecognisedSetting> Complaint) ModeOf(string? value)
-    {
-        var word = value?.Trim().ToLowerInvariant() ?? string.Empty;
-        if (word.Length == 0 || QuestionConsultSettings.Modes.All.Contains(word, StringComparer.Ordinal))
-        {
-            return (word.Length == 0 ? QuestionConsultSettings.Modes.Require : word, []);
-        }
-
-        return (QuestionConsultSettings.Modes.Require,
-        [
-            new UnrecognisedSetting(QuestionConsultKeys.Mode,
-                $"{QuestionConsultKeys.Mode} is '{value}', which this server does not know — the question consultant is required, as it is by default. The values are 'off', 'remind' and 'require'."),
-        ]);
     }
 }
 
@@ -395,7 +357,7 @@ public static class QuestionRoots
     public static string InactiveSentence(IReadOnlyList<string> otherSide) =>
         $"inactive on this side — every folder a disk row may read ({string.Join(", ", otherSide.Select(root => $"'{root}'"))}) is spelled for "
         + "the other operating system, so the server there reads it and this one has none; add a folder of this machine in "
-        + "ConnectOtherAIs > Question consultant to ask this row here too";
+        + "ConnectOtherAIs > Consask to ask this row here too";
 
     private static bool IsPosixAbsolute(string text) => text.StartsWith('/') && !text.StartsWith("//", StringComparison.Ordinal);
 

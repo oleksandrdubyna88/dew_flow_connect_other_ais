@@ -43,7 +43,7 @@ public sealed class McpContractTests : IDisposable
         StdioServer.RoundTrip(server, request, timeoutSeconds);
 
     [Fact]
-    public async Task Initialize_ThenToolsList_NamesTheTwelveTools_AndStdoutStaysPure()
+    public async Task Initialize_ThenToolsList_NamesTheThirteenTools_AndStdoutStaysPure()
     {
         using var server = Start();
         try
@@ -64,8 +64,8 @@ public sealed class McpContractTests : IDisposable
 
             names.Should().BeEquivalentTo(
                 ["providers", "open", "review_plan", "review_code", "review_document", "review_feature", "resolve",
-                 "status", "ask_human", "consult", "close_consult", "ask_consultants"],
-                "the twelve tools, unprefixed — the client's `coai` namespace is the only one");
+                 "status", "ask_human", "cons", "cons_close", "consask", "roles"],
+                "the thirteen tools, unprefixed — the client's `coai` namespace is the only one — with the renamed three under their v2 names and the v1 names not listed");
         }
         finally
         {
@@ -115,7 +115,7 @@ public sealed class McpContractTests : IDisposable
     /// <remarks>
     /// <para>Over the WIRE, because that is the only place this can be wrong: the collection is
     /// registered in `ServeAsync` and nothing in-process would notice it being registered on an
-    /// options object the transport never sees. A client lists this as `/mcp__coai__consult`.</para>
+    /// options object the transport never sees. A client lists this as `/mcp__coai__cons`.</para>
     /// <para>The argument is asked for WITHOUT a value as well, because that is the ordinary use —
     /// a person who types the command alone is saying "you know what we are stuck on".</para>
     /// </remarks>
@@ -136,17 +136,17 @@ public sealed class McpContractTests : IDisposable
                 .Select(p => p.GetProperty("name").GetString())
                 .ToList();
 
-            prompts.Should().BeEquivalentTo(["consult"], "one prompt, unprefixed, like the tools beside it");
+            prompts.Should().BeEquivalentTo(["cons"], "one prompt, unprefixed, like the tools beside it, and the v1 name `consult` not listed");
 
             var got = await RoundTrip(server, """
-                {"jsonrpc":"2.0","id":3,"method":"prompts/get","params":{"name":"consult","arguments":{"problem":"The parser returns 3 where 4 is expected."}}}
+                {"jsonrpc":"2.0","id":3,"method":"prompts/get","params":{"name":"cons","arguments":{"problem":"The parser returns 3 where 4 is expected."}}}
                 """);
             var message = got.RootElement.GetProperty("result").GetProperty("messages")[0];
 
             message.GetProperty("role").GetString().Should().Be("user");
             var text = message.GetProperty("content").GetProperty("text").GetString()!;
             text.Should().Contain("The parser returns 3 where 4 is expected.", "the person's own words travel unrewritten")
-                .And.Contain("`consult` tool")
+                .And.Contain("`cons` tool")
                 .And.Contain("rev-parse --show-toplevel")
                 .And.Contain("MATERIAL")
                 .And.Contain("Report the verification back");
@@ -158,7 +158,7 @@ public sealed class McpContractTests : IDisposable
             foreach (var arguments in (string[])["{\"problem\":\"\"}", "{}"])
             {
                 var bare = (await RoundTrip(server,
-                    $$$"""{"jsonrpc":"2.0","id":4,"method":"prompts/get","params":{"name":"consult","arguments":{{{arguments}}}}}""")).RootElement;
+                    $$$"""{"jsonrpc":"2.0","id":4,"method":"prompts/get","params":{"name":"cons","arguments":{{{arguments}}}}}""")).RootElement;
 
                 bare.TryGetProperty("error", out _).Should().BeFalse($"arguments {arguments} must be accepted: {bare}");
                 bare.GetProperty("result").GetProperty("messages")[0]
@@ -169,11 +169,91 @@ public sealed class McpContractTests : IDisposable
             // A problem carrying punctuation and a code span travels unrewritten, which is the claim
             // the message makes about the person's words.
             var awkward = await RoundTrip(server, """
-                {"jsonrpc":"2.0","id":5,"method":"prompts/get","params":{"name":"consult","arguments":{"problem":"`Count()` returns 3 after two fixes; expected 4."}}}
+                {"jsonrpc":"2.0","id":5,"method":"prompts/get","params":{"name":"cons","arguments":{"problem":"`Count()` returns 3 after two fixes; expected 4."}}}
                 """);
             awkward.RootElement.GetProperty("result").GetProperty("messages")[0]
                 .GetProperty("content").GetProperty("text").GetString()
                 .Should().Contain("`Count()` returns 3 after two fixes; expected 4.");
+        }
+        finally
+        {
+            server.Kill(entireProcessTree: true);
+            await server.WaitForExitAsync();
+        }
+    }
+
+    /// <summary>
+    /// The v1 names are hidden aliases (v2 E3.S3 t1): each still ANSWERS — over the real wire, with the same reply the new name gives
+    /// plus a `note` saying what it was renamed to — and none of them is LISTED, so a new client sees the new names only. The
+    /// prompt <c>consult</c> is served the same way.
+    /// </summary>
+    [Theory]
+    [InlineData("consult", "cons", """{"repoPath":"D:/nowhere","problem":"stuck"}""")]
+    [InlineData("close_consult", "cons_close", """{"repoPath":"D:/nowhere","consultationId":"c1","outcome":"solved"}""")]
+    [InlineData("ask_consultants", "consask", """{"repoPath":"D:/nowhere","question":"A or B?","context":"tried both"}""")]
+    public async Task AnOldToolName_StillAnswers_LikeTheNewOne_WithANoteSayingItWasRenamed(string oldName, string newName, string arguments)
+    {
+        using var server = Start();
+        try
+        {
+            await RoundTrip(server, """
+                {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"t","version":"0"}}}
+                """);
+            await server.StandardInput.WriteLineAsync("""{"jsonrpc":"2.0","method":"notifications/initialized"}""");
+            await server.StandardInput.FlushAsync();
+
+            var listed = await RoundTrip(server, """{"jsonrpc":"2.0","id":2,"method":"tools/list"}""");
+            var names = listed.RootElement.GetProperty("result").GetProperty("tools").EnumerateArray()
+                .Select(t => t.GetProperty("name").GetString()).ToList();
+            names.Should().Contain(newName).And.NotContain(oldName, "a hidden alias is callable and not listed");
+
+            string Call(int id, string name) =>
+                $$$"""{"jsonrpc":"2.0","id":{{{id}}},"method":"tools/call","params":{"name":"{{{name}}}","arguments":{{{arguments}}}}}""";
+            var viaNew = JsonDocument.Parse((await RoundTrip(server, Call(3, newName), 30)).RootElement
+                .GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString()!).RootElement;
+            var viaOld = JsonDocument.Parse((await RoundTrip(server, Call(4, oldName), 30)).RootElement
+                .GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString()!).RootElement;
+
+            viaOld.GetProperty("note").GetString().Should().StartWith($"renamed to {newName}");
+            viaNew.TryGetProperty("note", out _).Should().BeFalse("the new name carries no note");
+            viaOld.EnumerateObject().Where(p => p.Name != "note").Select(p => p.Name)
+                .Should().Equal(viaNew.EnumerateObject().Select(p => p.Name), "the old name answers with the new one's members, in its order");
+            viaOld.EnumerateObject().Where(p => p.Name != "note" && p.Value.ValueKind is JsonValueKind.String)
+                .Select(p => (p.Name, Value: p.Value.GetString()))
+                .Should().Equal(viaNew.EnumerateObject().Where(p => p.Value.ValueKind is JsonValueKind.String).Select(p => (p.Name, Value: p.Value.GetString())),
+                    "and the same words");
+        }
+        finally
+        {
+            server.Kill(entireProcessTree: true);
+            await server.WaitForExitAsync();
+        }
+    }
+
+    [Fact]
+    public async Task TheOldPromptName_StillGivesTheMessage_ButIsNotListed()
+    {
+        using var server = Start();
+        try
+        {
+            await RoundTrip(server, """
+                {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"t","version":"0"}}}
+                """);
+            await server.StandardInput.WriteLineAsync("""{"jsonrpc":"2.0","method":"notifications/initialized"}""");
+            await server.StandardInput.FlushAsync();
+
+            var old = await RoundTrip(server, """
+                {"jsonrpc":"2.0","id":2,"method":"prompts/get","params":{"name":"consult","arguments":{"problem":"red twice"}}}
+                """);
+            var viaNew = await RoundTrip(server, """
+                {"jsonrpc":"2.0","id":3,"method":"prompts/get","params":{"name":"cons","arguments":{"problem":"red twice"}}}
+                """);
+
+            Text(old).Should().Be(Text(viaNew), "the old prompt hands out the same message");
+            Text(old).Should().Contain("red twice").And.Contain("`cons` tool");
+
+            static string Text(JsonDocument document) =>
+                document.RootElement.GetProperty("result").GetProperty("messages")[0].GetProperty("content").GetProperty("text").GetString()!;
         }
         finally
         {
@@ -204,7 +284,7 @@ public sealed class McpContractTests : IDisposable
             var instructions = init.RootElement.GetProperty("result").GetProperty("instructions").GetString()!;
 
             instructions.Should()
-                .Contain("`consult` is for when YOU are stuck", "the tool has to be named for a client that lists no prompts")
+                .Contain("`cons` is for when YOU are stuck", "the tool has to be named for a client that lists no prompts")
                 .And.Contain("PROMPT", "and so does the other way in")
                 .And.Contain("advice, not orders");
         }
@@ -253,53 +333,11 @@ public sealed class McpContractTests : IDisposable
     }
 
     /// <summary>
-    /// With nobody at the keyboard, the escalation waits its budget and then tells the model to
-    /// ask in the chat — the family's `remote-ask` fallback, observed over the real wire. The question is the GATE's
-    /// (the session is held), the only kind that reaches VS Code (<c>research/PLAN_ask_human_is_for_the_gate.md</c>, G1).
+    /// <c>ask_human</c> over the real wire in v2: the tool stays registered for old callers, no card is written and nothing waits — the
+    /// reply is the one JSON object that tells the caller to ask in its own conversation.
     /// </summary>
     [Fact]
-    public async Task AskHuman_WithNobodyListening_WaitsThenSaysToAskInTheChat()
-    {
-        HeldGateAtNowhere();
-        // The card and its wait are the policies that ask a person's; policy auto (the default) answers a held gate at once.
-        using var server = Start("debug", 3, ("COAI_ON_EXHAUSTED", "human"));
-        try
-        {
-            await RoundTrip(server, """
-                {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"t","version":"0"}}}
-                """);
-            await server.StandardInput.WriteLineAsync("""{"jsonrpc":"2.0","method":"notifications/initialized"}""");
-            await server.StandardInput.FlushAsync();
-
-            // The budget is short here; the read must still outlast it.
-            var answer = await RoundTrip(server, """
-                {"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"ask_human","arguments":{"repoPath":"D:/nowhere","branch":"main","question":"ship it?"}}}
-                """, timeoutSeconds: 60);
-            var text = answer.RootElement.GetProperty("result").GetProperty("content")[0]
-                .GetProperty("text").GetString();
-
-            text.Should().Contain("no_answer_yet").And.Contain("ask the person directly");
-            Directory.GetFiles(Path.Combine(_data, "escalations"), "*.json")
-                .Should().ContainSingle("the question stays open — a person may still answer it");
-        }
-        finally
-        {
-            server.Kill(entireProcessTree: true);
-            await server.WaitForExitAsync();
-        }
-    }
-
-    /// <summary>A held gate on the path the two card tests ask about — the session a <c>call_human</c> leaves behind.</summary>
-    private void HeldGateAtNowhere() =>
-        new CoaiMcp.Server.SessionStore(_data).Save(new CoaiMcp.Server.PersistedSession(
-            new CoaiMcp.Core.Rounds.SessionState("s-held", "D:/nowhere", "main", CoaiMcp.Core.Rounds.PanelConfig.Uniform(3, 2, CoaiMcp.Core.Rounds.StagePolicy.Human)) { HumanGate = true }, []));
-
-    /// <summary>
-    /// The AI's own question, over the real wire: no card, no wait — the reply tells it to ask in its own conversation
-    /// (<c>research/PLAN_ask_human_is_for_the_gate.md</c>, G2).
-    /// </summary>
-    [Fact]
-    public async Task AskHuman_ForTheAisOwnQuestion_AnswersAtOnceToAskInTheConversation()
+    public async Task AskHuman_IsAnAlias_AnswersAtOnceToAskInTheConversation_WhateverTheArguments()
     {
         using var server = Start(escalationSeconds: 60);
         try
@@ -315,59 +353,11 @@ public sealed class McpContractTests : IDisposable
                 """, timeoutSeconds: 20);
             var text = answer.RootElement.GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString();
 
-            text.Should().Contain("ask_in_conversation", "the wait is 60 s and the read 20 s: only an answer that did not wait arrives");
+            var reply = JsonDocument.Parse(text!).RootElement;
+            reply.GetProperty("status").GetString().Should().Be("ask_in_conversation", "the wait is 60 s and the read 20 s: only an answer that did not wait arrives");
+            reply.GetProperty("note").GetString().Should().Be("removed in v2: coai never waits for a person; ask in your own conversation");
+            reply.EnumerateObject().Select(p => p.Name).Should().BeEquivalentTo(["status", "note"], "nothing else rides on it");
             Directory.Exists(Path.Combine(_data, "escalations")).Should().BeFalse("no card was written");
-        }
-        finally
-        {
-            server.Kill(entireProcessTree: true);
-            await server.WaitForExitAsync();
-        }
-    }
-
-    [Fact]
-    public async Task AskHuman_AnsweredInVsCode_ReturnsThePersonsWords()
-    {
-        HeldGateAtNowhere();
-        using var server = Start("debug", 60, ("COAI_ON_EXHAUSTED", "human"));
-        try
-        {
-            await RoundTrip(server, """
-                {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"t","version":"0"}}}
-                """);
-            await server.StandardInput.WriteLineAsync("""{"jsonrpc":"2.0","method":"notifications/initialized"}""");
-            await server.StandardInput.FlushAsync();
-
-            await server.StandardInput.WriteLineAsync("""
-                {"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"ask_human","arguments":{"repoPath":"D:/nowhere","branch":"main","question":"ship it?"}}}
-                """);
-            await server.StandardInput.FlushAsync();
-
-            // Stand in for the extension: wait for the question file, then write the answer.
-            var dir = Path.Combine(_data, "escalations");
-            string? question = null;
-            for (var i = 0; i < 200 && question is null; i++)
-            {
-                question = Directory.Exists(dir)
-                    ? Directory.GetFiles(dir, "*.json").FirstOrDefault(f => !f.EndsWith(".answer.json"))
-                    : null;
-                if (question is null)
-                {
-                    await Task.Delay(50);
-                }
-            }
-
-            question.Should().NotBeNull("the question must appear immediately, not when the wait ends");
-            var id = Path.GetFileNameWithoutExtension(question!);
-            await File.WriteAllTextAsync(
-                Path.Combine(dir, $"{id}.answer.json"),
-                $$"""{"id":"{{id}}","answer":"no, fix it first","answeredUtc":"{{DateTime.UtcNow:O}}"}""");
-
-            var line = await server.StandardOutput.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(60));
-            var text = JsonDocument.Parse(line!).RootElement
-                .GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString();
-
-            text.Should().Contain("answered").And.Contain("no, fix it first");
         }
         finally
         {
@@ -413,14 +403,12 @@ public sealed class McpContractTests : IDisposable
     }
 
     /// <summary>
-    /// <c>todo/PLAN_only_a_person_releases_the_gate.md</c> over the real wire: the schema still takes <c>humanDecision</c> (every
-    /// existing client keeps calling), and on a held gate with no card answered the value is a refusal SENTENCE that names the
-    /// card — not an SDK error, and not a release.
+    /// An old caller still sends <c>humanDecision: proceed</c>: v2's <c>resolve</c> does not declare it, the SDK drops an undeclared
+    /// argument without an error, and the answer is our own sentence — not an invocation failure, and no release of anything.
     /// </summary>
     [Fact]
-    public async Task Resolve_WithHumanDecisionProceed_AndNoCard_IsARefusalSentence_NotAnSdkError()
+    public async Task Resolve_FromAnOldCaller_WithHumanDecisionProceed_IsAnAnswer_NotAnSdkError()
     {
-        HeldGateAtNowhere();
         using var server = Start();
         try
         {
@@ -435,9 +423,7 @@ public sealed class McpContractTests : IDisposable
                 """);
 
             var text = answer.RootElement.GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString();
-            JsonDocument.Parse(text!).RootElement.GetProperty("error").GetString()
-                .Should().Contain("Proceed despite the findings").And.Contain("ask_human").And.Contain("never from this argument");
-            new CoaiMcp.Server.SessionStore(_data).Load("D:/nowhere", "main")!.State.HumanGate.Should().BeTrue("the argument released nothing");
+            JsonDocument.Parse(text!).RootElement.GetProperty("error").GetString().Should().Contain("call open first");
         }
         finally
         {

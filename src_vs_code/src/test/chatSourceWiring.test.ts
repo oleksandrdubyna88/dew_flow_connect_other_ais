@@ -184,7 +184,7 @@ test('a renamed file is followed; a SAVED untitled buffer deliberately is not', 
   // hands over the saved document and no previous uri — so a listener on it would attach a
   // conversation to the wrong file as readily as to the right one. Pinned here so that adding one is
   // a decision somebody makes on purpose rather than an afternoon's good idea.
-  const wiring = source('extension.ts');
+  const wiring = source('../shell/modules/chat/register.ts');
 
   assert.match(wiring, /vscode\.workspace\.onDidRenameFiles\(/u, 'a moved file loses its conversation');
   assert.match(wiring, /followRenames\(chatPanels, housekeeping\.index,/u, 'the rename reaches neither the open tabs nor the store');

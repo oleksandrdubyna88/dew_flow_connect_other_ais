@@ -56,7 +56,6 @@ function page(over: Partial<PanelState> = {}): string {
     hostKind: 'windows',
     side: '',
     perSide: false,
-    questions: [],
     sessions: [],
     openSections: ['reviewers'],
     usage: [],

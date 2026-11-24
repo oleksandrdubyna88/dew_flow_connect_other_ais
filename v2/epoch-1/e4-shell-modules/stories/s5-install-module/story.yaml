@@ -1,0 +1,5 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: s5-install-module
+title: "Binary install/update moved after the first ready"
+dependsOn:
+  - s3-sidebar

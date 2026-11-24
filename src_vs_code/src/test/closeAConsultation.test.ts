@@ -171,7 +171,7 @@ interface RunningPage {
  * ambient environment, no filesystem and no network, and the script is synchronous.</p>
  */
 function pageClickListener(): RunningPage {
-  const html = roundsLogHtml([], [], 'n0nce');
+  const html = roundsLogHtml([], 'n0nce');
   const script = html.slice(html.indexOf('<script'), html.lastIndexOf('</script>'));
   const body = script.slice(script.indexOf('>') + 1);
 

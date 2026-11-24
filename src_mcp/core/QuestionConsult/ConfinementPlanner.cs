@@ -128,7 +128,7 @@ public static class ConfinementPlanner
 
         if (grant.Roots.Count == 0)
         {
-            return "a 'disk' grant needs at least one root to read — set the folders in ConnectOtherAIs > Question consultant";
+            return "a 'disk' grant needs at least one root to read — set the folders in ConnectOtherAIs > Consask";
         }
 
         return grant.Roots.FirstOrDefault(root => !IsAbsolute(root)) is { } relative

@@ -11,6 +11,7 @@ import {
 import { AccountsView, ChooseSeams, NoticeSeams, Row, accountsRows, choose, copyDecisionFor, tellAfterRound } from './remoteAccountsRows';
 import type { RemoteSessions } from './remoteSessionHost';
 import { ACCOUNTS_LIMITS, defaultRemoteSeams, runAccounts } from './remoteSsh';
+import { registerCommand } from './shellBridge';
 import { liveTerminals } from './terminalHost';
 
 /**
@@ -316,7 +317,7 @@ export function bindTerminalAccounts(context: vscode.ExtensionContext, sessions:
   const accounts = new AccountsWindow(context, sessions, test);
   context.subscriptions.push(
     accounts,
-    vscode.commands.registerCommand('coai.terminalAccounts', () => { openList(accounts, sessions); }),
+    registerCommand('coai.terminalAccounts', () => { openList(accounts, sessions); }),
     vscode.window.onDidOpenTerminal(() => { void accounts.rearm(); }),
     vscode.window.onDidCloseTerminal(accounts.closed),
     sessions.onChanged(() => { void accounts.changedList(); }),

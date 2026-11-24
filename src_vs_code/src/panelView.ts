@@ -24,43 +24,28 @@ import { type BusySnapshot, IDLE } from './busySnapshot';
 import type { Phrase } from './phrases';
 import { phraseColours } from './phrases';
 import { ROLE_TONE_CSS, roleTone } from './roleTone';
+import { menuReadyScript, MENU_BASE_CSS, MENU_SECTION_CSS, menuTitle } from './sidebarMenu';
 import { runtimeOnServer, runtimeSkewNote } from './runtimeSince';
 import { availabilityOf, ProviderHealth, ProvidersAnswer } from './providers';
 import { ChatSettings, chatSettingsFrom } from './chatSettings';
 import { consultantBody } from './consultantView';
-import { NEW_PROMPT_SENTINEL, securityLaneBody } from './securityLaneView';
-import type { SecurityTryResult } from './securityTry';
 import type { ClientRegistration } from './setupTab';
 import type { MoveRecord } from './dataMove';
 import type { RolesEmbedState } from './rolesEmbed';
-import type { CommandsEmbedState } from './commandsEmbed';
-import type { SecurityTextState } from './securityPromptFiles';
 import type { ConsultantHealthState } from './consultantHealthState';
 import { CONSULTANT_HEALTH_CSS, COPY_COMMANDS } from './consultantHealthView';
-import { CALLER_KINDS, consultantRuntimeSkewNote, consultantSkewNote, vaultKeyNote } from './consultSettings';
-import {
-  COMMAND_MODEL_RUNTIMES,
-  ModelSlot,
-  NO_MODELS,
-  SHIPPED_COMMAND_MODELS,
-  SLOT_LABELS,
-  commandModelsSkewNote,
-} from './commandModels';
+import { consultantRuntimeSkewNote, consultantSkewNote, vaultKeyNote } from './consultSettings';
 import { chatProvidersFromPresets, type ChatProviderList } from './chatModels';
 import { mainPrompt } from './chatPresets';
 import { ON_EXHAUSTED_CHOICES, gateNotes } from './onExhaustedPanel';
-import { CoaiSettings, GatePer, LANGUAGES, OnExhausted, enabledCodeRoles, keptPerSide, roleIsOn } from './settingsShape';
-import { gatePerSkewNote, stopLocalSkewNote } from './gateScope';
+import { CoaiSettings, LANGUAGES, OnExhausted, enabledCodeRoles, keptPerSide, roleIsOn } from './settingsShape';
 import { Consultation, consultationsBody } from './consultations';
-import { Escalation } from './escalations';
 import { HELP, HelpKey } from './help';
 import { DEFAULT_API_DIALECT, dialectChoices } from './apiRuntime';
 import { featureNote, reviewsFeatures } from './featureGate';
 import { help, segmentedRadio } from './panelControls';
-import { cadenceBlock } from './cadenceSettings';
-import { CadenceLine, cadenceLinesHtml } from './cadenceLine';
-import { allowedModelsFor, ModelChoice, modelsFor, RemoteProvenance, Runtime } from './models';
-import { CONVENTIONS_ROLE_SINCE, ROLE_SWITCH_SINCE, promptsFor, selectedFor } from './prompts';
+import { allowedModelsFor, ModelChoice, RemoteProvenance, Runtime } from './models';
+import { CONVENTIONS_ROLE_SINCE, ROLE_SWITCH_SINCE } from './prompts';
 import { FEATURE_CODE, PLAN_CODE, RESULT_CODE, RESULT_DOCUMENT, bucketOf, composed, isActive, isBuiltIn, stageOf, type RoleRow } from './roles';
 import { CLIENT_TARGETS, clientTargetsLine } from './mcpBlock';
 import { DATA_TO_LEAVE, DATA_TO_MOVE, type DataLocation, type StorageSource } from './dataDir';
@@ -100,7 +85,6 @@ import { otherSideDataHtml, watchedGroupsHtml } from './serverPathsView';
 import { cliPathFieldsHtml, type CliPathFacts } from './cliPathFields';
 import { pathSidesOf, type PathSides } from './pathSides';
 import { thisSideLabel } from './consultantSides';
-import { SECURITY_COMMANDS } from './securityLaneState';
 import { cardColumns } from './cardColumns';
 
 /**
@@ -134,7 +118,7 @@ export interface PanelState {
    * The Team servers this machine knows, with whatever their catalogs last said.
    *
    * <p>It is IN {@link staticKey} rather than a live region: `liveRegions` returns only the regions in
-   * `LIVE_REGION_IDS` (questions, rounds, consultations, cadence, notifications), so everything else reaches the
+   * `LIVE_REGION_IDS` (questions, rounds, consultations, notifications), so everything else reaches the
    * screen by the repaint. A section that
    * was patched instead would be a section that stops updating the day somebody reorders the DOM.</p>
    */
@@ -168,23 +152,10 @@ export interface PanelState {
    */
   readonly consultations?: readonly Consultation[] | undefined;
   /**
-   * Each recent plan's consultation cadence, as `coai-mcp --cadence` answered it
-   * (research/PLAN_consult_on_a_cadence.md, epic 4 story 4.2). Optional for the reason
-   * {@link consultations} is: absent means no line, which is what a panel with no plan in flight shows.
-   */
-  readonly cadence?: readonly CadenceLine[] | undefined;
-  /**
    * The question consultant's shipped prompts' override files as they are ON DISK, by prompt id — read at paint
    * time like {@link consultPrompt} (todo/PLAN_question_consultant.md, S4). Absent or empty = the shipped words.
    */
   readonly qconsultPromptOverrides?: Readonly<Record<string, string>> | undefined;
-  /**
-   * Each Security lane prompt's override file as the server will read it, by prompt id — read at paint time like
-   * {@link qconsultPromptOverrides} (research/PLAN_the_security_tab_reads_at_a_glance.md, epic 2). Absent = not read yet.
-   */
-  readonly securityPromptText?: Readonly<Record<string, SecurityTextState>> | undefined;
-  /** The folder those files live in, so a card can name the file a person writes in. */
-  readonly securityPromptDir?: string | undefined;
   /** Where a disk root may not be on this machine — the data folder, the profile, the system folders (D14 c). */
   readonly qconsultPlaces?: RootPlaces | undefined;
   /**
@@ -268,7 +239,6 @@ export interface PanelState {
    * sidebar) draws Setup › This side without the list.
    */
   readonly sides?: SidesView | undefined;
-  readonly questions: readonly Escalation[];
   readonly sessions: readonly SessionFile[];
   /** Which collapsible sections are open. Empty falls back to {@link OPEN_BY_DEFAULT}. */
   readonly openSections: readonly string[];
@@ -332,16 +302,12 @@ export interface PanelState {
    * (`isReviewerRow`). The Settings page's tabs read this one (PLAN_one_model_catalog.md E4, epic 3's missed row).
    */
   readonly catalogRows?: readonly Vendor[];
-  /** What the installed binary last said about a sample on the Settings page's Security lane tab (`securityTry.ts`, E4.2). */
-  readonly securityTry?: SecurityTryResult | undefined;
   /** Whether each MCP client registers coai, read from its own config file (`setupTab.ts`, E4.5). */
   readonly mcpClients?: readonly ClientRegistration[] | undefined;
   /** The data folder's last move, as this profile remembers it across a reload (`coai.lastDataMove`, E4.5). */
   readonly lastDataMove?: MoveRecord | undefined;
   /** The review roles as the Settings page's Roles & prompts draws them (`rolesEmbed.ts`, E4.3) — read only while it can be shown. */
   readonly roles?: RolesEmbedState | undefined;
-  /** The gate's commands as the Settings page's Commands draws them (`commandsEmbed.ts`, E4.4) — read only while it can be shown. */
-  readonly commands?: CommandsEmbedState | undefined;
   /** When each control the Settings page marks "new" was first seen in this profile (`newTags.ts`). */
   readonly firstSeen?: Readonly<Record<string, number>>;
   /** The time the state was gathered — what a "new" mark is measured against. Absent: the moment the page is drawn. */
@@ -374,6 +340,11 @@ export interface PanelState {
    * exactly that — never as "there is no material", which is a different and untrue sentence.</p>
    */
   readonly bugz?: BugCorpus | undefined;
+  /**
+   * The corpus has been asked for and has not answered: the Bugz card says it is loading, rather than "not read" (which is the
+   * answer of a server that is not installed). The first paint of the sidebar sets it (`firstPaint.ts`); absent means not loading.
+   */
+  readonly bugzLoading?: boolean;
 
   /**
    * What the CLAUDE.md snippet pasted into this workspace is, next to what this build hands out.
@@ -551,19 +522,16 @@ function focusLiteral(focus: PanelFocus | undefined): string {
 export const PANEL_SECTIONS: readonly SectionSpec<PanelState>[] = [
   // The SIDEBAR: what is happening now, and the two tools a person reaches for while it happens — in the
   // order the operator named them (`research/PLAN_settings_page.md`, D1).
-  { id: 'notifications', title: 'Notifications', surface: 'sidebar', body: (_state, live) => liveRegion('notifications', live) },
+  { id: 'notifications', title: menuTitle('notifications'), surface: 'sidebar', body: (_state, live) => liveRegion('notifications', live) },
   // The gates and the consultations each in a section of its own, where Active rounds was — the operator's
-  // ask of 2026-09-29 (`research/PLAN_every_page_reads_alike.md`, S4). The gates keep the id `rounds`, and the
-  // cadence lines stay with them: they say where each plan's gate stands. A consultation being had is present
-  // tense exactly as a round is, so it stays in the sidebar (`research/PLAN_settings_page.md`, D2).
-  { id: 'rounds', title: 'Active gates', surface: 'sidebar', body: (_state, live) => liveRegion('rounds', live) },
-  { id: 'consultations', title: 'Active consultations', surface: 'sidebar', body: (_state, live) => liveRegion('consultations', live) },
-  // The cadence lines, out of Active gates into a section of their own — the operator, 2026-09-29, who read
-  // them as consultations (`research/PLAN_the_cadence_has_its_own_section.md`). Beside the consultations, because
-  // each line says which consultation a plan owes.
-  { id: 'cadence', title: 'Consultation cadence', surface: 'sidebar', body: (_state, live) => liveRegion('cadence', live) },
-  { id: 'phrases', title: 'Phrases', surface: 'sidebar', body: (state) => phrasesBody(state.phrases ?? []) },
-  { id: 'bugz', title: 'Bugz', surface: 'sidebar', body: (state) => bugzSection(state) },
+  // ask of 2026-09-29 (`research/PLAN_every_page_reads_alike.md`, S4). The gates keep the id `rounds`. A consultation
+  // being had is present tense exactly as a round is, so it stays in the sidebar (`research/PLAN_settings_page.md`, D2).
+  // The cadence section is gone (owner, 2026-11-23: removed in v2). The titles and the order are `sidebarMenu.ts`'s: the
+  // shell's own menu draws the same headers before this code has loaded.
+  { id: 'rounds', title: menuTitle('rounds'), surface: 'sidebar', body: (_state, live) => liveRegion('rounds', live) },
+  { id: 'consultations', title: menuTitle('consultations'), surface: 'sidebar', body: (_state, live) => liveRegion('consultations', live) },
+  { id: 'phrases', title: menuTitle('phrases'), surface: 'sidebar', body: (state) => phrasesBody(state.phrases ?? []) },
+  { id: 'bugz', title: menuTitle('bugz'), surface: 'sidebar', body: (state) => bugzSection(state) },
 ];
 
 /**
@@ -578,28 +546,7 @@ export function consultantSection(state: PanelState, callerRows: string): string
     // Each caller's pick carries its own health block (`consultantPicks.ts`); the body draws the switch, the caps and
     // the prompt around the picks.
     + consultantBody(state.settings.consult, { consultPrompt: state.consultPrompt, vibeHomes: state.settings.vibeHomesDirectory,
-      vibeHomesFinding: findingFor(state.pathFindings ?? [], VIBE_HOMES.id, state.settings.vibeHomesDirectory) }, callerRows)
-    // WHEN the consultant is asked without anybody being stuck, under WHO is asked
-    // (research/PLAN_consult_on_a_cadence.md, epic 4 story 4.1).
-    + cadenceBlock(state.settings.cadence);
-}
-
-/**
- * The Security lane tab.
- *
- * @param offered the rows a pair may name — the rows ticked Security lane on Models (E4.2)
- * @param allRows every catalog row, which a stranded pair's row is named from
- */
-export function securityLaneSection(state: PanelState, offered: readonly Vendor[], allRows: readonly Vendor[]): string {
-  return securityLaneBody(state.settings.securityLane, offered, serverVersionOf(state), securityFilesOf(state), allRows);
-}
-
-function serverVersionOf(state: PanelState): string {
-  return state.server.kind === 'absent' ? '' : state.server.version;
-}
-
-function securityFilesOf(state: PanelState): { text: Readonly<Record<string, SecurityTextState>>; promptsDir: string } {
-  return { text: state.securityPromptText ?? {}, promptsDir: state.securityPromptDir ?? '' };
+      vibeHomesFinding: findingFor(state.pathFindings ?? [], VIBE_HOMES.id, state.settings.vibeHomesDirectory) }, callerRows);
 }
 
 /** The Question consultant tab: the rows, the prompts, the folders, the mode and the limits. Its live questions are in the sidebar. */
@@ -636,6 +583,7 @@ function bugzSection(state: PanelState): string {
     // for one commit, and nothing assigned those fields — so choosing a model did nothing.
     model: state.settings.bugzModel,
     server: state.settings.bugzServer,
+    loading: state.bugzLoading === true,
   });
 }
 
@@ -688,10 +636,8 @@ ${busyMarkScript(busy)}
   // so a name alone would refocus whichever of them the document holds first.
   // The CALLER is part of it too: four consultant rows share one setting name, so without it a
   // repaint mid-edit would put the cursor back in whichever of them the document holds first.
-  // And the COMMAND-MODEL kind: four assistants' boxes share the two slot names.
   const idOf = (el) => el.dataset.setting + '|' + (el.dataset.vendor || '') + '|' + (el.dataset.role || '')
-    + '|' + (el.dataset.caller || '') + (el.dataset.commandModel ? '|' + el.dataset.commandModel : '')
-    + (el.dataset.securityField ? '|' + el.dataset.securityField : '');
+    + '|' + (el.dataset.caller || '');
   const posted = new Map();
   // What each control last held that was a REAL value. A sentinel is a request, not a choice, so the
   // control goes straight back to this when one is picked: nothing is written, so no repaint is
@@ -700,20 +646,10 @@ ${busyMarkScript(busy)}
   const real = new Map();
   const save = (el) => {
     const value = el.type === 'checkbox' ? el.checked : el.type === 'number' ? Number(el.value) : el.value;
-    if (value === '${NEW_PROMPT_SENTINEL}') {
-      // Not a prompt — a request to make one (research/PLAN_the_security_tab_reads_at_a_glance.md, epic 3). The select goes
-      // back to the prompt it showed, and the host is told which pair asked, by identity.
-      el.value = real.get(el) || '';
-      send({ type: 'command', command: 'newSecurityPrompt', id: el.dataset.seclaneRun }, el);
-      return;
-    }
     if (value === '__other__') {
       // Not a model — a request to type one; the input box comes from the provider side.
       el.value = real.get(el) || '';
-      // A split-order model picker names a caller kind and a slot, not a vendor row (issue #117).
-      send(el.dataset.commandModel
-        ? { type: 'command', command: 'customCommandModel', id: el.dataset.commandModel + ':' + el.dataset.setting }
-        : { type: 'command', command: 'customModel', id: el.dataset.vendor }, el);
+      send({ type: 'command', command: 'customModel', id: el.dataset.vendor }, el);
       return;
     }
     // \`change\` compares with the value the control had when it gained FOCUS, not with the value
@@ -726,10 +662,7 @@ ${busyMarkScript(busy)}
     // Through \`send\`: a write is numbered, and the control wears the busy mark if the host takes long (busyMark.ts).
     send({ type: 'setting', key: el.dataset.setting, value,
            vendor: el.dataset.vendor, role: el.dataset.role,
-           ...(el.dataset.securityField ? { securityField: el.dataset.securityField } : {}),
            caller: el.dataset.caller,
-           // Only on a split-order model picker, so every other write keeps its shape.
-           ...(el.dataset.commandModel ? { commandModel: el.dataset.commandModel } : {}),
            // Only on a dropdown: its value is a string like typed text's, and a refused one
            // snaps back where typed text must not (the follow-up to PR #561).
            ...(el.tagName === 'SELECT' ? { control: 'select' } : {}) }, el);
@@ -815,7 +748,7 @@ ${busyMarkScript(busy)}
     }
   });
   window.addEventListener('pagehide', () => flush());
-${selectSearchScript(['', '__other__', NEW_PROMPT_SENTINEL])}
+${selectSearchScript(['', '__other__'])}
 
   // A repaint that could not be withheld any longer lands under a focused control. The provider
   // names it, and the caret comes back to the end of what is in it — the end rather than where it
@@ -846,10 +779,6 @@ ${selectSearchScript(['', '__other__', NEW_PROMPT_SENTINEL])}
       break;
     }
   }
-  for (const el of document.querySelectorAll('[data-prompt]')) {
-    el.addEventListener('change', () =>
-      send({ type: 'prompt', role: el.dataset.prompt, round: Number(el.dataset.round), value: el.value }, el));
-  }
   for (const el of document.querySelectorAll('.section')) {
     el.addEventListener('toggle', () =>
       vscode.postMessage({ type: 'section', id: el.dataset.section, open: el.open }));
@@ -868,7 +797,7 @@ ${selectSearchScript(['', '__other__', NEW_PROMPT_SENTINEL])}
   bindCommands(document);
 
   // Live updates arrive as HTML for the regions that change on their own — the questions, the rounds in
-  // flight, the consultations, the cadence lines and the notifications (LIVE_REGION_IDS). Patching them leaves every other control ALONE,
+  // flight, the consultations and the notifications (LIVE_REGION_IDS). Patching them leaves every other control ALONE,
   // which is the whole point: assigning the panel's html reloads the webview, and a reload
   // closes any open dropdown. This is what stopped the pickers snapping shut mid-choice.
   // What each region showed last. Identical markup is not re-applied: replacing it recreates
@@ -939,6 +868,7 @@ ${selectSearchScript(['', '__other__', NEW_PROMPT_SENTINEL])}
   // LAST: this document is ready to hear what is running. Anything announced while it was being built reached the
   // document it replaced (busyMark.ts; research/PLAN_model_search_and_busy_marks.md §3.12).
   vscode.postMessage({ type: 'ready' });
+${menuReadyScript()}
 </script>
 </body>
 </html>`;
@@ -1665,116 +1595,7 @@ ${onExhaustedOptions(s.onExhausted)}
   </select>
 ${onExhaustedNotes(state)}
 </div>
-<div class="field">
-  <div class="check-row"><label class="check"><input type="checkbox" data-setting="stopLocalWhenQuiet"${s.stopLocalWhenQuiet ? ' checked' : ''}> Stop the local reviewer when the cloud reviewers found almost nothing</label>${help('stopLocalWhenQuiet')}</div>
-  <div class="hint">Takes effect from the next round — a round already running keeps the setting it started with.</div>
-${stopLocalSkew(state)}
-</div>
-<div class="field">
-  <div class="hint">These three do not change what the gate DECIDES. They are orders it hands back to
-  whichever AI called it — how the work is broken up, when you are interrupted, which model does the
-  expensive half. All three are off unless you turn them on.</div>
-  <div class="check-row"><label class="check"><input type="checkbox" data-setting="autonomous"${s.autonomous ? ' checked' : ''}> Work autonomously</label>${help('autonomous')}</div>
-  <div class="check-row"><label class="check"><input type="checkbox" data-setting="splitPlan"${s.splitPlan ? ' checked' : ''}> Split the plan into epics and stories</label>${help('splitPlan')}</div>
-${gatePerBlock(state)}
-  <div class="check-row"><label class="check"><input type="checkbox" data-setting="splitWithFable"${s.splitWithFable ? ' checked' : ''}> Split with the strongest model, and give it the risky stories</label>${help('splitWithFable')}</div>
-</div>
-${commandModelsBlock(state)}
-<div class="field">
-  <div class="hint">The words those orders are made of, and commands of your own to hand over with them.</div>
-  ${editorWay('reviews/commands', 'Edit commands…')}
-</div>`;
-}
-
-/**
- * How often split work comes back through the gate (issue #131): one gate per epic, or one for the
- * whole task — never per story. The segmented radio `codeWorkspace` already uses, for the same kind
- * of choice between two named modes.
- */
-/** What an older server does with the stand-down switch (issue #485): nothing, and the panel says so. */
-function stopLocalSkew(state: PanelState): string {
-  const note = stopLocalSkewNote(state.server.version, state.settings.stopLocalWhenQuiet);
-
-  return note.length === 0 ? '' : `  <div class="stale">${escapeHtml(note)}</div>`;
-}
-
-function gatePerBlock(state: PanelState): string {
-  const note = gatePerSkewNote(state.server.version, state.settings.splitPlan);
-  const choices: readonly (readonly [GatePer, string])[] = [['epic', 'One gate per epic'], ['task', 'One gate for the whole task']];
-
-  return `  ${segmentedRadio('gatePer', state.settings.gatePer, 'How often split work is gated', choices)}${help('gatePer')}
-${note.length === 0 ? '' : `  <div class="stale">${escapeHtml(note)}</div>\n`}`;
-}
-
-/**
- * The three models the model order names, one row per KIND of calling assistant (issue #117).
- *
- * <p>The order is carried out by the caller, so each kind names its OWN vendor's models: every picker
- * offers that vendor's list — the Claude families the CLI is asked about, the Codex list read from its
- * own cache, the Gemini ones Antigravity lists — and "another model…" for any name. The first option
- * is the shipped name; for every kind but Claude Code that is no model at all, and the order then says
- * so in words rather than naming another vendor's.</p>
- *
- * <p>A select, not a text box with a datalist: `modelOptions` below records why — a datalist filters
- * its options by the value already in the box, so once a model is chosen every other one vanishes.</p>
- *
- * <p>Always drawn, not only while the switch is on: a person choosing the models before ticking the
- * box is the ordinary order of things, and a block that appeared on tick would move the controls
- * under the cursor.</p>
- */
-function commandModelsBlock(state: PanelState): string {
-  const models = state.settings.commandModels;
-  const rows = CALLER_KINDS.map(({ id, label }) => {
-    const shipped = SHIPPED_COMMAND_MODELS[id] ?? NO_MODELS;
-    const box = (slot: ModelSlot, generic: string): string => {
-      const fallback = shipped[slot].length > 0 ? shipped[slot] : generic;
-
-      return `<select id="commandModel-${id}-${slot}" data-setting="${slot}" data-command-model="${id}"`
-        + ` aria-label="${escapeHtml(`${label} — ${SLOT_LABELS[slot].toLowerCase()} model`)}">`
-        + commandModelOptions(id, state, models[id]?.[slot] ?? '', `default — ${fallback}`)
-        + '</select>';
-    };
-
-    return `  <div class="model-pair">
-    <div class="group-head">${escapeHtml(label)}</div>
-    <div class="model-pair-boxes">
-      <label>${SLOT_LABELS.strongest}${box('strongest', 'its strongest')}</label>
-      <label>${SLOT_LABELS.implementation}${box('implementation', 'its usual')}</label>
-      <label>${SLOT_LABELS.coder}${box('coder', 'its faster')}</label>
-    </div>
-  </div>`;
-  }).join('\n');
-  const note = commandModelsSkewNote(state.server.version, models);
-
-  return `<div class="field">
-  <div class="model-pairs-head">Models the order names</div>
-  <div class="hint">Per assistant — the order is carried out by the assistant that called, so each
-  names its own. The first choice in each list is the default.</div>
-${note.length === 0 ? '' : `  <div class="stale">${escapeHtml(note)}</div>\n`}${rows}
-</div>`;
-}
-
-/** The options of one split-order model picker: the default, this kind's own models, and "another model…". */
-function commandModelOptions(kind: string, state: PanelState, current: string, defaultLabel: string): string {
-  return modelOptions(commandModelChoices(kind, state, current), current, escapeHtml(defaultLabel));
-}
-
-/**
- * The names a picker of this caller kind offers — its own vendor's models, never another's — through
- * `modelsFor`, the one place that decides what a runtime's list is (the Claude families labelled from
- * what the CLI answered, the discovered Codex list) and that keeps a saved name as `(yours)`, so a
- * value never vanishes from its own dropdown. A kind no runtime answers for offers only what was saved.
- */
-function commandModelChoices(kind: string, state: PanelState, current: string): readonly ModelChoice[] {
-  const runtime = COMMAND_MODEL_RUNTIMES[kind];
-
-  return runtime === undefined
-    ? savedOnly(current)
-    : modelsFor(runtime, state.codexModels, current, undefined, state.agyModels, [], state.claudeProbe);
-}
-
-function savedOnly(current: string): readonly ModelChoice[] {
-  return current.length > 0 ? [{ id: current, label: `${current} (yours)` }] : [];
+`;
 }
 
 /**
@@ -1809,11 +1630,7 @@ function limitsBody(s: CoaiSettings, enabledVendors: number): string {
   <input type="number" id="roundTimeoutMinutes" min="0" data-setting="roundTimeoutMinutes" value="${s.roundTimeoutMinutes}"
          aria-describedby="roundTimeoutNote">
 </div>
-<div class="hint" id="roundTimeoutNote">${escapeHtml(roundLimitNote(s, enabledVendors))}</div>
-<div class="field inline">
-  ${labelled('escalationMinutes', 'Wait for you, minutes', 'escalationMinutes')}
-  <input type="number" id="escalationMinutes" min="1" data-setting="escalationMinutes" value="${s.escalationMinutes}">
-</div>`;
+<div class="hint" id="roundTimeoutNote">${escapeHtml(roundLimitNote(s, enabledVendors))}</div>`;
 }
 
 /**
@@ -2184,19 +2001,14 @@ export
  * carries, and for the same reason.</p>
  */
 function roundLimitNote(s: CoaiSettings, enabledVendors: number): string {
-  if (s.securityLane.enabled && s.roundTimeoutMinutes === 0)
-    return 'Worked out by the server from ordinary reviewers, security pairs and serial engine queues.';
   if (s.roundTimeoutMinutes > 0) {
     return s.roundTimeoutMinutes < s.reviewerTimeoutMinutes
       ? `shorter than one reviewer's ${s.reviewerTimeoutMinutes} min — reviewers will be cut off`
       : 'set by hand';
   }
 
-  // Dealing changes the arithmetic rather than scaling it: every lens goes to ONE vendor instead of
-  // to all of them, so a dealt round launches one reviewer per ROLE however many vendors are on.
-  // That is half the round at two vendors, and the panel would have promised the undealt number.
   const codeRoles = enabledCodeRoles(s).length;
-  const reviewers = s.dealCodeLenses ? codeRoles : Math.max(1, enabledVendors) * codeRoles;
+  const reviewers = Math.max(1, enabledVendors) * codeRoles;
   const waves = Math.max(1, Math.ceil(reviewers / Math.max(1, s.maxConcurrency)));
 
   // "AT MOST", because the server derives from the reviewers a round ACTUALLY schedules, and it
@@ -2388,30 +2200,7 @@ function serverNotes(state: PanelState, role: RoleRow): string {
   return lines.map((line) => `  <div class="hint">${escapeHtml(line)}</div>`).join('\n');
 }
 
-/**
- * Which half of the prompts section a place draws: Stages (the rounds and the threshold of each role) or Prompts per
- * round (the round pickers) — research/PLAN_one_model_catalog.md E4.1. The old page drew both in one box per role, with a
- * tick of its own per role, until E5.1 step 5 removed it; a role's one switch is on Roles & prompts (E4.3).
- */
-export type PromptsHalf = 'stages' | 'prompts';
-
-/** One role's round pickers alone, for the Settings page's Prompts per round — or why it has none. */
-function pickersOnly(role: RoleRow, on: boolean, off: string, pickers: string): string {
-  return `<div class="role role-${roleTone(role.id, stageOf(role))}${off}">
-  <div class="head"><span class="name">${escapeHtml(role.name ?? role.id)}</span></div>
-${on ? pickers : '  <div class="hint">Switched off on Stages — no round asks it.</div>'}
-</div>`;
-}
-
-/** Prompts per round: the stages' heads and each role's pickers, nothing else. */
-function pickersBody(groups: readonly (readonly [string, string])[]): string {
-  return groups.map(([head, rows]) => `<div class="role-group">
-  <div class="group-head">${head}</div>
-${rows}
-</div>`).join('\n');
-}
-
-export function promptsBody(state: PanelState, half: PromptsHalf): string {
+export function promptsBody(state: PanelState): string {
   const s = state.settings;
   // The COMPOSED catalog rather than the shipped five: a role a person added is drawn here beside
   // them, under the name they gave it, with its own rounds, threshold and pickers. `composed` is the
@@ -2420,24 +2209,6 @@ export function promptsBody(state: PanelState, half: PromptsHalf): string {
   const roleRow = (role: RoleRow): string => {
     const label = role.name ?? role.id;
     const stage = stageOf(role);
-    // A role's own budget decides how many rounds it shows: a picker for a round that role will
-    // never reach is a control that cannot do anything, which the spending tabs already taught.
-    const budget = Math.max(1, Math.min(s.rounds[role.id] ?? 2, 6));
-    const pickers = Array.from({ length: budget }, (_, i) => {
-      const round = i + 1;
-      const current = selectedFor(role.id, round, s.promptsPerRound);
-      const options = promptsFor(role.id)
-        .map(
-          (p) =>
-            `<option value="${escapeHtml(p.id)}"${p.id === current ? ' selected' : ''} title="${escapeHtml(p.purpose)}">${escapeHtml(p.label)}</option>`,
-        )
-        .join('');
-      return `  <div class="field">
-    <label for="pr-${escapeHtml(role.id)}-${round}">Round ${round}</label>
-    <select id="pr-${escapeHtml(role.id)}-${round}" data-prompt="${escapeHtml(role.id)}" data-round="${round}">${options}</select>
-  </div>`;
-    }).join('\n');
-
     // A switch, but only on the CODE roles: the plan stage has one role, and a checkbox whose only
     // setting turns the whole stage off is a different feature nobody asked for.
     const switched = stage !== 'plan';
@@ -2446,10 +2217,6 @@ export function promptsBody(state: PanelState, half: PromptsHalf): string {
     const on = isActive(role) && (!switched || roleIsOn(s, role.id));
     const inactive = !isActive(role) ? ' off' : '';
     const off = switched && !on ? ' off' : '';
-    if (half === 'prompts') {
-      return pickersOnly(role, on, off, pickers);
-    }
-
     // How many times this role asks and how much it may still find, in one box. Stages draws no tick of its own: a role
     // has ONE switch, on Roles & prompts (E4.3).
     return `<div class="role role-${roleTone(role.id, stage)}${off}${inactive}">
@@ -2482,7 +2249,7 @@ ${serverNotes(state, role)}
   // takes no part in. The stage's vendor tick and its tool are epic 3's; this is what the seed forces.
   const features = boxes(FEATURE_CODE);
 
-  return PROMPTS_HALVES[half](state, { plan, code, documents, features });
+  return stagesBody(state, { plan, code, documents, features });
 }
 
 /** Each stage's role boxes, drawn. */
@@ -2493,15 +2260,8 @@ interface RoleGroups {
   readonly features: string;
 }
 
-/** How each half is drawn around the role boxes: the stages with their own switches, or the round pickers alone. */
-const PROMPTS_HALVES: Readonly<Record<PromptsHalf, (state: PanelState, groups: RoleGroups) => string>> = {
-  stages: (state, groups) => stagesBody(state, groups),
-  prompts: (_state, { plan, code, documents, features }) =>
-    pickersBody([['Plan stage', plan], ['Code stage', code], ['Document stage', documents], ['Feature stage', features]]),
-};
-
 /**
- * The stages around their role boxes: the lens deals, the workspace, the notes and the way to the roles — a jump to
+ * The stages around their role boxes: the workspace, the notes and the way to the roles — a jump to
  * Roles &amp; prompts (E5.1 step 1).
  */
 function stagesBody(state: PanelState, { plan, code, documents, features }: RoleGroups): string {
@@ -2509,19 +2269,11 @@ function stagesBody(state: PanelState, { plan, code, documents, features }: Role
 
   return `<div class="role-group">
   <div class="group-head">Plan stage</div>
-  <div class="field">
-    <label class="check"><input type="checkbox" data-setting="dealPlanLenses"${s.dealPlanLenses ? ' checked' : ''}> Deal the lenses across vendors</label>
-    <div class="hint">Off: every vendor answers the same question, and two vendors agreeing on a finding is a fact the gate can use. On: every lens gets asked once instead, at half the launches \u2014 and that agreement is gone. Anything you pick below wins either way.</div>
-  </div>
 ${plan}
 </div>
 <div class="role-group">
   <div class="group-head">Code stage \u2014 ${fanOut(state)}</div>
 ${roleSwitchSkew(state.server, s)}
-  <div class="field">
-    <label class="check"><input type="checkbox" data-setting="dealCodeLenses"${s.dealCodeLenses ? ' checked' : ''}> Deal the roles across vendors</label>
-    <div class="hint">Off: every code role is asked of every vendor. On: the roles are dealt out across the vendors, each asked of one.</div>
-  </div>
   <div class="field">
     ${labelled('codeWorkspace', 'What a reviewer gets', 'codeWorkspace')}
     ${segmentedRadio('codeWorkspace', s.codeWorkspace, 'What a reviewer gets', [['none', 'Fast — diffs only'], ['worktree', 'Full — with the code']])}
@@ -2993,35 +2745,13 @@ ${reviewers}</div>`;
 export function liveRegions(
   state: PanelState,
   nowMs: number = Date.now(),
-): { qconsults: string; rounds: string; consultations: string; cadence: string; notifications: string } {
+): { qconsults: string; rounds: string; consultations: string; notifications: string } {
   return {
-    qconsults: activeQuestionsBody(state.questions, state.qconsults ?? [], nowMs),
+    qconsults: activeQuestionsBody(state.qconsults ?? [], nowMs),
     rounds: roundsBody(state.sessions, nowMs, state.vendors.map((v) => v.id)),
     consultations: consultationsBody(state.consultations ?? [], nowMs),
-    cadence: cadenceBody(state),
     notifications: notificationsBody(state),
   };
-}
-
-/**
- * What Consultation cadence shows: each recent plan's cadence line — or why there is none.
- *
- * <p>ONE function for the first paint and the live push, so the two cannot disagree about whether a line
- * is there. It was drawn above the running rounds until 2026-09-29, when the operator read the lines as
- * consultations and asked for a section of their own; the page script patches every region by one loop
- * now, so a region of its own costs no new branch there.</p>
- */
-function cadenceBody(state: PanelState): string {
-  const lines = cadenceLinesHtml(state.cadence ?? []);
-  if (lines.length > 0) {
-    return lines;
-  }
-
-  return state.settings.cadence.mode === 'off'
-    ? '<div class="empty">The consultation cadence is off. It is switched on in <b>Settings → Consultant</b>.</div>'
-    // True of every way the list comes back empty with the cadence on: no round named a plan in the last day,
-    // the installed server is too old for the mode or not installed, or its first answer is still out.
-    : '<div class="empty">No plan\'s cadence has been read yet: a line appears here once a gate round in the last day names a plan and the server answers for it.</div>';
 }
 
 /**
@@ -3053,42 +2783,12 @@ function labelled(forId: string, text: string, key: HelpKey): string {
 export { escapeHtml } from './escapeHtml';
 
 const CSS = `
-  /* Everything measures its own border and padding: without this a 100% field plus padding is
-     wider than its parent, and the whole view gains a horizontal scrollbar. */
-  *, *::before, *::after { box-sizing: border-box; }
-  :root { color-scheme: light dark; }
-  /* The ROOT carries the text size, and the small print below is measured from it in rem — 13 of them
-     to the old pixel, so at the theme's default 13px every line is exactly the size it was. The Settings
-     tab roots it in its size control instead, which is how the notes follow that control: rem is measured
-     from the root alone, so no nested size compounds (research/PLAN_every_page_reads_alike.md, D5). */
-  html { font-size: var(--vscode-font-size); }
-  body {
-    font-family: var(--vscode-font-family); font-size: var(--vscode-font-size);
-    color: var(--vscode-foreground); background: transparent;
-    /* Air down both sides: nothing should touch the edge of the view, and the right-hand gap is
-       a shade wider so a field never sits under the scrollbar's track. */
-    margin: 0; padding: 4px 14px 20px 12px; overflow-x: hidden;
-  }
+${MENU_BASE_CSS}
   h2 {
     font-size: calc(11rem / 13); text-transform: uppercase; letter-spacing: .06em; opacity: .75;
     margin: 10px 0 6px; font-weight: 600;
   }
-  .section { border-top: 1px solid var(--vscode-panel-border); padding: 0 0 8px; }
-  .section > summary {
-    /* .9 rather than .75: coloured text at .75 on a dark ground is muddy, and the colour is
-       doing the separating now. */
-    font-size: calc(11rem / 13); text-transform: uppercase; letter-spacing: .06em; opacity: .9;
-    font-weight: 600; padding: 10px 0 6px; cursor: pointer; list-style: none;
-    display: flex; align-items: center; gap: 6px; user-select: none;
-  }
-  .section > summary:hover { opacity: 1; }
-  /* Each header that opens carries its own tone, from the same palette the role boxes use, so a
-     column of eight identical grey words becomes something you can aim at. The chevron follows for
-     free: it is drawn from currentColor.
-
-     Colour is never the only signal — every heading is also its own word — and each tone is a
-     --vscode-charts-* token with a hex fallback, so a theme that redefines the charts palette
-     moves these with it. */
+${MENU_SECTION_CSS}
   .sec-reviewers > summary { color: var(--tone-arch); }
   .sec-prompts   > summary { color: var(--tone-plan); }
   .sec-gate      > summary { color: var(--tone-sec); }
@@ -3117,35 +2817,11 @@ const CSS = `
      not about the gate at all, and a new hue would say "another kind of setting" when what it is
      is another kind of WORK. */
   .sec-chat      > summary { color: var(--tone-uxdx); }
-  .sec-phrases   > summary { color: var(--tone-plan); }
   /* The consultant takes the chat's tone for the same reason the chat took the server's: the two
      are one idea from opposite ends — a person asking another vendor about a passage, an AI asking
      one about the tree it is stuck in — and sharing a hue says so without a word. */
   .sec-consultant > summary { color: var(--tone-uxdx); }
-  /* Bugz takes the security tone because that is what the corpus IS: the accepted findings it
-     reads back are Reliability, Performance and Security ones, filtered to exactly those. Sharing
-     the hue with the gate says the two are the same subject seen from opposite ends — one deciding
-     what is a defect, the other keeping what was. */
-  .sec-bugz      > summary { color: var(--tone-sec); }
   .sec-usage     > summary { color: var(--tone-arch); }
-  .sec-rounds    > summary { color: var(--tone-plan); }
-  /* The Consultant section's own hue: the settings and the consultations they start read as one thing. */
-  .sec-consultations > summary { color: var(--tone-uxdx); }
-  .sec-cadence   > summary { color: var(--tone-limits); }
-  /* Notifications take the reliability tone, because that is what every record in them is
-     about: something refused, failed, stood down or repeated. Sharing the hue with the gate's
-     own reliability role says the two are asking the same question of different subjects. */
-  .sec-notifications > summary { color: var(--tone-sec); }
-  .section > summary::-webkit-details-marker { display: none; }
-  /* A real chevron, drawn from two borders rather than borrowed from punctuation: it matches the
-     Explorer's weight, scales with the text, and points the right way in both states with no
-     script. (A '›' glyph rendered a third of this size — a disclosure arrow nobody can hit.) */
-  .section > summary::before {
-    content: ''; flex: 0 0 auto; width: 6px; height: 6px; margin: 0 4px 0 2px;
-    border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
-    transform: rotate(-45deg); transition: transform .12s ease;
-  }
-  .section[open] > summary::before { transform: rotate(45deg); margin-top: -3px; }
   /* One row of buttons that wraps: a phrase list is a handful of short labels, and a column of them
      would push everything below it off the fold for no gain. */
   .phrases { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
@@ -3202,7 +2878,6 @@ const CSS = `
   .seg input { margin: 0; }
   .inline > label { flex: 1 1 auto; min-width: 0; margin-bottom: 0; }
   .inline > input[type="number"] { flex: 0 0 calc(64rem / 13); width: calc(64rem / 13); }
-  .hint { opacity: .65; font-size: calc(11rem / 13); margin: 3px 0 0; line-height: 1.45; }
   /* Sixteen names, in a sidebar whose width is somebody else's choice: two columns where there is
      room, one where there is not, and never a reason to scroll sideways. */
   .inventory { opacity: .65; font-size: calc(11rem / 13); margin: 3px 0 0; padding-left: 16px;
@@ -3408,7 +3083,6 @@ ${BUSY_CSS}
  */
 export const PANEL_COMMANDS = [
   'showNotifications',
-  'answer',
   'addVendor',
   'removeVendor',
   'runVendor',
@@ -3430,15 +3104,10 @@ export const PANEL_COMMANDS = [
   'fixWslNetwork',
   // Posted by the model picker rather than by a button: "another model…" is a request to type one.
   'customModel',
-  'editSecurityPrompt',
-  // A hand-registered general's leftover conditions, cleared in one press (research/PLAN_the_security_tab_reads_at_a_glance.md, D6).
   // The Consultant tab's health block (PLAN_the_consultant_works_on_every_vendor.md, epic 5): one real, paid check of a
   // caller kind's consultant, confirmed first; and agy's allow rule onto the clipboard. Both carry the CALLER KIND as id.
   'checkConsultant',
   'copyConsultantSnippet',
-  // And by a split-order model picker (issue #117): "another model…" asks for a name. Its id is
-  // `<caller kind>:<slot>` — eight pickers share the control.
-  'customCommandModel',
   // An api card's "reset to calibrated default" (S3.8): takes ONE of the row's own settings away, so the
   // module's default applies again. Its id is `<vendor id>:<setting>` — three resets share the command.
   'resetApiSetting',
@@ -3461,8 +3130,6 @@ export const PANEL_COMMANDS = [
   'clearKimiMarker',
   // ✓ Check on a Models card: one paid turn of that row, asked first by the host (D10), kept as `model-<id>`.
   'checkModel',
-  // Try it on the Settings page's Security lane tab: the id is the sample, put to `coai-mcp --check-security` on stdin (E4.2).
-  'trySecurity',
   // A phrase, onto the clipboard. Handled in the provider rather than by a registered command,
   // because it needs the id the button carries and nothing outside the panel ever asks for one.
   'copyPhrase',
@@ -3500,7 +3167,6 @@ export const PANEL_COMMANDS = [
   // The Question consultant tab's buttons (todo/PLAN_question_consultant.md, S4), listed in `qconsultWrite.ts`
   // beside the decisions they reach and handled as one group by the provider.
   ...QCONSULT_COMMANDS,
-  ...SECURITY_COMMANDS,
 ] as const;
 
 export type PanelCommand = (typeof PANEL_COMMANDS)[number];

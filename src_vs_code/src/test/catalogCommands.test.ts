@@ -15,10 +15,10 @@ const row = (id: string, runtime: Vendor['runtime'], extra: Partial<Vendor> = {}
 });
 
 test('a use is ticked and unticked in the catalog\'s own order', () => {
-  const rows = [row('codex', 'codex', { uses: ['security'] })];
+  const rows = [row('codex', 'codex', { uses: ['chat'] })];
 
-  assert.deepEqual(toggledUse(rows, 'codex', 'consultant', '').rows[0]!.uses, ['security', 'consultant']);
-  assert.deepEqual(toggledUse(rows, 'codex', 'security', '').rows[0]!.uses, [], 'unticked');
+  assert.deepEqual(toggledUse(rows, 'codex', 'consultant', '').rows[0]!.uses, ['consultant', 'chat']);
+  assert.deepEqual(toggledUse(rows, 'codex', 'chat', '').rows[0]!.uses, [], 'unticked');
 });
 
 test('a use the runtime cannot take is refused by name, and nothing changes', () => {

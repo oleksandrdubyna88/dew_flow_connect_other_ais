@@ -42,7 +42,7 @@ public sealed class TheFeatureRoundAnswersInItsOwnSchemaTests : IDisposable
             new PanelSettings
             {
                 Providers = [new("codex") { ExecutablePath = FakeCliExe, Feature = true }],
-                Rounds = new PanelConfig(PanelConfig.AllRoles.ToDictionary(r => r, _ => new RoleGate(1, 5)), StagePolicy.Human),
+                Rounds = new PanelConfig(PanelConfig.AllRoles.ToDictionary(r => r, _ => new RoleGate(1, 5))),
                 DataDir = _data,
             },
             VaultKeys.None("no vault in tests"),

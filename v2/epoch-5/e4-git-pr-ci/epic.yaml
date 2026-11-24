@@ -1,0 +1,7 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: e4-git-pr-ci
+title: "Git/PR/CI takeovers"
+half: server
+dependsOn: []
+doneWhen:
+  - "PR body from task.yaml + envelope; CI wait: checks must exist then pass; no-runner re-run once; conflicting PR reported"

@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 
 import { MIGRATION_KEYS } from '../../catalogMigrationHost';
 import { unknownKeysOf } from '../../catalogMigrationRun';
+import { activated } from './hostHelpers';
 
 /**
  * The registry signal the catalog migration waits on, held to a REAL editor
@@ -20,7 +21,7 @@ import { unknownKeysOf } from '../../catalogMigrationRun';
 export async function theMigrationKeysAreKnownInARealEditor(): Promise<void> {
   const extension = vscode.extensions.getExtension('remsoftdev.connect-other-ais');
   assert.ok(extension !== undefined, 'the extension under test is not installed in this host');
-  await extension.activate();
+  await activated(extension);
   const config = vscode.workspace.getConfiguration('coai');
   const defaultOf = (key: string): unknown => config.inspect(key)?.defaultValue;
 

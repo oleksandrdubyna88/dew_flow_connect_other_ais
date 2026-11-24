@@ -152,7 +152,7 @@ export function sessionsFor({ command, args, dataDir, timeoutMs }) {
         clientInfo: { name: 'seam', version: '1' },
       }).then(() => say({ jsonrpc: '2.0', method: 'notifications/initialized' })),
       tools: async () => await ask('tools/list', {}),
-      consult: async (repoPath) => await call('consult', {
+      consult: async (repoPath) => await call('cons', {
         repoPath,
         problem: 'The parser returns 3 where 4 is expected, after two fix attempts.',
       }),

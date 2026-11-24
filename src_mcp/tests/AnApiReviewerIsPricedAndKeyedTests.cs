@@ -319,7 +319,7 @@ public sealed class AnApiReviewerIsPricedAndKeyedTests : IDisposable
             {
                 Providers = PanelSettings.ParseVendors(
                     "[{\"id\":\"qwen-2\",\"runtime\":\"api\",\"model\":\"qwen3.8-max\",\"baseUrl\":\"https://token-plan.example/v1\",\"key\":\"qwen\"" + rowTail + "}]"),
-                Rounds = PanelConfig.Uniform(3, 2, StagePolicy.Human),
+                Rounds = PanelConfig.Uniform(3, 2),
                 DataDir = _dir,
                 ReviewerTimeout = TimeSpan.FromSeconds(30),
             },

@@ -232,7 +232,7 @@ async function settled<T extends { readonly refusal: string }>(
     class: 'refusal',
     source: 'questionConsultant',
     code: 'question-consultant-change-refused',
-    title: `The question consultant was not changed: ${result.refusal}.`,
+    title: `consask was not changed: ${result.refusal}.`,
   });
 }
 

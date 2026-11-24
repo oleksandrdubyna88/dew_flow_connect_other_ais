@@ -11,7 +11,7 @@
 A multi-model review gate. Your main AI writes the plan and the code; **other vendors' models** —
 Codex, Antigravity (Gemini/Claude/GPT-OSS), a second Claude, DeepSeek — review both in rounds,
 until the findings that matter drop under a
-threshold, or a human is called.
+threshold, or the rounds are spent and the agent takes what is true (`good_enough`).
 
 The value is not "more review". It is **review by a model that cannot see the author's reasoning**,
 which is the only kind that catches the author's assumptions.
@@ -43,23 +43,32 @@ vendor's model about the LIVE working tree, uncommitted edits included, getting 
 a verdict, and recording afterwards whether it helped. `review_feature` is the fourth gate, called
 once at the end of a plan of three or more epics over the whole feature; it needs no `open`.
 
-## When it needs a person
+## Who decides at the end of a round (v2)
 
-A `call_human` verdict — and an `ask_human` question asked while the gate is held, or in a feature
-review's second-round window — put the question
-in front of you **in VS Code**: a dialog, a status-bar item so a dismissed dialog loses nothing, and an
-open-questions section at the top of the rounds view. The call blocks until you answer; after 15 minutes
-it comes back `no_answer_yet` telling the AI to ask you in the chat instead, and the card is marked
-expired. Every OTHER question an AI asks — its own choices about the work — never reaches VS Code:
-`ask_human` answers it with `ask_in_conversation`, and the AI asks you in its own chat.
+A round ends in one of **four outcomes**, and none of them waits for a person:
 
-Still no port on either side: the server writes the question as a file into the data directory the
-extension already reads, and your answer is a file beside it.
+| Outcome | Meaning | What the AI does |
+|---|---|---|
+| `proceed` | the findings that gate are at or under the role's threshold | `resolve`, then the next stage |
+| `revise` | findings still gate and the role has rounds left | fix, `resolve`, review again |
+| `good_enough` | rounds are spent and findings still gate (or a feature review is at its cap) | read the findings, apply the ones that are true, reject the rest with reasons, `resolve`, move on |
+| `not_reviewed` | no reviewer answered | the stage proceeds WITHOUT a review — said out loud, never a pass |
 
-You answer with one of three buttons — **keep going** (another set of rounds), **stop and act on the
-findings**, or **stop and talk to me** — and each says what it will cause. None of them ships a change
-over open findings: an override meaning "ignore all this" is an off switch on a gate. The questions
-are English; there used to be a translator, and three buttons removed the prose it existed for.
+There is no held gate, no escalation card, no `call_human` verdict, no `continue_anyway`, no 15-minute wait
+and no per-stage "on exhausted" policy. The old ladder is gone, and with it the dialog, the status-bar
+item and the open-questions section that served it. The `ask_human` tool stays registered so an old
+caller does not break, and only answers `ask_in_conversation` with a note: the AI asks you in its own
+chat. `ask_consultants` is unchanged — it asks other vendors' models, never a person.
+
+A data folder written by an older build can hold sessions that were held, cards that were open and
+settings keys the v2 server no longer reads. The server converts them itself — the first start of a v2
+build runs the migration, a load of a session that is still held converts it, and `coai-mcp
+--migrate-v2` shows or runs the same work by hand. See `research/module_server.md`, *The v2 data
+migration*.
+
+An answer a person had already given to a held gate, and v1 never applied, is overridden by the
+conversion (the gate becomes `good_enough`); the person is told once, by a server notice, before the
+session is converted.
 
 ## What makes "fewer than 2 remarks" mean something
 
@@ -78,13 +87,10 @@ Without a rule, three verbose reviewers guarantee escalation forever. So:
    small enough — and it revises only for roles that still have rounds to spend.
 
 Defaults (`DEFAULTS` in `settingsShape.ts`): one round for every role — two for the feature review —
-and a threshold of 6 for the plan role and 5 for every other role. When the rounds run out there are
-five answers: **Auto**, the default (the gate raises no new hold, never waits and never writes a
-card; a round nobody answered proceeds as `not_reviewed` — a feature review's first round of two is retried first —, spent rounds as `good_enough`; only the
-AI's own question can still reach a person — after its consultants, when no consultant can be had, or at once when it
-declares `productionRisk: true` with a reason in the Planning or Released phase, where `AskGate` asks no consultant), ask a human, continue and say
-so, **good enough** (read the findings, apply the ones that are true, move on), or climb the
-escalation ladder.
+and a threshold of 6 for the plan role and 5 for every other role. When the rounds run out the answer is
+always `good_enough` (a round nobody answered is `not_reviewed`; a feature review's first round of two is
+retried first): the gate never waits and never writes a card. Only the AI's own question can still reach a
+person, and it does so in the AI's own chat, after its consultants.
 
 ## Install
 

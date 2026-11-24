@@ -204,7 +204,7 @@ public sealed class TempDirsAreSwept
             }
         }
 
-        seen.Distinct().Should().BeEquivalentTo(["Escalations.cs", "ReviewTreeRoot.cs", "WorktreeManager.cs"],
+        seen.Distinct().Should().BeEquivalentTo(["ScratchDirectory.cs", "ReviewTreeRoot.cs", "WorktreeManager.cs"],
             "a raw recursive delete in a fourth file is a deleter that skipped the shared one — use GitScratch.DeleteEvenIfReadOnly");
     }
 

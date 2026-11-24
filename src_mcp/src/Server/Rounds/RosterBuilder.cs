@@ -82,20 +82,6 @@ internal sealed class RosterBuilder(
     internal static bool Remote(ProviderSettings provider) => provider.IsRemote;
 
     /// <summary>
-    /// The security lane's roster for these settings — the one place its decisions are made, shared by
-    /// the work it appends and the source reader that must not read for a pairing that will not run.
-    /// </summary>
-    internal SecurityRoster Security() => Security(CodexTiers.None, RoundScratch.None);
-
-    /// <summary>
-    /// The security lane's roster, its codex rows launched with what this round's codex executables said about the
-    /// standard tier (research/PLAN_codex_tier_floor.md) — the lane's reviewers are launched through <see cref="SettingsFor"/>
-    /// like every other row, so they read the same answers.
-    /// </summary>
-    internal SecurityRoster Security(CodexTiers tiers, RoundScratch scratch) => new(_settings, _prompts, _canRun, _runtimeFor,
-        (provider, runtime) => SettingsFor(provider, runtime, runtime is ApiRuntime ? ApiRowView.Of(provider, _settings.ApiOverrides) : NotApi, tiers, scratch), log);
-
-    /// <summary>
     /// The round's own scratch (<see cref="RoundScratch"/>), prepared before the roster is built because a snapshot is made
     /// asynchronously and <see cref="BuildWork"/> is not: a path for the round's Vibe homes (D17), and — when this stage
     /// mounts a checkout and a runnable row of it runs on a runtime that asks (<see cref="IReviewerRuntime.NeedsASanitisedSnapshot"/>,
@@ -163,20 +149,15 @@ internal sealed class RosterBuilder(
     /// role somebody defined be asked anything at all.
     /// </remarks>
     private PromptChoice ChoiceFor(string role, int round) =>
-        _settings.Rounds.Catalog.ForRound(
-            role,
-            round,
-            _settings.PromptsPerRound.GetValueOrDefault(role, []));
+        _settings.Rounds.Catalog.ForRound(role, round, []);
 
     /// <summary>
-    /// The round's work: one item per (role, prompt), DEALT across the vendors.
+    /// The round's work: one item per role, every vendor asked every role's prompt.
     /// </summary>
     /// <remarks>
-    /// <para>Every vendor used to run every role's prompt — two vendors answering the same
-    /// question, with the dedup merging what they agreed on. Dealing them out asks every lens once
-    /// instead, at half the launches, and gives up cross-vendor agreement to do it. The trade is
-    /// written out in <see cref="PromptDeal"/>.</para>
-    /// <para>With ONE vendor the deal is the identity, and this is exactly what it always was.</para>
+    /// Every vendor answers every question, so the dedup can merge what two of them agree on — the strongest signal this
+    /// product produces. A role has ONE prompt, its general one; a variant is an on-disk override of that prompt's text
+    /// (<see cref="RolePrompts"/>), never a per-round choice.
     /// </remarks>
     /// <remarks>Internal so a test can read the working directory a reviewer is actually given.</remarks>
     internal RoundWork BuildWork(
@@ -197,13 +178,9 @@ internal sealed class RosterBuilder(
         // with no compile error. A caller that has not asked says so — `CodexTiers.None` — in so many words.
         CodexTiers codexTiers,
         int seed = 0,
-        IReadOnlyList<string>? planPrompts = null,
-        bool deal = false,
         // The feature stage's source turns (S3.2): the round's one resolver and the follow-up cap. Absent
         // — every other stage, and the feature stage with the follow-ups switched off — is a single turn.
         Runners.Feature.SourceTurns? source = null,
-        IReadOnlyList<Core.Context.FileDiff>? securityFiles = null,
-        IReadOnlyDictionary<string, string>? securitySources = null,
         // The round's own scratch (ScratchAsync): its snapshot and the folder its Vibe homes live in. Absent, a runtime that
         // must not start in the checkout is LEFT OUT of a stage that mounts one, with its reason — never started in it.
         RoundScratch? scratch = null)
@@ -247,12 +224,10 @@ internal sealed class RosterBuilder(
 
         var ids = CatalogIds(roles);
         var collector = new RosterCollector();
-        Assemble(runnable, Items(ids, round, planPrompts), deal, seed,
-            (provider, role, promptId) => AddReviewer(frame, collector, provider, role, promptId),
-            (provider, item) => CanCarry(provider, item.Role) && FitsTheCap(frame, provider, item));
+        Everyone(runnable, Items(ids, round),
+            (provider, role, promptId) => AddReviewer(frame, collector, provider, role, promptId));
 
-        var ordinary = collector.Work(ordinaryDue: ids.Count > 0, frame.Scratch);
-        return securityFiles is null ? ordinary : Security(frame.Tiers, frame.Scratch).Append(ordinary, securityFiles, stage, round, securitySources);
+        return collector.Work(frame.Scratch);
     }
 
     /// <summary>
@@ -386,29 +361,6 @@ internal sealed class RosterBuilder(
 
         return new FirstPromptText(
             _reviewerPrompt.ComposePrompt(choice, frame.Context, material, frame.Row.Answers, frame.FollowUps, instruction), instruction);
-    }
-
-    /// <summary>
-    /// Whether the row's reader can take this item's first prompt — the carrier test the deal asks before it hands the item out. True
-    /// for a row with no cap, and then nothing is composed.
-    /// </summary>
-    /// <remarks>
-    /// The same question <see cref="PlaceOf"/> asks in the leaf (<see cref="WhyOverTheCap"/>), the way <see cref="CanCarry"/> is "one
-    /// rule, asked in two places": dealing first and excluding in the leaf is what cost a custom role its whole round. A row this
-    /// round cannot run at all (no runtime) fits — the leaf already says why it is not used. So does an item whose prompt has
-    /// no text: there is nothing to measure, composing it throws, and the leaf says the role was not asked and why (the
-    /// question <see cref="AddReviewer"/> asks BEFORE the place, kept in that order here).
-    /// </remarks>
-    private bool FitsTheCap(RosterFrame frame, ProviderSettings provider, (string Role, string PromptId) item)
-    {
-        if (!provider.PromptCap.IsSet || _runtimeFor(provider) is not { } runtime)
-        {
-            return true;
-        }
-
-        var choice = ChoiceOf(item.Role, item.PromptId);
-
-        return !_prompts.Has(choice) || WhyOverTheCap(frame, provider, runtime, choice).Length == 0;
     }
 
     /// <summary>
@@ -556,83 +508,9 @@ internal sealed class RosterBuilder(
         return runtime is ApiRuntime ? told.WithApi(api.Effective) : told;
     }
 
-    /// <summary>
-    /// What this round asks: one item per role, or one per unspent lens when the plan stage deals.
-    /// </summary>
-    /// <remarks>
-    /// Pure, and extracted out of `BuildWork` on the code round — twice, by two different reviewers,
-    /// for exceeding the doctrine's complexity ceiling. This half was always a value rather than a
-    /// step, and reading it as one makes the method above shorter by a branch.
-    /// </remarks>
-    private List<(string Role, string PromptId)> Items(
-        IReadOnlyList<string> roles,
-        int round,
-        IReadOnlyList<string>? planPrompts) =>
-        planPrompts is { Count: > 0 } && roles.Count > 0
-            ? [.. planPrompts.SelectMany(id => Lens(roles, id))]
-            : [.. roles.Select(role => (Role: role, PromptId: ChoiceFor(role, round).Id))];
-
-    /// <summary>One dealt lens, under the role that owns it — or nothing.</summary>
-    /// <remarks>
-    /// <para>It went to <c>roles[0]</c>, which was true for exactly as long as a plan round had one
-    /// role in it. The round after a person adds a second plan role, the first role is asked every
-    /// lens, including the other role's, whose questions it then answers under its own name.</para>
-    /// <para>Three outcomes, not two. A lens the catalog gives to a role this round IS running goes
-    /// to that role. A lens the catalog does not know at all falls back to the first role, because a
-    /// stale pick must never leave a round with nothing to ask. A lens the catalog knows and gives
-    /// to a role this round is NOT running is DROPPED — reassigning it would have a reviewer answer
-    /// a question written for somebody else and the round report the wrong role as having asked it.
-    /// (codex and gemini, story B2's second code round.)</para>
-    /// </remarks>
-    private IEnumerable<(string Role, string PromptId)> Lens(IReadOnlyList<string> roles, string promptId)
-    {
-        if (_settings.Rounds.Catalog.PromptById(promptId)?.Role is not { Length: > 0 } owner)
-        {
-            return [(roles[0], promptId)];
-        }
-
-        return roles.FirstOrDefault(r => string.Equals(r, owner, StringComparison.OrdinalIgnoreCase)) is { } scheduled
-            ? [(scheduled, promptId)]
-            : [];
-    }
-
-    /// <summary>
-    /// Who is asked what: every vendor every question, or one hand dealt across them.
-    /// </summary>
-    /// <remarks>
-    /// <para>Not dealing is the shipped behaviour, and the reason is worth keeping beside the
-    /// branch: every vendor answering every question is what makes two vendors agreeing on a finding
-    /// a fact the gate can use. Dealing is opt-in precisely because it gives that up — every lens
-    /// gets asked instead of one lens being asked twice, at half the launches.</para>
-    /// <para>The `add` callback belongs to the caller because building one reviewer needs a dozen
-    /// things this method has no business holding — a schema file, two directories, a vault key.
-    /// What is extracted here is the SHAPE of the fan-out, which is the part with the branches.</para>
-    /// </remarks>
-    private static void Assemble(
-        IReadOnlyList<ProviderSettings> runnable,
-        IReadOnlyList<(string Role, string PromptId)> items,
-        bool deal,
-        int seed,
-        Action<ProviderSettings, string, string> add,
-        Func<ProviderSettings, (string Role, string PromptId), bool> canCarry)
-    {
-        if (!deal)
-        {
-            Everyone(runnable, items, add);
-
-            return;
-        }
-
-        // Dealt WITHIN the vendors that can carry the role, and the grouping is by that set rather
-        // than per item, so items every vendor can take are still spread across all of them.
-        // Dealing before asking cost a custom role its whole round: the hand fell to the Team
-        // server, the leaf that builds a launch excluded it there, and the local vendor sitting
-        // beside it was never offered the work. (gemini, story B2's second code round.)
-        foreach (var group in items.GroupBy(i => Carriers(runnable, i, canCarry), StringComparer.Ordinal))
-        {
-            Hand(runnable, [.. group], group.Key.Split('\0', StringSplitOptions.RemoveEmptyEntries), seed, add);
-        }
-    }
+    /// <summary>What this round asks: one item per role, with the prompt that role uses.</summary>
+    private List<(string Role, string PromptId)> Items(IReadOnlyList<string> roles, int round) =>
+        [.. roles.Select(role => (Role: role, PromptId: ChoiceFor(role, round).Id))];
 
     /// <summary>Every vendor offered every question — the shipped fan-out.</summary>
     private static void Everyone(
@@ -645,49 +523,6 @@ internal sealed class RosterBuilder(
             add(provider, item.Role, item.PromptId);
         }
     }
-
-    /// <summary>
-    /// One group of items, dealt across the vendors that can carry them.
-    /// </summary>
-    /// <remarks>
-    /// With NO carrier every vendor is offered the work anyway, so the leaf records why each of them
-    /// could not take it: a round that says nothing about a role is the defect this whole story is
-    /// about, and a deal is no excuse for one. Split out of <see cref="Assemble"/> so both stay
-    /// inside the complexity the family's C# doctrine allows. (CodeRabbit, this plan's pull request.)
-    /// </remarks>
-    private static void Hand(
-        IReadOnlyList<ProviderSettings> runnable,
-        IReadOnlyList<(string Role, string PromptId)> items,
-        string[] vendors,
-        int seed,
-        Action<ProviderSettings, string, string> add)
-    {
-        if (vendors.Length == 0)
-        {
-            Everyone(runnable, items, add);
-
-            return;
-        }
-
-        foreach (var hand in PromptDeal.Deal([.. items.Select(i => $"{i.Role}|{i.PromptId}")], vendors, seed))
-        {
-            var parts = hand.Item.Split('|', 2);
-            add(runnable.First(p => p.Provider == hand.Vendor), parts[0], parts[1]);
-        }
-    }
-
-    /// <summary>
-    /// Whether this vendor may be given this role at all.
-    /// </summary>
-    /// <remarks>
-    /// One rule, asked in two places: before the deal, so a role is dealt only among the vendors
-    /// that can run it, and inside the leaf, so the non-dealing fan-out — where every vendor is
-    /// offered everything — still records why one of them was not used. The question is about the
-    /// ROLE's provenance, from the catalog: a Team server validates the name against the catalog IT
-    /// was compiled with, and a role a person defined is not in it.
-    /// </remarks>
-    private bool CanCarry(ProviderSettings provider, string role) =>
-        WhyNotCarried(provider, role) is null;
 
     /// <summary>
     /// Why this vendor cannot run this role, or null when it can.
@@ -716,21 +551,6 @@ internal sealed class RosterBuilder(
         // a role "Requirements we wrote" reads that back rather than the `Requirements` the wire uses.
         return _remote.RolesOn(provider.BaseUrl).WhyNot(role, known?.Name ?? role, known?.BuiltIn == true);
     }
-
-    /// <summary>The vendors that can carry this item (a role and the prompt dealt for it), as one key so items group by capability.</summary>
-    /// <remarks>
-    /// <para>By ITEM, not by role, since a row's prompt cap (<see cref="FitsTheCap"/>) depends on the prompt the item composes —
-    /// two lenses of one role can fit different rows.</para>
-    /// Joined on NUL because a provider name is a person's own word and may hold any punctuation a
-    /// separator could have been — a space, a comma, a pipe, even a line break. Written as the
-    /// ESCAPE: an edit on this branch put the BYTE itself into the source, where it is invisible,
-    /// makes `grep` report the file as binary, and cannot be reviewed by reading it.
-    /// </remarks>
-    private static string Carriers(
-        IReadOnlyList<ProviderSettings> runnable,
-        (string Role, string PromptId) item,
-        Func<ProviderSettings, (string Role, string PromptId), bool> canCarry) =>
-        string.Join('\0', runnable.Where(p => canCarry(p, item)).Select(p => p.Provider));
 
     /// <summary>
     /// The roles a code round runs, once the repository has been asked whether it wrote any rules.

@@ -87,31 +87,4 @@ public sealed class EpicTwoReviewThreadsTests
         process.ExitCode.Should().Be(65);
         (await stderr).Should().Contain("--check-model reads", "the model check answered, not --check-consultant asking for --caller");
     }
-
-    [Fact]
-    public void AWordsOnlyCheck_DoesNotJudgeTheRunsItCannotResolve()
-    {
-        var (code, output, _) = CheckSecurityMode.Answer("""
-            {"text":"x","lane":{"enabled":true,"runs":[{"vendor":"codex","prompt":"redteam-sql"}]}}
-            """, validate: true);
-
-        code.Should().Be(0);
-        output.Should().NotContain("pair", "a run names a reviewer this check has no list of — that is the panel's question");
-    }
-
-    [Fact]
-    public void AnAlwaysCardsWords_AreSaidToBeUnused()
-    {
-        var lane = SecurityLaneSetting.Parse("""
-            {"enabled":true,"prompts":[{"id":"redteam-general","words":["billing"]}],"runs":[]}
-            """, []);
-
-        lane.Complaints.Should().Contain(c => c.Contains("redteam-general") && c.Contains("words"),
-            "an always card runs on every change, and a word on it would otherwise do nothing in silence");
-    }
-
-    [Fact]
-    public void AnAlwaysCardWithNoWords_IsNotComplainedAbout() =>
-        SecurityLaneSetting.Parse("""{"enabled":true,"prompts":[{"id":"redteam-general","words":[]}],"runs":[]}""", [])
-            .Complaints.Should().BeEmpty();
 }

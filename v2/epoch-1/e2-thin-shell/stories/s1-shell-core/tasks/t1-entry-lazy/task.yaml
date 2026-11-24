@@ -1,0 +1,13 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t1-entry-lazy
+title: "shell/entry.ts, lazy.ts, ids.ts; activation events onView/onWebviewPanel/onUri and implicit command events"
+kind: code
+complexity: 6
+dependsOn: []
+parallel: false
+files:
+  - src_vs_code/shell
+  - src_vs_code/package.json
+dod:
+  - id: d1
+    item: "activate() makes only register* and subscriptions.push calls"

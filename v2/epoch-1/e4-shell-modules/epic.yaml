@@ -1,0 +1,13 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: e4-shell-modules
+title: "Shell modules: sidebar, chat carried, install after ready, dead v1 out"
+half: extension
+dependsOn:
+  - e2-thin-shell
+doneWhen:
+  - "sidebar polls only while visible"
+  - "all chat host scenarios pass"
+  - "M2 still ≤ 2000 ms on Linux and ≤ 3000 ms on Windows"
+  - "no escalation or cadence control or watcher in the bundle"
+  - "--setup-clients runs after every activation (after ready) and finishes an interrupted client update"
+  - "the sidebar module draws the real interactive menu itself (collapsed section headers) without the legacy bundle; opening a section before the old code is ready shows loading for that section only; menuReady ≤ 2000 ms (Linux) or ≤ 3000 ms (Windows) in every sample"

@@ -129,26 +129,3 @@ export const CONVENTIONS_ROLE_SINCE = '0.18.10';
  * conventions skew, where an absent reviewer at least matches an absent result.</p>
  */
 export const ROLE_SWITCH_SINCE = '0.18.13';
-
-/**
- * What the panel shows as selected for one round — the stored choice, or what the server would
- * actually use, so the box never reads as "nothing" when a prompt is in fact chosen.
- *
- * <p><b>This function is a claim about another program.</b> Every branch here has to be the same
- * branch `PromptCatalog.ForRound` takes, and `panelServerPromptAgreement.test.ts` is what holds the
- * two together. It has lost two branches to that rule. A rotation fed by the panel's DEAL switch,
- * which the server's rotation never read — the picker named prompts nobody ran. And a round-1
- * conventions default, which existed because the conventions pass had no budget of its own; now
- * that Conventions is a ROLE there is nothing to substitute, and `hasRules` went with it.</p>
- */
-export function selectedFor(
-  role: string,
-  round: number,
-  stored: Readonly<Record<string, readonly string[]>>,
-): string {
-  const chosen = stored[role]?.[round - 1];
-
-  return chosen !== undefined && promptsFor(role).some((p) => p.id === chosen)
-    ? chosen
-    : universalFor(role).id;
-}

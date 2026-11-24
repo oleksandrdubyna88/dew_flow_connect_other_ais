@@ -1,0 +1,5 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: s3-renames
+title: "cons / cons_close / consask with aliases and settings fallbacks"
+dependsOn:
+  - s2-remove-modes

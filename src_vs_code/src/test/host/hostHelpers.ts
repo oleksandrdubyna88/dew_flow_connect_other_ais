@@ -1,4 +1,5 @@
 import * as assert from 'node:assert/strict';
+import type * as vscode from 'vscode';
 
 import { ChatPanels } from '../../chatPanels';
 import { threads, type Thread } from '../../chatThread';
@@ -39,4 +40,49 @@ export function registeredChat(panels: ChatPanels, key: object, saveId: string, 
   }));
 
   return id;
+}
+
+/**
+ * Activates the extension under test AND starts its old code and its chat module, then answers what those returned, as one object.
+ *
+ * <p>The shell's `activate()` only registers (v2 E2 S1), so it returns two doors: `legacy()` loads the `legacy` module and runs the old `activate()` once,
+ * and `chat()` (v2 E4) loads the `chat` module, which owns the chat commands, the serializer, the remote-sessions road and the skip-list check. The scenarios
+ * below were written against the one old call's result and its start-up work (watchers, the settings mirror, the migrations, the chat store); asking for both
+ * here is what a command, the sidebar or a restored chat tab does in the field, on first use. The two `shell` test doors are joined, so the
+ * hand-over scenario reads one list: the commands the two adopters hold between them, and a view provider AND a serializer.</p>
+ */
+export async function activated<T>(extension: vscode.Extension<T>): Promise<T> {
+  const shell = await extension.activate() as unknown as { readonly legacy: () => Promise<T>; readonly chat: () => Promise<ChatDoors>; readonly install: () => Promise<InstallDoors> };
+  const old = await shell.legacy() as T & { readonly shell?: LegacyDoor };
+  const chat = await shell.chat();
+  const { chat: chatDoor, ...doors } = chat;
+  // The install module (v2 E4 S5) holds `coai.installServer`; its work is not awaited here (it asks the network), only its door is read.
+  const installDoor = (await shell.install()).install;
+
+  return {
+    ...old,
+    ...doors,
+    ...(old.shell === undefined || chatDoor === undefined ? {} : {
+      shell: {
+        adoptedCommands: () => [...old.shell?.adoptedCommands() ?? [], ...chatDoor.adoptedCommands(), ...installDoor?.adoptedCommands() ?? []],
+        adoptedViewAndSerializer: () => old.shell?.adoptedView() === true && chatDoor.adoptedSerializer(),
+      },
+    }),
+  };
+}
+
+interface LegacyDoor {
+  readonly adoptedCommands: () => readonly string[];
+  readonly adoptedView: () => boolean;
+}
+
+interface InstallDoors {
+  readonly install?: { readonly adoptedCommands: () => readonly string[] };
+}
+
+interface ChatDoors {
+  readonly remoteSessions?: unknown;
+  readonly terminalAccounts?: unknown;
+  readonly skipShell?: unknown;
+  readonly chat?: { readonly adoptedCommands: () => readonly string[]; readonly adoptedSerializer: () => boolean };
 }

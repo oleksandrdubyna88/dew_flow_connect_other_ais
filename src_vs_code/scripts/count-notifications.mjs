@@ -27,6 +27,8 @@ import { fileURLToPath } from 'node:url';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const EXTENSION = resolve(HERE, '..');
 const SOURCE = join(EXTENSION, 'src');
+/** The shell's modules (`shell/modules/**`) ship code too: the chat registration moved there from `src/extension.ts` (v2 E4), notices and all. */
+const SHELL = join(EXTENSION, 'shell');
 export const INVENTORY = join(EXTENSION, 'notification-sites.json');
 
 /** The three ways this product tells somebody something. */
@@ -224,7 +226,8 @@ export function count(dir = SOURCE) {
   let inTheFunnel = 0;
   let routed = 0;
 
-  for (const file of everySourceFile(dir)) {
+  // The default is the whole shipped tree: `src` and `shell`. A directory given by a test is scanned alone.
+  for (const file of (dir === SOURCE ? [SOURCE, SHELL] : [dir]).flatMap((root) => everySourceFile(root))) {
     const here = readOneFile(file);
     let direct = 0;
     for (const api of APIS) {

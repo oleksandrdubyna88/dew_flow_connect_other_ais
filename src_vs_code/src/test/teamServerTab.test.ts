@@ -209,8 +209,10 @@ test('the Settings sheet is byte-identical after its tokens, chips and badges mo
   // the sheet with that comment and rule taken out still hashes to the previous pin, 4536314c…92a1.
   // Re-pinned 2026-10-19 when that plan moved from todo/ to research/: the `.rounds-line` comment names the plan's path,
   // and the sheet with only that path put back hashes to the previous pin, 1d7f4705…d514.
+  // Re-pinned 2026-11-22 (v2 E3.S2): the Security lane tab's stylesheet left the sheet with the tab; the sheet with that
+  // block put back hashes to the previous pin, 862e9808…d82e.
   assert.equal(createHash('sha256').update(CATALOG_CSS).digest('hex'),
-    '862e9808b1d116fa30806fd2cc1c944a9a351413adbc9ebf391fbc57ceb9d82e');
+    '9dd5bbaace97391f2eb85c97918eb58ab3b440e8c0b5449e51580c6740ed3b0b');
   for (const piece of [CATALOG_TOKENS, CATALOG_CHIPS, CATALOG_BADGES]) {
     assert.ok(CATALOG_CSS.includes(piece) && TEAM_TAB_CSS.includes(piece), 'both sheets wear the one shared piece');
   }

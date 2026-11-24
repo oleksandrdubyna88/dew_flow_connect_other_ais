@@ -1,0 +1,12 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t1-remove-watchers
+title: "Remove escalation/consultation/question watchers, cadence and hold controls from the extension"
+kind: code
+complexity: 5
+dependsOn: []
+parallel: false
+files:
+  - src_vs_code/src
+dod:
+  - id: d1
+    item: "no escalation or cadence control or watcher in the bundle"

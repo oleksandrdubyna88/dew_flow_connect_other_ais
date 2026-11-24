@@ -67,7 +67,7 @@ function bodyRule(html: string): string {
 // E5.1 step 4 of research/PLAN_one_model_catalog.md deleted it; its editor is a place of the Settings page, below.)
 const REDRAWN: readonly (readonly [string, (size: number, tone: number) => string])[] = [
   ['Notifications', (size, tone) => notificationsPageHtml({ rows: [], dataDir: 'd', older: false, loaded: 0, generation: 1, uiScale: size, textTone: tone }, 'n')],
-  ['Review rounds', (size, tone) => roundsLogHtml([], [], 'n', '', '', undefined, { text: { size, tone } })],
+  ['Review rounds', (size, tone) => roundsLogHtml([], 'n', '', '', undefined, { text: { size, tone } })],
   ['Who holds a key', (size, tone) => usersPageHtml({ view: { kind: 'no-key', said: '' } }, 'n', { size, tone })],
 ];
 

@@ -77,7 +77,7 @@ public sealed class APlanRoundRecordsWhatItReviewedTests : FakeCliRoundTests
         var oid = await Rev("HEAD:todo/PLAN_x.md");
         var service = await OpenedAsync();
 
-        var answer = Parse(await service.ReviewPlanAsync(_repo, Branch, Committed("todo/PLAN_x.md"), CadenceArgs.None, TestContext.Current.CancellationToken));
+        var answer = Parse(await service.ReviewPlanAsync(_repo, Branch, Committed("todo/PLAN_x.md"), TestContext.Current.CancellationToken));
 
         answer.TryGetProperty("error", out var error).Should().BeFalse($"the round ran, got: {error}");
         var expected = new PlanSource(PlanOrigin.Commit, sha, "todo/PLAN_x.md", oid, Encoding.UTF8.GetByteCount(Plan), DocumentRules.ArtifactIdOf(Plan));
@@ -98,7 +98,7 @@ public sealed class APlanRoundRecordsWhatItReviewedTests : FakeCliRoundTests
         // is what a pasted plan has to do.
         await CommitPlanAsync("todo/PLAN_x.md", Plan);
         var service = await OpenedAsync();
-        await service.ReviewPlanAsync(_repo, Branch, Committed("todo/PLAN_x.md"), CadenceArgs.None, TestContext.Current.CancellationToken);
+        await service.ReviewPlanAsync(_repo, Branch, Committed("todo/PLAN_x.md"), TestContext.Current.CancellationToken);
         RoundOf("PlanReview").Subject.Should().Be("PLAN_x.md");
 
         var pasted = await OpenedPastedAsync("feature");

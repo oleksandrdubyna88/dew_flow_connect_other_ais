@@ -47,4 +47,6 @@ public sealed record ConsultationRow(
     /// <summary>What a person can do about it; empty with it.</summary>
     string FailureCure = "",
     /// <summary>Where the failed turn's transcript was kept; empty when nothing was.</summary>
-    string Evidence = "");
+    string Evidence = "",
+    /// <summary>The plan item (a feature-folder path) the consultation was for, as the caller named it; empty when it named none (schema step 25).</summary>
+    string WorkItem = "");

@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 
 import type { CoaiExports } from '../../extension';
 import type { RemoteRun } from '../../remoteSsh';
-import { until } from './hostHelpers';
+import { until, activated } from './hostHelpers';
 
 /**
  * The per-host consent and the picked id of the BOUND road, in a real editor (S3-H1 of the E2 stories document, the chat reads the
@@ -41,7 +41,7 @@ function titleRoad(operands: readonly string[]): RemoteRun {
 export async function theConsentOfAHostIsKeptInTheRealGlobalState(): Promise<void> {
   const extension = vscode.extensions.getExtension<CoaiExports>('remsoftdev.connect-other-ais');
   assert.ok(extension !== undefined, 'the extension under test is not installed in this host');
-  const door = (await extension.activate()).remoteSessions;
+  const door = (await activated(extension)).remoteSessions;
   assert.ok(door !== undefined, 'the extension did not hand out its test door in test mode, so nothing below is about the bound road');
 
   const calls: (readonly string[])[] = [];

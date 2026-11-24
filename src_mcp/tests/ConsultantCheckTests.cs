@@ -289,7 +289,7 @@ public sealed class ConsultantCheckTests : IDisposable
 
         code.Should().Be(0);
         Text(said, "state").Should().Be("unavailable");
-        Text(said, "reason").Should().Contain("COAI_CONSULT_ENABLED", "the same sentence consult refuses with");
+        Text(said, "reason").Should().Contain("COAI_CONS_ENABLED", "the same sentence consult refuses with");
         File.Exists(Path.Combine(_data, "consultations", "health", "claude.check.json")).Should().BeFalse("nothing ran, so nothing is recorded");
         TurnsLaunched.Should().Be(0);
     }

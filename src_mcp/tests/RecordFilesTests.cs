@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using CoaiMcp.Server;
 using FluentAssertions;
 using Xunit;
@@ -48,13 +49,13 @@ public sealed class RecordFilesTests : IDisposable
     public void AReadAnswersTheRecord_AndNothingForAnAbsentOrTornFile()
     {
         var path = Path.Combine(_dir, "x.json");
-        RecordFiles.Read(path, EscalationJsonContext.Default.EscalationAnswer).Should().BeNull("absent");
+        RecordFiles.Read(path, RecordFilesTestContext.Default.TestRecord).Should().BeNull("absent");
 
         File.WriteAllText(path, """{"id":"x","answer":"yes","answeredUtc":"2026-10-02T12:00:00Z"}""");
-        RecordFiles.Read(path, EscalationJsonContext.Default.EscalationAnswer)!.Answer.Should().Be("yes");
+        RecordFiles.Read(path, RecordFilesTestContext.Default.TestRecord)!.Answer.Should().Be("yes");
 
         File.WriteAllText(path, "{ torn");
-        RecordFiles.Read(path, EscalationJsonContext.Default.EscalationAnswer).Should().BeNull("torn is not a record");
+        RecordFiles.Read(path, RecordFilesTestContext.Default.TestRecord).Should().BeNull("torn is not a record");
     }
 
     [Fact]
@@ -78,3 +79,10 @@ public sealed class RecordFilesTests : IDisposable
         RecordFiles.Delete(Path.Combine(_dir, "gone.json"), said.Add, "gone").Should().BeTrue("an absent file is already deleted");
     }
 }
+
+/// <summary>A record shaped like the stores' own, for the one test that reads a file through <see cref="RecordFiles.Read"/>.</summary>
+internal sealed record TestRecord(string Id, string Answer);
+
+[JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[JsonSerializable(typeof(TestRecord))]
+internal sealed partial class RecordFilesTestContext : JsonSerializerContext;

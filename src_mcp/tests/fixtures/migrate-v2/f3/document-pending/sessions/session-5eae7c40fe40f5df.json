@@ -1,0 +1,147 @@
+{
+  "state": {
+    "sessionId": "54beca54",
+    "repoPath": "/fixture/repo",
+    "branch": "epic-1",
+    "config": {
+      "onExhausted": "Human",
+      "autonomous": false,
+      "securityLane": {
+        "maxRounds": 2,
+        "threshold": 0,
+        "enabled": false
+      },
+      "roles": {
+        "PlanCritique": {
+          "maxRounds": 1,
+          "threshold": 0,
+          "enabled": true
+        },
+        "Conventions": {
+          "maxRounds": 1,
+          "threshold": 0,
+          "enabled": true
+        },
+        "Architecture": {
+          "maxRounds": 1,
+          "threshold": 0,
+          "enabled": true
+        },
+        "SecurityReliability": {
+          "maxRounds": 1,
+          "threshold": 0,
+          "enabled": true
+        },
+        "UxDxPerformance": {
+          "maxRounds": 1,
+          "threshold": 0,
+          "enabled": true
+        },
+        "DocumentReview": {
+          "maxRounds": 1,
+          "threshold": 0,
+          "enabled": true
+        },
+        "DocumentSummary": {
+          "maxRounds": 1,
+          "threshold": 0,
+          "enabled": true
+        },
+        "FeatureReview": {
+          "maxRounds": 1,
+          "threshold": 0,
+          "enabled": true
+        },
+        "Spec": {
+          "maxRounds": 1,
+          "threshold": 0,
+          "enabled": true
+        }
+      }
+    },
+    "stage": "DocumentReview",
+    "roundsRunThisStage": 1,
+    "escalationsUsed": 0,
+    "awaitingResolve": true,
+    "planProceeded": false,
+    "advanceOnResolve": false,
+    "humanGate": true,
+    "holdQuestions": [
+      "ee95dd5aa97f"
+    ],
+    "requestQuestions": [],
+    "rejections": [],
+    "secondRound": "None",
+    "document": "docs/spec.md",
+    "isDocumentSession": true,
+    "feature": "",
+    "isFeatureSession": false
+  },
+  "rounds": [
+    {
+      "stage": "DocumentReview",
+      "number": 1,
+      "verdict": "call_human",
+      "gatingCount": 1,
+      "reviewers": "all 1 reviewers answered",
+      "completedUtc": "2026-11-22T18:34:38.7936005Z",
+      "status": "done",
+      "startedUtc": "2026-11-22T18:34:38.6593926Z",
+      "runnerPid": 334294,
+      "sha": "",
+      "planKey": "",
+      "epicNumber": 0,
+      "cadenceNote": "",
+      "note": "",
+      "key": "ed9321080722de541dfb1eecbd2fd115",
+      "admittedBy": "",
+      "repeats": 1,
+      "loggedNote": "",
+      "reviewerStates": [
+        {
+          "provider": "codex",
+          "role": "Spec",
+          "status": "done",
+          "findings": 1,
+          "note": "",
+          "seconds": 0.1,
+          "model": "",
+          "effort": ""
+        }
+      ],
+      "subject": "What this document is for",
+      "tokensIn": 0,
+      "tokensOut": 0,
+      "costNote": "",
+      "usageNote": ""
+    }
+  ],
+  "openedUtc": "2026-11-22T18:34:38.544223Z",
+  "pending": [
+    {
+      "severity": "Major",
+      "category": "Completeness",
+      "file": "",
+      "line": 0,
+      "title": "\u0027fast\u0027 is not a number",
+      "why": "nobody can tell whether the result meets it",
+      "fix": "state a latency and a percentile",
+      "providers": [
+        "codex"
+      ],
+      "role": "Spec",
+      "capReason": "",
+      "alsoSeenBy": [],
+      "isGating": true
+    }
+  ],
+  "planText": "# What this document is for\n\nIt is the requirements for a payments integration, written for the two engineers who will\nbuild it and the manager who signs it off. After reading it they must be able to start\nwithout asking anybody a question. It deliberately does not cover the contract with the\nprovider or the pricing, both of which are settled elsewhere.",
+  "plan": "",
+  "epic": "",
+  "cadenceRepoId": "",
+  "featureBase": "",
+  "carried": [],
+  "usedPrompts": [
+    "spec-general"
+  ]
+}

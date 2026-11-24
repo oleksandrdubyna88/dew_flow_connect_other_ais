@@ -5,18 +5,15 @@ import { CATALOG_CSS } from '../catalogCss';
 import { catalogHtml } from '../catalogPage';
 import type { ModelPreset, PromptPreset } from '../chatPresets';
 import type { ChatSettings } from '../chatSettings';
-import { SHIPPED_COMMANDS, type CommandRow } from '../commands';
 import { chatProviderListFor, chatSendingFields, gateBody, type PanelState } from '../panelView';
 import { FEATURE_CODE, PLAN_CODE, RESULT_CODE, RESULT_DOCUMENT, bucketOf, composed } from '../roles';
-import { DEFAULT_SECURITY } from '../securityLane';
-import { promptsInOrder } from '../securityLaneState';
 import { panelState } from './panelPageHarness';
 import { pageTree, selectorsOf, type PageNode } from './pageTree';
 import { runPageHtml } from './pageScriptHarness';
 
 /**
  * The Settings page's tabs lay their cards out the way Models does (operator, 2026-10-09, extension 0.65.0): two columns
- * on a wide editor, one on a narrow one — Reviews (every sub-tab but Limits), Security lane and Chat. ONE mechanism, the
+ * on a wide editor, one on a narrow one — Reviews (every sub-tab but Limits) and Chat. ONE mechanism, the
  * class Models' cards carry, never a second grid beside it.
  *
  * <p>Read off the page as drawn and run (`pageTree.ts`, `runPageHtml`): each place's repeated cards must be the CHILDREN
@@ -51,20 +48,13 @@ const CHAT: ChatSettings = {
   autoSend: 'keyboard', model: 'chat-deep', modelName: '',
 };
 
-const MINE: CommandRow = { id: 'cmd-ab12', title: 'Run the linter', stage: 'code', enabled: true };
-
-/** Every place with something to repeat: the roles and commands read, two chat models, two prompt presets, two pairs. */
+/** Every place with something to repeat: the roles read, two chat models, two prompt presets. */
 function fullState(): PanelState {
   const base = panelState('reviewers');
 
   return {
     ...base,
-    settings: {
-      ...base.settings,
-      securityLane: { ...DEFAULT_SECURITY, runs: [{ vendor: 'codex', prompt: 'redteam-general' }, { vendor: 'claude', prompt: 'redteam-general' }] },
-    },
     roles: { rows: [], texts: {}, serverVersion: '', perSide: false, stranded: [] },
-    commands: { rows: [MINE], texts: {}, serverVersion: '', perSide: false },
     chat: CHAT,
   };
 }
@@ -85,12 +75,9 @@ function paneOn(place: string): PageNode {
 /** The top-level fields a builder draws, read off its own output — the count a place that wraps it must show. */
 const fieldsOf = (html: string): number => pageTree(html).children.filter((node) => has(node, 'field')).length;
 
-/** The role boxes Stages and Prompts per round draw: one per role in the four buckets `promptsBody` groups. */
+/** The role boxes Stages draws: one per role in the four buckets `promptsBody` groups. */
 const STAGED = [PLAN_CODE, RESULT_CODE, RESULT_DOCUMENT, FEATURE_CODE];
 const roleBoxes = (state: PanelState): number => composed(state.settings.roles).filter((role) => STAGED.includes(bucketOf(role))).length;
-
-/** The lane's two numbers, by the field each writes. */
-const LANE_NUMBERS = ['threshold', 'maxRounds'];
 
 /** A model's block or a preset: it carries its id. A stranded choice or a conflict is a warning, and spans both columns. */
 const chatCard = (node: PageNode, kind: string): boolean => node.tagName === 'DIV' && node.dataset.chpId !== undefined && has(node, kind);
@@ -107,7 +94,6 @@ const FAMILIES: readonly {
   readonly card: (node: PageNode, pane: PageNode) => boolean;
 }[] = [
   { place: 'reviews/stages', family: 'Stages role boxes', expected: roleBoxes, card: (node) => node.tagName === 'DIV' && has(node, 'role') },
-  { place: 'reviews/prompts', family: 'Prompts per round role boxes', expected: roleBoxes, card: (node) => node.tagName === 'DIV' && has(node, 'role') },
   // A role spans the page and its PROMPTS flow: a stage often holds one role, which two columns of roles would leave
   // as narrow as before.
   {
@@ -118,26 +104,6 @@ const FAMILIES: readonly {
   },
   // The gate is one decision per field, and nothing repeats but the fields themselves.
   { place: 'reviews/gate', family: 'The gate fields', expected: (state) => fieldsOf(gateBody(state)), card: (node, pane) => has(node, 'field') && !insideA(node, 'field', pane) },
-  {
-    place: 'reviews/commands', family: 'Commands — Yours', expected: (state) => state.commands?.rows.length ?? 0,
-    card: (node) => node.tagName === 'SECTION' && node.dataset.cmdId !== undefined,
-  },
-  {
-    place: 'reviews/commands', family: 'Commands — Shipped', expected: () => SHIPPED_COMMANDS.length,
-    card: (node) => node.tagName === 'SECTION' && node.dataset.cmdFile !== undefined,
-  },
-  {
-    place: 'security', family: 'Security lane numbers', expected: () => LANE_NUMBERS.length,
-    card: (node) => node.tagName === 'LABEL' && node.find((one) => LANE_NUMBERS.includes(one.dataset.securityField ?? '')).length > 0,
-  },
-  {
-    place: 'security', family: 'Security lane prompt cards', expected: (state) => promptsInOrder(state.settings.securityLane).length,
-    card: (node) => node.tagName === 'FIELDSET' && has(node, 'seclane-prompt'),
-  },
-  {
-    place: 'security', family: 'Security lane pairs', expected: (state) => state.settings.securityLane.runs.length,
-    card: (node) => node.tagName === 'FIELDSET' && !has(node, 'seclane-prompt'),
-  },
   {
     place: 'chat', family: 'Chat models a chat opens on',
     expected: (state) => chatProviderListFor(CHAT, state).providers.filter((one) => CHAT.models.some((model) => model.id === one.id)).length,
@@ -167,10 +133,10 @@ test('each named tab draws every family of its repeated cards, all of it, in the
   }
 });
 
-test('Limits stays one column — five numbers do not need two', () => {
+test('Limits stays one column — four numbers do not need two', () => {
   const pane = paneOn('reviews/limits');
 
-  assert.ok(pane.find((node) => node.dataset.setting !== undefined || node.tagName === 'INPUT').length >= 5, 'the fixture: Limits draws its five numbers');
+  assert.ok(pane.find((node) => node.dataset.setting !== undefined || node.tagName === 'INPUT').length >= 4, 'the fixture: Limits draws its four numbers');
   assert.deepEqual(pane.find((node) => has(node, COLUMNS)).map((node) => node.tagName), [], 'Limits drew a column grid');
 });
 

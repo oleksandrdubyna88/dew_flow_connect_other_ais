@@ -38,7 +38,8 @@ public static class QuestionConsultRows
         record.Rows.Sum(r => r.TokensIn),
         record.Rows.Sum(r => r.TokensOut),
         record.Rows.Any(r => r.CostUsd is not null) ? record.Rows.Sum(r => r.CostUsd ?? 0) : null,
-        record.Alert);
+        record.Alert,
+        record.WorkItem);
 
     public static IReadOnlyList<QuestionConsultRowEntry> Entries(QuestionConsultRecord record) =>
         [.. record.Rows.Select(r => new QuestionConsultRowEntry(

@@ -1,5 +1,51 @@
 # Changelog
 
+## Extension 2.0.0 · Server 2.0.0 — 2026-11-24
+
+**coai 2.0: the gate never waits for a person.** A review round ends with one of four outcomes: `proceed`, `revise`,
+`good_enough` or `not_reviewed`. Held gates, the `call_human` verdict, the escalation card and its watcher are gone. A failed
+reviewer is a notification, and the AI keeps working. `ask_human` now answers that the question belongs in the caller's own
+conversation.
+
+**Your v1 data is migrated for you.** The first start of coai-mcp 2.0 on a data folder runs `--migrate-v2` by itself (only from
+major version 2). It releases held sessions, archives open escalation cards, moves `qphase/` and `cadence/` to
+`migrations/v1-archive/`, renames settings keys and moves every setting 2.0 does not read to `settings.v1-removed.json`. It is
+safe to run twice. The marker `migrations/v2.done` says it finished. Look first with `coai-mcp --migrate-v2` (a dry run).
+
+**The sidebar starts in 3 seconds or less.** The extension is a thin shell now: it loads when you open the sidebar, run a coai
+command or open a chat, and draws its menu (Notifications, Active gates, Active consultations, Phrases, Bugz) before the older
+code loads. The limit is 3 s on Windows and 2 s on Linux; the owner's Windows machine measured 1 to 2 s.
+
+**Install is one step.** After the sidebar is ready, the extension runs `coai-mcp --setup-clients`: it finds Claude Code, Codex and
+agy and writes the `coai` MCP entry for each. It first reads whether your Claude Code takes `claude mcp add-json` from stdin
+(2.1.310 does not, 2.1.330 does); an older one gets the entry as an argument only when the entry holds no value, otherwise it is
+refused with "update Claude Code (claude update)". Every client that is not set up has its reason in the backup manifest and one
+notification. By hand: `coai-mcp --install`, `--setup-clients --dry-run`, `--remove`, `--restore`.
+
+**New names and tools.** `cons` (the consultant for a stuck AI) and `consask` (the question consultant) replace `consult` and the
+question-consultant names; the old names still answer as hidden aliases until 2.1. The `roles` tool and a SessionStart hook tell
+an AI the main AI, the models per role and the complexity bands. `review_*`, `cons` and `consask` accept a `workItem`.
+Conventions are optional.
+
+**Removed:** the Commands page, the Security lane, the consultation cadence, the "When the rounds run out" choice and the
+waiting-question status bar item, with their settings.
+
+**Restart every client** after the update: every Claude Code, Codex and agy session, and every VS Code window. Update the server
+and the extension together. Checked before the release: the old extension 0.89.2 works with coai-mcp 2.0 (only the removed
+features answer "not here"), and the 2.0 client calls only routes the deployed Team server 0.16.3 has. Details:
+`RELEASE_NOTES_2.0.md`.
+
+## Team server 0.16.4 — 2026-11-24
+
+**The Team server's agy hook knows its own folder (#1023).** The Team server answers agy's tool-call hook with its own binary and
+the same library as coai-mcp, so it gets the fixes in Server 0.66.1 below. It now takes its hook folder from where agy starts the
+hook, not from the working-folder name in agy's call, which is the first folder in sorted order. On today's server that name
+already was the hook folder, because `/root/.local/share/…` sorts before `/tmp/coai-server-job-…`, so no read was being denied
+wrongly. A job folder that sorted first would have lost every read. The Windows rules do not apply to a Linux server. A job folder
+on a network mount is not supported.
+
+**Rollback:** re-dispatch `deploy-server.yml` with 0.16.3.
+
 ## Server 0.66.1 — 2026-11-24
 
 **Fixed: an Antigravity reader in a folder that sorts before coai's own folder can read again (#1023).** agy sorts the folders it

@@ -1,12 +1,12 @@
-import { randomBytes } from 'node:crypto';
 import * as vscode from 'vscode';
 import { coaiDataDir } from './dataDir';
 import { Notice, answered, buttonsOf, gapRecord, gapSentence, noticeRecord } from './notice';
-import { Gap, NO_GAP, settled, widened } from './writeGap';
+import { NO_GAP, settled, widened } from './writeGap';
+import { hostRuntime } from './hostRuntime';
+import type { NotifyState } from './runtimeState';
 import { NotificationRecord } from './notifications';
 import { recordNotification } from './notificationsFile';
 import { askPerson } from './personWait';
-import { Suppressor, suppressor } from './suppression';
 
 /**
  * The one door every message this extension shows a person goes through.
@@ -39,42 +39,30 @@ import { Suppressor, suppressor } from './suppression';
  */
 
 /**
- * Which run this is.
+ * Which run this is, what bounds this run's share of the ledger, and what this run could not write: ONE per host, held in the shared
+ * runtime (`runtimeState.ts`), not in this file. The shell loads features as separate bundles and each bundle carries its own copy of
+ * this module, so a module-level `RUN`, suppressor or gap would exist once per bundle: two budgets, two run ids, two holes. (v2 E4.)
  *
- * <p>Minted once per host start, and NOT the pid: pids are reused, so a pid cannot identify a
- * process lifetime and two unrelated incidents months apart would group into one row. It lives in
- * memory, so a restart is a new run — which is the honest reading, a new host being a new
- * observer.</p>
+ * <p>The run id is minted once per host start, and NOT the pid: pids are reused, so a pid cannot identify a process lifetime and two
+ * unrelated incidents months apart would group into one row. It lives in memory, so a restart is a new run — which is the honest reading,
+ * a new host being a new observer. The bounds are per run, and a restart is a new observer with a fresh count.</p>
  */
-const RUN = randomBytes(6).toString('hex');
-
-/**
- * What bounds this run's share of the ledger.
- *
- * <p>One per host, minted beside the run id because that is exactly its lifetime: every bound it
- * enforces is per run, and a restart is a new observer with a fresh count. It bounds what is
- * WRITTEN and never what is shown — see `suppression.ts`.</p>
- */
-const BOUNDS: Suppressor = suppressor(RUN, process.pid);
-
-/** What this run could not write, and over what window. Never a notification. */
-let gap: Gap = NO_GAP;
-
-/** One gap record in flight at a time, so two writes landing together cannot write the hole twice. */
-let flushing = false;
+const state = (): NotifyState => hostRuntime().notify;
 
 /** What the panel section and the page say about the ledger's own gap. Empty when there is none. */
 export function theGap(): string {
+  const { gap } = state();
+
   return gapSentence(gap.lost, gap.since === '' ? '' : new Date(gap.since).toLocaleTimeString());
 }
 
 /** For a test, and for the panel after a data directory move. */
 export function forgetTheGap(): void {
-  gap = NO_GAP;
+  state().gap = NO_GAP;
 }
 
 function noteLoss(at: Date): void {
-  gap = widened(gap, at.toISOString());
+  state().gap = widened(state().gap, at.toISOString());
 }
 
 /**
@@ -90,16 +78,17 @@ function noteLoss(at: Date): void {
  * about.</p>
  */
 async function flushTheGap(at: Date): Promise<void> {
-  if (gap.lost === 0 || flushing) {
+  const mine = state();
+  if (mine.gap.lost === 0 || mine.flushing) {
     return;
   }
-  flushing = true;
+  mine.flushing = true;
   try {
-    const held = gap;
+    const held = mine.gap;
     let landed = true;
     await recordNotification(
       coaiDataDir(),
-      gapRecord(held.lost, held.since, held.until, RUN, process.pid, at),
+      gapRecord(held.lost, held.since, held.until, mine.run, process.pid, at),
       () => {
         landed = false;
       },
@@ -107,10 +96,10 @@ async function flushTheGap(at: Date): Promise<void> {
     if (landed) {
       // Only what this record described. A notice lost WHILE it was being written is still lost,
       // and `settled` subtracts rather than zeroing for exactly that reason.
-      gap = settled(gap, held);
+      mine.gap = settled(mine.gap, held);
     }
   } finally {
-    flushing = false;
+    mine.flushing = false;
   }
 }
 
@@ -212,9 +201,9 @@ async function record(notice: Notice, at: Date): Promise<{
   readonly firstEver: boolean;
   readonly kept: NotificationRecord | undefined;
 }> {
-  const verdict = BOUNDS.admit(notice, at);
+  const verdict = state().bounds.admit(notice, at);
   const asked = verdict.write
-    ? { ...noticeRecord(notice, RUN, process.pid, at), seq: verdict.seq }
+    ? { ...noticeRecord(notice, state().run, process.pid, at), seq: verdict.seq }
     : undefined;
   // `landed`, not "we called write". A record the disk refused is not a record, and returning it
   // would have `notifyAndAsk` append an ANSWER to an asking that does not exist on disk.
@@ -235,7 +224,7 @@ async function record(notice: Notice, at: Date): Promise<{
  * nobody is reading, which is the shape of the incident this whole ledger exists for.</p>
  */
 export function notifyResolved(code: string, subject?: string): void {
-  BOUNDS.resolved(code, subject);
+  state().bounds.resolved(code, subject);
 }
 
 /**

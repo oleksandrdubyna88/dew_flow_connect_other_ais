@@ -64,7 +64,9 @@ test('A1-T18: the host half is wired as written', () => {
     assert.ok(!(() => { try { return /saveWaiting\(/u.test(readFileSync(join(__dirname, '..', '..', 'src', file), 'utf8')); } catch { return false; } })(), `the round calls saveWaiting: ${file}`);
   }
   assert.equal(countIn(host, /kind: 'mend'/gu), 1, 'kind: mend is written in more than one place of the host file');
-  assert.equal(countIn(sourceOf('extension.ts'), /'terminal-hosts'/gu), 1);
+  // The hosts folder is named in ONE place, the chat registration (v2 E4); the old activation names it no more.
+  assert.equal(countIn(sourceOf('../shell/modules/chat/register.ts'), /'terminal-hosts'/gu), 1);
+  assert.equal(countIn(sourceOf('extension.ts'), /'terminal-hosts'/gu), 0, 'the old activation names the hosts folder again, beside the chat module');
   assert.equal(countIn(host, /MARKER_PREFIX = 'unsure-'/gu), 1);
   assert.deepEqual(filesWith(/claimFile\([^)]*'refused'|LOCK_ID = 'refused'/u), ['remoteRefusalsDisk.ts']);
   assert.deepEqual(filesWith(/take: 'person'|takenByPerson/u).filter((file) => file !== 'chatStoreLock.ts'), ['remoteKeeper.ts', 'remoteRefusals.ts', 'remoteRefusalsDisk.ts'].filter((file) => filesWith(/take: 'person'|takenByPerson/u).includes(file)));

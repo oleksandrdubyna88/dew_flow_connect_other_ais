@@ -1,0 +1,15 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t3-verdict-tests
+title: "Delete tests of removed behaviour; add RoundMachine tests for the four outcomes"
+kind: test
+complexity: 5
+dependsOn:
+  - t2-holds-cards-askhuman
+parallel: false
+files:
+  - src_mcp/tests
+dod:
+  - id: d1
+    item: "the MCP test executable is green"
+  - id: d2
+    item: "each kept outcome has a test that fails if its branch is deleted"

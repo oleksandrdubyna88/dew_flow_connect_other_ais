@@ -1,0 +1,13 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t2-recheck-m2
+title: "Re-run the measure launch; M2 still ≤ 2000 ms on Linux and ≤ 3000 ms on Windows"
+kind: measure
+complexity: 2
+dependsOn:
+  - t1-remove-watchers
+parallel: false
+files:
+  - research/RESULTS_v2_start.md
+dod:
+  - id: d1
+    item: "new M2 recorded"

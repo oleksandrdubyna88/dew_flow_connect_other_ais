@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 
 import { phrasesFrom } from '../../phrases';
 import { rowsAfter, rowsOf } from '../../phrasesEdit';
+import { activated } from './hostHelpers';
 
 /**
  * The default phrases in a REAL editor (research/PLAN_default_phrases.md; its plan round, finding 1).
@@ -20,7 +21,7 @@ import { rowsAfter, rowsOf } from '../../phrasesEdit';
 export async function theDefaultPhrasesInARealEditor(): Promise<void> {
   const extension = vscode.extensions.getExtension('remsoftdev.connect-other-ais');
   assert.ok(extension !== undefined, 'the extension under test is not installed in this host');
-  await extension.activate();
+  await activated(extension);
   const config = (): vscode.WorkspaceConfiguration => vscode.workspace.getConfiguration('coai');
   const before = config().inspect('phrases')?.globalValue;
   try {

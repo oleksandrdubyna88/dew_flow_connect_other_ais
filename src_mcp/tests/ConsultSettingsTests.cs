@@ -39,7 +39,7 @@ public sealed class ConsultSettingsTests
     [InlineData("False")]
     public void TheFourSpellingsOfFalse_SwitchTheToolOff(string value)
     {
-        From(("COAI_CONSULT_ENABLED", value)).ConsultEnabled.Should().BeFalse();
+        From(("COAI_CONS_ENABLED", value)).ConsultEnabled.Should().BeFalse();
     }
 
     /// <summary>
@@ -59,16 +59,16 @@ public sealed class ConsultSettingsTests
     [InlineData("true")]
     public void EverythingElse_LeavesItOn(string value)
     {
-        From(("COAI_CONSULT_ENABLED", value)).ConsultEnabled.Should().BeTrue();
+        From(("COAI_CONS_ENABLED", value)).ConsultEnabled.Should().BeTrue();
     }
 
     [Fact]
     public void TheCapsAreRead_AndNonsenseFallsBackRatherThanReachingZero()
     {
         var configured = From(
-            ("COAI_CONSULT_TURNS", "3"),
-            ("COAI_CONSULT_CALLS_PER_SESSION", "4"),
-            ("COAI_CONSULT_IDLE_MINUTES", "30"));
+            ("COAI_CONS_TURNS", "3"),
+            ("COAI_CONS_CALLS_PER_SESSION", "4"),
+            ("COAI_CONS_IDLE_MINUTES", "30"));
 
         configured.ConsultTurns.Should().Be(3);
         configured.ConsultCallsPerSession.Should().Be(4);
@@ -77,9 +77,9 @@ public sealed class ConsultSettingsTests
         // A cap of zero is a feature that refuses every call while the panel shows it switched on,
         // which is the one state nothing on screen could explain.
         var silly = From(
-            ("COAI_CONSULT_TURNS", "0"),
-            ("COAI_CONSULT_CALLS_PER_SESSION", "-2"),
-            ("COAI_CONSULT_IDLE_MINUTES", "half an hour"));
+            ("COAI_CONS_TURNS", "0"),
+            ("COAI_CONS_CALLS_PER_SESSION", "-2"),
+            ("COAI_CONS_IDLE_MINUTES", "half an hour"));
 
         silly.ConsultTurns.Should().Be(5);
         silly.ConsultCallsPerSession.Should().Be(10);

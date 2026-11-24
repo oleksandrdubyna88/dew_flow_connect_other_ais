@@ -6,7 +6,7 @@ import { sourceOf } from './sourceReading';
 
 /**
  * E5.1 step 4 of research/PLAN_one_model_catalog.md: the Review roles, Gate commands and Chat presets tabs are deleted, and
- * the three commands that opened them stay for one more release as REDIRECTS — each opens the Settings page at the
+ * the commands that opened them stay (the Gate commands one went with the commands in v2 E3.S2) for one more release as REDIRECTS — each opens the Settings page at the
  * place that holds its editor now, so a keybinding or a habit of somebody's still lands somewhere useful (the plan
  * round's finding 0).
  *
@@ -16,7 +16,6 @@ import { sourceOf } from './sourceReading';
 
 const ROWS: readonly (readonly [command: string, place: string])[] = [
   ['coai.editRoles', 'reviews/roles'],
-  ['coai.editCommands', 'reviews/commands'],
   ['coai.editChatPresets', 'chat'],
 ];
 
@@ -41,11 +40,11 @@ for (const [command, place] of ROWS) {
   });
 }
 
-test('exactly the three commands are redirected — none added, none dropped', () => {
+test('exactly the two commands are redirected — none added, none dropped', () => {
   assert.deepEqual([...registered().handlers.keys()].sort(), ROWS.map(([command]) => command).sort());
 });
 
-test('the extension registers the three commands through the redirects, never through a page of their own', () => {
+test('the extension registers the two commands through the redirects, never through a page of their own', () => {
   const extension = sourceOf('extension.ts');
 
   // `ok` over `match`: a failure names the wiring, not the whole of `extension.ts`.

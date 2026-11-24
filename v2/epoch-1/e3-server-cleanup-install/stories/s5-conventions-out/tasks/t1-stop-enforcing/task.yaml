@@ -1,0 +1,15 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t1-stop-enforcing
+title: "Remove conventions enforcement from the server (ledger/epoch/cadence checks, rule-version notices); keep reading a mounted .agents/conventions as the repo own instructions"
+kind: code
+complexity: 4
+dependsOn: []
+parallel: true
+files:
+  - src_mcp/runners/Context/StageRules.cs
+  - src_mcp/src/Server
+dod:
+  - id: d1
+    item: "a repo without the mount gets no missing-rules notice"
+  - id: d2
+    item: "a repo with the mount still has its rules read"

@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
-import { Escalation } from './escalations';
-import { LogRow, questionsHtml, roundsLogHtml } from './roundsLog';
+import { LogRow, roundsLogHtml } from './roundsLog';
 import { DbTotals, EMPTY_TOTALS } from './roundsDb';
 import { BusyHost } from './busyHost';
 import { Push, PushLedger, Region } from './pushLedger';
@@ -28,10 +27,10 @@ const ASSUME_READY_MS = 5_000;
  * expanding a row are the page's own state, and nothing about them comes back here — which is
  * deliberate, and the lesson of the sidebar's disclosures: a page state that round-trips through
  * the extension host is a page state that can be re-applied by a patch and fire its own event
- * again. The three things that DO come back are commands: answer a question, choose a spending
- * window, forget a vendor's spending — and one word, `ready`.</p>
+ * again. The things that DO come back are commands: choose a spending
+ * window, forget a vendor's spending, close a consultation — and one word, `ready`.</p>
  *
- * <p>A push happens only when the rows, the questions or the spending region actually changed.
+ * <p>A push happens only when the rows or a region actually changed.
  * The watcher ticks every five seconds whether or not anything did, and a page re-rendering its
  * table for nothing would drop the scroll position of somebody reading it.</p>
  */
@@ -52,14 +51,13 @@ export class RoundsLogPanel {
   /** The newest of everything, so a page that says `ready` can be answered from here. */
   private latest: {
     rows: readonly LogRow[];
-    questions: readonly Escalation[];
     usage: string;
     spots: string;
     totals: DbTotals;
     consultations: string;
     qconsults: string;
     team: TeamPush;
-  } = { rows: [], questions: [], usage: '', spots: '', totals: EMPTY_TOTALS, consultations: '', qconsults: '', team: NO_TEAM_PUSH };
+  } = { rows: [], usage: '', spots: '', totals: EMPTY_TOTALS, consultations: '', qconsults: '', team: NO_TEAM_PUSH };
 
   /** What stops this page's own clock (`teamUsagePoll.ts`), while it runs. */
   private stopClock: (() => void) | undefined;
@@ -86,7 +84,6 @@ export class RoundsLogPanel {
 
   show(
     rows: readonly LogRow[],
-    questions: readonly Escalation[],
     usageHtml: string,
     spotsHtml = '',
     totals: DbTotals = EMPTY_TOTALS,
@@ -95,7 +92,7 @@ export class RoundsLogPanel {
   ): void {
     if (this.panel !== undefined) {
       this.panel.reveal();
-      this.update(rows, questions, usageHtml, true, spotsHtml, totals, consultationsHtml, qconsultsHtml);
+      this.update(rows, usageHtml, true, spotsHtml, totals, consultationsHtml, qconsultsHtml);
       return;
     }
     const panel = vscode.window.createWebviewPanel(
@@ -114,9 +111,9 @@ export class RoundsLogPanel {
     );
     this.panel = panel;
     panel.webview.html = roundsLogHtml(
-      rows, questions, webviewNonce(), usageHtml, spotsHtml, totals,
+      rows, webviewNonce(), usageHtml, spotsHtml, totals,
       { consultations: consultationsHtml, qconsults: qconsultsHtml, text: { size: currentUiScale(), tone: currentTextTone() } });
-    this.latest = { rows, questions, usage: usageHtml, spots: spotsHtml, totals, consultations: consultationsHtml, qconsults: qconsultsHtml, team: this.latest.team };
+    this.latest = { rows, usage: usageHtml, spots: spotsHtml, totals, consultations: consultationsHtml, qconsults: qconsultsHtml, team: this.latest.team };
     this.rebuilt();
 
     const text = pushTextControlsTo(panel.webview);
@@ -173,7 +170,6 @@ export class RoundsLogPanel {
   /** Pushes what changed — the rows, the spending region, or both — and nothing when nothing did. */
   update(
     rows: readonly LogRow[],
-    questions: readonly Escalation[],
     usageHtml: string,
     force = false,
     spotsHtml = '',
@@ -185,7 +181,7 @@ export class RoundsLogPanel {
     if (this.panel === undefined) {
       return;
     }
-    this.latest = { rows, questions, usage: usageHtml, spots: spotsHtml, totals, consultations: consultationsHtml, qconsults: qconsultsHtml, team };
+    this.latest = { rows, usage: usageHtml, spots: spotsHtml, totals, consultations: consultationsHtml, qconsults: qconsultsHtml, team };
     void this.pushAll(force);
   }
 
@@ -283,14 +279,14 @@ export class RoundsLogPanel {
   }
 
   private async pushEach(force: boolean): Promise<void> {
-    const { rows, questions, usage, spots, totals, consultations, qconsults, team } = this.latest;
+    const { rows, usage, spots, totals, consultations, qconsults, team } = this.latest;
     // A RECORD over `Region` rather than a list: adding a region to the union without giving it a
     // push here is then a compile error rather than a region that silently never updates.
     // (gemini, the code round.)
     const regions: Record<Region, { readonly content: string; readonly message: () => unknown }> = {
       rows: {
-        content: payloadOf(rows, questions),
-        message: () => ({ type: 'rows', rows, questions: questionsHtml(questions) }),
+        content: payloadOf(rows),
+        message: () => ({ type: 'rows', rows }),
       },
       usage: { content: usage, message: () => ({ type: 'usage', html: usage }) },
       spots: { content: spots, message: () => ({ type: 'spots', html: spots }) },
@@ -344,12 +340,12 @@ export class RoundsLogPanel {
 }
 
 /**
- * What "changed" means for the table: the serialised rows and questions.
+ * What "changed" means for the table: the serialised rows.
  *
  * <p>A running round's `seconds` advances every tick by construction, so while something runs the
  * page is pushed every five seconds — which is right, that is the number somebody is watching.
  * When nothing runs, the payload is stable and nothing is sent.</p>
  */
-function payloadOf(rows: readonly LogRow[], questions: readonly Escalation[]): string {
-  return JSON.stringify([rows, questions]);
+function payloadOf(rows: readonly LogRow[]): string {
+  return JSON.stringify(rows);
 }

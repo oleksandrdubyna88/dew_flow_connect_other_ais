@@ -1,0 +1,9 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: e2-studio-roles
+title: "Studio review roles in jinx_studio (seam first)"
+half: both
+dependsOn:
+  - e1-attachments
+doneWhen:
+  - "text-only seam role measured on the known defects; visual seam role on the known seam plus clean pairs"
+  - "findings written to scene_issue as consultant, idempotent"

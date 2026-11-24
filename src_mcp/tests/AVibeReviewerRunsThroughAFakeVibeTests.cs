@@ -174,7 +174,7 @@ public sealed class AVibeReviewerRunsThroughAFakeVibeTests : IAsyncLifetime
             new PanelSettings
             {
                 Providers = [new("vibe") { Runtime = "vibe", ExecutablePath = FakeCliExe, Model = "glm-5-3" }],
-                Rounds = new PanelConfig(catalog.Roles.ToDictionary(r => r.Id, _ => new RoleGate(1, 5)), StagePolicy.Human) { Catalog = catalog },
+                Rounds = new PanelConfig(catalog.Roles.ToDictionary(r => r.Id, _ => new RoleGate(1, 5))) { Catalog = catalog },
                 DataDir = data,
                 CodeWorkspace = "worktree",
                 ReviewerTimeout = TimeSpan.FromSeconds(60),

@@ -47,6 +47,10 @@ public sealed class AReaderModeNeverMakesTheDataDirectoryTests : IDisposable
         new[] { "--round-counts-merged" },
         new[] { "--round-authors" },
         new[] { "--features" },
+        // The Claude mod's band: lists consultation files and reads the notices tail; answers three empty lists for a folder that is not there.
+        new[] { "--band-json" },
+        // What each item of a plan cost (v2 E3.S8): reads the rounds database read-only; the folder argument is this test's own build output, inside the checkout.
+        new[] { "--plan-report", AppContext.BaseDirectory, "--json" },
         new[] { "--version" },
         // Launched on a person's act, but it reads stdin and answers stdout only (research/PLAN_names_and_a_missing_root.md 3.3).
         new[] { "--check-security" },
@@ -80,6 +84,17 @@ public sealed class AReaderModeNeverMakesTheDataDirectoryTests : IDisposable
 
         Directory.Exists(Missing).Should().BeFalse(
             $"`coai-mcp {string.Join(' ', args)}` exited {code} and left the missing data directory behind, holding: {Inside()}");
+    }
+
+    [Theory]
+    [InlineData("--roles")]
+    [InlineData("--roles", "--format", "claude-hook")]
+    public async Task RolesLeavesAMissingNamedDataDirectoryAbsent(params string[] args)
+    {
+        var (_, code) = await Stdout.OfAsync(() => Program.RunAsync(args));
+
+        code.Should().Be(0);
+        Directory.Exists(Missing).Should().BeFalse($"`coai-mcp {string.Join(' ', args)}` made the missing data directory, holding: {Inside()}");
     }
 
     [Fact]
@@ -129,14 +144,6 @@ public sealed class AReaderModeNeverMakesTheDataDirectoryTests : IDisposable
 
         Directory.Exists(Missing).Should().BeFalse($"--close-consult exited {code} ({said.Trim()}) and made the missing data directory, holding: {Inside()}");
         code.Should().Be(65, "no consultation can be recorded in a folder that is not there — a refusal, never a write");
-    }
-
-    [Fact]
-    public async Task CadenceLeavesAMissingNamedDataDirectoryAbsent()
-    {
-        await Stdout.OfAsync(() => Program.RunAsync(["--cadence", "--repo", _parent, "--branch", "main", "--plan", "x"]));
-
-        Directory.Exists(Missing).Should().BeFalse($"--cadence left the missing data directory behind, holding: {Inside()}");
     }
 
     /// <summary>

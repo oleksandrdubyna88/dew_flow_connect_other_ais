@@ -32,6 +32,19 @@ namespace CoaiMcp.Server;
 /// <param name="Log">Where a notice that did not land is said out loud.</param>
 public sealed record Noticing(Func<ServerNotice, bool> Offer, Serilog.ILogger Log)
 {
+    private readonly Func<ServerNotice, bool>? _settled;
+
+    /// <summary>
+    /// Offers a notice and answers whether the writer SETTLED it: the queue took it and drained. A caller that must not go on until the line can be read back from disk — the v2 hold
+    /// boundary, which converts a session only after the notice about it is written — uses this one. Where nothing makes a writer wait (a test's list, <see cref="None"/>) it is
+    /// <see cref="Offer"/> itself, and the caller's own read-back is what tells written from accepted.
+    /// </summary>
+    public Func<ServerNotice, bool> Settled
+    {
+        get => _settled ?? Offer;
+        init => _settled = value;
+    }
+
     /// <summary>
     /// The production composition: the host's writer, the HOST's environment, its log.
     /// </summary>
@@ -53,7 +66,9 @@ public sealed record Noticing(Func<ServerNotice, bool> Offer, Serilog.ILogger Lo
         var directory = new NoticesDirectory(env);
         var pid = Environment.ProcessId;
 
-        return new(notice => writer.Offer(directory.Where, Stamped(notice, run, pid), log), log);
+        Func<ServerNotice, bool> offer = notice => writer.Offer(directory.Where, Stamped(notice, run, pid), log);
+
+        return new(offer, log) { Settled = notice => offer(notice) && writer.IdleWithinBudget() };
     }
 
     /// <summary>

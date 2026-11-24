@@ -35,8 +35,6 @@ type Launch =
    * (`consultantCheckRun.runConsultantCheck`), and refused by the server too (research/PLAN_names_and_a_missing_root.md 3.3).
    */
   | 'a person acts, held by the extension'
-  /** Launched on a person's act, but reads stdin and answers stdout only: never touches the data directory (`CheckSecurityMode`). */
-  | 'touches no data directory'
   /**
    * The consultants survey: writes its health file, is not started while the named root is missing (`consultantsProbe`),
    * and is refused by the server too — a terminal or an older extension made the folder (the code round's own review).
@@ -48,6 +46,12 @@ type Launch =
    * neither generic server test runs it against a missing named root; `KimiClearMarkerModeTests.cs` holds it, and a test below checks that.
    */
   | 'a person acts, outside the data directory'
+  /**
+   * Launched by the install module after the first `menuReady` (v2 E4 s5), and it never reads or writes the DATA directory: it writes the
+   * `coai` entry into each AI client's own config (`--setup-clients`, v2 E3.S6; `Program.Startup.SetupClients` is no `WriterModes` member,
+   * its state is `~/.local/state/coai`). The server's own `SetupClientsMode` tests hold it.
+   */
+  | 'by the install module, outside the data directory'
   /** The literal names a mode but launches no `coai-mcp` (another program's flag). */
   | 'not a coai-mcp launch';
 
@@ -66,7 +70,6 @@ const LAUNCHES: Readonly<Record<string, Launch>> = {
   '--providers': 'reader',
   '--features': 'reader',
   '--version': 'reader',
-  '--cadence': 'reader',
   '--collect-bugs': 'a person acts, refused by the server',
   '--pairs-keep': 'a person acts, refused by the server',
   '--pairs-decide': 'a person acts, refused by the server',
@@ -75,8 +78,8 @@ const LAUNCHES: Readonly<Record<string, Launch>> = {
   '--close-consult': 'a person acts, makes no missing root',
   '--check-consultant': 'a person acts, held by the extension',
   '--check-model': 'a person acts, held by the extension',
-  '--check-security': 'touches no data directory',
   '--kimi-clear-marker': 'a person acts, outside the data directory',
+  '--setup-clients': 'by the install module, outside the data directory',
   '--probe-api': 'a person acts, refused by the server',
   '--consultants': 'survey, held by the extension',
   '--help': 'not a coai-mcp launch',
@@ -124,7 +127,7 @@ test('every READER is run by the server\'s test against a missing data directory
 });
 
 /** The kinds the server's reader test must run: none of them may make a missing named root. */
-const HELD_BY_THE_READER_TEST: ReadonlySet<Launch> = new Set<Launch>(['reader', 'touches no data directory', 'a person acts, makes no missing root']);
+const HELD_BY_THE_READER_TEST: ReadonlySet<Launch> = new Set<Launch>(['reader', 'a person acts, makes no missing root']);
 
 /** The kinds that write, which the server refuses under a missing named root and its writer test runs. */
 const HELD_BY_THE_WRITER_TEST: ReadonlySet<Launch> = new Set<Launch>(['a person acts, held by the extension', 'a person acts, refused by the server', 'survey, held by the extension']);
@@ -158,7 +161,7 @@ test('no mode a person starts is left unmeasured — each is held by the reader 
   // The coordinator's follow-up of 2026-10-11: "a person acts" used to be a kind no test held. Every launch now names
   // which server test holds it, so a new person's mode is red here until it is measured.
   const unheld = Object.entries(LAUNCHES)
-    .filter(([, launch]) => !HELD_BY_THE_READER_TEST.has(launch) && !HELD_BY_THE_WRITER_TEST.has(launch) && launch !== 'a person acts, outside the data directory')
+    .filter(([, launch]) => !HELD_BY_THE_READER_TEST.has(launch) && !HELD_BY_THE_WRITER_TEST.has(launch) && launch !== 'a person acts, outside the data directory' && launch !== 'by the install module, outside the data directory')
     .map(([mode]) => mode);
 
   assert.deepEqual(unheld.sort(), ['--help'], 'a mode is held by neither server test — measure it against a missing root');

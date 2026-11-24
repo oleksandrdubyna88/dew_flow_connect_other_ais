@@ -1,7 +1,9 @@
 import { resolve, sep } from 'node:path';
 import type { NotificationRecord } from './notifications';
 import { type PathFinding, type Presence, isAboutAMissingPath, missingTitle } from './pathFindings';
+import { hostRuntime } from './hostRuntime';
 import { DATA_DIRECTORY } from './pathSettings';
+import type { BoardState } from './runtimeState';
 import { finishedInTime } from './withinTheClock';
 
 /**
@@ -42,22 +44,22 @@ export interface HeldNotice {
   readonly record: NotificationRecord;
 }
 
-let published: readonly PathFinding[] = [];
-let held: readonly HeldNotice[] = [];
-let listeners: readonly (() => void)[] = [];
+/**
+ * Every variable of this board lives in the shared runtime (`runtimeState.ts`), not in this module: the shell loads features as separate
+ * bundles, each with its own copy of this file, and a path watch published into one copy would be unheard by the writers of another (v2 E4).
+ */
+const board = (): BoardState => hostRuntime().board;
 
 /**
  * The first answer about the data root, which the ledger gate waits for before it decides — resolved from the start,
  * so a window with no host watch (a test) is never held, and bounded ({@link SETTLE_CEILING_MS}) so a probe that never
  * answers cannot hold every toast of the window.
  */
-let settling: Promise<unknown> = Promise.resolve();
 
 /**
  * Whether the first data-root answer has landed (or nothing was ever expected): a writer that can decide synchronously —
  * a render's spawn, which must start in the same turn — asks this before it waits, so the wait is only ever real.
  */
-let known = true;
 
 /** How long the ledger gate waits for the first data-root answer at most — the probe's own deadline, with room. */
 export const SETTLE_CEILING_MS = 10_000;
@@ -71,10 +73,8 @@ export const SETTLE_CEILING_MS = 10_000;
  * very folder the notice says is missing in that gap. So an absence is kept until a probe CONFIRMS the root is there, or
  * the setting names another root; a pending or unknown answer never lifts it.</p>
  */
-let absentRoot: PathFinding | undefined;
 
 /** Who is told when a kept absence is lifted by a confirmed root ({@link onDataRootBack}). */
-let backListeners: readonly (() => void)[] = [];
 
 /**
  * The watch's answer about the named data root, on every refresh: `here` lifts a kept absence, another root (or none)
@@ -84,9 +84,9 @@ export function noteDataRoot(root: string | undefined, presence: Presence): void
   if (nothingToLift(root, presence)) {
     return;
   }
-  absentRoot = undefined;
+  board().absentRoot = undefined;
   if (presence === 'here') {
-    for (const listener of backListeners) {
+    for (const listener of board().backListeners) {
       listener();
     }
   }
@@ -94,7 +94,9 @@ export function noteDataRoot(root: string | undefined, presence: Presence): void
 
 /** Whether no absence is kept, or the answer is about the kept root and does not confirm it. */
 function nothingToLift(root: string | undefined, presence: Presence): boolean {
-  return absentRoot === undefined || (root === absentRoot.value && presence !== 'here');
+  const kept = board().absentRoot;
+
+  return kept === undefined || (root === kept.value && presence !== 'here');
 }
 
 /**
@@ -103,48 +105,48 @@ function nothingToLift(root: string | undefined, presence: Presence): boolean {
  * the folder, with no settings edit (research/PLAN_paths_per_side.md E5.7, risk item F).
  */
 export function onDataRootBack(listener: () => void): void {
-  backListeners = [...backListeners, listener];
+  board().backListeners = [...board().backListeners, listener];
 }
 
 /** The host has decided what it knows: the page reads it, the gate reads it, held notices still missing stay held. */
 export function publishFindings(findings: readonly PathFinding[]): void {
-  published = findings;
-  absentRoot = missingDataRoot() ?? absentRoot;
-  held = stillHeld(held, findings);
-  for (const listener of listeners) {
+  board().published = findings;
+  board().absentRoot = missingDataRoot() ?? board().absentRoot;
+  board().held = stillHeld(board().held, findings);
+  for (const listener of board().listeners) {
     listener();
   }
 }
 
 export function currentFindings(): readonly PathFinding[] {
-  return published;
+  return board().published;
 }
 
 /** Told after every publish — the panel repaints from it. */
 export function onFindings(listener: () => void): void {
-  listeners = [...listeners, listener];
+  board().listeners = [...board().listeners, listener];
 }
 
 /** The host says which probe answers the data-root question first; the gate waits for it (bounded) before deciding. */
 export function expectDataRoot(answer: Promise<unknown>): void {
-  known = false;
-  settling = answer.then(() => { known = true; }, () => { known = true; });
+  board().known = false;
+  board().settling = answer.then(() => { board().known = true; }, () => { board().known = true; });
 }
 
 /** Resolved once the data root has been asked about (or the ceiling passed) — what `recordNotification` awaits. */
 export async function dataRootSettled(): Promise<void> {
-  await finishedInTime(settling, SETTLE_CEILING_MS);
-  known = true;
+  await finishedInTime(board().settling, SETTLE_CEILING_MS);
+  board().known = true;
 }
 
 /** Whether the board has its first data-root answer — true when no host watch ever asked for one (a test). */
 export function dataRootKnown(): boolean {
-  return known;
+  return board().known;
 }
 
 /** The finding that THIS window's named data root is missing, or nothing — the default location is never one (D3). */
 export function missingDataRoot(): PathFinding | undefined {
-  return published.find((one) => one.key === DATA_DIRECTORY.id && one.state === 'missing');
+  return board().published.find((one) => one.key === DATA_DIRECTORY.id && one.state === 'missing');
 }
 
 /**
@@ -152,7 +154,7 @@ export function missingDataRoot(): PathFinding | undefined {
  * change's re-ask (`pending`) and a probe past its deadline (`unknown`) keep it ({@link noteDataRoot}).
  */
 export function absentDataRoot(): PathFinding | undefined {
-  return missingDataRoot() ?? absentRoot;
+  return missingDataRoot() ?? board().absentRoot;
 }
 
 /** The refused data root when `path` is at or under it — the write that would create it — or nothing. */
@@ -217,12 +219,12 @@ function comparable(path: string): string {
 
 /** A notice the ledger would not take, kept for this window run — one per setting key, the newest replacing the older. */
 export function holdNotice(record: NotificationRecord): void {
-  held = withHeld(held, record);
+  board().held = withHeld(board().held, record);
 }
 
 /** The held notices, newest last — what the notifications page shows for this window run beside the ledger's rows. */
 export function heldNotices(): readonly NotificationRecord[] {
-  return held.map((one) => one.record);
+  return board().held.map((one) => one.record);
 }
 
 /** The setting key a missing-path notice is about — the half of its subject before the value. */
@@ -249,11 +251,11 @@ export { isAboutAMissingPath };
 
 /** For a test: nothing published, nothing held, nothing awaited. */
 export function forgetFindingsBoard(): void {
-  published = [];
-  absentRoot = undefined;
-  backListeners = [];
-  held = [];
-  listeners = [];
-  settling = Promise.resolve();
-  known = true;
+  board().published = [];
+  board().absentRoot = undefined;
+  board().backListeners = [];
+  board().held = [];
+  board().listeners = [];
+  board().settling = Promise.resolve();
+  board().known = true;
 }

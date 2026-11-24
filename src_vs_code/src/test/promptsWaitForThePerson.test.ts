@@ -64,8 +64,9 @@ test('every input box, quick pick and file dialog is opened through askPerson', 
 
 // 15 → 14 on 2026-10-04 (research/PLAN_bugz_keys_per_server.md): the contributor-key box moved to the keys host's
 // askForContributorKey, still through askPerson, so the sidebar button and the command share one flow.
-test('the panel provider’s own fourteen prompts are among them', () => {
-  assert.equal(prompts().filter((one) => one.where.startsWith('panelProvider.ts:')).length, 14,
+// 14 → 13 in v2 E3.S2: the split-order model picker's "another model…" box went with the command models.
+test('the panel provider’s own thirteen prompts are among them', () => {
+  assert.equal(prompts().filter((one) => one.where.startsWith('panelProvider.ts:')).length, 13,
     'a prompt was added or removed in the panel provider — check it goes through askPerson, then update this count');
 });
 

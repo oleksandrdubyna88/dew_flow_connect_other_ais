@@ -1,0 +1,13 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: e1-gate-simplify
+title: "Gate core: four outcomes, v1 data migrated, live proof"
+mvp: true
+half: server
+dependsOn: []
+parallelWith:
+  - e2-thin-shell
+doneWhen:
+  - "only proceed, revise, good_enough and not_reviewed come out of a round"
+  - "the deleted classes are gone and the MCP test executable is green"
+  - "--migrate-v2 converts every released fixture exactly once; an interrupted run ends equal to one clean run"
+  - "3 real plan→code gates end with 0 person waits; migration on copies of real data: dry-run = apply, second run 0; outcome shares recorded"

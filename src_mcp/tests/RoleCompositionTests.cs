@@ -49,7 +49,7 @@ public sealed class RoleCompositionTests
     [Fact]
     public void WithNothingConfigured_TheRoundIsExactlyWhatTheProductShips()
     {
-        var config = new PanelConfig(Roles: null, StagePolicy.Human) { Catalog = Composed() };
+        var config = new PanelConfig(Roles: null) { Catalog = Composed() };
 
         config.RolesForRound(Stage.PlanReview, round: 1).Should().Equal("PlanCritique");
         config.RolesForRound(Stage.CodeReview, round: 1).Should().Equal(
@@ -267,21 +267,6 @@ public sealed class RoleCompositionTests
 
         catalog.ById("Requirements").Should().BeNull("its only prompt was refused, so the role has no general one");
         catalog.Dropped.Should().Contain(d => d.Contains(promptId) && d.Contains("names a file"));
-    }
-
-    [Theory]
-    [InlineData("command-autonomy")]
-    [InlineData("command-docs")]
-    public void APromptIdInTheCommandsNamespace_IsDroppedAndNamed(string promptId)
-    {
-        // Issue #467: a role prompt and a gate command share <dataDir>/prompts/, so a role prompt named
-        // `command-autonomy` would BE the autonomy order's override — editing the reviewer's prompt would
-        // reword the order, and the reviewer would be launched with the order as its prompt. (our own
-        // reviewer, the code round.)
-        var catalog = Composed(Custom("Requirements", RoleStages.Result, promptId));
-
-        catalog.ById("Requirements").Should().BeNull("its only prompt was refused");
-        catalog.Dropped.Should().Contain(d => d.Contains(promptId) && d.Contains("the gate's command texts"));
     }
 
     [Fact]

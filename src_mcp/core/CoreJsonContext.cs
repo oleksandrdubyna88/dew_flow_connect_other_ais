@@ -29,7 +29,7 @@ namespace CoaiMcp.Core;
 [JsonSerializable(typeof(CoaiMcp.Core.Catalog.FeatureAvailabilitySeed))]
 [JsonSerializable(typeof(RawQuestionAnswer))]
 // S2 of the same plan: the shipped base prompts (embedded like the table), a person's own prompts
-// (COAI_QCONSULT_PROMPTS) and the rows (COAI_QCONSULT_ROWS) — every wire field nullable, read once here.
+// (COAI_CONSASK_PROMPTS) and the rows (COAI_CONSASK_ROWS) — every wire field nullable, read once here.
 [JsonSerializable(typeof(QuestionPromptSeed))]
 [JsonSerializable(typeof(List<QuestionPromptSeedRow?>), TypeInfoPropertyName = "ListQuestionPromptSeedRow")]
 [JsonSerializable(typeof(List<QuestionRowDto?>), TypeInfoPropertyName = "ListQuestionRowDto")]

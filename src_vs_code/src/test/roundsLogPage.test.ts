@@ -46,7 +46,7 @@ function script(html: string): string {
 // ---------- a page that fails says so ----------
 
 test('an error in the page script is written onto the page, not swallowed', () => {
-  const html = roundsLogHtml(rowsFrom([session([round()])], NOW), [], 'n');
+  const html = roundsLogHtml(rowsFrom([session([round()])], NOW), 'n');
   const js = script(html);
 
   assert.match(js, /window\.onerror = function/, 'an uncaught error is trapped');
@@ -61,7 +61,7 @@ test('every column that holds DATA is a sort key, and the ones that hold control
   // The rule this has always been about is that no data column is dead to a click. The actions
   // column is the exception and must be one: sorting a table by a column of identical buttons is
   // an ordering that means nothing, so it carries no `data-sort` for the handler to find.
-  const html = roundsLogHtml(rowsFrom([session([round()])], NOW), [], 'n');
+  const html = roundsLogHtml(rowsFrom([session([round()])], NOW), 'n');
   const head = html.slice(html.indexOf('<thead>'), html.indexOf('</thead>'));
   const ths = head.match(/<th\b[^>]*>/g) ?? [];
 
@@ -104,7 +104,7 @@ test('a round with no date at all is kept by an open range and dropped by a boun
 });
 
 test('the toolbar offers the date range and a Today shortcut', () => {
-  const html = roundsLogHtml([], [], 'n');
+  const html = roundsLogHtml([], 'n');
 
   assert.ok(html.includes('id="from"') && html.includes('type="datetime-local"'), 'from, with a time');
   assert.ok(html.includes('id="to"'), 'to');
@@ -114,7 +114,7 @@ test('the toolbar offers the date range and a Today shortcut', () => {
 // ---------- the spending tab ----------
 
 test('the page has two tabs, rounds and usage, and rounds is the one shown first', () => {
-  const html = roundsLogHtml([], [], 'n', '<div class="usage-rows">SPENDING</div>');
+  const html = roundsLogHtml([], 'n', '<div class="usage-rows">SPENDING</div>');
 
   assert.ok(html.includes('data-tab="rounds"') && html.includes('data-tab="usage"'), 'both tabs');
   assert.ok(html.includes('id="tab-usage"'), 'the usage tab has a body');
@@ -127,7 +127,7 @@ function pageScript(html: string): string {
 }
 
 test('the page opens on today, and All dates clears the range', () => {
-  const html = roundsLogHtml([], [], 'n');
+  const html = roundsLogHtml([], 'n');
 
   assert.match(pageScript(html), /function setToday/, 'the range is set on load');
   assert.ok(html.includes('id="alldates"'), 'with a way back to everything');
@@ -161,7 +161,7 @@ test('an instant bound compares against the instant the round started', () => {
  * pages, like the flat tab strip above the table, not actions on the current view.</p>
  */
 test('the three date buttons are painted as buttons, not as secondary text', () => {
-  const html = roundsLogHtml([], [], 'n');
+  const html = roundsLogHtml([], 'n');
 
   for (const id of ['today', 'alldates', 'clear']) {
     const button = [...html.matchAll(/<button[^>]*>/g)].map((m) => m[0]).find((b) => b.includes(`id="${id}"`));
@@ -177,7 +177,7 @@ test('what the three are painted with is the one primary rule, and nothing later
   // A regex naming the shapes somebody thought of cannot cover the ones they did not, so the guard
   // is inverted: every selector in this stylesheet that mentions a button at all must be one of the
   // four known forms. A fifth is a red test, whatever it is called.
-  const html = roundsLogHtml([], [], 'n');
+  const html = roundsLogHtml([], 'n');
   const css = html.slice(html.indexOf('<style>'), html.indexOf('</style>'));
 
   assert.match(css, /\n\s*button \{[^}]*var\(--vscode-button-background\)/, 'the bare rule is the primary background');

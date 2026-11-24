@@ -44,6 +44,15 @@ on:
         required: false
         type: boolean
         default: false
+      # Reaches the `mcp-binaries` legs only, and only on a DISPATCH: a tag always stamps its own version. Empty keeps the
+      # `0.0.0-manual` stamp. A 2.x release candidate lets a hand check run the automatic v1 -> 2.0 migration, which starts
+      # only for a build whose major version is 2 or more (`MigrationV2.ShouldRunAutomatically`). Nothing else is accepted,
+      # so a dispatch can never stamp a version that looks like a real release. It is a build and a workflow artifact, never a release.
+      version:
+        description: 'mcp only: stamp this 2.x release candidate, e.g. 2.0.0-rc.1 (empty: 0.0.0-manual)'
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -235,6 +244,34 @@ jobs:
         with:
           persist-credentials: false
 
+      # The version is derived ONCE, before anything is built, because the binary is stamped with it and
+      # the smoke step then asserts the binary says the same thing. It used to be computed inside
+      # the packaging step only, which named the asset correctly while the binary inside it still
+      # reported the SDK's default — the extension had no way to ask a file what it was.
+      #
+      # FIRST, not after the tests: a malformed `version` input is refused in seconds, and the Windows legs
+      # spend close to half an hour on `Build and test`. A tag stamps its own version and ignores the input.
+      # A dispatch stamps `0.0.0-manual`, or the input when it is a 2.x release candidate — the one shape that
+      # makes the build a v2 build (the automatic v1 -> 2.0 migration starts at major 2) without making it
+      # look like a release. The input reaches the shell through `env:`, never as an expression inside the command.
+      - name: The version this release stamps
+        shell: bash
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/mcp-v* ]]; then
+            VERSION="${GITHUB_REF_NAME#mcp-v}"
+          elif [ -n "$INPUT_VERSION" ]; then
+            if ! [[ "$INPUT_VERSION" =~ ^2\.[0-9]+\.[0-9]+-rc\.[0-9]+$ ]]; then
+              echo "::error::the version input '$INPUT_VERSION' is not a 2.x release candidate (2.<minor>.<patch>-rc.<n>, e.g. 2.0.0-rc.1)"
+              exit 1
+            fi
+            VERSION="$INPUT_VERSION"
+          else
+            VERSION="0.0.0-manual"
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
       # THE SUBMODULE, without which the tests below cannot pass.
       #
       # `StageRulesTests` reads `.agents/conventions/` — it asks the production collector which
@@ -273,16 +310,6 @@ jobs:
           else
             ./src_mcp/tests/bin/Release/net10.0/CoaiMcp.Tests${{ runner.os == 'Windows' && '.exe' || '' }}
           fi
-
-      # The version is derived ONCE, before the publish, because the binary is stamped with it and
-      # the smoke step then asserts the binary says the same thing. It used to be computed inside
-      # the packaging step only, which named the asset correctly while the binary inside it still
-      # reported the SDK's default — the extension had no way to ask a file what it was.
-      - name: The version this release stamps
-        shell: bash
-        run: |
-          if [[ "$GITHUB_REF" == refs/tags/mcp-v* ]]; then VERSION="${GITHUB_REF_NAME#mcp-v}"; else VERSION="0.0.0-manual"; fi
-          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
 
       - name: Publish
         shell: bash
@@ -460,6 +487,23 @@ jobs:
         if: ${{ !startsWith(matrix.rid, 'win-') }}
         shell: bash
         run: sha256sum "$ASSET" > "$ASSET.sha256"
+
+      # A MANUAL build keeps its package, so a person can take it for a hand check. Windows already does:
+      # the shared signing workflow uploads `mcp-win-<arch>` with the final zip and its checksum, for a dispatch as
+      # for a tag. This is the same for the other four platforms, under `mcp-<rid>` (no pattern of `mcp-win-*`
+      # matches it). The files are the ones a release would carry, named as the installer asks for them
+      # (`coai-mcp-<version>-<rid>.tar.gz` and its `.sha256`). It is an ARTIFACT of this run, kept a week — not
+      # a release, not a tag, not an upload to one: the next step is what attaches to a release, and it stays tag-only.
+      - name: Keep the package as a workflow artifact (a manual build)
+        if: ${{ github.event_name == 'workflow_dispatch' && !startsWith(matrix.rid, 'win-') }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mcp-${{ matrix.rid }}
+          path: |
+            ${{ env.ASSET }}
+            ${{ env.ASSET }}.sha256
+          if-no-files-found: error
+          retention-days: 7
 
       # A DRAFT, and that is the fix for a real 404. A release created here is created by whichever
       # matrix leg finishes FIRST, and the extension's update check reads `…/releases` immediately —

@@ -21,9 +21,9 @@ function paneOf(state: PanelState, place: string): PageNode {
 
 /**
  * The old sections that move as they are, each with the place that holds it and the builder BOTH pages draw it with:
- * every Settings section but the reviewers (now Models), the prompts (split), the keys (counted over every row, below),
- * and the three that pick from the catalog since E4.2 — the consultant, the question consultant and the Security lane
- * (consultantPicks, qconsultRowPicks and securityPicks tests) — and Chat, drawn from the rows ticked Chat with its
+ * every Settings section but the reviewers (now Models), the stages, the keys (counted over every row, below),
+ * and the two that pick from the catalog since E4.2 — the consultant and the question consultant
+ * (consultantPicks and qconsultRowPicks tests) — and Chat, drawn from the rows ticked Chat with its
  * prompt presets inline since E4.6b (chatOnTheNewPage.test.ts).
  *
  * <p>LISTED, not read off the old page's `PANEL_SECTIONS` as it was until E5's prerequisite (b): E5.1 deletes that
@@ -67,32 +67,24 @@ test('every old section that moves whole is drawn in its place, by its own build
   assert.equal(checked, 5, 'five old sections move whole: the gate, limits, team servers, this side and the MCP server');
 });
 
-test('the prompts section is split: the switches and budgets on Stages, the round pickers on Prompts per round', () => {
+test('Stages draws the budgets of the roles and no round picker — the per-round prompt picker is gone (v2 E3.S2)', () => {
   const state = panelState('reviewers');
   const stages = paneOf(state, 'reviews/stages');
-  const prompts = paneOf(state, 'reviews/prompts');
 
   assert.ok(stages.find((node) => node.dataset.setting === 'rounds').length > 0, 'Stages draws no rounds');
   // One switch per role (E4.3): it lives on Roles & prompts, so Stages draws the role's state in words, not a second tick.
   assert.deepEqual(stages.find((node) => node.dataset.setting === 'roleEnabled'), []);
-  assert.deepEqual(stages.find((node) => node.dataset.prompt !== undefined), [], 'a round picker drawn twice on one page is two controls for one setting');
-  assert.ok(prompts.find((node) => node.dataset.prompt !== undefined && node.dataset.round === '1').length > 0, 'Prompts per round draws no picker');
-  assert.deepEqual(prompts.find((node) => node.dataset.setting === 'rounds'), []);
+  assert.deepEqual(stages.find((node) => node.dataset.prompt !== undefined), [], 'a round picker is drawn for a prompt the server no longer picks per round');
 });
 
-test('on the running page a round picker writes a round pick, and each control is there once', () => {
+test('on the running page each rounds box is there once, and no round picker is', () => {
   const state = panelState('reviewers');
-  const page = runPanel(state, { html: catalogHtml(state, 'test-nonce', 'reviews/prompts') });
-  const keys = page.prompts.map((one) => `${one.dataset['prompt']}/${one.dataset['round']}`);
-  assert.deepEqual(keys, [...new Set(keys)], 'one round of one role has two pickers');
+  const page = runPanel(state, { html: catalogHtml(state, 'test-nonce', 'reviews/stages') });
   const rounds = page.controls.filter((one) => one.dataset['setting'] === 'rounds').map((one) => one.dataset['role']);
+
+  assert.ok(rounds.length > 0, 'the page draws no rounds box at all');
   assert.deepEqual(rounds, [...new Set(rounds)], 'one role has two rounds boxes');
-
-  const picker = page.prompts[0]!;
-  picker.value = picker.options.at(-1)?.value ?? '';
-  picker.fire('change');
-
-  assert.deepEqual(page.posted.filter((one) => one['type'] === 'prompt').map((one) => one['role']), [picker.dataset['prompt']]);
+  assert.deepEqual(page.prompts, [], 'a round picker is drawn for a prompt the server no longer picks per round');
 });
 
 test('no id is drawn twice on the new page — a label would name the wrong control', () => {
@@ -134,7 +126,7 @@ test('a feature tab names the rows ticked for it, and a row ticked for something
 test('a feature tab with nothing ticked says so, and the consultant says who answers until then (D2)', () => {
   const state = { ...panelState('reviewers'), catalogRows: DEFAULT_VENDORS };
 
-  assert.match(strip(state, 'security'), /No model is ticked for the security lane yet/);
+  assert.match(strip(state, 'consultants/qconsult'), /No model is ticked for the consask yet/);
   assert.match(strip(state, 'consultants/consultant'), /each caller asks the pair it ships with/);
 });
 

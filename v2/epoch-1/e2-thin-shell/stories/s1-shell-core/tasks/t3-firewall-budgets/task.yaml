@@ -1,0 +1,14 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t3-firewall-budgets
+title: "entry-firewall.mjs (metafile inputs and outputs[*].imports) + byte budgets + ESLint no-restricted-imports on the shell"
+kind: code
+complexity: 5
+dependsOn:
+  - t2-bundles
+parallel: false
+files:
+  - src_vs_code/scripts/entry-firewall.mjs
+  - src_vs_code/eslint.config.mjs
+dod:
+  - id: d1
+    item: "a planted require('node:fs') in the entry fails CI"

@@ -29,8 +29,6 @@ public static class ServerNoticeCodes
     /// person to look at a vendor that was never slow. Still written down, because the launch may well have been billed.
     /// </summary>
     public const string ReviewerCancelled = "reviewer-cancelled";
-    public const string SecurityLaneIncomplete = "security-lane-incomplete";
-
     public const string ReviewerRateLimited = "reviewer-rate-limited";
 
     /// <summary>A reviewer process that ended with a non-zero exit.</summary>
@@ -61,8 +59,11 @@ public static class ServerNoticeCodes
     /// <summary>Written by the run itself, from the catch that wraps the host.</summary>
     public const string Crash = "crash";
 
-    /// <summary>A consultation the cadence owed and nobody could have — the round went ahead (research/PLAN_consult_on_a_cadence.md).</summary>
-    public const string CadenceStoodDown = "cadence-stood-down";
+    /// <summary>
+    /// The v2 migration released a held gate whose card a person had ANSWERED: v1 never applied the answer and v2 never waits, so the session was converted to
+    /// good_enough. Subject is the CARD id — written once per card (E1.S4, <c>v2/epoch-1/e1-gate-simplify/stories/s4-migrate-v2/SPEC.md</c> §5.4).
+    /// </summary>
+    public const string V2ConvertedAnsweredHold = "v2-converted-answered-hold";
 
     /// <summary>Every code, for the test that asserts the redactor rewrites none of them.</summary>
     public static IReadOnlyList<string> All =>
@@ -70,7 +71,6 @@ public static class ServerNoticeCodes
         Refused,
         ReviewerTimedOut,
         ReviewerCancelled,
-        SecurityLaneIncomplete,
         ReviewerRateLimited,
         ReviewerExit,
         ReviewerNotStarted,
@@ -83,6 +83,6 @@ public static class ServerNoticeCodes
         KilledReviewers,
         UncleanExit,
         Crash,
-        CadenceStoodDown,
+        V2ConvertedAnsweredHold,
     ];
 }
