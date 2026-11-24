@@ -13,8 +13,8 @@
 > answered O1–O7, N1–N5, Q1–Q2 and decision 20; no question for the owner was open before the stop below. This text was cut from 154 KB:
 > the decision history, the findings F1 and F2 in full, the step 0 tables and the installer's design are in
 > [PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_appendix.md](PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_appendix.md),
-> word for word where they were moved. **STOPPED at 1.2; re-review `4082dc2c` `proceed` (5 findings folded into the
-> revision); the owner's approval owed, then epoch 2.** Epoch 1 is stopped for re-review: its first change was 1.1
+> word for word where they were moved. **Epoch 2 open, approved by the owner 2026-11-24, no E1 code yet. Before it: STOPPED at 1.2; re-review `4082dc2c` `proceed` (5 findings folded into the
+> revision); the owner approved epoch 2.** Epoch 1 is closed: its first change was 1.1
 > (K5 of E1, gate G2), and its second, 1.2, moves the person's refusals and the Stop out of `globalState` into a file
 > that is merged under a lock. The text of § 3, § *Security*, § *Growth surfaces*, the residuals, R12 and C4 below is
 > REVISED to entry 1.2, and with them the lines of § 2, the test plan, the Definition of Done, R8 and the scope of E1
@@ -34,7 +34,7 @@ quota gauge, measured 2026-10-10),
 
 ## Plan changes
 
-> Epoch 1 · approved 2026-11-19 · by reviewers · state: stopped
+> Epoch 1 · approved 2026-11-19 · by reviewers · state: closed
 
   The gate's round 1 on `653140c3`: `proceed`, codex only; antigravity did not receive the plan whole. Its 7
   findings, the reply's commands and the consultants' answer on the split are folded into this approved text. They
@@ -87,7 +87,11 @@ Narrowed: no — nothing left the scope, the Definition of Done, the merge condi
   the test plan; R2.)
   (The commits of epoch 1 are this plan's own documents — the stories document of E1, its two specs and the record
   of gate G2 — and the revision rewrote them in place. No code exists for a judge to sort.)
-  (Epoch 2 is not open. Its line is written with the owner's approval.)
+  (Approved by the owner on 2026-11-24, as revised, with one answer on the per-side question: a second side of the
+  machine (a WSL window beside the Windows one) is used for the chat of a `Creds:` terminal only, not for the
+  accounts list. So the stated justification of candidate C4b is not met, and C4b stays a candidate.)
+
+> Epoch 2 · approved 2026-11-24 · by owner · state: open
 
 ## The goal
 
@@ -1382,7 +1386,8 @@ plan (kind `epics`), recorded in the ledger — **but for C1, which this approve
   now copies a refusal it sees into its own file. What is left: a record of what was lifted, so that a stale copy
   is not taken again (residual 4 of the file) and a lift on one side can reach the others; and the same carrying
   for the Stop. Justified by R8 or R12 showing a lifted refusal that came back, by run (d) of R12 showing a copy
-  that was lost, or by the owner working on two sides with terminals of the same hosts.
+  that was lost, or by the owner working on two sides with terminals of the same hosts.. The owner answered on
+  2026-11-24 that a second side is used for the chat only, so this justification is not met.
 - **C5 — the Claude usage only on a press, or road (b), or the account only.** Justified by W7 failing; the planner
   recommends the account only.
 - **C6 — one lock between VS Code windows for the round.** Justified by R2 or R9 showing that two windows doubling
