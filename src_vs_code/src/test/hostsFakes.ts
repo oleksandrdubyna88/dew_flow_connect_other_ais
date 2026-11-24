@@ -139,7 +139,8 @@ export class FakeDisk implements RefusalsDisk {
   refusedHosts = (): readonly string[] => (this.file()?.refused ?? []).map((one) => one.host).sort();
 }
 
-export const instant = async (): Promise<void> => undefined;
+/** The pause between tries, as the tests have it: a macrotask, so the other writers of one test run through their steps meanwhile. */
+export const instant = (): Promise<void> => new Promise((resolve) => { setImmediate(resolve); });
 
 export interface Window {
   readonly view: View;
