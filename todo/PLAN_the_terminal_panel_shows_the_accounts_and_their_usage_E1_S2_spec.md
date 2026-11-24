@@ -231,7 +231,7 @@ this text was parsed and not run** (§ A2.0). The coder may write the constant i
 times, 58 backslashes and no backtick, so a template literal needs every backslash twice and every `${` escaped);
 the hash test checks the result.
 
-Pinned sha256: PENDING — the code story writes the value here and in the test, in one commit (the procedure below).
+Pinned sha256: `e42bae875254ba509d2be0ed0c1cc079999e08d1be0f82bfb2edb35ac55d8ebd`
 
 Provenance, not the pin: when M-A1…M-A14 were run, the block that stood here hashed to
 `eeb2e82975f9cc04004eae2d2d7c3a81363c3ab05268453053cd60625a13efe6`. **The block changed after those measurements, at
