@@ -136,7 +136,7 @@ public static class KimiCredentialsLock
 
     /// <summary>
     /// The server's gate on <paramref name="target"/>'s sign-in, waited for in one-second slices until taken or <paramref name="ct"/>
-    /// fires (<see cref="OperationCanceledException"/>, which the executor already reads as the row's end). <see cref="Hold.Unusable"/>
+    /// fires — the token also cuts the slice in progress, so a cancel is read within milliseconds, not at the slice's end (<see cref="OperationCanceledException"/>, which the executor already reads as the row's end). <see cref="Hold.Unusable"/>
     /// at once for a folder with no key — and nothing is made under <see cref="Root"/> — or a lock folder or file that cannot be used.
     /// </summary>
     public static async Task<Hold> TakeAsync(string target, CancellationToken ct)
@@ -155,7 +155,7 @@ public static class KimiCredentialsLock
         while (true)
         {
             ct.ThrowIfCancellationRequested();
-            var hold = await Task.Run(() => HeldFile.TakeVerified(path, Slice), ct);
+            var hold = await Task.Run(() => HeldFile.TakeVerified(path, Slice, ct: ct), ct);
             if (hold is not Hold.Busy)
             {
                 return Recorded(hold, target);

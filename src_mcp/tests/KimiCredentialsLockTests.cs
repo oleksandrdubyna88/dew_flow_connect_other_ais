@@ -239,13 +239,19 @@ public sealed class KimiCredentialsLockTests : IDisposable
         using var rooted = Rooted();
         Directory.CreateDirectory(Locks);
         using var holder = ((Hold.Taken)HeldFile.Take(KimiCredentialsLock.PathFor(Persons))).Stream;
-        using var cancelled = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
-        var waited = Stopwatch.StartNew();
+        using var cancelled = new CancellationTokenSource();
+        var waiting = KimiCredentialsLock.TakeAsync(Persons, cancelled.Token);
+        await Task.Delay(100, TestContext.Current.CancellationToken);
 
-        var wait = async () => await KimiCredentialsLock.TakeAsync(Persons, cancelled.Token);
+        // The clock starts at the CANCEL, not at the call: a timer-driven cancel (the former CancelAfter(200 ms) and a 2 s bound on the whole wait) read a
+        // starved thread pool's late timer as a slow cancel, and failed about every second CI run at 2.006-2.013 s. The gate waits in one-second slices, and a
+        // wait that ignored the token inside a slice answered about 900 ms after this cancel — so 500 ms tells a wait cut by the token from one that is not.
+        var afterCancel = Stopwatch.StartNew();
+        await cancelled.CancelAsync();
+        var wait = async () => await waiting;
 
         await wait.Should().ThrowAsync<OperationCanceledException>();
-        waited.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(2));
+        afterCancel.Elapsed.Should().BeLessThan(TimeSpan.FromMilliseconds(500), "the token cuts the slice in progress; it does not wait for the slice to end");
     }
 
     [Fact]
