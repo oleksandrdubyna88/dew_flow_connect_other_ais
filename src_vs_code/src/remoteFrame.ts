@@ -2,6 +2,7 @@ import { isSessionId } from './chatSource';
 import { isTerminalName } from './chatStore';
 import { NO_NAMES, SessionNames, collectNames } from './claudeQuestion';
 import { projectDirNames } from './claudeSessions';
+import { framed } from './remoteFraming';
 import { REGISTRY_MAX, REMOTE_PROTOCOL, RemoteCall, TAIL_MAX, isFolderName } from './remoteScript';
 
 /**
@@ -117,16 +118,14 @@ export function readRemote(run: { readonly code: number; readonly stdout: string
 
 const unreadable = (why: Unreadable): RemoteRead => ({ kind: 'unreadable', why });
 
-/** The lines between the LAST `COAI-BEGIN 1` and the first `COAI-END` after it. */
+/** The lines between the LAST `COAI-BEGIN 1` and the first `COAI-END` after it: the shared finder's answer, in this parser's own faults. */
 function framedLines(stdout: string): readonly string[] {
-  const lines = stdout.split('\n');
-  const begin = lines.lastIndexOf(`COAI-BEGIN ${REMOTE_PROTOCOL}`);
-  if (begin < 0) {
-    return fail(lines.some((line) => line.startsWith('COAI-BEGIN ')) ? 'version' : 'no-sentinel');
+  const found = framed(stdout, { begin: `COAI-BEGIN ${REMOTE_PROTOCOL}`, family: 'COAI-BEGIN ', end: 'COAI-END' });
+  if (found.kind === 'no-begin') {
+    return fail(found.otherVersion ? 'version' : 'no-sentinel');
   }
-  const end = lines.indexOf('COAI-END', begin + 1);
 
-  return end < 0 ? fail('cut') : lines.slice(begin + 1, end);
+  return found.kind === 'no-end' ? fail('cut') : found.lines;
 }
 
 /** A marker and the data lines after it. */
