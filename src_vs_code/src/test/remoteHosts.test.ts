@@ -784,6 +784,10 @@ test('A1-T27 (the keeper half): a writer that woke up after a take-over loses no
   const c = windowOver(backing, disk, { mode: 'whole-state' });
   await b.keeper.commit({ kind: 'person', host: 'h', answer: 'no' });
   await c.keeper.admit('probe');
+  // the copy in the list is gone too (a stale whole-state write), so only the memory of the newest file can bring the refusal back
+  backing.values.set(KEY, []);
+  b.view.sync();
+  c.view.sync();
   const written = disk.file() as { gen: number };
   // a stale writer renames a file of the same gen and another writer over it: it holds g and not h
   disk.files.set('refused.json', textOf({ v: 1, gen: written.gen, by: 'woke-up', refused: [{ host: 'g', utc: NOW }] }));
@@ -791,9 +795,14 @@ test('A1-T27 (the keeper half): a writer that woke up after a take-over loses no
   assert.deepEqual(disk.refusedHosts(), ['g', 'h'], 'the union was not written');
   // B is closed before its next read; a third window that had read the newer file writes the union
   assert.equal((await c.keeper.admit('probe')).kind, 'read');
-  disk.files.set('refused.json', textOf({ v: 1, gen: written.gen, by: 'woke-up-too', refused: [{ host: 'g', utc: NOW }] }));
+  await b.keeper.commit({ kind: 'person', host: 'y', answer: 'no' });
+  backing.values.set(KEY, []);
+  b.view.sync();
+  c.view.sync();
   assert.equal((await c.keeper.admit('probe')).kind, 'read');
-  assert.deepEqual(disk.refusedHosts(), ['g', 'h'], 'a window that saw the newer file did not write the union');
+  disk.files.set('refused.json', textOf({ v: 1, gen: written.gen + 1, by: 'woke-up-too', refused: [{ host: 'g', utc: NOW }] }));
+  assert.equal((await c.keeper.admit('probe')).kind, 'read');
+  assert.ok(disk.refusedHosts().includes('h') && disk.refusedHosts().includes('g'), 'a window that saw the newer file did not write the union');
   // no window that saw it: the copy is gone too, the host is read (residual 5b, asserted so that it is seen)
   const d = new FakeDisk();
   const bk = new Backing();
