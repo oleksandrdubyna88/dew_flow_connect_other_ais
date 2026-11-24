@@ -65,6 +65,7 @@ public sealed class TheLinkResolverIsOneRoadTests
         ["src_mcp/runners/Worktrees/SubmoduleMounts.cs"] = "decides which declared mounts of a tree the product made are INSPECTED (read-only git status); nothing is deleted by it, and the tree's removal is guarded by RealPath",
         ["src_mcp/runners/Worktrees/SubmodulePopulator.cs"] = "the clone source IS the folded path it checked: NoLinksBetween lstat-s every directory from the checkout down to it, so no link can sit on the way",
         ["src_mcp/src/Acp/KimiClearMarkerMode.cs"] = "deletes one file whose DIRECT parent string equals the product's own lock root and whose name matches 16 hex digits plus .survivors.json; a link there is unlinked, never followed",
+        ["src_mcp/src/PlanReportMode.cs"] = "--plan-report folds the folder argument only to NAME the items below it and reads no file through it: the walk skips every link (a reparse point) and descends only by directory name; the StartsWith is over the recorded workItem STRINGS, a text comparison that opens nothing",
         ["src_mcp/src/Server/QuestionConsult/QuestionConsultSettings.cs"] = "a deny-list of places: every root is compared as written AND at its RealPath, and a root that cannot be resolved is refused",
     };
 

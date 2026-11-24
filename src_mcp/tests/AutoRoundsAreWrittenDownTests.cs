@@ -53,7 +53,7 @@ public sealed class AutoRoundsAreWrittenDownTests
     {
         await using var harness = new CodeRoundHarness();
         await harness.InitializeAsync();
-        var service = harness.Service(autonomous: true, log: Log);
+        var service = harness.Service(log: Log);
         await service.OpenAsync(harness.Repo, "feature");
         NobodyAnswers();
 
@@ -81,7 +81,7 @@ public sealed class AutoRoundsAreWrittenDownTests
     {
         await using var harness = new CodeRoundHarness();
         await harness.InitializeAsync();
-        var service = harness.Service(threshold: 0, maxRounds: 1, autonomous: true, log: Log);
+        var service = harness.Service(threshold: 0, maxRounds: 1, log: Log);
         await service.OpenAsync(harness.Repo, "feature");
         CodeRoundHarness.SetAnswer(CodeRoundHarness.OneMajor);
 
@@ -93,22 +93,5 @@ public sealed class AutoRoundsAreWrittenDownTests
         var line = AutoLines.Should().ContainSingle().Subject;
         line.Level.Should().Be(LogEventLevel.Information);
         line.Text.Should().Contain("good_enough under policy auto").And.Contain("still gate after 1 round(s)");
-    }
-
-    [Fact]
-    public async Task UnderHuman_TheRoundGetsNoAutoNote()
-    {
-        await using var harness = new CodeRoundHarness();
-        await harness.InitializeAsync();
-        var service = harness.Service(autonomous: false, log: Log);
-        await service.OpenAsync(harness.Repo, "feature");
-        NobodyAnswers();
-
-        var reply = Parse(await service.ReviewPlanAsync(harness.Repo, "feature", Plan, TestContext.Current.CancellationToken));
-
-        reply.GetProperty("verdict").GetString().Should().Be("call_human", reply.ToString());
-        NoteInTheSessionFile(harness).Should().BeEmpty("a person's policy decided this round, and says nothing of policy auto");
-        NoteInTheDatabase(harness).Should().BeEmpty();
-        AutoLines.Should().BeEmpty();
     }
 }

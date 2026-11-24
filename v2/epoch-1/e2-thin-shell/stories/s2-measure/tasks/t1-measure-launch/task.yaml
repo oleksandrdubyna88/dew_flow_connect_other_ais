@@ -1,0 +1,14 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t1-measure-launch
+title: "run-host.mjs measure launch: fresh profile and data dir per sample, isActive false asserted, driver clock, fresh ready ack, M1/M2/M3"
+kind: code
+complexity: 6
+dependsOn: []
+parallel: false
+files:
+  - src_vs_code/scripts/run-host.mjs
+  - src_vs_code/src/test/host/measureScenario.ts
+  - src_vs_code/shell/measure.ts
+dod:
+  - id: d1
+    item: "a planted 3 s sleep in activation fails the launch"

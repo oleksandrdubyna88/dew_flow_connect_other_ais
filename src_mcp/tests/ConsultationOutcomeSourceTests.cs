@@ -75,7 +75,7 @@ public sealed class ConsultationOutcomeSourceTests : IDisposable
             Status = ConsultationStatuses.Closed,
             Outcome = ConsultationOutcomes.Solved,
             OutcomeBy = "person",
-            Reason = "all 5 of its turns are used (COAI_CONSULT_TURNS sets the cap)",
+            Reason = "all 5 of its turns are used (COAI_CONS_TURNS sets the cap)",
             EndedUtc = "2026-09-17T09:30:00.0000000Z",
         });
 

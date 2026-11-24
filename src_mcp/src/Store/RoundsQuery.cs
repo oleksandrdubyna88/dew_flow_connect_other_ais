@@ -18,10 +18,7 @@ public sealed record LoggedFinding(
     string Providers,
     string Resolution,
     string Reason,
-    bool ReRaised)
-{
-    public Core.Security.SecurityFindingDetails? SecurityEvidence { get; init; }
-}
+    bool ReRaised);
 
 /// <summary>One round, with the findings it produced. Keyed the way the page keys its own rows.</summary>
 public sealed record LoggedRound(
@@ -674,8 +671,7 @@ public static class RoundsQuery
             Text(rows, "providers"),
             Text(rows, "resolution"),
             Text(rows, "reason"),
-            Number(rows, "re_raised") == 1)
-        { SecurityEvidence = SecurityFindingStore.Read(rows) };
+            Number(rows, "re_raised") == 1);
 
     /// <summary>
     /// The consultations, newest first, bounded by the same limit the rounds are.

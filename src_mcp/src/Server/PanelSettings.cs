@@ -252,15 +252,6 @@ public sealed record PanelSettings
 
     public PanelConfig Rounds { get; init; } = new();
 
-    /// <summary>
-    /// The policy in <see cref="Rounds"/> is a default taken because the settings file was there and could not be read (and the process
-    /// environment names no policy). Rounds run on it; no hold from before policy auto is released on it.
-    /// </summary>
-    /// <remarks>Set by <see cref="PanelServiceHost"/> alone; false in every settings object built any other way.</remarks>
-    public bool PolicyUnread { get; init; }
-
-    public SecurityLaneSetting SecurityLane { get; init; } = new();
-
     public int GlobalConcurrency { get; init; } = 3;
 
     public int PerProviderConcurrency { get; init; } = 2;
@@ -318,49 +309,6 @@ public sealed record PanelSettings
     /// on this change's plan round.</para>
     /// </remarks>
     public IReadOnlyList<TimeSpan> RetryLadder { get; init; } = Runners.Reviewers.RetryLadder.Default;
-
-    /// <summary>
-    /// How long an escalation waits for a person before answering "nobody answered yet".
-    /// </summary>
-    /// <remarks>
-    /// Fifteen minutes (thirty until S3 of the question consultant, A10), then the card is marked expired and
-    /// the fallback is the family's: the main AI asks in the chat, as `remote-ask.md` prescribes on
-    /// `no_answer_yet`. Waiting forever would hand the decision to whichever MCP client's own timeout fires first.
-    /// </remarks>
-    public TimeSpan EscalationBudget { get; init; } = TimeSpan.FromMinutes(DefaultEscalationMinutes);
-
-    /// <summary>The one number the default above and the reader below share.</summary>
-    public const int DefaultEscalationMinutes = 15;
-
-    /// <summary>
-    /// Which prompt each role uses on each round — <c>role -> [round1, round2, ...]</c>, by
-    /// catalog id. An empty or unknown entry falls back to the rotation or the universal prompt.
-    /// </summary>
-    /// <summary>
-    /// Deal the PLAN stage's lenses across the vendors instead of giving every vendor the same one.
-    /// </summary>
-    /// <remarks>
-    /// <para>Opt-in, and off by default, because of what it trades. With it off — the shipped
-    /// behaviour — every vendor answers the same question and <c>FindingDedup</c> merges what they
-    /// agree on, which is the strongest signal this product produces. With it on every lens gets
-    /// asked once instead, at half the launches, and that agreement is gone.</para>
-    /// <para>Two flags rather than one because the stages are not alike: a plan has three lenses for
-    /// one role, a code round has three roles.</para>
-    /// </remarks>
-    public bool DealPlanLenses { get; init; }
-
-    public bool DealCodeLenses { get; init; }
-
-    public IReadOnlyDictionary<string, IReadOnlyList<string>> PromptsPerRound { get; init; } =
-        new Dictionary<string, IReadOnlyList<string>>();
-
-    /// <summary>
-    /// Spend the rounds on DIFFERENT lenses instead of asking the same broad question again.
-    /// </summary>
-    /// <remarks>
-    /// Off by default: rotation changes what a second round means, and a person who has not asked
-    /// for it should get the prompt they last read in the panel.
-    /// </remarks>
 
     /// <summary>Where sessions, prompts overrides and round artifacts live.</summary>
     public string DataDir { get; init; } = DefaultDataDir;
@@ -423,7 +371,7 @@ public sealed record PanelSettings
         env("COAI_CONSULTANT_HOMES") is { Length: > 0 } homes ? homes : Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
 
     /// <summary>The root a <see cref="Runners.Worktrees.WorktreeManager"/> is given: <see cref="RoundTreeRoot"/>, or the data dir's own.</summary>
-    /// <remarks>One expression for every place that builds a manager — the service and the <c>--cadence</c> reader.</remarks>
+    /// <remarks>One expression for every place that builds a manager.</remarks>
     public string WorktreeRoot => RoundTreeRoot is { Length: > 0 } roundTrees ? roundTrees : Path.Combine(DataDir, "worktrees");
 
     /// <summary>
@@ -469,72 +417,6 @@ public sealed record PanelSettings
     /// healthy and fast for a capped request.
     /// </remarks>
     public int LocalMaxTokens { get; init; } = 8192;
-
-    /// <summary>
-    /// Work without interrupting the person until there is no other way.
-    /// </summary>
-    /// <remarks>
-    /// Off by default, like the two below: a gate that starts issuing orders nobody asked for is one
-    /// people turn off entirely. What it produces is a COMMAND in the round's reply, not a change to
-    /// what the gate decides.
-    /// </remarks>
-    public bool Autonomous { get; init; }
-
-    /// <summary>Break an accepted plan into epics and stories, and close each one properly.</summary>
-    public bool SplitPlan { get; init; }
-
-    /// <summary>
-    /// The local reviewer stands down once every cloud reviewer has answered and they found at most one
-    /// remark between them — the launch already on the card finishes, no other starts (issue #485). Off by
-    /// default: it changes what the gate RUNS. From <c>COAI_STOP_LOCAL_WHEN_QUIET</c>.
-    /// </summary>
-    public bool StopLocalWhenQuiet { get; init; }
-
-    /// <summary>
-    /// Order the work in the subagent model tiers, on the caller's own three models (strongest, implementation, coder).
-    /// </summary>
-    /// <remarks>
-    /// The name is historical: the switch named Fable to every caller until issue #117 made the models
-    /// a per-caller choice (<see cref="CommandModels"/>). Renaming the stored key would be a migration of
-    /// every settings file for a word nobody sees.
-    /// </remarks>
-    public bool SplitWithFable { get; init; }
-
-    /// <summary>
-    /// The models (three slots) a person configured, per caller kind — only those; the rest resolve through
-    /// <see cref="Core.Commands.CommandModels.For"/>. From <c>COAI_COMMAND_MODELS</c>; issue #117.
-    /// </summary>
-    public IReadOnlyDictionary<string, Core.Commands.ModelPair> CommandModels { get; init; } =
-        new Dictionary<string, Core.Commands.ModelPair>();
-
-    /// <summary>
-    /// The commands a person added, from <c>COAI_COMMANDS</c> (issue #467) — handed to the caller after the
-    /// built-in orders, each with the text of its own file. None unless somebody added one.
-    /// </summary>
-    public IReadOnlyList<Core.Commands.CustomCommand> CustomCommands { get; init; } = [];
-
-    /// <summary>
-    /// How often split work is gated — once per epic unless <c>COAI_GATE_PER</c> says <c>task</c>
-    /// (issue #131). Never per story.
-    /// </summary>
-    public Core.Commands.GateScope GatePer { get; init; } = Core.Commands.GateScope.Epic;
-
-    /// <summary>
-    /// Whether the gate orders a consultation per group of epics, and refuses without one —
-    /// <c>COAI_CADENCE_MODE</c> = off | remind | require (<c>research/PLAN_consult_on_a_cadence.md</c>).
-    /// </summary>
-    /// <remarks><c>remind</c> by default (D4): the extension is on the Marketplace, and a refusal by default
-    /// would change every user's gate on an update. The operator turns <c>require</c> on.</remarks>
-    public Core.Cadence.CadenceMode CadenceMode { get; init; } = Core.Cadence.CadenceMode.Remind;
-
-    /// <summary>One consultation per this many epics — <c>COAI_CADENCE_EVERY</c>, three by the operator's rule.</summary>
-    public int CadenceEvery { get; init; } = Core.Cadence.CadenceRule.DefaultEvery;
-
-    /// <summary>From this many epics the caller is asked which carry the most risk — <c>COAI_CADENCE_RISK_THRESHOLD</c>.</summary>
-    public int CadenceRiskThreshold { get; init; } = Core.Cadence.CadenceRule.DefaultRiskThreshold;
-
-    /// <summary>The most risky epics and stories one plan may name — <c>COAI_CADENCE_RISK_MAX</c> (D6).</summary>
-    public int CadenceRiskMax { get; init; } = Core.Cadence.CadenceRule.DefaultRiskMax;
 
     /// <summary>
     /// How many epics a plan needs before the feature gate runs for it — <c>COAI_FEATURE_MIN_EPICS</c>,
@@ -942,7 +824,39 @@ public sealed record PanelSettings
         // catalog and the sentences it refused join `Unrecognised`. Calling the parser or the
         // composer again for the second half would let the two halves of one answer describe two
         // different values of the setting. (codex, story B2's second code round.)
-        SecurityLaneSetting.Apply(WithCatalog(env, ParseRoles(env(Key.Roles))), env(SecurityLaneSetting.Key));
+        FromRenamedEnvironment(WithRenamedKeys(env));
+
+    private static PanelSettings FromRenamedEnvironment(Func<string, string?> env) =>
+        WithCatalog(env, ParseRoles(env(Key.Roles)));
+
+    /// <summary>
+    /// <c>COAI_CONS_*</c> and <c>COAI_CONSASK_*</c> are the names of what v1 called <c>COAI_CONSULT_*</c> and
+    /// <c>COAI_QCONSULT_*</c> (server.md § 2). The reader asks for the new names; an unset (or empty) new key falls back to the old
+    /// one, so a settings file or an environment an older extension wrote keeps working, and when BOTH are set the new key wins.
+    /// </summary>
+    /// <remarks>
+    /// Spelled as a rule over the prefix, not a list: a key added under one of them later is a fallback too, and the two
+    /// prefixes cannot disagree with the readers. <c>COAI_CONSASK_</c> is tested first because it also begins with
+    /// <c>COAI_CONS</c>. <c>COAI_CONSULTANTS</c> and <c>COAI_CONSULTANT_HOMES</c> are other keys and keep their names.
+    /// </remarks>
+    internal static Func<string, string?> WithRenamedKeys(Func<string, string?> env) => name =>
+    {
+        var value = env(name);
+        if (value is { Length: > 0 })
+        {
+            return value;
+        }
+
+        var old = OldNameOf(name);
+
+        return old is null ? value : env(old) is { Length: > 0 } fallback ? fallback : value;
+    };
+
+    /// <summary>The v1 key a v2 key replaced, or nothing when the key is not one of the renamed families.</summary>
+    internal static string? OldNameOf(string name) =>
+        name.IndexOf("COAI_CONSASK_", StringComparison.Ordinal) == 0 ? "COAI_QCONSULT_" + name["COAI_CONSASK_".Length..]
+        : name.IndexOf("COAI_CONS_", StringComparison.Ordinal) == 0 ? "COAI_CONSULT_" + name["COAI_CONS_".Length..]
+        : null;
 
     private static PanelSettings WithCatalog(Func<string, string?> env, RolesSetting roles) =>
         WithCatalog(env, roles, RoleComposition.Compose(roles.Rows));
@@ -952,8 +866,6 @@ public sealed record PanelSettings
         WithCatalog(
             env, roles, catalog, ResolveDataDir(env),
             ConsultantRouting.Parse(env("COAI_CONSULTANTS")),
-            CommandModelsSetting.Parse(env(CommandModelsSetting.Key)),
-            CommandsSetting.Parse(env(CommandsSetting.Key)),
             QuestionConsultReader.Read(env, ResolveDataDir(env), SystemPlaces.Current));
 
     /// <remarks>
@@ -970,8 +882,6 @@ public sealed record PanelSettings
         RoleCatalog catalog,
         string dataDir,
         ConsultantsSetting consultants,
-        CommandModelsSetting commandModels,
-        CommandsSetting customCommands,
         QuestionConsultSetting questions) => new PanelSettings
         {
             Rounds = Config(env, catalog),
@@ -988,26 +898,20 @@ public sealed record PanelSettings
                 .. catalog.Dropped.Select(dropped => new UnrecognisedSetting(Key.Roles, dropped)),
                 .. consultants.Complaints.Select(
                     complaint => new UnrecognisedSetting(Key.Consultants, complaint)),
-                .. commandModels.Complaints.Select(
-                    complaint => new UnrecognisedSetting(CommandModelsSetting.Key, complaint)),
-                .. customCommands.Complaints.Select(
-                    complaint => new UnrecognisedSetting(CommandsSetting.Key, complaint)),
                 .. questions.Complaints,
                 .. HomesRootProblems(env),
             ],
             QuestionConsult = questions.Settings,
-            CommandModels = commandModels.Map,
-            CustomCommands = customCommands.Commands,
             RoundTreeRoot = env("COAI_ROUND_WORKTREES") is { Length: > 0 } roundTrees
                 ? roundTrees
                 : Runners.Worktrees.WorktreeManager.MachineLocalRoot,
             Consultants = consultants.Map,
-            ConsultTurns = IntVar(env, "COAI_CONSULT_TURNS", 5),
-            ConsultCallsPerSession = IntVar(env, "COAI_CONSULT_CALLS_PER_SESSION", 10),
-            ConsultIdle = TimeSpan.FromMinutes(IntVar(env, "COAI_CONSULT_IDLE_MINUTES", 15)),
+            ConsultTurns = IntVar(env, "COAI_CONS_TURNS", 5),
+            ConsultCallsPerSession = IntVar(env, "COAI_CONS_CALLS_PER_SESSION", 10),
+            ConsultIdle = TimeSpan.FromMinutes(IntVar(env, "COAI_CONS_IDLE_MINUTES", 15)),
             ConsultantHomesRoot = HomesRootOf(env),
             Pace = ServerPace.From(env),
-            ConsultEnabled = NotSwitchedOff(env, "COAI_CONSULT_ENABLED"),
+            ConsultEnabled = NotSwitchedOff(env, "COAI_CONS_ENABLED"),
             KimiAllowNetworkSignIn = Flag(env, "COAI_KIMI_ALLOW_NETWORK_SIGNIN"),
             ConsultantsUnreadable = consultants.Unreadable,
             GlobalConcurrency = IntVar(env, "COAI_MAX_CONCURRENCY", 3),
@@ -1021,11 +925,6 @@ public sealed record PanelSettings
             RoundTimeout = TimeSpan.FromMinutes(CountVar(env, "COAI_ROUND_TIMEOUT_MINUTES", 0)),
             RateLimitBackoff = TimeSpan.FromSeconds(IntVar(env, "COAI_RATE_LIMIT_BACKOFF_SECONDS", 15)),
             RetryLadder = LadderFrom(env),
-            // Seconds win when set: minutes are the setting a person configures, seconds are for a short
-            // budget a test or a scripted run needs. One knob would have had to lie about one of the two.
-            EscalationBudget = env("COAI_ESCALATION_SECONDS") is { Length: > 0 }
-            ? TimeSpan.FromSeconds(IntVar(env, "COAI_ESCALATION_SECONDS", 30))
-            : TimeSpan.FromMinutes(IntVar(env, "COAI_ESCALATION_MINUTES", DefaultEscalationMinutes)),
             // ABSOLUTE, always. A relative one was accepted happily and made every round unrunnable: the
             // server writes its schema file and hands the reviewer that same relative path, and a vendor
             // CLI is launched in a directory of its own — so every reviewer answered "cannot find the
@@ -1039,15 +938,6 @@ public sealed record PanelSettings
             DataDir = dataDir,
             AgentLogDir = env("COAI_AGENT_LOG_DIR") is { Length: > 0 } logs ? Path.GetFullPath(logs) : string.Empty,
             LocalMaxTokens = IntVar(env, "COAI_LOCAL_MAX_TOKENS", 8192),
-            Autonomous = Flag(env, "COAI_AUTONOMOUS"),
-            SplitPlan = Flag(env, "COAI_SPLIT_PLAN"),
-            StopLocalWhenQuiet = Flag(env, "COAI_STOP_LOCAL_WHEN_QUIET"),
-            SplitWithFable = Flag(env, "COAI_SPLIT_WITH_FABLE"),
-            GatePer = GateScopeOf(env(Key.GatePer) ?? string.Empty),
-            CadenceMode = CadenceModeOf(env(Key.CadenceMode) ?? string.Empty),
-            CadenceEvery = IntVar(env, "COAI_CADENCE_EVERY", Core.Cadence.CadenceRule.DefaultEvery),
-            CadenceRiskThreshold = IntVar(env, "COAI_CADENCE_RISK_THRESHOLD", Core.Cadence.CadenceRule.DefaultRiskThreshold),
-            CadenceRiskMax = IntVar(env, "COAI_CADENCE_RISK_MAX", Core.Cadence.CadenceRule.DefaultRiskMax),
             // `IntVar`: a plan of zero epics is not a plan, so zero falls back rather than meaning "always".
             FeatureMinEpics = IntVar(env, "COAI_FEATURE_MIN_EPICS", Core.Feature.FeatureGate.DefaultMinEpics),
             // Zero is the meaningful value here — single-turn — and the ceiling is a decision, so neither
@@ -1065,9 +955,6 @@ public sealed record PanelSettings
                 IntVar(env, "COAI_LOCAL_MAX_TOKENS", 0),
                 IntVar(env, "COAI_FEATURE_API_REVIEW_MINUTES", 0)),
             CodeWorkspace = WorkspaceOf(env(Key.Workspace)),
-            DealPlanLenses = Flag(env, "COAI_DEAL_PLAN") || Flag(env, "COAI_ROTATE_PROMPTS"),
-            DealCodeLenses = Flag(env, "COAI_DEAL_CODE") || Flag(env, "COAI_ROTATE_PROMPTS"),
-            PromptsPerRound = ParsePromptRounds(env("COAI_PROMPTS_PER_ROUND")),
         }.WithProvidersFrom(env);
 
     /// <summary>Where a code reviewer runs, or the checkout when this build does not know the name.</summary>
@@ -1079,24 +966,6 @@ public sealed record PanelSettings
     {
         "worktree" => "worktree",
         _ => "none",
-    };
-
-    /// <summary>What a policy name means: <c>null</c> when none is named (absent, empty or <c>auto</c> — policy auto), the policy
-    /// a known name stands for, or Human when this build does not know the name.</summary>
-    /// <remarks>
-    /// Human is the fallback because it is the end of the range that STOPS: a policy this build
-    /// cannot honour must never resolve to proceeding over open findings. No trimming: <c>"auto "</c> is a word this
-    /// build does not know, and it stops. <c>auto</c> is spelled here and nowhere else on the server; what "no policy
-    /// named" means is decided by <see cref="PanelConfig"/>'s code constructor.
-    /// </remarks>
-    private static StagePolicy? PolicyOf(string? value) => value?.ToLowerInvariant() switch
-    {
-        null or "" or "auto" => null,
-        "continue" => StagePolicy.Continue,
-        "human" => StagePolicy.Human,
-        "escalate" => StagePolicy.Escalate,
-        "good_enough" or "goodenough" => StagePolicy.GoodEnough,
-        _ => StagePolicy.Human,
     };
 
     /// <summary>
@@ -1133,7 +1002,6 @@ public sealed record PanelSettings
 
         internal const string FollowUps = "COAI_FEATURE_SOURCE_FOLLOWUPS";
 
-        internal const string Exhausted = "COAI_ON_EXHAUSTED";
 
         internal const string Workspace = "COAI_CODE_WORKSPACE";
 
@@ -1141,9 +1009,6 @@ public sealed record PanelSettings
 
         internal const string Consultants = "COAI_CONSULTANTS";
 
-        internal const string GatePer = "COAI_GATE_PER";
-
-        internal const string CadenceMode = "COAI_CADENCE_MODE";
     }
 
     /// <summary>Every setting whose VALUE this build could not use, as one sentence each.</summary>
@@ -1157,7 +1022,7 @@ public sealed record PanelSettings
     /// </remarks>
     private static IReadOnlyList<UnrecognisedSetting> UnknownValues(
         Func<string, string?> env, RolesSetting roles) =>
-        [.. WhyBackoff(env), .. WhyExhausted(env), .. WhyWorkspace(env), .. WhyGatePer(env), .. WhyCadenceMode(env), .. WhyRoles(roles), .. WhyFollowUps(env)];
+        [.. WhyBackoff(env), .. WhyWorkspace(env), .. WhyRoles(roles), .. WhyFollowUps(env)];
 
     /// <summary>
     /// <c>COAI_FEATURE_SOURCE_FOLLOWUPS</c> as a count of follow-up turns: an integer in
@@ -1178,42 +1043,6 @@ public sealed record PanelSettings
               + $"The values are the integers 0 to {Core.Feature.SourceBudget.MaxFollowUps}; 0 switches the follow-ups off.")]
             : [];
 
-    private static IReadOnlyList<UnrecognisedSetting> WhyCadenceMode(Func<string, string?> env) =>
-        env(Key.CadenceMode) is { Length: > 0 } mode && CadenceModeOf(mode) == Core.Cadence.CadenceMode.Remind
-        && !string.Equals(mode.Trim(), "remind", StringComparison.OrdinalIgnoreCase)
-            ? [new UnrecognisedSetting(
-                Key.CadenceMode,
-                $"{Key.CadenceMode} is '{mode}', which this server does not know — the consultation cadence "
-              + "reminds, as it does by default. The values are 'off', 'remind' and 'require'.")]
-            : [];
-
-    /// <summary><c>COAI_CADENCE_MODE</c> as a mode; anything it cannot read is <c>remind</c>, said by <see cref="WhyCadenceMode"/>.</summary>
-    private static Core.Cadence.CadenceMode CadenceModeOf(string value) =>
-        Enum.TryParse<Core.Cadence.CadenceMode>(value.Trim(), ignoreCase: true, out var mode) && Enum.IsDefined(mode)
-            ? mode
-            : Core.Cadence.CadenceMode.Remind;
-
-    private static IReadOnlyList<UnrecognisedSetting> WhyGatePer(Func<string, string?> env) =>
-        env(Key.GatePer) is { Length: > 0 } scope && !AGateScopeWeKnow(scope)
-            ? [new UnrecognisedSetting(
-                Key.GatePer,
-                $"{Key.GatePer} is '{scope}', which this server does not know — split work is gated "
-              + "once per epic, as it is by default. The values are 'epic' and 'task'.")]
-            : [];
-
-    private static bool AGateScopeWeKnow(string value) =>
-        string.Equals(value.Trim(), "epic", StringComparison.OrdinalIgnoreCase)
-        || string.Equals(value.Trim(), "task", StringComparison.OrdinalIgnoreCase);
-
-    /// <summary>
-    /// <c>COAI_GATE_PER</c> as a scope: <c>task</c> is one gate for the whole task, anything else is
-    /// per epic — an unknown word is said by <see cref="WhyGatePer"/> (issue #131).
-    /// </summary>
-    private static Core.Commands.GateScope GateScopeOf(string value) =>
-        string.Equals(value.Trim(), "task", StringComparison.OrdinalIgnoreCase)
-            ? Core.Commands.GateScope.Task
-            : Core.Commands.GateScope.Epic;
-
     private static IReadOnlyList<UnrecognisedSetting> WhyBackoff(Func<string, string?> env) =>
         env(Key.Backoff) is { Length: > 0 } backoff
         && Runners.Reviewers.RetryLadder.Parse(backoff).Count == 0
@@ -1223,36 +1052,6 @@ public sealed record PanelSettings
               + "seconds — it is using the waits it would have used anyway. The form is "
               + "'5,30,60,120', and one number means one retry at that interval.")]
             : [];
-
-    private static IReadOnlyList<UnrecognisedSetting> WhyExhausted(Func<string, string?> env) =>
-        env(Key.Exhausted) is { Length: > 0 } policy
-        && PolicyOf(policy) == StagePolicy.Human
-        && !string.Equals(policy, "human", StringComparison.OrdinalIgnoreCase)
-            ? [new UnrecognisedSetting(
-                Key.Exhausted,
-                $"{Key.Exhausted} is '{policy}', which this server does not know — it is asking a "
-              + "person instead. The panel is probably newer than this server: update it in "
-              + "ConnectOtherAIs > MCP server.")]
-            : [];
-
-    /// <summary>
-    /// A policy the PROCESS environment pins — a client's <c>env</c> block, which wins over the panel (<c>SettingsFile.Over</c>) and so is outside the
-    /// extension's one-time migration. One note for a known word other than <c>auto</c>; none for <c>auto</c>, absent or empty, and none for an unknown
-    /// word, which <see cref="WhyExhausted"/> already says — one value is never two notes. Only the process environment is read: the same value in the
-    /// settings file is the panel's own choice.
-    /// </summary>
-    internal static IReadOnlyList<UnrecognisedSetting> PinnedPolicy(Func<string, string?> processEnv) =>
-        processEnv(Key.Exhausted) is { Length: > 0 } policy && NamesAKnownPolicyOtherThanAuto(policy)
-            ? [new UnrecognisedSetting(
-                Key.Exhausted,
-                $"{Key.Exhausted} is '{policy}' in this server's own environment — your MCP client's `env` block — which overrides the panel; "
-              + "Auto is the default now. Remove it from that `env` block to follow the panel.")]
-            : [];
-
-    /// <summary>A word <see cref="PolicyOf"/> knows and that is not <c>auto</c>: an UNKNOWN word also reads as <c>human</c>, and only the spelling tells them apart.</summary>
-    private static bool NamesAKnownPolicyOtherThanAuto(string policy) =>
-        PolicyOf(policy) is { } named
-        && (named != StagePolicy.Human || string.Equals(policy, "human", StringComparison.OrdinalIgnoreCase));
 
     private static IReadOnlyList<UnrecognisedSetting> WhyWorkspace(Func<string, string?> env) =>
         env(Key.Workspace) is { Length: > 0 } workspace && !AWorkspaceWeKnow(workspace)
@@ -1282,35 +1081,6 @@ public sealed record PanelSettings
               + "roles it shipped with, and nothing you added is in this round. The form is an "
               + """array of rows: [{"id":"Requirements","name":"...","stage":"result","prompts":[…]}].""")]
             : [];
-
-    /// <summary>
-    /// <c>{"Architecture":["architecture","arch-boundaries"],...}</c> — the panel's per-round
-    /// choice. Malformed JSON is no choice at all rather than a half-applied one.
-    /// </summary>
-    private static IReadOnlyDictionary<string, IReadOnlyList<string>> ParsePromptRounds(string? json)
-    {
-        if (json is not { Length: > 0 })
-        {
-            return new Dictionary<string, IReadOnlyList<string>>();
-        }
-
-        try
-        {
-            var parsed = System.Text.Json.JsonSerializer.Deserialize(
-                json, SettingsJsonContext.Default.DictionaryStringListString);
-            // `{"Architecture": null}` is valid JSON and would put a NULL list in the map, which
-            // the round then dereferences. Found by the gate reviewing this very commit: a
-            // hand-edited settings file could crash every round with no useful message.
-            return parsed?
-                       .Where(e => e.Value is not null)
-                       .ToDictionary(e => e.Key, e => (IReadOnlyList<string>)e.Value)
-                   ?? new Dictionary<string, IReadOnlyList<string>>();
-        }
-        catch (System.Text.Json.JsonException)
-        {
-            return new Dictionary<string, IReadOnlyList<string>>();
-        }
-    }
 
     /// <summary>Whether the text is a JSON array with nothing in it — said, not malformed and not absent.</summary>
     private static bool IsEmptyList(string json)
@@ -1708,7 +1478,7 @@ public sealed record PanelSettings
     /// repeat it for three roles.
     /// </remarks>
     private static PanelConfig Config(Func<string, string?> env, RoleCatalog catalog) =>
-        new(Roles: RoleGates(env, catalog), OnExhausted: PolicyOf(env(Key.Exhausted)))
+        new(Roles: RoleGates(env, catalog))
         {
             Catalog = catalog,
         };

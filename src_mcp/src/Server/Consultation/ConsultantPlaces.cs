@@ -454,7 +454,7 @@ public sealed class ConsultantPlaces(string homesRoot, string store, IProcessLau
     /// <summary>The budget's refusal: what had been done when it ran out — copies made, or (before the first copy) the phase it ended — and the one cure.</summary>
     private static string OutOfBudget(OneShotTally tally, TimeSpan budget) =>
         $"copying the granted folders took longer than the row's budget ({budget.TotalSeconds:0} s): {Progress(tally)} — "
-        + "grant fewer or smaller folders, or give the row more time (COAI_QCONSULT_ROW_MINUTES)";
+        + "grant fewer or smaller folders, or give the row more time (COAI_CONSASK_ROW_MINUTES)";
 
     /// <summary>"0 of 0 copied" reads as "nothing found", so before the first copy the sentence says what was going on instead.</summary>
     private static string Progress(OneShotTally tally) =>

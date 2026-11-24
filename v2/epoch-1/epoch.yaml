@@ -1,0 +1,11 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: epoch-1
+title: Foundation
+proves: "the simplified gate and the new shell work end to end on this machine"
+dependsOn: []
+epics:
+  - e1-gate-simplify
+  - e2-thin-shell
+  - e3-server-cleanup-install
+  - e4-shell-modules
+  - e5-release-2-0

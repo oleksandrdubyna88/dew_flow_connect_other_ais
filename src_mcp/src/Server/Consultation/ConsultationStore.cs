@@ -125,9 +125,9 @@ public sealed class ConsultationStore(
     /// came after, from the copy: a follow-up starting in between had its <c>asking</c> overwritten by a
     /// stale close. A sweep once per start made that window rare; a sweep every minute made it worth
     /// closing (<c>research/PLAN_consult_limits_kinds_and_help.md</c>, the code round).</para>
-    /// <para>Expiry is decided the same way (CodeRabbit, the pull request): a lapsed cadence consultation past
-    /// retention can be given its verdict at any moment — which makes it the group's evidence — so its
-    /// delete, too, is decided on the record as it is under the lock.</para>
+    /// <para>Expiry is decided the same way (CodeRabbit, the pull request): a lapsed consultation past
+    /// retention can be given its verdict at any moment, so its delete, too, is decided on the record as it
+    /// is under the lock.</para>
     /// </remarks>
     internal bool SweepOne(ConsultationRecord record, Func<int, bool> isAlive, DateTime nowUtc, TimeSpan idle, TimeSpan retention)
     {
@@ -161,9 +161,9 @@ public sealed class ConsultationStore(
     private static SweepStep StepFor(ConsultationRecord record, SweepRule rule) =>
         record.IsOver ? ExpiryOf(record, rule) : LiveStepOf(record, rule);
 
-    /// <summary>A finished record: deleted past retention, unless it is cadence evidence, which is kept.</summary>
+    /// <summary>A finished record: deleted past retention, unless it is a legacy ordered one, which is kept.</summary>
     private static SweepStep ExpiryOf(ConsultationRecord record, SweepRule rule) =>
-        !IsCadenceEvidence(record)
+        !IsLegacyOrderedEvidence(record)
         && rule.NowUtc - Parse(record.EndedUtc.Length > 0 ? record.EndedUtc : record.UpdatedUtc, rule.NowUtc) > rule.Retention
             ? new SweepStep(SweepAction.Delete, record)
             : SweepStep.Keep(record);
@@ -186,8 +186,7 @@ public sealed class ConsultationStore(
     /// gone, and, worse, a turn can leave its OWN server's pid on a record it never settled while that
     /// server runs on. Found live 2026-09-26 — the answer arrived, the record write failed, the turn
     /// left <c>asking</c> naming this alive server, <c>close_consult</c> refused it as running, and the
-    /// pid rule kept it for ever while the cadence gate refused the epic's code round for want of a
-    /// consultation nobody could end.</para>
+    /// pid rule kept it for ever.</para>
     /// <para>So the pid is one signal and the turn's DEADLINE is the other: a turn is bounded, and an
     /// <c>asking</c> record that has not advanced within the idle window — which the turn's own deadline
     /// sits well inside — is one no turn is still running for. Either way the lock, not this, is what
@@ -253,19 +252,15 @@ public sealed class ConsultationStore(
 
     private const string PastDeadline = "the turn ran past its deadline without settling — its server left the record behind";
 
-    /// <summary>Whether a record is what the cadence gate counts: an ordered consultation closed with a verdict.</summary>
-    internal static bool IsCadenceEvidence(ConsultationRecord record) =>
+    /// <summary>
+    /// Whether a record is a legacy ordered (cadence or risk) consultation closed with a verdict. The cadence is gone in v2, but
+    /// these records are collected data of older builds and are never reaped (append-only); v2 writes none.
+    /// </summary>
+    internal static bool IsLegacyOrderedEvidence(ConsultationRecord record) =>
         record.Kind != Core.Consultation.ConsultKinds.Stuck
         && record.IsOver
         && ConsultationOutcomes.IsVerdict(record.Outcome);
 
-    /// <remarks>
-    /// <b>A cadence or risk consultation closed with a verdict is never reaped</b> (research/PLAN_consult_on_a_cadence.md,
-    /// found while answering epic 2's code round): it is the only evidence the cadence gate reads that a group of
-    /// epics or a risky piece was consulted on, and a plan's epics run for weeks — private repo A's fourteen did —
-    /// while retention is seven days. They are few (a group per three epics and at most three risk items per
-    /// plan). A lapsed or failed one is no evidence and goes like any other.
-    /// </remarks>
     /// <summary>A record past retention, removed — its decision made by <see cref="ExpiryOf"/>.</summary>
     /// <remarks>Retried on the next sweep — but SAID (codex, code round): <see cref="RecordFiles.Delete"/>.</remarks>
     private bool Deleted(ConsultationRecord record) => RecordFiles.Delete(PathFor(record.Id), warn, $"consultation {record.Id}");

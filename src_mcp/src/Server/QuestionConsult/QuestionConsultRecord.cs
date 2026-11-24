@@ -115,13 +115,19 @@ public sealed record QuestionConsultRecord(
     string Question,
     string StartedUtc)
 {
-    /// <summary>S3: the plan the question was asked under, as the phase store keys it. Empty until then.</summary>
+    /// <summary>Kept for records and the extension's view: v1 keyed the phase rule on it; v2 writes it empty.</summary>
     public string PlanKey { get => field ?? string.Empty; init; } = string.Empty;
+
+    /// <summary>
+    /// The plan item this question was for — the repository-relative feature-folder path the caller named in <c>workItem</c> (coai v2 E3.S8, <see cref="WorkItems"/>).
+    /// Empty when it named none, and on every record written before the field.
+    /// </summary>
+    public string WorkItem { get => field ?? string.Empty; init; } = string.Empty;
 
     /// <summary>What the caller tried and the options — capped by the tool at 8 KB.</summary>
     public string Context { get => field ?? string.Empty; init; } = string.Empty;
 
-    /// <summary>S3 (D8): the caller declared a production risk. Never read in S2.</summary>
+    /// <summary>Kept for records of older builds; v2 has no production-risk bypass and writes false.</summary>
     public bool ProductionRisk { get; init; }
 
     public string RiskReason { get => field ?? string.Empty; init; } = string.Empty;

@@ -62,7 +62,7 @@ export default tseslint.config(
   {
     // `out/` is compiled output, the `.mjs` scripts are not in the TypeScript project, and
     // `src/generated/` is written by `prepare-gate.mjs` during the build.
-    ignores: ['out/**', 'node_modules/**', 'scripts/**', 'src/generated/**'],
+    ignores: ['out/**', 'dist/**', 'node_modules/**', 'scripts/**', 'src/generated/**'],
   },
   {
     // A disable that has stopped being needed is an exemption nobody granted: once a refactor makes
@@ -73,7 +73,8 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    files: ['src/**/*.ts'],
+    // `shell/` is the thin entry and its modules (v2 E2): held to the same rules as `src/`, with its own tsconfig (`shell/tsconfig.json`).
+    files: ['src/**/*.ts', 'shell/**/*.ts'],
     languageOptions: {
       parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname },
     },
@@ -114,6 +115,31 @@ export default tseslint.config(
       complexity: ['error', 4],
       'max-lines-per-function': ['error', 50],
     },
+  },
+  {
+    // THE ENTRY'S FIREWALL, source half (v2 extension.md § 2). The four files that make `dist/extension.js` (entry, lazy, ids, measure) may import `vscode`,
+    // `node:path` and each other, and nothing else: no `fs`, no process, no network, nothing under `src/`. The regex bans every
+    // specifier except those four. `scripts/entry-firewall.mjs` is the other half: it reads what esbuild actually bundled, which
+    // also catches a `require()` this rule cannot see.
+    files: ['shell/entry.ts', 'shell/lazy.ts', 'shell/ids.ts', 'shell/measure.ts'],
+    rules: {
+      'no-restricted-imports': ['error', {
+        patterns: [{
+          regex: '^(?!(vscode|node:path|\\./(entry|lazy|ids|measure))$)',
+          message: 'The shell entry may import only vscode, node:path and its own siblings (entry, lazy, ids, measure); load anything else lazily from a module.',
+        }],
+      }],
+    },
+  },
+  {
+    // `lazy.ts` is the one file that calls `require`, and with a computed path: that is what loading a module lazily IS.
+    // The entry and the ids may not call it at all.
+    files: ['shell/entry.ts', 'shell/ids.ts', 'shell/measure.ts'],
+    rules: { 'no-restricted-globals': ['error', { name: 'require', message: 'Only shell/lazy.ts loads modules.' }] },
+  },
+  {
+    files: ['shell/lazy.ts'],
+    rules: { '@typescript-eslint/no-require-imports': 'off' },
   },
   {
     // Tests narrate: one file holds one scenario end to end, and splitting it to satisfy a line count

@@ -23,12 +23,12 @@ import { escapeHtml } from './escapeHtml';
  * that drew "A review is waiting on you", so a question waiting on the person is drawn once — beside whatever the
  * consultants answered — and stays where that region stood, first and never collapsible.</p>
  */
-export const LIVE_REGION_IDS = ['qconsults', 'rounds', 'consultations', 'cadence', 'notifications'] as const;
+export const LIVE_REGION_IDS = ['qconsults', 'rounds', 'consultations', 'notifications'] as const;
 export type LiveRegionId = (typeof LIVE_REGION_IDS)[number];
 export type Regions = Readonly<Record<LiveRegionId, string>>;
 
 /** Every region empty — what a paint key is built with, so a live change can never move the key. */
-export const BLANK_REGIONS: Regions = { qconsults: '', rounds: '', consultations: '', cadence: '', notifications: '' };
+export const BLANK_REGIONS: Regions = { qconsults: '', rounds: '', consultations: '', notifications: '' };
 
 /**
  * The webviews a section can be drawn on — the list every page-wide test iterates.
@@ -59,7 +59,7 @@ export function sectionsOn<S>(specs: readonly SectionSpec<S>[], surface: Surface
   return specs.filter((spec) => spec.surface === surface);
 }
 
-function disclosure(id: string, title: string, open: boolean, body: string): string {
+export function disclosure(id: string, title: string, open: boolean, body: string): string {
   return `<details class="section sec-${id}" data-section="${id}"${open ? ' open' : ''}>
   <summary>${escapeHtml(title)}</summary>
 ${body}

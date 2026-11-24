@@ -87,7 +87,7 @@ export const PRICES = (model: string) =>
 
 /** The page module as it SHIPS: bundled and minified, its two page-building exports mapped back to their names. */
 export interface BundledLog {
-  roundsLogHtml: (rows: unknown[], questions: unknown[], nonce: string, usage?: string, spots?: string, totals?: unknown, options?: Record<string, unknown>) => string;
+  roundsLogHtml: (rows: unknown[], nonce: string, usage?: string, spots?: string, totals?: unknown, options?: Record<string, unknown>) => string;
   rowsFrom: (sessions: unknown[], now: number, priceOf?: unknown, usage?: unknown[], log?: unknown) => unknown[];
 }
 
@@ -130,7 +130,7 @@ export function bundledPage(sessions: unknown[] = [SESSION], log: unknown = LOG)
   // `cost3` is embedded by its source text and CALLED `money`, a module-level binding the minifier
   // had renamed to `R`. The page defines `money`, so nothing looked missing until a row asked for
   // its cost.
-  const html = module_.roundsLogHtml(module_.rowsFrom(sessions, NOW, PRICES, [USED], log), [], 'n0nce');
+  const html = module_.roundsLogHtml(module_.rowsFrom(sessions, NOW, PRICES, [USED], log), 'n0nce');
 
   return { html, script: html.slice(html.indexOf('<script'), html.lastIndexOf('</script>')) };
 }
@@ -243,7 +243,7 @@ export interface DomPage {
  * and nothing else is in reach: the document, the window's listener, the VS Code bridge and the two timer functions.
  */
 export function runningDomPage(module_: BundledLog = bundledLogModule(), sessions: unknown[] = [SESSION]): DomPage {
-  const html = module_.roundsLogHtml(module_.rowsFrom(sessions, NOW, PRICES, [USED], LOG), [], 'n0nce');
+  const html = module_.roundsLogHtml(module_.rowsFrom(sessions, NOW, PRICES, [USED], LOG), 'n0nce');
   const document_ = new DomDocument(html);
   const sent: Array<Record<string, unknown>> = [];
   const heard: Array<(event: { data: unknown }) => void> = [];

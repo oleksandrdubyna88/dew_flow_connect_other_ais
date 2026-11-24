@@ -1,0 +1,13 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t3-remote-wsl
+title: "scripts/measure-remote-wsl.ps1 + driver VSIX; marks readable with COAI_MEASURE=1 in any mode"
+kind: code
+complexity: 5
+dependsOn:
+  - t1-measure-launch
+parallel: true
+files:
+  - src_vs_code/scripts/measure-remote-wsl.ps1
+dod:
+  - id: d1
+    item: "the result names the extension-host location"

@@ -22,18 +22,11 @@ import {
   consultSettingsFrom,
   CONSULT_SETTINGS,
 } from './consultSettings';
-import { CADENCE_SETTINGS, CadenceSettings, DEFAULT_CADENCE, cadenceEnv, cadenceSettingsFrom } from './cadenceSettings';
 import { DEFAULT_QCONSULT, QCONSULT_SETTINGS, QconsultSettings, qconsultEnv, qconsultSettingsFrom } from './qconsultSettings';
-import { CommandModels, commandModelsEnv, commandModelsFrom } from './commandModels';
-import { commandsFrom, type CommandRow } from './commands';
 import { ON_EXHAUSTED_CHOICES, type OnExhausted } from './onExhaustedPanel';
 import { onExhaustedEnv } from './onExhaustedWire';
-import { DEFAULT_SECURITY, securityEnv, securityLaneFrom, type SecurityLane } from './securityLane';
 
 export type { OnExhausted };
-
-/** How often split work is gated (issue #131) — `COAI_GATE_PER` on the wire. */
-export type GatePer = 'epic' | 'task';
 
 /** The five languages a person may be asked in. */
 export type LanguageCode = 'en' | 'es' | 'de' | 'ru' | 'uk';
@@ -98,16 +91,6 @@ export interface CoaiSettings {
    * answers and it enforces the caps.</p>
    */
   readonly consult: ConsultSettings;
-  readonly securityLane: SecurityLane;
-
-  /**
-   * When the consultant is asked without anybody being stuck — once per group of epics, and on the
-   * riskiest pieces of a big plan (research/PLAN_consult_on_a_cadence.md).
-   *
-   * <p>Its own module (`cadenceSettings.ts`) for the reason `consult` has one: the panel block and the
-   * env block read it through ONE function.</p>
-   */
-  readonly cadence: CadenceSettings;
 
   /**
    * The question consultant — the models a question is put to before the person is asked
@@ -159,47 +142,6 @@ export interface CoaiSettings {
    */
   readonly roundTimeoutMinutes: number;
   readonly credsKey: string;
-  readonly escalationMinutes: number;
-  /** Per role, the prompt id each round uses — index 0 is round 1. Empty = the universal one. */
-  readonly promptsPerRound: Readonly<Record<string, readonly string[]>>;
-  /** Spend the rounds on different lenses instead of asking the same broad question again. */
-  /**
-   * Deal the lenses across the vendors instead of giving every vendor the same one.
-   *
-   * <p>Two switches because the stages are not alike: a plan has three lenses for one role, a code
-   * round has three roles. Off by default, and that default is the point \u2014 with it off every vendor
-   * answers the same question and two vendors agreeing on a finding is a fact the gate can use.
-   * On, every lens gets asked once at half the launches, and that agreement is gone.</p>
-   */
-  readonly dealPlanLenses: boolean;
-  readonly dealCodeLenses: boolean;
-  /**
-   * Work without interrupting the person until there is no other way.
-   *
-   * <p>These three are ORDERS the gate hands back to whichever AI called it, not changes to what the
-   * gate decides. They are the operator's decisions — how the work is broken up, when a person is
-   * interrupted, which model does the expensive half — and the panel is where the operator sits.</p>
-   */
-  readonly autonomous: boolean;
-  /** Break an accepted plan into epics and stories, and close each story properly. */
-  readonly splitPlan: boolean;
-  /** The local reviewer stands down after a quiet cloud (issue #485). */
-  readonly stopLocalWhenQuiet: boolean;
-  /**
-   * Do the split, and the stories where being wrong is expensive, with the caller's STRONGEST model.
-   *
-   * <p>The key's name is historical: it named Fable to every caller until issue #117 made the two
-   * models a per-caller choice ({@link commandModels}). Renaming a stored key is a migration of every
-   * settings file for a word nobody sees.</p>
-   */
-  readonly splitWithFable: boolean;
-  /** Per caller kind, the models the model order names — what a person typed, trimmed (issue #117). */
-  readonly commandModels: CommandModels;
-  /**
-   * How often split work comes back through the gate: once per EPIC (the default) or once for the
-   * whole TASK — never per story, which cost a branch and two rounds a story (issue #131).
-   */
-  readonly gatePer: GatePer;
   /**
    * What a code reviewer is launched in: `none` (Fast — the diff alone) or `worktree` (Full).
    *
@@ -219,12 +161,6 @@ export interface CoaiSettings {
    * the shipped order, with the shipped budgets.</p>
    */
   readonly roles: readonly RoleRow[];
-
-  /**
-   * The gate commands this person added, as the rows `COAI_COMMANDS` carries (issue #467) — the wire
-   * format, like `roles`. Empty is the normal state and emits no key at all.
-   */
-  readonly commands: readonly CommandRow[];
 }
 
 // How a changed control is routed lives in its own module; re-exported so every importer keeps its path.
@@ -281,23 +217,9 @@ export const DEFAULTS: CoaiSettings = {
   reviewerTimeoutMinutes: 10,
   roundTimeoutMinutes: 0,
   credsKey: '',
-  // The server's own `PanelSettings.DefaultEscalationMinutes` (15 since S3, A10) — held level by a test that reads the C#.
-  escalationMinutes: 15,
-  promptsPerRound: {},
-  dealPlanLenses: false,
-  dealCodeLenses: false,
-  autonomous: false,
-  splitPlan: false,
-  stopLocalWhenQuiet: false,
-  splitWithFable: false,
-  commandModels: commandModelsFrom(undefined),
-  gatePer: 'epic',
   codeWorkspace: 'none',
   roles: [],
-  commands: [],
   consult: DEFAULT_CONSULT,
-  securityLane: DEFAULT_SECURITY,
-  cadence: DEFAULT_CADENCE,
   qconsult: DEFAULT_QCONSULT,
 };
 
@@ -316,17 +238,13 @@ export type SettingsOverlay = Readonly<Record<string, unknown>>;
  */
 export const OVERLAID_SETTINGS: readonly string[] = [
   'vendors', 'rounds', 'thresholds', 'roleEnabled', 'onExhausted', 'maxConcurrency', 'maxPerProvider',
-  'reviewerTimeoutMinutes', 'roundTimeoutMinutes', 'credsKey', 'escalationMinutes', 'promptsPerRound',
-  'dealPlanLenses', 'dealCodeLenses', 'autonomous', 'splitPlan', 'splitWithFable', 'commandModels', 'gatePer', 'codeWorkspace', 'stopLocalWhenQuiet',
+  'reviewerTimeoutMinutes', 'roundTimeoutMinutes', 'credsKey',
+  'codeWorkspace',
   // A person's own review roles belong to the WORK, which is what a side is — beside `rounds`,
   // `thresholds` and `roleEnabled`, which ask the same question about the roles this product ships.
   // The prompt BODIES do NOT: they live in one data directory, because a body is the text of a
   // question rather than a configuration, and two sides asking one question is right.
   'roles',
-  // A person's own gate commands, beside their roles and for the same reason; their TEXTS, like the
-  // prompt bodies, live in the one data directory.
-  'commands',
-  'securityLane',
   // The Bugz pair, per side for the reason every row above is: a side is the WORK. Two sides of one
   // machine can face different companies, and the local engine that may read their findings — and
   // the server those pairs would be sent to — are not the same question on both.
@@ -343,8 +261,6 @@ export const OVERLAID_SETTINGS: readonly string[] = [
   // sides of one machine serving two companies want their own, like every other row above. Spread
   // rather than listed, so adding a sixth consult setting cannot leave it silently shared.
   ...CONSULT_SETTINGS,
-  // When the consultant is asked is a property of the work too, and spread for the same reason.
-  ...CADENCE_SETTINGS,
   // Who the question consultant asks, and the folders a disk row may read, are the work's too.
   ...QCONSULT_SETTINGS,
 ];
@@ -433,22 +349,9 @@ export function settingsFrom(read: ConfigReader): CoaiSettings {
     vibeHomesDirectory: asString(read('vibeHomesDirectory')).trim(),
     kimiAllowNetworkSignIn: read('kimiAllowNetworkSignIn') === true,
 
-    escalationMinutes: asPositive(read('escalationMinutes'), DEFAULTS.escalationMinutes),
-    promptsPerRound: asPromptRounds(read('promptsPerRound')),
-    dealPlanLenses: read('dealPlanLenses') === true,
-    dealCodeLenses: read('dealCodeLenses') === true,
-    autonomous: read('autonomous') === true,
-    splitPlan: read('splitPlan') === true,
-    stopLocalWhenQuiet: read('stopLocalWhenQuiet') === true,
-    splitWithFable: read('splitWithFable') === true,
-    commandModels: commandModelsFrom(read('commandModels')),
-    gatePer: read('gatePer') === 'task' ? 'task' : 'epic',
     codeWorkspace: read('codeWorkspace') === 'worktree' ? 'worktree' : 'none',
     roles: rolesFrom(read('roles')),
-    commands: commandsFrom(read('commands')),
     consult: consultSettingsFrom(read),
-    securityLane: securityLaneFrom(read('securityLane')),
-    cadence: cadenceSettingsFrom(read),
     qconsult: qconsultSettingsFrom(read),
   };
 }
@@ -476,7 +379,7 @@ export function envBlock(
   /** Whether `features` is the binary's SETTLED answer — empty then means an older binary, not "not asked yet". */
   featuresSettled = false,
 ): Record<string, string> {
-  const env: Record<string, string> = securityEnv(settings.securityLane, installedServerVersion, features);
+  const env: Record<string, string> = {};
   // "Differs from the shipped list" is asked of what CROSSES — both lists as the server would read
   // them — not of a hand-kept subset of fields. The subset missed the plan / code / document boxes, the
   // CLI path and (until S3.3a) the feature tick, so a change to a shipped row never reached the server.
@@ -484,24 +387,17 @@ export function envBlock(
   // Compared as CONFIGURED (no version gate), then written as the installed server may read it — so a list
   // whose only difference an older server cannot take (an api row, a feature tick) is still written, as before.
   // A catalog row that reviews nothing and serves only features that cross resolved stays off (`rowsOnTheWire`).
-  const onTheWire = rowsOnTheWire(vendors, settings.securityLane);
+  const onTheWire = rowsOnTheWire(vendors);
   // The capabilities count in the comparison too, so a shipped row whose only change is a field the binary takes — a
   // system prompt — is still written; one the binary does not take still is not.
   if (vendorsEnv(onTheWire, '', undefined, features) !== vendorsEnv(DEFAULT_VENDORS, '', undefined, features)) {
     env['COAI_VENDORS'] = vendorsEnv(onTheWire, installedServerVersion, priceOf, features);
-  }
-  if (Object.keys(settings.promptsPerRound).length > 0) {
-    env['COAI_PROMPTS_PER_ROUND'] = JSON.stringify(settings.promptsPerRound);
   }
   // The rows go out exactly as they are stored: this setting IS the wire format, so there is no
   // shape to translate and no second schema to keep level. Empty emits nothing, which is what makes
   // a server older than 0.19.0 a non-event for everybody who has added no role of their own.
   if (settings.roles.length > 0) {
     env['COAI_ROLES'] = JSON.stringify(settings.roles);
-  }
-  // The same bargain for a person's own gate commands (issue #467): the rows ARE the wire format.
-  if (settings.commands.length > 0) {
-    env['COAI_COMMANDS'] = JSON.stringify(settings.commands);
   }
   // A key per role, and only where it differs: the panel writes what is not the default so that
   // returning a control to its default REMOVES the key rather than pinning the old value.
@@ -510,33 +406,8 @@ export function envBlock(
       env[`COAI_ROUNDS_${role.toUpperCase()}`] = String(rounds);
     }
   }
-  if (settings.dealPlanLenses !== DEFAULTS.dealPlanLenses) {
-    env['COAI_DEAL_PLAN'] = 'true';
-  }
-  if (settings.dealCodeLenses !== DEFAULTS.dealCodeLenses) {
-    env['COAI_DEAL_CODE'] = 'true';
-  }
   if (settings.codeWorkspace !== DEFAULTS.codeWorkspace) {
     env['COAI_CODE_WORKSPACE'] = settings.codeWorkspace;
-  }
-  // The three that make the gate give orders. Written only when ON, like every other switch here:
-  // a file that carries only what differs from the defaults is one a person can read.
-  if (settings.autonomous) {
-    env['COAI_AUTONOMOUS'] = 'true';
-  }
-  if (settings.splitPlan) {
-    env['COAI_SPLIT_PLAN'] = 'true';
-  }
-  if (settings.stopLocalWhenQuiet) {
-    env['COAI_STOP_LOCAL_WHEN_QUIET'] = 'true';
-  }
-  if (settings.splitWithFable) {
-    env['COAI_SPLIT_WITH_FABLE'] = 'true';
-  }
-  // Only the caller kinds whose pair differs from the shipped one — a pristine panel adds nothing.
-  Object.assign(env, commandModelsEnv(settings.commandModels));
-  if (settings.gatePer !== DEFAULTS.gatePer) {
-    env['COAI_GATE_PER'] = settings.gatePer;
   }
 
   for (const [role, threshold] of Object.entries(settings.thresholds)) {
@@ -557,21 +428,19 @@ export function envBlock(
   // The consultant's key, only when a caller differs from its shipped pair (consultantsWire.ts holds the rule and its reasons).
   Object.assign(env, consultantsEnv(settings.consult, vendors, installedServerVersion, priceOf, features));
   if (settings.consult.turns !== DEFAULT_CONSULT.turns) {
-    env['COAI_CONSULT_TURNS'] = String(settings.consult.turns);
+    env['COAI_CONS_TURNS'] = String(settings.consult.turns);
   }
   if (settings.consult.callsPerSession !== DEFAULT_CONSULT.callsPerSession) {
-    env['COAI_CONSULT_CALLS_PER_SESSION'] = String(settings.consult.callsPerSession);
+    env['COAI_CONS_CALLS_PER_SESSION'] = String(settings.consult.callsPerSession);
   }
   if (settings.consult.idleMinutes !== DEFAULT_CONSULT.idleMinutes) {
-    env['COAI_CONSULT_IDLE_MINUTES'] = String(settings.consult.idleMinutes);
+    env['COAI_CONS_IDLE_MINUTES'] = String(settings.consult.idleMinutes);
   }
   // Written only when OFF, like every role switch: absent means on, and the server encodes that
   // structurally rather than by agreement.
   if (!settings.consult.enabled) {
-    env['COAI_CONSULT_ENABLED'] = 'false';
+    env['COAI_CONS_ENABLED'] = 'false';
   }
-  // Only the cadence values that differ from the server's own — a pristine panel adds nothing.
-  Object.assign(env, cadenceEnv(settings.cadence));
   // The question consultant's eight, each only when it differs — and none for a server known to be too old to
   // read them (`QCONSULT_SINCE`), which the section then says in a banner.
   Object.assign(env, qconsultEnv(settings.qconsult, installedServerVersion, catalogRowOnTheWire(vendors, installedServerVersion, priceOf, features)));
@@ -589,9 +458,6 @@ export function envBlock(
   }
   if (settings.credsKey) {
     env['COAI_CREDS_KEY'] = settings.credsKey;
-  }
-  if (settings.escalationMinutes !== DEFAULTS.escalationMinutes) {
-    env['COAI_ESCALATION_MINUTES'] = String(settings.escalationMinutes);
   }
   // The Bugz server. NOT the Bugz model (research/PLAN_one_model_catalog.md T7, removed in E5.1): it was written here as
   // `COAI_BUGZ_MODEL` so a collect started from a terminal could find it, and nothing in coai-mcp ever read that key —
@@ -631,26 +497,6 @@ function asOnExhausted(value: unknown): OnExhausted {
   return ON_EXHAUSTED_CHOICES.some((choice) => choice.value === value) ? (value as OnExhausted) : DEFAULTS.onExhausted;
 }
 
-
-/**
- * The stored per-round prompt map, kept only where it is actually a map of string arrays.
- *
- * <p>A stale id is NOT filtered here: the server falls back to the universal prompt for anything
- * it does not recognise, and silently dropping a name the person chose would make a typo look
- * like it had been accepted.</p>
- */
-function asPromptRounds(value: unknown): Record<string, string[]> {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    return {};
-  }
-  const out: Record<string, string[]> = {};
-  for (const [role, rounds] of Object.entries(value as Record<string, unknown>)) {
-    if (Array.isArray(rounds)) {
-      out[role] = rounds.filter((r): r is string => typeof r === 'string');
-    }
-  }
-  return out;
-}
 
 /**
  * A role -> number map from settings, with every role falling back to its default.

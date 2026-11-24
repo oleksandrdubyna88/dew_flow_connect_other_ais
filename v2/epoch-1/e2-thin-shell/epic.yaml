@@ -1,0 +1,14 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: e2-thin-shell
+title: "Thin extension shell, ≤ 2 s start, chat carried"
+mvp: true
+half: extension
+dependsOn: []
+parallelWith:
+  - e1-gate-simplify
+doneWhen:
+  - "no onStartupFinished; activate() only registers (entryPurity test)"
+  - "entry firewall checks inputs and output imports; byte budgets green"
+  - "M2 = command → the REAL sidebar menu (section headers Notifications, Active gates, Active consultations, Phrases, Bugz) painted AND interactive (page posts menuReady; a skeleton or inert snapshot does not count) ≤ 2000 ms in every sample on Linux CI and Remote-WSL (its extension host runs on Linux), ≤ 3000 ms on Windows CI (owner, 2026-11-23); M1 ≤ 100 ms"
+  - "v1 baseline and per-step marks of the old activate() recorded"
+  - "joint smoke with the E1 binary passes; settings-mirror check done"

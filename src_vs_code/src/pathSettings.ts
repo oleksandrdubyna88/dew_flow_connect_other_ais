@@ -50,6 +50,8 @@ export interface PathSetting {
    * name a problem by (E5.2) — or empty for a setting the server never sees.
    */
   readonly wireKey: string;
+  /** The key an older coai-mcp named the same problem by, when the key was renamed — `findingsFromServer` accepts both. */
+  readonly wireKeyBefore?: string;
   /** How the value is named in a sentence — `folder`, `CLI`, `data folder`. */
   readonly noun: string;
   /** What the other side does with it, said in the "the other side's" note — `its server reads it there`. */
@@ -76,7 +78,7 @@ function legacyCli(id: string, setting: string): PathSetting {
 /** The question consultant's disk roots — the setting the rule was first written for. */
 export const QCONSULT_ROOTS: PathSetting = {
   id: 'coai.qconsultRoots', setting: 'coai.qconsultRoots', kind: 'folderList', mustExist: true, saidBy: 'server',
-  place: 'consultants/qconsult', wireKey: 'COAI_QCONSULT_ROOTS', noun: 'folder', there: 'its server reads it there', instead: '', asksDisk: true,
+  place: 'consultants/qconsult', wireKey: 'COAI_CONSASK_ROOTS', wireKeyBefore: 'COAI_QCONSULT_ROOTS', noun: 'folder', there: 'its server reads it there', instead: '', asksDisk: true,
 };
 
 /**

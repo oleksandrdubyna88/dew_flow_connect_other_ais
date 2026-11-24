@@ -87,7 +87,7 @@ internal static class ConsultationFailing
 
     /// <summary>The working tree changed while the consultant ran: the read-only promise was broken.</summary>
     public static ConsultationFailed Breach(TurnFailure turn, ConsultFailure.TreeChanged failure) =>
-        new(Ended(turn, failure, "the working tree changed while the consultant was running") with { Alert = failure.Sentence },
+        new(Ended(turn, failure, "the working tree changed while cons was running") with { Alert = failure.Sentence },
             failure.Kind, failure, Resumable: false, turn.Vendor, turn.Share);
 
     /// <summary>
@@ -166,7 +166,7 @@ internal static class ConsultationFailing
         return turn.Record with
         {
             Status = ConsultationStatuses.Failed,
-            Reason = "the call was cancelled while the consultant was running",
+            Reason = "the call was cancelled while cons was running",
             Handle = turn.KeptHandle,
             FailureKind = cancelled.Kind,
             FailureCure = cancelled.Cure,
@@ -230,8 +230,8 @@ internal static class ConsultationFailing
 
     /// <summary>The conversation is kept: the turn is not counted, and the next call picks it up.</summary>
     private static string Resumable(ConsultationFailed failed) =>
-        $"the consultant ({failed.Vendor}) accepted the turn but the answer did not arrive: {failed.Failure.What(failed.Vendor)}; "
-        + $"the turn was NOT counted — call consult again with consultationId {failed.Next.Id} and the consultant will pick the conversation up";
+        $"the cons model ({failed.Vendor}) accepted the turn but the answer did not arrive: {failed.Failure.What(failed.Vendor)}; "
+        + $"the turn was NOT counted — call cons again with consultationId {failed.Next.Id} and it will pick the conversation up";
 
     /// <summary>The optional sentences, in the order a caller acts on them.</summary>
     private static string[] Facts(ConsultationFailed failed, bool gaveBack, string unrecorded) =>

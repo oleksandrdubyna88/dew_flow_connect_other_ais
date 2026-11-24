@@ -29,7 +29,7 @@ internal static class ConsultationAnswering
             Status = last ? ConsultationStatuses.Closed : ConsultationStatuses.Open,
             // The sentence a LATER call is refused with is this one, so it carries the cure — the
             // setting's name — rather than leaving the caller to find it.
-            Reason = last ? $"all {record.MaxTurns} of its turns are used (COAI_CONSULT_TURNS sets the cap)" : string.Empty,
+            Reason = last ? $"all {record.MaxTurns} of its turns are used (COAI_CONS_TURNS sets the cap)" : string.Empty,
             EndedUtc = last ? turn.Utc : string.Empty,
             UpdatedUtc = turn.Utc,
             // An answer is the state now: the failure it followed is history, kept in the ledger and the

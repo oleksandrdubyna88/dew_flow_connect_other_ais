@@ -47,8 +47,6 @@ public sealed class TheLeakingTestSitesRemoveWhatTheyMadeTests
     [InlineData("coai-record-", nameof(PanelServiceTests.CodeStage_FansOutThreeRolesPerProvider_WithThreeDistinctPrompts))]
     [InlineData("coai-cwd-", nameof(PanelServiceTests.ThePlanStage_GivesReviewersNoCheckout_ToExplore))]
     [InlineData("coai-plan-said-", nameof(PanelServiceTests.ThePlanStage_IsToldItHasNoCheckout_NotMerelyGivenNone))]
-    [InlineData("coai-deal-", nameof(PanelServiceTests.WithDealingOn_ACodeRound_AsksEachRoleOnce_AcrossTheVendors))]
-    [InlineData("coai-deal-plan-", nameof(PanelServiceTests.WithDealingOn_ThePlanRound_SpendsADifferentLensPerVendor))]
     public async Task APanelServiceTestThatRecordsLaunches_RemovesItsRecordFolder(string prefix, string method)
     {
         var before = FoldersOf(prefix);

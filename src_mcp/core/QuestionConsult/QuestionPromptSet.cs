@@ -14,7 +14,7 @@ namespace CoaiMcp.Core.QuestionConsult;
 /// <param name="Shipped">Whether it came with the binary — a shipped prompt has a default to restore to.</param>
 public sealed record QuestionPromptDefinition(string Id, string Title, Capability Capability, string Text, bool Shipped);
 
-/// <summary>What <c>COAI_QCONSULT_PROMPTS</c> turned out to be: the prompts a person added, and the complaints.</summary>
+/// <summary>What <c>COAI_CONSASK_PROMPTS</c> turned out to be: the prompts a person added, and the complaints.</summary>
 /// <param name="Unreadable">The whole value could not be parsed — no custom prompt exists, and the complaint says why.</param>
 public sealed record QuestionPromptsSetting(
     IReadOnlyList<QuestionPromptDefinition> Prompts,
@@ -28,7 +28,7 @@ internal sealed record QuestionPromptSeedRow(string? Id, string? Title, string? 
 
 /// <summary>
 /// The base prompts a row may name: the three shipped ones, embedded from <c>shared/question-prompts.json</c>,
-/// plus whatever a person added through <c>COAI_QCONSULT_PROMPTS</c>.
+/// plus whatever a person added through <c>COAI_CONSASK_PROMPTS</c>.
 /// </summary>
 /// <remarks>
 /// <para>Embedded for the reason <c>RuntimeCapabilities</c> and <c>RoleCatalog</c> give: a published
@@ -76,7 +76,7 @@ public sealed record QuestionPromptSet(IReadOnlyList<QuestionPromptDefinition> P
         {
             return new QuestionPromptsSetting(
                 [],
-                [$"COAI_QCONSULT_PROMPTS could not be read ({e.Message.Split(" LineNumber:")[0].Trim()}) — no custom prompt is offered until it is fixed; the shipped three still are"],
+                [$"COAI_CONSASK_PROMPTS could not be read ({e.Message.Split(" LineNumber:")[0].Trim()}) — no custom prompt is offered until it is fixed; the shipped three still are"],
                 Unreadable: true);
         }
     }
@@ -107,12 +107,12 @@ public sealed record QuestionPromptSet(IReadOnlyList<QuestionPromptDefinition> P
         var id = row.Id?.Trim() ?? string.Empty;
         if (!RoleComposition.IsPromptId(id))
         {
-            return (null, $"COAI_QCONSULT_PROMPTS: the prompt id '{id}' is not one an override file can be named by — lower-case letters, digits and dashes, starting with a letter or digit");
+            return (null, $"COAI_CONSASK_PROMPTS: the prompt id '{id}' is not one an override file can be named by — lower-case letters, digits and dashes, starting with a letter or digit");
         }
 
         if (Shipped.Find(id) is not null || accepted.Any(p => string.Equals(p.Id, id, StringComparison.OrdinalIgnoreCase)))
         {
-            return (null, $"COAI_QCONSULT_PROMPTS: the prompt id '{id}' is already taken — a shipped prompt is edited through its override, never redefined, and one id is one prompt");
+            return (null, $"COAI_CONSASK_PROMPTS: the prompt id '{id}' is already taken — a shipped prompt is edited through its override, never redefined, and one id is one prompt");
         }
 
         return Body(row, id);
@@ -122,13 +122,13 @@ public sealed record QuestionPromptSet(IReadOnlyList<QuestionPromptDefinition> P
     {
         if (!Capabilities.TryParse(row.Capability ?? string.Empty, out var capability))
         {
-            return (null, $"COAI_QCONSULT_PROMPTS: the prompt '{id}' declares the capability '{row.Capability}', which is not one of: {Capabilities.AllSpelled}");
+            return (null, $"COAI_CONSASK_PROMPTS: the prompt '{id}' declares the capability '{row.Capability}', which is not one of: {Capabilities.AllSpelled}");
         }
 
         var text = row.Text?.Trim() ?? string.Empty;
 
         return text.Length == 0
-            ? (null, $"COAI_QCONSULT_PROMPTS: the prompt '{id}' has no text — a row paired with it would be launched with nothing to say")
+            ? (null, $"COAI_CONSASK_PROMPTS: the prompt '{id}' has no text — a row paired with it would be launched with nothing to say")
             : (new QuestionPromptDefinition(id, Title(row, id), capability, text, Shipped: false), string.Empty);
     }
 

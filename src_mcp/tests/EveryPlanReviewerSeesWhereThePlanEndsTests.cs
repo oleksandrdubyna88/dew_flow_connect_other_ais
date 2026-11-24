@@ -55,7 +55,7 @@ public sealed class EveryPlanReviewerSeesWhereThePlanEndsTests : FakeCliRoundTes
     private PanelService TwoVendors() =>
         ServiceFor(Defaults() with
         {
-            Rounds = PanelConfig.Uniform(3, 2, StagePolicy.Human),
+            Rounds = PanelConfig.Uniform(3, 2),
             Providers = [new("codex") { ExecutablePath = FakeCliExe }, new("gemini") { ExecutablePath = FakeCliExe }],
         });
 
@@ -289,7 +289,7 @@ public sealed class EveryPlanReviewerSeesWhereThePlanEndsTests : FakeCliRoundTes
     }
 
     [Fact]
-    public async Task EveryReviewerThatDidNotGetThePlan_IsNoAnswerAtAll_AndTheGateCallsAHuman()
+    public async Task EveryReviewerThatDidNotGetThePlan_IsNoAnswerAtAll_AndTheRoundIsNotReviewed()
     {
         Script(Answer(TokenFinding(Id)), Answer(TokenFinding(Id)));
         var service = TwoVendors();
@@ -297,7 +297,7 @@ public sealed class EveryPlanReviewerSeesWhereThePlanEndsTests : FakeCliRoundTes
 
         var answer = Parse(await service.ReviewPlanAsync(_repo, "feature", Plan, TestContext.Current.CancellationToken));
 
-        answer.GetProperty("verdict").GetString().Should().Be("call_human");
+        answer.GetProperty("verdict").GetString().Should().Be("not_reviewed");
         answer.GetProperty("reviewers").GetString().Should().Contain("0 of 2 reviewers answered");
     }
 
@@ -307,28 +307,28 @@ public sealed class EveryPlanReviewerSeesWhereThePlanEndsTests : FakeCliRoundTes
         // T19, the fold half, as decided on the cadence consultation: a reviewer that says the plan did not reach it did
         // not review the plan, so its other findings are set aside — and the reviewer line says how many.
         Script(Answer(TokenFinding(Id), RealFinding, OtherFinding), Answer(TokenFinding(Id), RealFinding, OtherFinding));
-        var service = ServiceFor(Defaults() with { Rounds = PanelConfig.Uniform(3, 2, StagePolicy.Human) });
+        var service = ServiceFor(Defaults() with { Rounds = PanelConfig.Uniform(3, 2) });
         await service.OpenAsync(_repo, "feature");
 
         var answer = Parse(await service.ReviewPlanAsync(_repo, "feature", Plan, TestContext.Current.CancellationToken));
 
         answer.GetProperty("reviewers").GetString().Should().Contain("0 of 1 reviewers answered").And.Contain("2 other findings set aside");
         answer.GetProperty("findings").GetArrayLength().Should().Be(0);
-        answer.GetProperty("verdict").GetString().Should().Be("call_human");
+        answer.GetProperty("verdict").GetString().Should().Be("not_reviewed");
     }
 
     [Fact]
-    public async Task TwoIdenticalTokensFromTheOnlyReviewer_IsNoAnswer_AndTheGateCallsAHuman()
+    public async Task TwoIdenticalTokensFromTheOnlyReviewer_IsNoAnswer_AndTheRoundIsNotReviewed()
     {
         // The defect: two copies stayed an `Ok`, counted as answered, and under the plan threshold the round proceeded
         // with no review at all.
         Script(Answer(TokenFinding(Id), TokenFinding(Id)), Answer(TokenFinding(Id), TokenFinding(Id)));
-        var service = ServiceFor(Defaults() with { Rounds = PanelConfig.Uniform(3, 2, StagePolicy.Human) });
+        var service = ServiceFor(Defaults() with { Rounds = PanelConfig.Uniform(3, 2) });
         await service.OpenAsync(_repo, "feature");
 
         var answer = Parse(await service.ReviewPlanAsync(_repo, "feature", Plan, TestContext.Current.CancellationToken));
 
-        answer.GetProperty("verdict").GetString().Should().Be("call_human");
+        answer.GetProperty("verdict").GetString().Should().Be("not_reviewed");
         answer.GetProperty("reviewers").GetString().Should().Contain("0 of 1 reviewers answered");
     }
 
@@ -336,7 +336,7 @@ public sealed class EveryPlanReviewerSeesWhereThePlanEndsTests : FakeCliRoundTes
     public async Task ATokenForAnotherPlanBesideRealFindings_IsAnAnswer_AndMerged()
     {
         Script(Answer(TokenFinding("0000000000000000"), RealFinding), Answer(TokenFinding("0000000000000000"), RealFinding));
-        var service = ServiceFor(Defaults() with { Rounds = PanelConfig.Uniform(3, 2, StagePolicy.Human) });
+        var service = ServiceFor(Defaults() with { Rounds = PanelConfig.Uniform(3, 2) });
         await service.OpenAsync(_repo, "feature");
 
         var answer = Parse(await service.ReviewPlanAsync(_repo, "feature", Plan, TestContext.Current.CancellationToken));

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import fs from 'node:fs';
 import path from 'node:path';
-import { CONVENTIONS_ID, CONVENTIONS_ROLE_SINCE, PROMPTS, ROLES, selectedFor, universalFor } from '../prompts';
+import { CONVENTIONS_ROLE_SINCE } from '../prompts';
 import { PanelState } from '../panelView';
 import { everyPageHtml } from './panelPages';
 import { DEFAULTS } from '../settingsShape';
@@ -11,17 +11,10 @@ import { DEFAULT_VENDORS } from '../vendors';
 import { SNIPPET_VERSION } from '../claudeSnippet';
 
 /**
- * The picker shows the prompt the SERVER will run, for every round the person can see.
+ * The panel and the server agree on the roles: the seed both read is loaded, and a panel ahead of its server says so.
  *
- * <p>Found by the pre-delivery campaign rather than by reading: the panel passed its
- * <b>deal</b> switch into {@link selectedFor}'s <i>rotating</i> slot, so ticking "Deal the lenses
- * across vendors" made round 2 of Architecture display <code>arch-boundaries</code> — while the
- * server, whose rotation had no switch the panel could reach, ran <code>architecture</code>. A
- * picker that names a prompt nobody runs is worse than an empty one: it is evidence for a choice
- * that was never made. Rotation is gone from both halves; this test is what keeps them level.</p>
- *
- * <p>Its twin on the C# side is <code>ConventionsPassTests</code>. Two suites for one rule, because
- * the rule is that two programs agree, and neither can check that alone.</p>
+ * <p>The per-round prompt picker this file used to hold against the server's prompt catalog is gone with the server's
+ * `PromptsPerRound` (v2 E3.S2): a role has one prompt now, so there is no round to pick for.</p>
  */
 
 /** Enough panel to render the Prompts section; every field the version-skew test does not read. */
@@ -34,7 +27,6 @@ const baseState = (): PanelState => ({
   hostKind: 'windows',
   side: '',
   perSide: false,
-  questions: [],
   sessions: [],
   openSections: ['prompts'],
   usage: [],
@@ -45,25 +37,7 @@ const baseState = (): PanelState => ({
   latestServerVersion: '',
 });
 
-/**
- * What the SERVER runs for an unset round — read from the seed, not restated here.
- *
- * <p><b>It used to be `universalFor(role).id`, and that was worth nothing.</b> `selectedFor` falls
- * back to `universalFor` too, so the assertion below compared a function with itself: the two
- * "programs" could have moved together forever and this file would have stayed green. Caught on
- * that change's own pull request, and it is the same defect this suite exists to prevent — one
- * implementation standing in for two.</p>
- *
- * <p>The fix after that read `PromptCatalog.cs` with a regular expression, which held for as long
- * as the server kept its catalog as a C# array. It keeps it in `shared/builtin-roles.json` now, so
- * that is what this reads — and the property survives the move intact, because it is still the
- * OTHER program's answer. The seed is what `RoleCatalog.Builtin` loads and `BuiltinRoleCatalogTests`
- * asserts it against, field for field; this file asserts the panel against the same file. Neither
- * side's answer is derived from the other's, which is the whole reason this test exists.</p>
- *
- * <p>Not `BUILTIN_ROLES`, deliberately: that is the panel's generated copy, and comparing the panel
- * with its own copy would be the original defect in a new spelling.</p>
- */
+/** The seed (`shared/builtin-roles.json`), read as the server reads it — not the panel's generated copy of it. */
 interface SeedRole {
   readonly id: string;
   readonly prompts: readonly { readonly id: string }[];
@@ -73,56 +47,10 @@ const SEED: readonly SeedRole[] = JSON.parse(
   fs.readFileSync(path.join(__dirname, '..', '..', '..', 'shared', 'builtin-roles.json'), 'utf8'),
 ).roles;
 
-/** The universal prompt id the SERVER ships for each role: its FIRST, which is `General` there. */
-function serverUniversals(): ReadonlyMap<string, string> {
-  const out = new Map<string, string>();
-  for (const role of SEED) {
-    if (role.prompts.length > 0) {
-      out.set(role.id, role.prompts[0]!.id);
-    }
-  }
-
-  return out;
-}
-
 test('the seed actually loaded', () => {
   // The regular expression this replaced could return an empty map and leave every assertion below
   // passing over nothing — which is how the vacuous version of this file survived a day.
   assert.ok(SEED.length >= 5, `the seed has ${SEED.length} roles`);
-});
-
-test('an unset round shows what the server runs, for every role and every round', () => {
-  const universals = serverUniversals();
-
-  // The roles come from the panel's own catalog rather than a list retyped here: a role the panel
-  // gained and this file did not would otherwise go unchecked, which is the second half of the
-  // same finding.
-  // Both directions, not just one. Iterating the panel's roles catches a role the panel has and
-  // the seed does not; the count catches the reverse — a role ADDED to the seed that the panel's
-  // generated copy is missing, which would otherwise leave this green while the picker omits it.
-  // (gemini, this story's code round.)
-  assert.ok(ROLES.length > 0);
-  assert.strictEqual(
-    ROLES.length,
-    universals.size,
-    'the panel draws a different number of roles from the number the seed ships',
-  );
-  for (const { id: role } of ROLES) {
-    const server = universals.get(role);
-    assert.ok(
-      server,
-      `${role} is not in shared/builtin-roles.json — the panel knows a role the seed does not`,
-    );
-
-    for (const round of [1, 2, 3, 4]) {
-      assert.equal(
-        selectedFor(role, round, {}),
-        server,
-        `${role} round ${round}: the panel would show a different prompt from the one the seed gives `
-          + 'this role. If the seed changed, run: node src_vs_code/scripts/generate-builtin-roles.mjs',
-      );
-    }
-  }
 });
 
 /**
@@ -163,44 +91,4 @@ test('a panel ahead of its server says so, instead of showing a round the server
   // sentence, which multiplies by the vendor count three lines further down the same page.
   assert.ok(behind.includes('three code roles, not four'), 'the unit is roles');
   assert.ok(!behind.includes('three reviewers'), 'a reviewer count would contradict the fan-out line');
-});
-
-test('a later round never shows a lens nobody selected', () => {
-  // The whole class of defect in one assertion: no unset round may resolve to a narrow lens,
-  // because nothing on the server side would run one without an explicit pick.
-  //
-  // Asserted as a PROPERTY of what came back — is this prompt the role's universal one — rather
-  // than by recomputing the answer with `universalFor`, which is the shape that made the test
-  // above vacuous for a day.
-  for (const { id: role } of ROLES) {
-    for (const round of [2, 3, 4]) {
-      const shown = selectedFor(role, round, {});
-      assert.ok(
-        PROMPTS.some((p) => p.id === shown && p.role === role && p.universal),
-        `${role} round ${round} shows ${shown}, which is not this role's universal prompt`,
-      );
-    }
-  }
-});
-
-test('an explicit choice is still what is shown', () => {
-  assert.equal(
-    selectedFor('Architecture', 2, { Architecture: ['architecture', 'arch-evolution'] }),
-    'arch-evolution',
-  );
-});
-
-/**
- * The saved configuration of somebody who chose Conventions under Architecture yesterday.
- *
- * <p>Two reviewers on the plan round asked what becomes of that stored selection now that the
- * prompt has left the three code roles: silently ignored, or a round that fails on an id nobody
- * offers? Neither — it falls back to the role's own universal question, by the same rule that
- * covers a renamed prompt. Asserted by NAME because the generic sentence is already tested and
- * this is the specific selection this change orphaned. Its twin is `ConventionsPassTests`.</p>
- */
-test('a saved Conventions choice under a role that no longer offers it falls back', () => {
-  for (const role of ['Architecture', 'SecurityReliability', 'UxDxPerformance']) {
-    assert.equal(selectedFor(role, 1, { [role]: [CONVENTIONS_ID] }), universalFor(role).id);
-  }
 });

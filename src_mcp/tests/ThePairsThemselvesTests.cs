@@ -522,7 +522,7 @@ public sealed class ThePairsThemselvesTests : IDisposable
         // (why a consultation failed) three more to `consultations`, step 20 (the round counter's model)
         // one to `reviewers`, step 21 (the round's identity across the wire, story 4.1) one more to
         // `rounds`, step 22 (what a code round changed) five more to `rounds` and one to `reviewers`, and step 23
-        // (what a plan round reviewed) one more to `rounds`, and step 24 (who wrote the code a round reviewed) fourteen more to `rounds` — and
+        // (what a plan round reviewed) one more to `rounds`, and step 24 (who wrote the code a round reviewed) fourteen more to `rounds`, and step 25 (the plan item a call was for) one to each of `rounds`, `consultations` and `question_consults`, with three partial indexes — and
         // an index on one of them, dropped FIRST because SQLite refuses DROP COLUMN on an indexed column. `round_authors` is IF NOT EXISTS, so
         // it needs nothing. Step 17 (the question consultant) only creates tables
         // IF NOT EXISTS, and step 20's index is CREATE INDEX IF NOT EXISTS, so re-running those needs nothing
@@ -568,6 +568,12 @@ public sealed class ThePairsThemselvesTests : IDisposable
             ALTER TABLE rounds DROP COLUMN ambiguous_output_tokens;
             ALTER TABLE rounds DROP COLUMN ambiguous_cache_creation_tokens;
             ALTER TABLE rounds DROP COLUMN ambiguous_cache_read_tokens;
+            DROP INDEX rounds_by_work_item;
+            DROP INDEX consultations_by_work_item;
+            DROP INDEX question_consults_by_work_item;
+            ALTER TABLE rounds DROP COLUMN work_item;
+            ALTER TABLE consultations DROP COLUMN work_item;
+            ALTER TABLE question_consults DROP COLUMN work_item;
             PRAGMA user_version = 12;
             """);
         SqliteConnection.ClearAllPools();

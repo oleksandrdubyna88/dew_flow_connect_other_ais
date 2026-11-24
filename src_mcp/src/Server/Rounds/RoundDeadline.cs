@@ -12,8 +12,7 @@ internal static class RoundDeadline
         var rows = settings.Providers.Where(p => p.Enabled).Select(p => new
         {
             Provider = p,
-            Count = (p.Serves(stage) ? roles : 0) + (settings.SecurityLane.Applies(stage)
-                ? settings.SecurityLane.Runs.Count(r => r.Vendor == p.Provider && r.Serves(stage)) : 0),
+            Count = p.Serves(stage) ? roles : 0,
         }).ToArray();
         var cloud = rows.Where(r => r.Provider.Runtime != "local").ToArray();
         var waves = Math.Max(Waves(cloud.Sum(r => r.Count), settings.GlobalConcurrency),
@@ -21,10 +20,8 @@ internal static class RoundDeadline
         var engines = rows.Where(r => r.Provider.Runtime == "local").GroupBy(r => LocalRuntime.EngineKey(
             r.Provider.BaseUrl.Length > 0 ? r.Provider.BaseUrl : LocalRuntime.DefaultEndpoint));
         waves = Math.Max(waves, engines.Select(g => Waves(g.Sum(r => r.Count), settings.LocalConcurrency)).DefaultIfEmpty(1).Max());
-        var sourceBudget = settings.SecurityLane.Applies(stage)
-            && settings.SecurityLane.Runs.Any(r => r.Serves(stage) && r.Context == Core.Security.SecurityContextModes.Slice) ? SecuritySources.CollectionBudget : TimeSpan.Zero;
         var whole = RoundBudget.Expressible(settings.RoundTimeout > TimeSpan.Zero
-            ? settings.RoundTimeout : RoundBudget.For(perReviewer, waves, 1) + sourceBudget);
+            ? settings.RoundTimeout : RoundBudget.For(perReviewer, waves, 1));
         if (whole < perReviewer) log.Warning("the round limit of {Limit:0} minute(s) is shorter than one reviewer's own {Reviewer:0}; reviewers may be cancelled", whole.TotalMinutes, perReviewer.TotalMinutes);
         return whole;
     }

@@ -1,0 +1,13 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t3-chat-scenarios
+title: "Host scenarios: cold chat command and restored legacy tab without the sidebar, custom data root, side model, close right after a turn"
+kind: test
+complexity: 5
+dependsOn:
+  - t2-chat-register
+parallel: false
+files:
+  - src_vs_code/src/test/host
+dod:
+  - id: d1
+    item: "all existing chat host scenarios pass"

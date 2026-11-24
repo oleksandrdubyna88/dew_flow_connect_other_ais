@@ -1,0 +1,13 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t1-tool-renames
+title: "Serve cons, cons_close, consask; keep consult, close_consult, ask_consultants as hidden aliases with a 'renamed' note"
+kind: code
+complexity: 4
+dependsOn: []
+parallel: false
+files:
+  - src_mcp/src/Tools.cs
+  - src_mcp/src/Prompts.cs
+dod:
+  - id: d1
+    item: "tools/list shows the new names only; old names still answer"

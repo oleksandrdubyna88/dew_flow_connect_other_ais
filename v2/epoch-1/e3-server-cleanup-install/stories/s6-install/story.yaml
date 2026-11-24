@@ -1,0 +1,5 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: s6-install
+title: "--install and --setup-clients: find CLIs, write MCP config (cornerstone)"
+dependsOn:
+  - s3-renames

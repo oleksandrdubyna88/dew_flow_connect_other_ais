@@ -152,7 +152,7 @@ test('findings are keyed one round at a time', () => {
 // ---------- what the page does with them ----------
 
 test('the page can render a finding under its round', () => {
-  const html = roundsLogHtml(rowsFrom([session([round()])], NOW, () => undefined, [], LOG), [], 'n');
+  const html = roundsLogHtml(rowsFrom([session([round()])], NOW, () => undefined, [], LOG), 'n');
   const script = html.slice(html.indexOf('<script'));
 
   assert.match(script, /function foundHtml/, 'the detail region builds them');
@@ -216,7 +216,7 @@ test('with nothing decided yet the tab says what will fill it', () => {
 });
 
 test('the page has the third tab, and it is not the one it opens on', () => {
-  const html = roundsLogHtml([], [], 'n', '', blindSpotsHtml(LOG));
+  const html = roundsLogHtml([], 'n', '', blindSpotsHtml(LOG));
 
   assert.match(html, /data-tab="spots"/);
   assert.match(html, /id="tab-spots"/);

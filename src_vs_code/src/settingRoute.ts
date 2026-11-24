@@ -1,5 +1,3 @@
-import { isModelSlot, type ModelSlot } from './commandModels';
-
 /*
  * How one changed control of the panel is routed to where it is kept (`settingRoute`). Moved out of `settingsShape.ts`
  * when the dropdown's `control` joined it and that file passed 800 lines; `settingsShape` re-exports
@@ -26,7 +24,6 @@ export type SettingWrite = (
   | { readonly kind: 'vendor'; readonly key: string; readonly value: unknown; readonly vendor: string }
   | { readonly kind: 'role'; readonly key: string; readonly value: unknown; readonly role: string }
   | { readonly kind: 'caller'; readonly key: string; readonly value: unknown; readonly caller: string }
-  | { readonly kind: 'commandModel'; readonly key: ModelSlot; readonly value: unknown; readonly commandModel: string }
 ) & { readonly control?: ControlKind };
 
 /** The kind of control a write came from, where the host needs it: only a dropdown says so. */
@@ -38,10 +35,7 @@ export interface SettingMessage {
   readonly value: unknown;
   readonly vendor?: string | undefined;
   readonly role?: string | undefined;
-  readonly securityField?: string | undefined;
   readonly caller?: string | undefined;
-  /** The caller KIND whose split-order model a box names (issue #117) — a key of `coai.commandModels`. */
-  readonly commandModel?: string | undefined;
   /** `select` when a dropdown changed — absent for every other control. */
   readonly control?: ControlKind | undefined;
 }
@@ -59,14 +53,11 @@ export function settingMessageFrom(m: {
   readonly value?: unknown;
   readonly vendor?: string | undefined;
   readonly role?: string | undefined;
-  readonly securityField?: string | undefined;
   readonly caller?: string | undefined;
-  readonly commandModel?: string | undefined;
   readonly control?: unknown;
 }): SettingMessage {
   return {
-    key: m.key, value: m.value, vendor: m.vendor, role: m.role, caller: m.caller, commandModel: m.commandModel,
-    ...(m.securityField ? { securityField: m.securityField } : {}),
+    key: m.key, value: m.value, vendor: m.vendor, role: m.role, caller: m.caller,
     // Only the literal crosses — the page is the only sender, and a value it never sends is not believed.
     ...(m.control === 'select' ? { control: 'select' as const } : {}),
   };
@@ -79,8 +70,8 @@ export function settingMessageFrom(m: {
 export function settingWrite(message: SettingMessage): SettingWrite | undefined {
   const write = routed(message);
 
-  // Carried on EVERY kind, because a dropdown sits in a vendor row, a consultant row and a split-order
-  // slot as well as among the plain settings — and a refusal is snapped back by the control, not the kind.
+  // Carried on EVERY kind, because a dropdown sits in a vendor row and a consultant row
+  // as well as among the plain settings — and a refusal is snapped back by the control, not the kind.
   return write === undefined || message.control !== 'select' ? write : { ...write, control: 'select' };
 }
 
@@ -89,12 +80,6 @@ function routed(message: SettingMessage): SettingWrite | undefined {
   if (!named(key)) {
     return undefined;
   }
-  if (named(message.commandModel)) {
-    // The key names WHICH slot changed, and only the two slots exist: anything else is a page and a
-    // host that disagree, and writing it would store a field no reader looks at.
-    return isModelSlot(key) ? { kind: 'commandModel', key, value, commandModel: message.commandModel } : undefined;
-  }
-
   return keyedBy(message, key, value);
 }
 

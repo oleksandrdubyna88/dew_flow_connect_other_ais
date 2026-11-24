@@ -1,0 +1,13 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t1-roles-tool
+title: "MCP tool roles + one-shot --roles [--format json|claude-hook]; shared/role-defaults.json with ordered model lists per role and main-AI vendor"
+kind: code
+complexity: 6
+dependsOn: []
+parallel: false
+files:
+  - src_mcp/src
+  - shared/role-defaults.json
+dod:
+  - id: d1
+    item: "codex/agy rows only from measured model lists"

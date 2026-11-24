@@ -29,11 +29,11 @@ public static class QuestionConsultTable
             INSERT INTO question_consults (
                 id, caller, caller_kind, session_id, repo_path, branch, head_sha, plan_key, question, context,
                 production_risk, risk_reason, status, outcome, escalation_id, started_utc, ended_utc,
-                rows, answered, seconds, tokens_in, tokens_out, cost_usd, alert)
+                rows, answered, seconds, tokens_in, tokens_out, cost_usd, alert, work_item)
             VALUES (
                 $id, $caller, $kind, $session, $repo, $branch, $sha, $plan, $question, $context,
                 $risk, $riskReason, $status, $outcome, $escalation, $started, $ended,
-                $rows, $answered, $seconds, $in, $out, $cost, $alert)
+                $rows, $answered, $seconds, $in, $out, $cost, $alert, $workItem)
             ON CONFLICT(id) DO UPDATE SET
                 status = excluded.status, outcome = excluded.outcome, escalation_id = excluded.escalation_id,
                 ended_utc = excluded.ended_utc, rows = excluded.rows, answered = excluded.answered,
@@ -64,6 +64,8 @@ public static class QuestionConsultTable
         Bind(write, "$out", q.TokensOut);
         Bind(write, "$cost", q.CostUsd is { } usd ? usd : DBNull.Value);
         Bind(write, "$alert", q.Alert);
+        // Frozen with the first write (schema step 25): the conflict clause above does not rewrite it.
+        Bind(write, "$workItem", q.WorkItem);
         write.ExecuteNonQuery();
     }
 

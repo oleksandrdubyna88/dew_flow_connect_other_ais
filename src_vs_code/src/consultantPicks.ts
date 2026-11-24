@@ -83,7 +83,7 @@ function unpickedNote(caller: string, picked: string, rows: readonly Vendor[]): 
   const names = unpickedRows(caller, picked, rows);
   const words = names.length === 1 ? ONE_ROW : SOME_ROWS;
 
-  return names.length === 0 ? '' : `${namesSaid(names)} ${words.verb} ticked consultant on Models, but ${callerLabel(caller)} `
+  return names.length === 0 ? '' : `${namesSaid(names)} ${words.verb} ticked cons on Models, but ${callerLabel(caller)} `
     + `still asks the shipped pair — pick ${words.pick} here to use it.`;
 }
 

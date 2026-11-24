@@ -315,16 +315,23 @@ public sealed class RoundsQueryTests : IDisposable
     }
 
     [Fact]
-    public void WhatARoundOrdered_ComesBackWithItsFindings_WithTheSizeItMeasured()
+    public void WhatAnOlderBuildsRoundOrdered_StillComesBackWithItsFindings_WithTheSizeItMeasured()
     {
-        // Issue #131: "why five epics?" had no answer anywhere a person could look.
+        // Issue #131: "why five epics?" had an answer a person could look up. v2 orders nothing and writes none, but the
+        // rounds an older build recorded keep theirs, and the log still shows them.
         using (var db = RoundsDb.Open(_dir, _log)!)
         {
-            db.RecordRound(Session, Round(), [Found("one")], new RoundContext("SCOPE", "7133c2f", "claude-code")
-            {
-                Commands = ["Split this plan into 2-3 EPICS …", "Work AUTONOMOUSLY …"],
-                PlanShape = "Medium: 400 lines, 8 build step(s), 3 file(s) named, 2 area(s) touched",
-            });
+            db.RecordRound(Session, Round(), [Found("one")], new RoundContext("SCOPE", "7133c2f", "claude-code"));
+        }
+
+        using (var raw = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={Path.Combine(_dir, RoundsDb.FileName)};Pooling=False"))
+        {
+            raw.Open();
+            using var older = raw.CreateCommand();
+            older.CommandText = "UPDATE rounds SET commands = $commands, plan_shape = $shape";
+            older.Parameters.AddWithValue("$commands", """["Split this plan into 2-3 EPICS …","Work AUTONOMOUSLY …"]""");
+            older.Parameters.AddWithValue("$shape", "Medium: 400 lines, 8 build step(s), 3 file(s) named, 2 area(s) touched");
+            older.ExecuteNonQuery();
         }
 
         var orders = RoundsQuery.FindingsOf(_dir, "s1", "CodeReview", 1).Orders;

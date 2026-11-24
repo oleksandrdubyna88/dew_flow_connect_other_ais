@@ -83,13 +83,13 @@ void test('--providers names a missing root as a settingProblem of the wire shap
     assert.equal(problems.length, 1, `one missing root is one problem; the server said ${JSON.stringify(problems)}`);
     const [problem] = problems;
     assert.deepEqual(Object.keys(problem!).sort((a, b) => a.localeCompare(b)), ['key', 'kind', 'sentence', 'value'], 'the wire shape is these four fields and no other');
-    assert.equal(problem!['key'], 'COAI_QCONSULT_ROOTS');
+    assert.equal(problem!['key'], 'COAI_CONSASK_ROOTS');
     assert.equal(problem!['kind'], 'missing-folder');
     assert.equal(problem!['value'], gone, 'the STORED spelling, as the extension wrote it');
     assert.ok(Array.isArray(answer.unrecognised) && answer.unrecognised.includes(problem!['sentence']), 'the sentence is the one unrecognised carries, so the toast can drop it');
 
     const notes = parseProviderNotes(output);
-    assert.deepEqual(notes.settingProblems.map((one) => [one.key, one.kind, one.value]), [['COAI_QCONSULT_ROOTS', 'missing-folder', gone]]);
+    assert.deepEqual(notes.settingProblems.map((one) => [one.key, one.kind, one.value]), [['COAI_CONSASK_ROOTS', 'missing-folder', gone]]);
   } finally {
     rmSync(dataDir, { recursive: true, force: true });
     rmSync(roots, { recursive: true, force: true });

@@ -1,0 +1,5 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: s7-roles-hook
+title: "roles tool + SessionStart hook"
+dependsOn:
+  - s6-install

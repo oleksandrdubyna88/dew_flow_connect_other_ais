@@ -2,7 +2,7 @@ import * as assert from 'node:assert/strict';
 import * as vscode from 'vscode';
 
 import type { CoaiExports } from '../../extension';
-import { until } from './hostHelpers';
+import { until, activated } from './hostHelpers';
 
 /**
  * The skip-shell check writes the person's USER setting, once, after the press, in a real editor (S3-H1 of the E3 stories document).
@@ -32,7 +32,7 @@ const rememberedAsAdded = (memory: unknown): boolean =>
 export async function theSkipListAddAppendsToTheUserSettingOnce(): Promise<void> {
   const extension = vscode.extensions.getExtension<CoaiExports>('remsoftdev.connect-other-ais');
   assert.ok(extension !== undefined, 'the extension under test is not installed in this host');
-  const door = (await extension.activate()).skipShell;
+  const door = (await activated(extension)).skipShell;
   assert.ok(door !== undefined, 'the extension did not hand out its skip-shell test door in test mode, so nothing below is about the bound check');
 
   const savedValue = userValue();

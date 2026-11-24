@@ -5,8 +5,8 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// The static text an AI reads says what policy auto does (<c>research/PLAN_auto_never_asks_a_person_E1.md</c> § 9.3, the parent's § 4.7): the
-/// instructions are sent once at <c>initialize</c> and the policy can change mid-session, so every sentence is true under every policy.
+/// The static text an AI reads says what v2 does: nothing waits for a person, <c>ask_human</c> is an alias that points back to the
+/// caller's own conversation, and four verdicts exist.
 /// </summary>
 /// <remarks>
 /// The tool descriptions are read from the source of <c>Tools.cs</c>, the way <see cref="TheGateSaysWhenToConsultTests"/> reads them: the
@@ -19,74 +19,56 @@ public sealed class TheWordsAreTrueUnderPolicyAutoTests
     private static string Resolve => TheGateSaysWhenToConsultTests.DescriptionOf("resolve");
 
     [Fact]
-    public void AskHumanSaysItNeverWaitsUnderAuto_AndWhatItAnswersInstead()
+    public void AskHumanSaysItIsRemoved_AndWhatToDoInstead()
     {
-        AskHuman.Should().Contain("UNDER POLICY `auto`").And.Contain("never waits for the person and writes no card")
-            .And.Contain("the consultants of a production risk still run", "auto never waits for the PERSON; it does not skip the consultants")
-            .And.Contain("`status: \"consult_first\"`", "the AI's own question without a consultId")
-            .And.Contain("ask the consultants", "the sentence says what to do next")
-            .And.Contain("A held gate is answered `no_answer_yet` at once")
-            .And.Contain("a hold left by a build before auto that could not be released yet says why — call again");
+        AskHuman.Should().Contain("Removed in v2").And.Contain("never waits for a person and writes no card")
+            .And.Contain("`status: \"ask_in_conversation\"`")
+            .And.Contain("Ask the person yourself, in this conversation")
+            .And.NotContain("call_human").And.NotContain("no_answer_yet").And.NotContain("consult_first");
     }
 
     [Fact]
-    public void AskHumanQualifiesTheWait_ForEveryOtherPolicy()
+    public void ResolveSaysNothingHoldsTheGate_AndNamesNoHumanDecision()
     {
-        AskHuman.Should().Contain("under any other policy THIS CALL BLOCKS", "the wait is the other policies'")
-            .And.Contain("under any other policy; under `auto` it comes at once, and its instruction says what to do instead")
-            .And.NotContain("and THIS CALL BLOCKS until they answer", "that is the unqualified sentence this one replaces");
+        Resolve.Should().Contain("No verdict holds the gate: `not_reviewed` and `good_enough` are resolved like `proceed`.")
+            .And.NotContain("humanDecision").And.NotContain("notice card").And.NotContain("call_human");
     }
 
     [Fact]
-    public void AskHumanNamesFourStatuses_AndKeepsTheThingsOtherTestsPin()
+    public void TheInstructionsSayNothingWaitsForAPerson_AndAskHumanIsRemoved()
     {
-        AskHuman.Should().Contain("`status: \"consult_first\"`").And.Contain("`status: \"ask_in_conversation\"`")
-            .And.Contain("`status: \"answered\"`").And.Contain("`status: \"no_answer_yet\"`");
-        AskHuman.Should().Contain("15 minutes by default").And.Contain("expired");
-    }
-
-    [Fact]
-    public void ResolveSaysWhatAutoDoesToAHold_AndKeepsTheRuleItAlwaysSaid()
-    {
-        Resolve.Should().Contain("Under a policy that asks a person, a call_human verdict holds the gate; policy `auto` raises no hold, "
-                + "and `not_reviewed` and `good_enough` are resolved like `proceed`.")
-            .And.Contain("Policy auto also releases a hold left by a build before auto, and every review call then says so: call resolve — "
-                + "with your decisions, or none — and the stage advances, once.")
-            .And.Contain("is not a decision").And.Contain("refused while a gate is held").And.Contain("answer on the notice card");
-    }
-
-    [Fact]
-    public void TheInstructionsSayCallHumanComesOnlyFromAPolicyThatAsksAPerson()
-    {
-        Flat(Program.Instructions).Should().Contain("`call_human` comes only from a policy asking a person")
-            .And.Contain("under the default `auto` an unreviewed round says `not_reviewed`")
-            .And.Contain("an older build's hold is released, saying so");
+        Flat(Program.Instructions).Should().Contain("Nothing waits for a person: a round nobody answered says `not_reviewed`")
+            .And.Contain("Nothing holds the gate: `not_reviewed` and `good_enough` advance on `resolve` like `proceed`")
+            .And.Contain("`ask_human` is removed in v2 and only says so")
+            .And.NotContain("call_human").And.NotContain("continue_anyway");
         Program.Instructions.Length.Should().BeLessThanOrEqualTo(2000, "a client keeps about 2 KiB and drops the rest");
     }
 
     [Fact]
     public void TheInstructionsSayWhichVerdictsLetAStageAdvance_AndReviewCodeWaitsForTheStage()
     {
-        Flat(Program.Instructions).Should().Contain("Repeat until the verdict advances the stage (`proceed`, `continue_anyway`, `good_enough` or `not_reviewed`)",
-                "policy continue answers an exhausted round continue_anyway with AdvanceOnResolve set (RoundMachine.Exhausted, RoundCommands.MayProceed): it advances too")
+        Flat(Program.Instructions).Should().Contain("Repeat until the verdict advances the stage (`proceed`, `good_enough` or `not_reviewed`)")
             .And.Contain("`review_code` REFUSES until the plan stage advanced")
-            .And.NotContain("until a plan round reached `proceed`", "under the default policy a round nobody answered ends not_reviewed, and the stage opens on resolve");
+            .And.NotContain("until a plan round reached `proceed`", "a round nobody answered ends not_reviewed, and the stage opens on resolve");
         Program.Instructions.Length.Should().BeLessThanOrEqualTo(2000);
     }
 
     [Fact]
-    public void TheReviewCodeDescriptionDoesNotWaitForProceed_ItWaitsForTheStage()
+    public void TheReviewDescriptionsNameOnlyTheFourVerdicts()
     {
         var reviewCode = Flat(TheGateSaysWhenToConsultTests.DescriptionOf("review_code"));
+        var reviewPlan = Flat(TheGateSaysWhenToConsultTests.DescriptionOf("review_plan"));
 
         reviewCode.Should().Contain("REFUSES until the plan stage advanced")
-            .And.Contain("`proceed`, `continue_anyway`, `good_enough` or `not_reviewed`")
-            .And.NotContain("until a plan round reached `proceed`");
+            .And.Contain("`proceed`, `good_enough` or `not_reviewed`")
+            .And.NotContain("continue_anyway").And.NotContain("until a plan round reached `proceed`");
+        reviewPlan.Should().Contain("(proceed | revise | good_enough | not_reviewed)")
+            .And.NotContain("call_human").And.NotContain("escalated").And.NotContain("continue_anyway");
     }
 
     private static string Flat(string text) => System.Text.RegularExpressions.Regex.Replace(text, @"\s+", " ");
 
     [Fact]
-    public void TheHelpNamesAllFiveValues_AndWhatAbsentMeans() =>
-        Program.HelpText.Should().Contain("COAI_ON_EXHAUSTED (auto|human|continue|good_enough|escalate; absent = auto)");
+    public void TheHelpNamesNoPolicySetting() =>
+        Program.HelpText.Should().NotContain("COAI_ON_EXHAUSTED").And.NotContain("COAI_ESCALATION");
 }

@@ -34,7 +34,7 @@ internal static class Schema
         TheRunsThemselves, ThePairsThemselves, WhatWasSent, HowItEnded, WhoSaidSo,
         TheSendsThemselves, WhatAPersonSaid, WhatItWasTold, WhatTheCadenceCounts,
         WhyARoundDidNotRun, TheQuestionsAsked, SecurityEvidence, WhyAConsultationFailed,
-        TheReviewersModel, TheRoundsKey, TheRoundsSize, ThePlanSource, TheRoundsAuthors,
+        TheReviewersModel, TheRoundsKey, TheRoundsSize, ThePlanSource, TheRoundsAuthors, TheWorkItem,
     ];
 
     internal const string SecurityEvidence = """
@@ -726,5 +726,29 @@ internal static class Schema
         ALTER TABLE rounds ADD COLUMN ambiguous_cache_creation_tokens  INTEGER NOT NULL DEFAULT 0;
         ALTER TABLE rounds ADD COLUMN ambiguous_cache_read_tokens      INTEGER NOT NULL DEFAULT 0;
         CREATE INDEX IF NOT EXISTS rounds_by_authors_session ON rounds (authors_session);
+        """;
+
+    /// <summary>
+    /// Step 25: which item of a plan each round, consultation and question was FOR (coai v2 E3.S8, <c>v2/architecture/server.md</c> §21).
+    /// </summary>
+    /// <remarks>
+    /// <para><c>work_item</c> is the repository-relative path of an epoch, epic, story or task folder, as the caller named it in the optional
+    /// <c>workItem</c> argument of <c>review_plan</c>, <c>review_code</c>, <c>review_document</c>, <c>review_feature</c>, <c>cons</c> and <c>consask</c>
+    /// (validated by <c>WorkItems</c>: relative, inside the repository, no <c>..</c>). <b>Empty means "not attributed"</b> — every row written before
+    /// this step, and every call by a caller that sent none; it is never a missing value and never a guess. One column on each of the three tables the
+    /// per-item report reads: <c>rounds</c> (rewritten from the round on every re-record, as <c>round_key</c> is), <c>consultations</c> and
+    /// <c>question_consults</c> (frozen at the first turn: a follow-up cannot move a consultation to another item).</para>
+    /// <para>The indexes serve the one query that asks per item (<c>--plan-report</c>); each is partial over the attributed rows, so the rows of every
+    /// caller that never sends the argument cost nothing.</para>
+    /// <para>Appended, never inserted, for the reason step 20 records; a reader opened read-only (<c>--plan-report</c>) runs no step and asks the schema
+    /// whether the column is there, so a database an older server last wrote reads as no events rather than as an error.</para>
+    /// </remarks>
+    internal const string TheWorkItem = """
+        ALTER TABLE rounds ADD COLUMN work_item TEXT NOT NULL DEFAULT '';
+        ALTER TABLE consultations ADD COLUMN work_item TEXT NOT NULL DEFAULT '';
+        ALTER TABLE question_consults ADD COLUMN work_item TEXT NOT NULL DEFAULT '';
+        CREATE INDEX IF NOT EXISTS rounds_by_work_item ON rounds (work_item) WHERE work_item <> '';
+        CREATE INDEX IF NOT EXISTS consultations_by_work_item ON consultations (work_item) WHERE work_item <> '';
+        CREATE INDEX IF NOT EXISTS question_consults_by_work_item ON question_consults (work_item) WHERE work_item <> '';
         """;
 }

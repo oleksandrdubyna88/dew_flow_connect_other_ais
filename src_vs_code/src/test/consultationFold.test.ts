@@ -147,7 +147,7 @@ function consultationsBody() {
 }
 
 function runPage() {
-  const html = roundsLogHtml([], [], 'n0nce');
+  const html = roundsLogHtml([], 'n0nce');
   const script = html.slice(html.indexOf('<script'), html.lastIndexOf('</script>'));
   const code = script.slice(script.indexOf('>') + 1);
   const consultations = consultationsBody();

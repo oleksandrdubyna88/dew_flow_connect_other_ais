@@ -1,0 +1,18 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t3-role-delta
+title: "One-shot --role-delta"
+kind: code
+complexity: 4
+dependsOn:
+  - t2-ba-run-repair
+parallel: false
+files:
+  - src_mcp/src/RoleDeltaMode.cs
+  - src_mcp/src/Program.cs
+  - .agents/PROJECT.md
+  - src_mcp/tests
+dod:
+  - id: d1
+    item: "10 task files: 1 edited = 0.10 pass; 1 edited + 1 deleted = 0.20 fail; an added task counts; a CRLF-only change does not"
+  - id: d2
+    item: "exits 0, 65, 74; never 64"

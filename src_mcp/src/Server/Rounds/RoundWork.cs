@@ -41,9 +41,6 @@ internal sealed record RoundWork(
     /// </summary>
     public int? Gitlinks { get; init; }
 
-    public bool SecurityActive { get; init; }
-    public bool OrdinaryDue { get; init; }
-
     /// <summary>
     /// What the round did NOT look at and must say so, appended to its reviewer line — today the
     /// uncommitted tail of a checkout whose committed part was reviewed. Empty for almost every round.

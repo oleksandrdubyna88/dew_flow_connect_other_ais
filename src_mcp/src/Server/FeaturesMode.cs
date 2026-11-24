@@ -28,10 +28,6 @@ internal static class FeaturesMode
         "cliEffort",
         // E2.3: a consultant on an api row, or a codex row on somebody else's endpoint (its provider on every turn).
         "apiConsultant",
-        // E2.4: COAI_SECURITY_LANE's `signals` (a signal's words) and a prompt's `words` — an older binary refuses the members.
-        "securityWords",
-        // E2.4: `--check-security [--validate]` on stdin — what the editor's "Try it" and save-time check ask.
-        "checkSecurity",
         // E2.4: `--check-model` — the consultant's check of any catalog row, read on stdin (D10).
         "checkModel",
         // A row's `stream`: an api row asks for its answer as a stream (research/PLAN_api_streaming.md).

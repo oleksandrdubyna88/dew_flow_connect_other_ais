@@ -1,0 +1,7 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: e3-more-adapters
+title: "php, rust, python, java adapters"
+half: server
+dependsOn: []
+doneWhen:
+  - "each stack's fixture repo goes green end to end"

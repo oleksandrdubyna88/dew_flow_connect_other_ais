@@ -111,12 +111,12 @@ public sealed class ARoundsNumberComesFromTheJournalTests : IAsyncLifetime
         result.ExitCode.Should().Be(0, $"git {string.Join(' ', args)}: {result.StdErr}");
     }
 
-    private PanelService Service(StagePolicy onExhausted = StagePolicy.Human, int maxRounds = 3) =>
+    private PanelService Service(int maxRounds = 3) =>
         new(
             new PanelSettings
             {
                 Providers = [new("codex") { ExecutablePath = FakeCliExe }],
-                Rounds = PanelConfig.Uniform(maxRounds, 2, onExhausted),
+                Rounds = PanelConfig.Uniform(maxRounds, 2),
                 DataDir = _data,
                 ReviewerTimeout = TimeSpan.FromSeconds(30),
                 RateLimitBackoff = TimeSpan.FromMilliseconds(5),
@@ -197,65 +197,5 @@ public sealed class ARoundsNumberComesFromTheJournalTests : IAsyncLifetime
         rows.Select(r => r.HeadSha).Distinct().Should().HaveCount(2, "each row names the commit IT reviewed");
         (await TrailOf(service, "feature", "CodeReview")).Should().Equal([1, 2],
             "and the session file numbers them the same way the database does");
-    }
-
-    /// <summary>
-    /// The escalation ladder resets the budget counter too, and its next round must not land on the
-    /// number of the round that climbed.
-    /// </summary>
-    [Fact]
-    public async Task ARoundAfterTheLadderFired_TakesTheNextNumber_NotTheFirstOneAgain()
-    {
-        var service = Service(StagePolicy.Escalate, maxRounds: 1);
-        await service.OpenAsync(_repo, "feature");
-
-        Script(ThreeMajors);
-        var first = Parse(await service.ReviewPlanAsync(_repo, "feature", "a plan with three real problems"));
-        first.GetProperty("verdict").GetString().Should().Be("escalated", $"one round, three majors over a threshold of two: {first}");
-        await service.ResolveAsync(_repo, "feature", AcceptAll(first));
-
-        Script(ThreeMajors);
-        var second = Parse(await service.ReviewPlanAsync(_repo, "feature", "a plan with three real problems"));
-        second.TryGetProperty("error", out var error).Should().BeFalse($"the ladder granted a fresh set of rounds: {error}");
-
-        RowsOf("PlanReview").Select(r => r.Number).Should().Equal([1, 2],
-            "the round that climbed the ladder and the round after it are two rounds");
-        (await TrailOf(service, "feature", "PlanReview")).Should().Equal([1, 2]);
-    }
-
-    /// <summary>
-    /// A person's <c>Continue</c> grants a fresh budget — and the round it grants is the next one in
-    /// the journal, not a rewrite of the one that called them.
-    /// </summary>
-    [Fact]
-    public async Task ARoundAfterAPersonSaidContinue_TakesTheNextNumber_NotTheOneThatCalledThem()
-    {
-        var service = Service();
-        await service.OpenAsync(_repo, "feature");
-        Script(Clean);
-        await service.ReviewPlanAsync(_repo, "feature", "a plan nobody objects to");
-        await service.ResolveAsync(_repo, "feature", "[]");
-
-        // Every reviewer fails: nothing was reviewed, so a person is called.
-        Script(Clean, exit: 1, stderr: "429 Too Many Requests");
-        var called = Parse(await service.ReviewCodeAsync(_repo, "feature", "main", Scope));
-        called.GetProperty("verdict").GetString().Should().Be("call_human", $"{called}");
-        await service.ResolveAsync(_repo, "feature", "[]");
-
-        // The person answers the notice the round left in the panel: keep going, more rounds.
-        var question = Directory.GetFiles(Path.Combine(_data, "escalations"), "*.json")
-            .Single(f => !f.EndsWith(".answer.json", StringComparison.Ordinal));
-        var id = Path.GetFileNameWithoutExtension(question);
-        await File.WriteAllTextAsync(
-            Path.Combine(_data, "escalations", $"{id}.answer.json"),
-            $$"""{"id":"{{id}}","answer":"keep going","answeredUtc":"{{DateTime.UtcNow:O}}","decision":"continue"}""");
-
-        Script(Clean);
-        var next = Parse(await service.ReviewCodeAsync(_repo, "feature", "main", Scope));
-        next.GetProperty("verdict").GetString().Should().Be("proceed", $"the fresh set of rounds runs: {next}");
-
-        RowsOf("CodeReview").Select(r => r.Number).Should().Equal([1, 2],
-            "the round that called the person is still on the record beside the one they granted");
-        (await TrailOf(service, "feature", "CodeReview")).Should().Equal([1, 2]);
     }
 }

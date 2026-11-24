@@ -957,7 +957,8 @@ test('and the extension passes it nothing but the one thing that cannot live in 
   // A client entry is the only place they can reach a server, which is why the block carries them
   // and carries nothing else. What `serverEnv()` may contain is asserted as BEHAVIOUR, not as text,
   // in `theDirectoryAPersonChose.test.ts` — "a server is handed the two keys, and only those two".
-  const source = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'extension.ts'), 'utf8');
+  // The install flow moved to the install module (v2 E4, s5-install-module): the two clipboard writes are now in `extension.ts` (copy the block) and in the module's `flow.ts` (install).
+  const source = ['src/extension.ts', 'shell/modules/install/flow.ts'].map((file) => fs.readFileSync(path.join(__dirname, '..', '..', file), 'utf8')).join('\n');
   // One level of nesting, so `mcpServerBlock(target.fsPath, serverEnv())` is read whole. The older
   // pattern stopped at the first `)` and would have reported the argument list as `…, serverEnv(`.
   const calls = [...source.matchAll(/mcpServerBlock\(((?:[^()]|\([^()]*\))*)\)/gu)].map((m) => m[1]!.trim());

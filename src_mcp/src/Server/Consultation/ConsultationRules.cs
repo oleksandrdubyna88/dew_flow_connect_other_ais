@@ -36,7 +36,7 @@ internal static class ConsultationRules
         ConsultationStore.IdleFor(record, nowUtc) > idle
             ? $"consultation {record.Id} sat idle for more than {idle.TotalMinutes:0} minutes and is closed; its vendor conversation was dropped — start a new consultation"
         : record.Budget.Exhausted
-            ? $"consultation {record.Id} has used all {record.MaxTurns} of its turns and is closed — a fresh problem statement opens a new one (COAI_CONSULT_TURNS sets the cap)"
+            ? $"consultation {record.Id} has used all {record.MaxTurns} of its turns and is closed — a fresh problem statement opens a new one (COAI_CONS_TURNS sets the cap)"
         : ProblemText.RepeatsTurn([.. record.Turns.Select(t => t.Problem)], problem) is { } turn
             ? $"the problem text repeats turn {turn} of consultation {record.Id} — a follow-up reports what you VERIFIED since the last advice (the command you ran, the error you got, the line it named), it does not re-ask"
         : null;

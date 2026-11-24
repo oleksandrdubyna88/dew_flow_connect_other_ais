@@ -1,0 +1,5 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: s1-job-lease
+title: "Detached role job: lease, generation, role tools"
+cornerstone: true
+dependsOn: []

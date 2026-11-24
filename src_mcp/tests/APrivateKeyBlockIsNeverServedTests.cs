@@ -338,7 +338,7 @@ public sealed class APrivateKeyBlockIsNeverServedTests : IAsyncLifetime
             new PanelSettings
             {
                 Providers = [new("codex") { ExecutablePath = FakeCliExe, Feature = true }],
-                Rounds = new PanelConfig(PanelConfig.AllRoles.ToDictionary(r => r, _ => new RoleGate(2, 5)), StagePolicy.Human),
+                Rounds = new PanelConfig(PanelConfig.AllRoles.ToDictionary(r => r, _ => new RoleGate(2, 5))),
                 DataDir = _data,
                 ReviewerTimeout = TimeSpan.FromSeconds(30),
                 RateLimitBackoff = TimeSpan.FromMilliseconds(5),

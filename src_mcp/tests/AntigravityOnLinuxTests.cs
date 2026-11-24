@@ -51,7 +51,7 @@ public class AntigravityOnLinuxTests
             new PanelSettings
             {
                 Providers = [new("antigravity") { ExecutablePath = "/home/somebody/.local/bin/agy" }],
-                Rounds = PanelConfig.Uniform(3, 2, StagePolicy.Human),
+                Rounds = PanelConfig.Uniform(3, 2),
                 DataDir = data,
                 ReviewerTimeout = TimeSpan.FromSeconds(30),
             },

@@ -83,7 +83,7 @@ public sealed class QuestionAdmissionTests
     public void AStrandedCatalogRow_IsBlocked_InTheExtensionsOwnWords_AndNeverShowsAnEmptyQuote()
     {
         // research/PLAN_names_and_a_missing_root.md story 2: the extension sends a pick whose catalog row is gone, or no
-        // longer ticked, as {vendor:'<id>', runtime:''} and says "<id> is no longer ticked question consultant (or was
+        // longer ticked, as {vendor:'<id>', runtime:''} and says "<id> is no longer ticked consask (or was
         // removed) — pick another model" (qconsultWrite.ts, noModel). The server blocked the same row with a sentence about
         // vendors and runtimes nobody had picked.
         var refused = Admit(Row("consult-claude", string.Empty, "question-opinion"), Settings())
@@ -91,7 +91,7 @@ public sealed class QuestionAdmissionTests
 
         refused.Status.Should().Be(RowOutcomes.Blocked);
         refused.Reason.Should().Be(
-            $"consult-claude is no longer ticked question consultant (or was removed) — pick another model, in {QuestionAdmission.Section}");
+            $"consult-claude is no longer ticked consask (or was removed) — pick another model, in {QuestionAdmission.Section}");
         refused.Reason.Should().NotContain("''");
     }
 

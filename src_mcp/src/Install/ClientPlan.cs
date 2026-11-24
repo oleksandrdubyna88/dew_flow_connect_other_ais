@@ -1,0 +1,176 @@
+namespace CoaiMcp.Install;
+
+/// <summary>What the run is for: bring the entries to the binary, or take ours away.</summary>
+internal enum Wanted
+{
+    Install,
+    Remove,
+}
+
+/// <summary>What the planner needs besides the file texts — all of it injected, so a scenario is a unit test.</summary>
+/// <param name="Wanted">Install or remove.</param>
+/// <param name="Binary">The path to register.</param>
+/// <param name="BinaryExplicit">Whether the person named it (<c>--binary</c>) — then it is registered over another live one; otherwise another live <c>coai-mcp</c> is left standing.</param>
+/// <param name="IsWindows">Whether this side is Windows: a path with a character <c>cmd.exe</c> reads as an operator is refused there.</param>
+/// <param name="Exists">Whether a file is on this side's disk — how a registered binary is told missing.</param>
+/// <param name="InClaudeSession">Whether the installer runs inside a Claude Code session, where the claude CLI refuses to read a server definition from stdin — so its MCP target cannot add or update, and says so before any lock or backup.</param>
+internal sealed record PlanInputs(Wanted Wanted, string Binary, bool BinaryExplicit, bool IsWindows, Func<string, bool> Exists, bool InClaudeSession = false);
+
+/// <summary>
+/// The decisions of the installer — PURE: file texts and found CLIs and flags in, one <see cref="PlannedTarget"/> per target out (v2 E3.S6 t2; most of the scenarios are unit tests of this class).
+/// </summary>
+internal static class ClientPlan
+{
+    /// <summary>The characters <c>cmd.exe</c> reads as operators — a <c>.cmd</c> shim re-parses its arguments, so a path holding one is refused, not quoted.</summary>
+    private static readonly char[] CmdOperators = ['&', '%', '^', '|', '<', '>', '\r', '\n'];
+
+    /// <summary>The target of <paramref name="target"/> for an install or a removal, from what its file holds.</summary>
+    internal static PlannedTarget Plan(IInstallTarget target, InstallHost host, ConfigRead read, PlanInputs inputs, McpEntry? interrupted)
+    {
+        var file = target.FileOf(host);
+        if (read is not ConfigRead.Found found)
+        {
+            return PlannedTarget.Refused(target.Cli, target.Kind, file, $"{file} cannot be changed: {((ConfigRead.Unreadable)read).Reason}");
+        }
+
+        if (!target.FollowsBinary)
+        {
+            return Unbound(target, file, found, inputs.Wanted);
+        }
+
+        return inputs.Wanted == Wanted.Remove
+            ? Removal(target, file, found)
+            : Install(target, file, found, inputs, interrupted);
+    }
+
+    /// <summary>A target whose text does not name the binary (the instruction line): added when missing, replaced when its wording is old, removed on request — never judged by the registered path.</summary>
+    private static PlannedTarget Unbound(IInstallTarget target, string file, ConfigRead.Found found, Wanted wanted)
+    {
+        if (wanted == Wanted.Remove)
+        {
+            return found.Entry is null
+                ? PlannedTarget.Nothing(target.Cli, target.Kind, file, "no coai block")
+                : new PlannedTarget(target.Cli, target.Kind, file, PlanAction.Remove, target.Via(PlanAction.Remove), found.Entry, null, [], "our block is removed");
+        }
+
+        var wantedEntry = target.NewEntry(string.Empty);
+
+        return found.Entry is null
+            ? new PlannedTarget(target.Cli, target.Kind, file, PlanAction.Add, target.Via(PlanAction.Add), null, wantedEntry, [], "no coai block yet")
+            : wantedEntry.Same(found.Entry)
+                ? PlannedTarget.Nothing(target.Cli, target.Kind, file, "already says this")
+                : new PlannedTarget(target.Cli, target.Kind, file, PlanAction.Update, target.Via(PlanAction.Update), found.Entry, wantedEntry, [], "the block's wording is old; it is replaced");
+    }
+
+    private static PlannedTarget Removal(IInstallTarget target, string file, ConfigRead.Found found) => found.Entry switch
+    {
+        null => PlannedTarget.Nothing(target.Cli, target.Kind, file, "no coai entry", found.ShadowedBy),
+        { IsOurs: false } => PlannedTarget.Nothing(target.Cli, target.Kind, file, $"an entry named coai that starts '{found.Entry.FileName}' is not ours and is left alone", found.ShadowedBy),
+        var ours => new PlannedTarget(target.Cli, target.Kind, file, PlanAction.Remove, target.Via(PlanAction.Remove), ours, null, found.ShadowedBy, "our entry is removed"),
+    };
+
+    private static PlannedTarget Install(IInstallTarget target, string file, ConfigRead.Found found, PlanInputs inputs, McpEntry? interrupted)
+    {
+        if (found.Entry is { IsOurs: false } foreign)
+        {
+            return PlannedTarget.Refused(target.Cli, target.Kind, file, $"an entry named coai already starts '{(foreign.FileName.Length > 0 ? foreign.FileName : "something that is not coai-mcp")}', not coai-mcp — it is not ours to replace", found.ShadowedBy);
+        }
+
+        if (found.Entry is { } ours && SamePath(ours.Command, inputs.Binary, inputs.IsWindows))
+        {
+            return PlannedTarget.Nothing(target.Cli, target.Kind, file, "already registered at this path", found.ShadowedBy);
+        }
+
+        if (inputs.IsWindows && inputs.Binary.IndexOfAny(CmdOperators) >= 0)
+        {
+            return PlannedTarget.Refused(target.Cli, target.Kind, file, $"the binary path holds a character cmd.exe reads as an operator (one of & % ^ | < >): {inputs.Binary}", found.ShadowedBy);
+        }
+
+        if (inputs.InClaudeSession && target is ClaudeMcp)
+        {
+            return PlannedTarget.Refused(target.Cli, target.Kind, file, ClaudeMcp.SessionRefusal, found.ShadowedBy);
+        }
+
+        return NoSecretOnACommandLine(found.Entry is null ? Added(target, file, found, inputs, interrupted) : Moved(target, file, found, found.Entry, inputs), target);
+    }
+
+    /// <summary>
+    /// Codex takes an environment value only as an argument of <c>codex mcp add</c>, so a plan that would pass an entry's env on is REFUSED when that env holds a key that is not known to be non-secret
+    /// (<see cref="CodexMcp.NonSecretEnv"/>) — at plan time, before any lock or backup, and with the key's name only.
+    /// </summary>
+    private static PlannedTarget NoSecretOnACommandLine(PlannedTarget plan, IInstallTarget target) =>
+        target is CodexMcp && plan.Action.Changes() && CodexMcp.EnvRefusal(plan.After) is { Length: > 0 } refusal
+            ? PlannedTarget.Refused(plan.Client, plan.Kind, plan.File, refusal, plan.ShadowedBy)
+            : plan;
+
+    private static PlannedTarget Added(IInstallTarget target, string file, ConfigRead.Found found, PlanInputs inputs, McpEntry? interrupted)
+    {
+        var after = interrupted is null ? target.NewEntry(inputs.Binary) : target.WithCommand(interrupted, inputs.Binary);
+
+        return new PlannedTarget(
+            target.Cli, target.Kind, file, PlanAction.Add, target.Via(PlanAction.Add), null, after, found.ShadowedBy,
+            interrupted is null ? "no coai entry yet" : "an update was interrupted after the old entry was removed; it is finished with the old environment");
+    }
+
+    private static PlannedTarget Moved(IInstallTarget target, string file, ConfigRead.Found found, McpEntry registered, PlanInputs inputs)
+    {
+        if (!inputs.BinaryExplicit && inputs.Exists(registered.Command) && !InSameVersionsFolder(registered.Command, inputs.Binary))
+        {
+            return PlannedTarget.Nothing(
+                target.Cli, target.Kind, file,
+                $"another coai-mcp is registered and present ({registered.Command}); it is left standing — name this one with --binary to move it",
+                [.. found.ShadowedBy, $"registered:{registered.Command}"]);
+        }
+
+        return new PlannedTarget(
+            target.Cli, target.Kind, file, PlanAction.Update, target.Via(PlanAction.Update), registered, target.WithCommand(registered, inputs.Binary), found.ShadowedBy,
+            "the registered binary is not this one; the command is replaced and its environment and arguments are kept");
+    }
+
+    /// <summary>The restore of <paramref name="target"/>: the file's entry goes back to <paramref name="before"/>, but only when it is still what the install wrote (<paramref name="after"/>).</summary>
+    internal static PlannedTarget Restore(IInstallTarget target, InstallHost host, ConfigRead read, McpEntry? before, McpEntry? after, bool inClaudeSession = false)
+    {
+        var file = target.FileOf(host);
+        if (read is not ConfigRead.Found found)
+        {
+            return PlannedTarget.Refused(target.Cli, target.Kind, file, $"{file} cannot be changed: {((ConfigRead.Unreadable)read).Reason}");
+        }
+
+        if (before is null ? found.Entry is null : before.Same(found.Entry))
+        {
+            return PlannedTarget.Nothing(target.Cli, target.Kind, file, "already as it was before the install", found.ShadowedBy);
+        }
+
+        if (inClaudeSession && target is ClaudeMcp && before is not null)
+        {
+            return PlannedTarget.Refused(target.Cli, target.Kind, file, ClaudeMcp.SessionRefusal, found.ShadowedBy);
+        }
+
+        return (after is null ? found.Entry is null : after.Same(found.Entry))
+            ? NoSecretOnACommandLine(new PlannedTarget(target.Cli, target.Kind, file, PlanAction.Restore, target.Via(PlanAction.Restore), found.Entry, before, found.ShadowedBy, "the entry goes back to what it was before the install"), target)
+            : PlannedTarget.Refused(target.Cli, target.Kind, file, $"{file} no longer holds what the install wrote, so it is not put back over a later change", found.ShadowedBy);
+    }
+
+    /// <summary>agy's one target: answered <c>unmeasured</c>, with the file it would be.</summary>
+    internal static PlannedTarget Unmeasured(IInstallTarget target, InstallHost host) =>
+        PlannedTarget.Nothing(target.Cli, target.Kind, target.FileOf(host), AgyMcp.Unmeasured);
+
+    private static bool SamePath(string registered, string binary, bool isWindows) =>
+        registered.Equals(binary, isWindows ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+
+    /// <summary>
+    /// Both paths are <c>…/versions/&lt;v&gt;/coai-mcp</c> under the same folder — one binary's older and newer places, so the newer replaces the older
+    /// (<c>versions/&lt;v&gt;</c> disappears after two updates, which is why the stable path is what is registered).
+    /// </summary>
+    internal static bool InSameVersionsFolder(string a, string b)
+    {
+        static string? Root(string path)
+        {
+            var parts = path.Replace('\\', '/').Split('/');
+
+            return parts.Length >= 3 && parts[^3] == "versions" ? string.Join('/', parts[..^3]) : null;
+        }
+
+        return Root(a) is { } rootA && Root(b) is { } rootB && rootA.Equals(rootB, StringComparison.OrdinalIgnoreCase);
+    }
+}

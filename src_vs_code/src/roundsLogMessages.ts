@@ -49,7 +49,6 @@ export interface LogPageMessage {
 
 export type LogCommand =
   | { readonly kind: 'ready' }
-  | { readonly kind: 'answer'; readonly id: string }
   | { readonly kind: 'usageWindow'; readonly window: string }
   /** The period *What it keeps missing* is counted over — the server counts it, so the host is asked. */
   | { readonly kind: 'spotsPeriod'; readonly period: LogPeriod }
@@ -168,8 +167,6 @@ export function logCommandOf(message: LogPageMessage | undefined | null): LogCom
   }
 
   switch (message.command) {
-    case 'answer':
-      return { kind: 'answer', id };
     case 'usageWindow':
       return { kind: 'usageWindow', window: id };
     case 'spotsPeriod':
@@ -198,8 +195,6 @@ export function logCommandOf(message: LogPageMessage | undefined | null): LogCom
 }
 
 export interface RoundsLogHooks {
-  /** Answer… under an open question. */
-  readonly onAnswer: (id: string) => Promise<void>;
   /** Today / Week / Month / Year on the spending tab. */
   readonly onUsageWindow: (window: string) => Promise<void>;
   /** Today … All on *What it keeps missing*, which the server counts, so the host is asked. */
@@ -250,7 +245,6 @@ type CommandOf<K extends LogCommand['kind']> = Extract<LogCommand, { readonly ki
 
 /** What each kind of command asks the host to do. `ready` and `ignore` ask for nothing, so they are not here. */
 const WORK: { readonly [K in Exclude<LogCommand['kind'], 'ready' | 'ignore'>]: (command: CommandOf<K>, hooks: RoundsLogHooks) => Promise<void> } = {
-  answer: (command, hooks) => hooks.onAnswer(command.id),
   usageWindow: (command, hooks) => hooks.onUsageWindow(command.window),
   spotsPeriod: (command, hooks) => hooks.onSpotsPeriod(command.period),
   forget: (command, hooks) => hooks.onForget(command.provider),

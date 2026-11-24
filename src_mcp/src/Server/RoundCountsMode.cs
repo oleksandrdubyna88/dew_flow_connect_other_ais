@@ -25,7 +25,7 @@ namespace CoaiMcp.Server;
 /// the fault hidden behind it (<c>.agents/PROJECT.md</c>).</para>
 /// <para><b>Nothing is written.</b> The read is <c>RoundCounts.Read</c>'s read-only open; a reader cannot
 /// migrate and must not try — the server's own open is what advances the schema.</para>
-/// <para>A unit of its own rather than more of <c>Program.cs</c>, for the reason <c>CadenceReadMode</c> gives.</para>
+/// <para>A unit of its own rather than more of <c>Program.cs</c>, like every other one-shot mode.</para>
 /// </remarks>
 internal static class RoundCountsMode
 {
@@ -44,7 +44,7 @@ internal static class RoundCountsMode
             note(why);
 
             // 65, NOT 64: the binary HAS this mode and is refusing the request. `--close-consult`,
-            // `--cadence` and `--log --since` answer a malformed request the same way.
+            // `--log --since` answers a malformed request the same way.
             return 65; // EX_DATAERR
         }
 

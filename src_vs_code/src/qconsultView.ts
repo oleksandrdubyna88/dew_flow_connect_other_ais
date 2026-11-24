@@ -2,7 +2,7 @@ import type { Admission } from './capabilityAdmission';
 import { offeredLine, optionHtml, rowPicks } from './catalogPicks';
 import { escapeHtml } from './escapeHtml';
 import type { HelpKey } from './help';
-import { help, segmentedRadio } from './panelControls';
+import { help } from './panelControls';
 import { familyLabel, otherSideHere, otherSideNote, type Existence, type PathFamily } from './pathFamily';
 import { NOTHING_ASKED, groupedPaths } from './pathGroups';
 import { groupCaptionId, pathGroupsHtml } from './pathGroupsView';
@@ -122,7 +122,7 @@ function promptOption(prompt: QuestionPromptView, runtime: string, row: Question
 export function qconsultBody(settings: QconsultSettings, state: QconsultViewState): string {
   return [
     banner(state.serverVersion),
-    switchAndMode(settings),
+    switchBlock(settings),
     rowsBlock(settings, state),
     promptsBlock(settings, state),
     rootsBlock(settings, state),
@@ -136,17 +136,10 @@ function banner(serverVersion: string): string {
   return note.length === 0 ? '' : `<div class="hint stale" data-qconsult-banner>${escapeHtml(note)}</div>`;
 }
 
-const MODE_WORDS: readonly (readonly [string, string])[] = [['off', 'Off'], ['remind', 'Remind'], ['require', 'Require']];
-
-function switchAndMode(settings: QconsultSettings): string {
+function switchBlock(settings: QconsultSettings): string {
   return `<div class="field">
-  <div class="check-row"><label for="qconsultEnabled"><input type="checkbox" id="qconsultEnabled" data-setting="qconsultEnabled"${settings.enabled ? ' checked' : ''}> Let an AI ask the question consultant first</label>${help('qconsultEnabled')}</div>
-  <div class="hint">Before an AI asks you a question it calls <code>ask_consultants</code>: every row below that is on answers it at once, each with its one prompt, and the answers come back to the AI separately — advice, never orders.</div>
-</div>
-<div class="field">
-  <label>${help('qconsultMode')}Before it asks you</label>
-  ${segmentedRadio('qconsultMode', settings.mode, 'What the gate in front of ask_human does about a question asked without the consultants', MODE_WORDS)}
-  <div class="hint">Require: once a plan is being built — after its first two question batches, until its stage release — a question that was not put to the consultants first is refused. A production risk with a reason always reaches you at once, with the consultants' answers folded under it. Remind only says so; Off says nothing.</div>
+  <div class="check-row"><label for="qconsultEnabled"><input type="checkbox" id="qconsultEnabled" data-setting="qconsultEnabled"${settings.enabled ? ' checked' : ''}> Let an AI ask consask first</label>${help('qconsultEnabled')}</div>
+  <div class="hint">Before an AI asks you a question it calls <code>consask</code>: every row below that is on answers it at once, each with its one prompt, and the answers come back to the AI separately — advice, never orders.</div>
 </div>`;
 }
 
@@ -399,7 +392,6 @@ function limitsBlock(settings: QconsultSettings): string {
   return [
     numberField('qconsultRowMinutes', 'Minutes one row may run', settings.rowMinutes, 60),
     numberField('qconsultQuestionsPerSession', 'Questions per session', settings.questionsPerSession, 100),
-    numberField('qconsultFreeBatches', 'Question batches that reach you first', settings.freeBatches, 20),
   ].join('\n');
 }
 

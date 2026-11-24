@@ -69,11 +69,9 @@ test('every host that saves a setting reports the refusal, because saveSetting n
   // would put a directory in somebody's config that this window is not using.
     // `roleDeletionsHost.ts` is the fifth, and it takes the panel's shape for the same reason: a
   // row that did not move makes everything after it meaningless, so it says so and returns.
-  // The commands' writes are the sixth (issue #467), and take the roles' shape: they go through `settledWrites`, whose
-  // `report` is `reportRefusal`. Both moved into `rolesHost.ts` and `commandsHost.ts` (PLAN_one_model_catalog.md E4.3,
-  // E4.4), which the Settings page calls since the two tabs that also did went (E5.1 step 4).
+  // (The commands' writes, `commandsHost.ts`, went with the commands in v2 E3.S2.)
   const callers = ['phrasesPanel.ts', 'rolesHost.ts', 'panelProvider.ts', 'dataCommands.ts',
-    'roleDeletionsHost.ts', 'commandsHost.ts',
+    'roleDeletionsHost.ts',
     // The chat presets' model edits go to the catalog's rows and this side's chat model since E4.6a; their writes moved,
     // with their `reportRefusal`, into `chatPresetsHost.ts`, which both pages that edit them call (E4.6b).
     'chatPresetsHost.ts',

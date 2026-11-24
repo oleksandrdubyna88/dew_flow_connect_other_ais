@@ -60,8 +60,8 @@ test('the gap record does not go through the counter it is reporting', () => {
   assert.match(flush, /await recordNotification\(/u, 'it appends for itself');
   assert.doesNotMatch(flush, /\bawait write\(/u, 'never through the funnel write');
   assert.doesNotMatch(flush, /\bnoteLoss\(/u, 'and never counts its own failure as a lost notice');
-  assert.match(flush, /gap = settled\(gap, held\)/u, 'the counter moves only by what was written');
-  assert.match(flush, /if \(gap\.lost === 0 \|\| flushing\)/u, 'and two landings cannot write it twice');
+  assert.match(flush, /mine\.gap = settled\(mine\.gap, held\)/u, 'the counter moves only by what was written');
+  assert.match(flush, /if \(mine\.gap\.lost === 0 \|\| mine\.flushing\)/u, 'and two landings cannot write it twice');
 });
 
 test('the code a gap is written under is one literal, shared with every reader', () => {

@@ -42,7 +42,6 @@ function stateOf(file: SettingsFile): PanelState {
   return {
     ...panelState('reviewers'),
     chat: chatSettingsFrom(readerOf(file)),
-    commands: { rows: [], texts: {}, serverVersion: '', perSide: false },
     roles: { rows: [], texts: {}, serverVersion: '', perSide: false, stranded: [] },
   };
 }

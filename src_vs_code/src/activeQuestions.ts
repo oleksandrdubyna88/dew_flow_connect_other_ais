@@ -1,40 +1,30 @@
 import { escapeHtml } from './escapeHtml';
-import type { Escalation, EscalationAdvice } from './escalations';
-import { questionHtml } from './questionLayout';
 import { CONSULTING, INTERRUPTED, type QuestionConsult, type QuestionConsultRow } from './questionConsults';
 import { shortDuration } from './usage';
 
 /**
- * **Active questions** — the sidebar's first region (todo/PLAN_question_consultant.md, S4, §0 item 6): what an AI
- * is asking right now, in two stages.
+ * **Active questions** — the sidebar's first region (todo/PLAN_question_consultant.md, S4, §0 item 6): what the consultants are answering right now,
+ * one line per model with its status and how long it has taken, advancing as each row settles (the server rewrites the record per row).
  *
- * <p><b>Stage 1, consulting:</b> a question put to the consultants, one line per model with its status and how
- * long it has taken, advancing as each row settles (the server rewrites the record per row). <b>Stage 2, waiting
- * for you:</b> the person's card — the question, what still gates, a production risk with its reason, the
- * consultation it followed, every consultant's answer folded under it, and Answer. It REPLACES the old "A review
- * is waiting on you" card, and a question is drawn ONCE: a record bound to an open card is drawn inside the
- * card, never also as a line of its own. An expired card is not here at all — the watcher does not keep it.</p>
+ * <p>v2 (E4, story s6-dead-v1-out): the second stage — the person's card with its Answer button — is gone with the held gate it answered; the server
+ * has no held gates and no cards. What stays is the consulting stage and the interrupted one (a question whose server stopped answering is terminal here
+ * rather than spinning for ever). Nothing feeds this region until the sidebar polls for it again, so it reads as empty.</p>
  *
- * <p>Never collapsible, like the region it replaced: a blocked question is the one thing on the panel that must
- * not be tidied away behind an arrow. Every word a model or a server wrote is escaped.</p>
+ * <p>Never collapsible. Every word a model or a server wrote is escaped.</p>
  */
-export function activeQuestionsBody(cards: readonly Escalation[], records: readonly QuestionConsult[], nowMs: number): string {
-  const bound = new Set(cards.flatMap((card) => boundRecords(card, records).map((one) => one.id)));
-  const unbound = (status: string): readonly QuestionConsult[] => records
-    .filter((one) => one.status === status && !bound.has(one.id))
+export function activeQuestionsBody(records: readonly QuestionConsult[], nowMs: number): string {
+  const withStatus = (status: string): readonly QuestionConsult[] => records
+    .filter((one) => one.status === status)
     .sort((a, b) => b.startedUtc.localeCompare(a.startedUtc));
-  const consulting = unbound(CONSULTING);
-  const interrupted = unbound(INTERRUPTED);
-  if (cards.length === 0 && consulting.length === 0 && interrupted.length === 0) {
+  const consulting = withStatus(CONSULTING);
+  const interrupted = withStatus(INTERRUPTED);
+  if (consulting.length === 0 && interrupted.length === 0) {
     return '';
   }
 
   return [
     '<h2>Active questions</h2>',
     stage('Consulting', consulting.map((one) => consultingCard(one, nowMs))),
-    stage('A question is waiting on you', cards.map((card) => waitingCard(card, records, nowMs))),
-    // S4b item 9: a question whose server stopped answering — swept by it, or shown so by a silent heartbeat — is
-    // terminal here rather than spinning for ever; the watcher keeps it the window a finished one is kept.
     stage('Interrupted — its server stopped answering', interrupted.map((one) => consultingCard(one, nowMs))),
   ].filter((part) => part.length > 0).join('\n');
 }
@@ -42,11 +32,6 @@ export function activeQuestionsBody(cards: readonly Escalation[], records: reado
 /** One stage under its heading, or nothing when it has nothing. */
 function stage(heading: string, parts: readonly string[]): string {
   return parts.length === 0 ? '' : `<h3>${heading}</h3>\n${parts.join('\n')}`;
-}
-
-/** The records a card stands for: the consultation it followed (verified by the server), and one run beside it. */
-function boundRecords(card: Escalation, records: readonly QuestionConsult[]): readonly QuestionConsult[] {
-  return records.filter((one) => one.id === (card.consultId ?? '') || one.escalationId === card.id);
 }
 
 /** Stage 1: one question and one line per model. */
@@ -71,70 +56,6 @@ function elapsed(row: QuestionConsultRow, record: QuestionConsult, nowMs: number
   const since = Date.parse(record.startedUtc);
 
   return Number.isFinite(since) ? shortDuration(Math.max(0, (nowMs - since) / 1000)) : 'just started';
-}
-
-/** Stage 2: the card, with every answer folded under it. */
-function waitingCard(card: Escalation, records: readonly QuestionConsult[], nowMs: number): string {
-  return `<div class="question" data-question="${escapeHtml(card.id)}">
-  <div class="said">${questionHtml(card.question)}</div>
-${findings(card)}${riskLine(card)}  <div class="meta">${escapeHtml(card.branch)}${card.translationNote ? ` · shown untranslated: ${escapeHtml(card.translationNote)}` : ''}</div>
-${followed(card)}${answersOf(card, records, nowMs)}
-  <button data-command="answer" data-id="${escapeHtml(card.id)}">Answer…</button>
-</div>`;
-}
-
-function findings(card: Escalation): string {
-  return card.openFindings
-    .map((f) => `  <div class="finding">• ${escapeHtml(f.severity)} ${escapeHtml(f.category)} — ${escapeHtml(f.title)}</div>\n`)
-    .join('');
-}
-
-/** D8: the AI declared a production risk — the card says so, and why, before anything else of it. */
-function riskLine(card: Escalation): string {
-  return card.productionRisk === true
-    ? `  <div class="hint stale" data-risk>Production risk — ${escapeHtml(card.riskReason ?? '')}</div>\n`
-    : '';
-}
-
-/** The consultation the card followed — the id the AI passed, which the server verified (D14 a). */
-function followed(card: Escalation): string {
-  return (card.consultId ?? '').length === 0
-    ? ''
-    : `  <div class="meta" data-followed>Followed the consultation <code>${escapeHtml(card.consultId ?? '')}</code></div>\n`;
-}
-
-/**
- * The answers under a card: the ones the server folded into the card (a production risk, S3), or else the rows
- * of the consultation it followed. Each is a fold — the advice can be pages — with its chip and its flag outside.
- */
-function answersOf(card: Escalation, records: readonly QuestionConsult[], nowMs: number): string {
-  const folded = card.consultantAnswers ?? [];
-  const answers: readonly EscalationAdvice[] = folded.length > 0 ? folded : rowsAsAdvice(boundRecords(card, records));
-  if (answers.length === 0) {
-    return '';
-  }
-
-  return `  <div class="hint">What the consultants answered:</div>\n${answers.map((one) => answerFold(one, nowMs)).join('\n')}\n`;
-}
-
-function rowsAsAdvice(records: readonly QuestionConsult[]): readonly EscalationAdvice[] {
-  return records.flatMap((record) => record.rows.map((row) => ({
-    rowId: row.rowId, vendor: row.vendor, model: row.model, promptTitle: row.promptTitle, capability: row.capability,
-    flag: row.flag, status: row.status, reason: row.reason, advice: row.advice, note: row.note,
-  })));
-}
-
-function answerFold(answer: EscalationAdvice, _nowMs: number): string {
-  const said = answer.advice.length > 0 ? answer.advice : answer.reason;
-
-  return `  <details class="qanswer" data-row="${escapeHtml(answer.rowId)}"><summary>${chip(answer.status)} ${escapeHtml(who(answer.vendor, answer.model))} — ${escapeHtml(answer.promptTitle)}${flagged(answer.flag)}</summary>
-    <div class="advice">${escapeHtml(said.length > 0 ? said : 'nothing yet')}</div>${noteLine(answer.note ?? '')}
-  </details>`;
-}
-
-/** What the row's record says beside its answer — a disk root nobody watched (S4b item 5) is read WITH the advice it qualifies. */
-function noteLine(note: string): string {
-  return note.length === 0 ? '' : `\n    <div class="hint" data-note>${escapeHtml(note)}</div>`;
 }
 
 /** D13: the flag beside every answer from a row that can read this machine. */

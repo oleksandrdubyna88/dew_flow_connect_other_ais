@@ -91,7 +91,7 @@ public sealed class QuestionPromptSetTests : IDisposable
         var custom = QuestionPromptSet.ParseCustom(json);
 
         custom.Prompts.Should().BeEmpty();
-        custom.Complaints.Should().ContainSingle().Which.Should().Contain(complaint).And.Contain("COAI_QCONSULT_PROMPTS");
+        custom.Complaints.Should().ContainSingle().Which.Should().Contain(complaint).And.Contain("COAI_CONSASK_PROMPTS");
         custom.Unreadable.Should().BeFalse("a refused row is not an unreadable list");
     }
 

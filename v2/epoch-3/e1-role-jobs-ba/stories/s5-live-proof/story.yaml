@@ -1,0 +1,5 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: s5-live-proof
+title: "Live proof: the BA writes epoch-3 e2-coder-one-task"
+dependsOn:
+  - s4-ba-role

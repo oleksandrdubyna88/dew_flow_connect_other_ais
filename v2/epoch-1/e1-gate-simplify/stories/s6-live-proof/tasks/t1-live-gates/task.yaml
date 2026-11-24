@@ -1,0 +1,12 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t1-live-gates
+title: "Run 3 real plan→code gates on the E1 binary; record 0 person waits and only the four outcomes"
+kind: measure
+complexity: 4
+dependsOn: []
+parallel: false
+files:
+  - research/RESULTS_v2_gate_core.md
+dod:
+  - id: d1
+    item: "3 real gates recorded with verdicts and reviewer counts"

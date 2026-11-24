@@ -34,11 +34,11 @@ test('a changed dropdown says it is a select, and nothing else does', () => {
   number.fire('change');
   assert.equal('control' in lastWrite(limits), false, 'a number is typed, like text, and must not be repainted');
 
-  const gate = runPanel(panelState('gate'));
-  const box = control(gate, 'stopLocalWhenQuiet');
-  box.checked = true;
+  const consultant = runPanel(panelState('consultant'));
+  const box = control(consultant, 'consultEnabled');
+  box.checked = false;
   box.fire('change');
-  assert.equal('control' in lastWrite(gate), false, 'a box already snaps back by its value; its write keeps its shape');
+  assert.equal('control' in lastWrite(consultant), false, 'a box already snaps back by its value; its write keeps its shape');
 });
 
 test('only the literal select crosses from the page, onto every kind of write', () => {
@@ -48,8 +48,7 @@ test('only the literal select crosses from the page, onto every kind of write', 
     assert.equal('control' in settingMessageFrom({ ...base, control: forged }), false, `${JSON.stringify(forged)} was trusted`);
   }
 
-  // A split-order picker's key names a slot, and only the two slots route (issue #117).
-  const routes = [{}, { vendor: 'grok' }, { role: 'Architecture' }, { caller: 'claude' }, { key: 'strongest', commandModel: 'claude' }];
+  const routes = [{}, { vendor: 'grok' }, { role: 'Architecture' }, { caller: 'claude' }];
   for (const route of routes) {
     const write = settingWrite(settingMessageFrom({ ...base, ...route, control: 'select' }));
     assert.ok(write !== undefined, `${JSON.stringify(route)} routes nowhere`);
@@ -113,7 +112,7 @@ test('the host saves every non-plain kind through saveOrSnapBack', async () => {
   const { join } = await import('node:path');
   const host = readFileSync(join(process.cwd(), 'src', 'panelProvider.ts'), 'utf8');
 
-  for (const stored of ["'vendors'", 'write.key', "'commandModels'"]) {
+  for (const stored of ["'vendors'", 'write.key']) {
     // A substring, not a RegExp built from text: nothing here needs a pattern (CodeQL, on the PR).
     assert.ok(host.includes(`await this.saveWrite(config, ${stored}, `), `a ${stored} write is saved without the snap-back`);
   }
@@ -135,11 +134,4 @@ test('the host saves every non-plain kind through saveOrSnapBack', async () => {
   // `surfaceSlot.test.ts` ('a forced repaint writes the same page again').
   assert.match(host, /private snapBack\(from: SurfaceSlot\): Promise<void> \{\s*from\.forceRepaint\(\);\s*return this\.render\(\);/,
     'the snap-back no longer forces a repaint of the page the refusal came from, so it is never rebuilt from what is stored');
-  // Said by `save` (its catch reports the refusal — `settingRefusedWiring.test.ts`), written through THIS side
-  // (`thePanelReadsThisSide.test.ts`), and put back here with the repaint started, not awaited.
-  assert.match(host, /if \(!pick\.ok \|\| !\(await this\.save\(config, 'promptsPerRound', pick\.value\)\)\) \{\s*\/\/[^\n]*\n\s*await afterTheWrite\(\(\) => this\.snapBack\(from\)\)\(\);\s*return;/,
-    'a refused prompt pick is not put back — or its repaint is awaited inside the write queue');
-  // A prompt pick is a setting write like any other, so it is serialised with them (the gate's code round).
-  assert.match(host, /this\.enqueue\(\(\) => this\.choosePrompt\(role, round, String\(m\.value\), from\)\)/,
-    'a prompt pick writes outside the write queue, so it can race the writes queued beside it');
 });

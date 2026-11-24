@@ -103,7 +103,7 @@ public sealed class AKimiRowRunsThroughTheServiceOnWsl2Tests : IAsyncLifetime
             new PanelSettings
             {
                 Providers = [new("kimi") { Runtime = "kimi", ExecutablePath = FakeAcpAgent.FakeCliExe, Model = "kimi-code/k3" }],
-                Rounds = new PanelConfig(catalog.Roles.ToDictionary(r => r.Id, _ => new RoleGate(1, 5)), StagePolicy.Human) { Catalog = catalog },
+                Rounds = new PanelConfig(catalog.Roles.ToDictionary(r => r.Id, _ => new RoleGate(1, 5))) { Catalog = catalog },
                 DataDir = data,
                 CodeWorkspace = "worktree",
                 ReviewerTimeout = TimeSpan.FromSeconds(90),

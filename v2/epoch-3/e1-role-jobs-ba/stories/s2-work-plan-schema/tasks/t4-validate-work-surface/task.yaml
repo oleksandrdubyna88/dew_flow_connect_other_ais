@@ -1,0 +1,19 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t4-validate-work-surface
+title: "One-shot --validate-work and tool validate_work"
+kind: code
+complexity: 5
+dependsOn:
+  - t3-validator
+parallel: false
+files:
+  - src_mcp/src/ValidateWorkMode.cs
+  - src_mcp/src/Program.cs
+  - src_mcp/src/Tools.cs
+  - .agents/PROJECT.md
+  - src_mcp/tests
+dod:
+  - id: d1
+    item: "B11 and B12 pass"
+  - id: d2
+    item: "the mode makes no data directory"

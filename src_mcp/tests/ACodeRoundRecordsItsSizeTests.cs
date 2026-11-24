@@ -143,7 +143,7 @@ public sealed class ACodeRoundRecordsItsSizeTests : IAsyncLifetime
             new PanelSettings
             {
                 Providers = [new("codex") { ExecutablePath = FakeCliExe }],
-                Rounds = PanelConfig.Uniform(3, 2, StagePolicy.Human),
+                Rounds = PanelConfig.Uniform(3, 2),
                 DataDir = data ?? _data,
                 ReviewerTimeout = TimeSpan.FromSeconds(30),
                 RateLimitBackoff = TimeSpan.FromMilliseconds(5),

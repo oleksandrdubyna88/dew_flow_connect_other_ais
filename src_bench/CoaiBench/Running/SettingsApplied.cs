@@ -114,13 +114,14 @@ public static class SettingsCheck
 
     // The words every split order of a first plan round carries, whatever size it names — the one
     // phrase the "build it as it stands" order shares with the others (issue #131). The server's copy
-    // is `GateCommands.GateOrderMarker`; both are held to `shared/command-models.json`. An older
+    // was `GateCommands.GateOrderMarker`; v2 removed the orders and the shared file that held both copies, so this copy now only
+    // recognises the orders of a PUBLISHED server older than v2. An older
     // server's order has none, which is why "Split this plan into" still counts beside it.
     internal const string SplitOrder = "THE GATE runs once";
     private const string AlreadySplit = "already under way";
     // The words the model order OPENS with, whichever models it names. The server's copy is
-    // `GateCommands.ModelOrderMarker`; the bench references nothing of the server, so both are held to
-    // `shared/command-models.json`'s `orderOpensWith` by their own tests. It was "Fable" until issue
+    // `GateCommands.ModelOrderMarker` (removed in v2, with `shared/command-models.json`); the bench references nothing of the
+    // server and keeps its copy for the published servers that still order it. It was "Fable" until issue
     // #117 made the models a per-caller choice, and a Codex round would have read as a dead switch.
     internal const string ModelOrder = "Do the SPLIT itself with ";
 

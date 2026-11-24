@@ -195,3 +195,26 @@ test('every path either half composes under the data directory is in the invento
     + 'itself? Getting that wrong is silent in both directions.',
   );
 });
+
+// ---------- the v2 migration's archive is history; its markers are not ----------
+
+test('the archived v1 stores travel with the data folder, and the marker, the journal and the claims stay behind', () => {
+  // `migrations/v1-archive/` holds the ONLY copy of the qphase and cadence history the v2 migration
+  // archived (E1.S4). A move that left it behind loses that history and reports success. The rest of
+  // `migrations/` — the marker v2.done and the journal — is evidence about THIS folder; carried to
+  // another, the marker would say a folder was migrated that was not.
+  const named = new Map(INVENTORY.map((entry) => [entry.path, entry]));
+  const archive = named.get('migrations/v1-archive/');
+  assert.ok(archive !== undefined, 'the archive has its own inventory entry, because its fate differs from its parent folder');
+  assert.equal(archive!.kind, 'directory');
+  assert.equal(archive!.move, true, 'the only copy of the history');
+  assert.equal(archive!.clash, true, 'a second installation\'s archive would land on top of this one');
+  assert.ok(DATA_TO_MOVE.includes('migrations/v1-archive/'));
+  assert.ok(HISTORY_THAT_CLASHES.includes('migrations/v1-archive/'));
+
+  const folder = named.get('migrations/');
+  assert.ok(folder !== undefined);
+  assert.equal(folder!.move, false, 'the marker and the journal describe this folder only');
+  assert.ok(!DATA_TO_MOVE.includes('migrations/'), 'moving the whole folder would carry v2.done to a folder that was never migrated');
+  assert.ok(named.get('claims/')!.move === false, 'a lease and claims are handles, never content');
+});

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using CoaiMcp.Core.Findings;
 using CoaiMcp.Core.Rounds;
+using CoaiMcp.Server.Migrations;
 
 namespace CoaiMcp.Server;
 
@@ -115,20 +116,6 @@ public sealed record RoundRecord(
     /// </remarks>
     public string Sha { get; init; } = string.Empty;
 
-    /// <summary>
-    /// The plan this round's epic belongs to, as its cadence key (the file name) — empty for a round of no
-    /// declared epic, and for every round older than the cadence (<c>research/PLAN_consult_on_a_cadence.md</c>).
-    /// </summary>
-    /// <remarks>Stamped from the session when the round is FIRST written, so an interrupted round carries it
-    /// too — the epic-1-3 consultation, point 2: "the first code round of this epic" is asked of these.</remarks>
-    public string PlanKey { get => field ?? string.Empty; init; } = string.Empty;
-
-    /// <summary>The declared epic's own number; 0 for none.</summary>
-    public int EpicNumber { get; init; }
-
-    /// <summary>What the cadence said about this round — "met", "stood down: &lt;reason&gt;", or empty.</summary>
-    public string CadenceNote { get => field ?? string.Empty; init; } = string.Empty;
-
     /// <summary>The verdict of a round that did not run because nobody could review it (D1).</summary>
     public const string Skipped = "skipped";
 
@@ -147,6 +134,16 @@ public sealed record RoundRecord(
     /// Trailing and defaulted, so every session file on disk stays valid.
     /// </remarks>
     public string Key { get => field ?? string.Empty; init; } = string.Empty;
+
+    /// <summary>
+    /// The plan item this round was FOR — the repository-relative feature-folder path the caller named in <c>workItem</c> (coai v2 E3.S8, <see cref="WorkItems"/>),
+    /// one spelling. Empty when it named none, and on every round recorded before the field: "not attributed", never a guess.
+    /// </summary>
+    /// <remarks>
+    /// On the ROUND and not the session: a session is one branch and spans many items, so the item a gate ran for is a fact of the round. Trailing and
+    /// defaulted like <see cref="Key"/>, so every session file on disk stays valid and a save by an older build keeps it in the unknown-member bag.
+    /// </remarks>
+    public string WorkItem { get => field ?? string.Empty; init; } = string.Empty;
 
     /// <summary>
     /// The D23 ground this round was admitted on — a <see cref="Core.Rounds.SecondRoundGround"/> by name for
@@ -332,18 +329,6 @@ public sealed record PersistedSession(SessionState State, List<RoundRecord> Roun
     public string PlanText { get; init; } = string.Empty;
 
     /// <summary>
-    /// The plan file the caller last declared for this session, repo-relative — the cadence's plan
-    /// (<c>research/PLAN_consult_on_a_cadence.md</c>). Empty until one is declared; an empty argument keeps it.
-    /// </summary>
-    public string Plan { get => field ?? string.Empty; init; } = string.Empty;
-
-    /// <summary>The epic the caller last declared, <c>k/N</c>; cleared when a different plan is declared.</summary>
-    public string Epic { get => field ?? string.Empty; init; } = string.Empty;
-
-    /// <summary>The repository's common dir, as the cadence record is keyed — what <c>resolve</c> closes an epic under.</summary>
-    public string CadenceRepoId { get => field ?? string.Empty; init; } = string.Empty;
-
-    /// <summary>
     /// The resolved BASE of a feature session's first round — what a later call on the same plan is
     /// compared with, so the same plan reviewed on a release branch or a backport is refused rather
     /// than silently inheriting this review's rejections and budget (§4.3). Empty until recorded.
@@ -489,6 +474,18 @@ public sealed class SessionStore(string dataDir, RoleCatalog? catalog = null)
     /// <summary>The write road of one session file: (file, whole text). <see cref="AtomicFile.Write"/> with its shared window by default; a seam so a test can hold, fail or pause the write.</summary>
     internal Action<string, string> FileWriter { get; init; } = static (file, json) => Runners.Files.AtomicFile.Write(file, json, Runners.Files.AtomicFile.SharingRetry);
 
+    /// <summary>
+    /// Where a notice about an answered hold is written AND settled (<see cref="Noticing.Settled"/>): the convert-on-load door announces an answered hold through it before it converts the
+    /// session. Absent means the store cannot announce — a held session with an answered card then stays held when it is loaded, and a held session with none converts as always.
+    /// </summary>
+    internal Func<CoaiMcp.Core.Notices.ServerNotice, bool>? Notice { get; init; }
+
+    /// <summary>The clock of the convert-on-load door: its journal line and its notices are stamped from it.</summary>
+    internal TimeProvider Clock { get; init; } = TimeProvider.System;
+
+    /// <summary>Where the convert-on-load door says what it could not do. The host passes its own log; the default is Serilog's global one, which a bare store in a tool or a test may leave silent.</summary>
+    internal Serilog.ILogger Log { get; init; } = Serilog.Log.Logger;
+
     private string SessionsDir => Path.Combine(dataDir, "sessions");
 
     /// <summary>
@@ -521,14 +518,108 @@ public sealed class SessionStore(string dataDir, RoleCatalog? catalog = null)
 
         try
         {
-            return Normalised(
+            var session = Normalised(
                 JsonSerializer.Deserialize(ReadShared(file), ServerJsonContext.Default.PersistedSession));
+
+            return session is not null && LegacyHold.Stands(session.State) ? ConvertedOnLoad(file, session) : session;
         }
         catch (Exception e) when (e is JsonException or IOException or UnauthorizedAccessException)
         {
             return null; // a torn or momentarily busy file is a fresh session, not a locked repo
         }
     }
+
+    /// <summary>
+    /// A session a v1 build HELD, found by a load: left out of its hold with the same conversion the v2 migration makes, saved under the claim and journaled (SPEC §5.1).
+    /// </summary>
+    /// <remarks>
+    /// <para>The migration cannot be the only door. A session it deferred, a file that was unreadable and is readable now, and a held session a v1 process that is still alive
+    /// writes after <c>v2.done</c> would all stay held for ever — and a v2 round machine does not read a hold. So the first load converts it.</para>
+    /// <para><b>Under the claim, or not at all.</b> The claim is taken here and the file read again under it. When another call holds the claim — a round, a resolve, the
+    /// migration — that call owns the file: this load hands back the session as v2 reads it, in memory, and writes nothing; the holder's own save persists it. A read-only
+    /// folder, or a write that fails, ends the same way: the caller gets the converted session and the file is converted by the next load that can.</para>
+    /// <para>The journal line says <c>on-load</c>; the conversion is the migration's own function (<see cref="HoldConversion.Converted"/>) behind the migration's own boundary
+    /// (<see cref="HoldBoundary"/>), so both doors write the same bytes <b>and the same notice</b>: an answered hold is announced, and the notice read back from disk, BEFORE the
+    /// session leaves its hold. When the notice cannot be confirmed — no sink, a writer that refuses, a line the disk never took — the session is returned as it was loaded, STILL
+    /// HELD (a v2 code path reads a held session as a normal one), nothing is written, and the next load or migration tries again; converting it anyway would end the only
+    /// chance of the notice, because no later run lists a session that is no longer held. An answer file that exists and cannot be read (permissions, an I/O error) is the same
+    /// case: whether a person answered is unknown, so the session stays held with a warning until the file can be read. The same rule covers the two ways out that do not write
+    /// (<see cref="HoldBoundary.InMemory"/>): a conversion handed to a caller is a conversion that caller may save.</para>
+    /// <para>Every step that falls back is SAID through <see cref="Log"/>: a save or a re-read that failed, and a session left held.</para>
+    /// </remarks>
+    private PersistedSession ConvertedOnLoad(string file, PersistedSession held)
+    {
+        var state = held.State;
+        var boundary = new HoldBoundary(dataDir, Notice, Clock);
+        try
+        {
+            using var claim = SessionClaim.TryTake(dataDir, state.RepoPath, state.Branch, state.Document, state.Feature);
+            if (claim is null)
+            {
+                return InMemory(boundary, file, held);
+            }
+
+            // Read again UNDER the claim: the first read was before it, and the holder that had it may have converted the file.
+            var fresh = Normalised(JsonSerializer.Deserialize(ReadShared(file), ServerJsonContext.Default.PersistedSession));
+            if (fresh is null || !LegacyHold.Stands(fresh.State))
+            {
+                return fresh ?? InMemory(boundary, file, held);
+            }
+
+            var release = boundary.Released(fresh, file);
+            if (!release.IsConverted)
+            {
+                Log.Warning("v2 convert on load: {File} stays held and is converted by a later load or migration — {Why}", Path.GetFileName(file), release.Why);
+
+                return fresh;
+            }
+
+            var converted = release.Session;
+
+            WriteTo(file, converted);
+            HoldConversion.Journaled(dataDir, file, "on-load", SaidInTheLog, Clock);
+            if (converted.Rounds.Count > 0)
+            {
+                HoldConversion.WriteNote(dataDir, converted.State.SessionId, converted.Rounds[^1], SaidInTheLog);
+            }
+
+            return converted;
+        }
+        catch (Exception e) when (e is JsonException or IOException or UnauthorizedAccessException)
+        {
+            Log.Warning(e, "v2 convert on load: the claimed session {File} could not be read again or saved, so the caller gets it in memory and the file is converted by a later load", Path.GetFileName(file));
+
+            return InMemory(boundary, file, held);
+        }
+    }
+
+    /// <summary>The session as v2 reads it, unwritten (<see cref="HoldBoundary.InMemory"/>); a notice history that cannot be read leaves it held, and says so.</summary>
+    private PersistedSession InMemory(HoldBoundary boundary, string file, PersistedSession held)
+    {
+        try
+        {
+            return boundary.InMemory(held, file);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            Log.Warning(e, "v2 convert on load: the notice history could not be read for {File}, so the session is returned held", Path.GetFileName(file));
+
+            return held;
+        }
+    }
+
+    /// <summary>The diagnostic of a best-effort step of the convert-on-load door: the store's <see cref="Log"/>, which is the server's own — stderr and the run's file, never stdout.</summary>
+    private void SaidInTheLog(string sentence) => Log.Warning("{Sentence}", sentence);
+
+    /// <summary>
+    /// One session file by its PATH, made whole like <see cref="Load"/> — but read WITHOUT the turn, and a file that cannot be read THROWS
+    /// (<see cref="JsonException"/>, <see cref="IOException"/>, <see cref="UnauthorizedAccessException"/>): the v2 migration must tell a corrupt file
+    /// from a busy one and a fresh session from neither (E1.S4), and a DRY RUN must not create the <c>.turn</c> file a turn would make. A reader needs
+    /// no turn to see a whole file — every write is a temp file moved over it, and the shared read tolerates the move (<see cref="SharedRead"/>).
+    /// <see cref="Load"/> answers all three failures as null.
+    /// </summary>
+    internal PersistedSession? LoadFile(string file) =>
+        Normalised(JsonSerializer.Deserialize(SharedRead.Text(file), ServerJsonContext.Default.PersistedSession));
 
     /// <summary>
     /// Reads a session file WITHOUT forbidding anyone else to write it.
@@ -573,7 +664,18 @@ public sealed class SessionStore(string dataDir, RoleCatalog? catalog = null)
         // a parameter: a session knows what it is about, and a save that had to be told would be a
         // save that could be told wrong. It is also what lets the orphan sweep re-save a feature
         // session under its own key without knowing what a feature session is.
-        var file = FileFor(session.State.RepoPath, session.State.Branch, session.State.Document, session.State.Feature);
+        WriteTo(FileFor(session.State.RepoPath, session.State.Branch, session.State.Document, session.State.Feature), session);
+    }
+
+    /// <summary>
+    /// Writes a session to a file the CALLER names — scrub, turn and atomic move exactly as <see cref="Save"/>, with its failures as raw
+    /// <see cref="IOException"/> / <see cref="UnauthorizedAccessException"/> for the caller to classify. The v2 migration rewrites a session
+    /// where it LIES, which is not always the file its key would name (E1.S4, scenario 15): a second file would be a second session.
+    /// </summary>
+    internal void SaveTo(string file, PersistedSession session) => WriteTo(file, session);
+
+    private void WriteTo(string file, PersistedSession session)
+    {
         // The bags are cleaned on a copy, once, here — the only place a session is serialised (SessionScrub says what it drops).
         var json = JsonSerializer.Serialize(SessionScrub.Scrubbed(session, Retired), ServerJsonContext.Default.PersistedSession);
         // ONE road, whether or not the turn could be taken: a temp file beside the session, then the move over it — `AtomicFile`, whose
@@ -623,27 +725,6 @@ public sealed class SessionStore(string dataDir, RoleCatalog? catalog = null)
 
         return swept;
     }
-
-    /// <summary>
-    /// Every question the sessions on disk hold — on a hold (<see cref="SessionState.HoldQuestions"/>) or as a feature
-    /// session's request (<see cref="SessionState.RequestQuestions"/>) — read again only when the sessions directory
-    /// changed. What <see cref="EscalationRetention"/> asks before it takes a card: a hold is bound to its question by
-    /// identity, and the file is what the person answers. It used to be asked per id, reading every session each
-    /// time — the idle-CPU defect of 2026-10-06 (<see cref="SessionHolds"/> says the rest).
-    /// </summary>
-    public HeldQuestions HeldQuestions() => Holds.Read();
-
-    /// <summary>How many session files <see cref="HeldQuestions"/> has parsed — for the idle-budget tests.</summary>
-    internal int HeldQuestionParses => Holds.Parses;
-
-    /// <summary>
-    /// Built on first use: it needs <see cref="TryRead"/>, which a field initializer cannot name. Two threads racing the
-    /// first use can each build one; the loser's cache is simply dropped.
-    /// </summary>
-    private SessionHolds Holds => field ??= new SessionHolds(SessionsDir, TryRead, TimeProvider.System);
-
-    /// <summary>The one session reader, for a test that builds a <see cref="SessionHolds"/> of its own.</summary>
-    internal PersistedSession? TryReadForTests(string file) => TryRead(file);
 
     /// <summary>One session file, or nothing — torn, busy or not a session is nothing, and a sweep walks on.</summary>
     private PersistedSession? TryRead(string file)
@@ -697,12 +778,12 @@ public sealed class SessionStore(string dataDir, RoleCatalog? catalog = null)
         // A file written before `config` existed deserialises with a NULL one — the same shape of
         // absence `UsedPrompts` documents next door, and `ASessionFromAnOlderBuildStillRuns` is what
         // found it here. It gets the shipped defaults, which is what a session that never recorded a
-        // budget was always running on — and no policy-auto marker: a file with no config predates policy auto. Without this it
+        // budget was always running on. Without this it
         // got a NullReferenceException the moment the
         // catalog was reattached.
         var config = whole.State.Config is { } configured
             ? configured with { Catalog = live }
-            : new PanelConfig(roles: null, autonomous: null) { Catalog = live };
+            : new PanelConfig() { Catalog = live };
 
         return whole with { State = whole.State with { Config = config } };
     }

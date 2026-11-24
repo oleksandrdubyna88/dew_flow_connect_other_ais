@@ -65,12 +65,11 @@ public sealed class SingleUseTake(CounterTake take)
 /// bounded give-back of a call a vendor failed to serve.
 /// </summary>
 /// <remarks>
-/// <para>The <see cref="CallerSessions"/> claim shape — one file per caller, held
+/// <para>One file per caller, held
 /// <see cref="FileShare.None"/> while it is read, decided and rewritten — because two servers share
 /// one data directory as a matter of course and a read-then-write would let both count the same call
 /// as the first.</para>
-/// <para><b>It never fails open.</b> The split-order claim fails open because a duplicate instruction
-/// is cheaper than a silently disabled feature; a call cap that fails open is a runaway agent on a
+/// <para><b>It never fails open.</b> A call cap that fails open is a runaway agent on a
 /// paid vendor, which two reviewers called out on the plan round. When the file cannot be written the
 /// cap is enforced IN MEMORY for the lifetime of this server process, and the reply says so. When a file
 /// EXISTS but cannot be read — held past the contention budget, or torn into something that does not parse
@@ -97,7 +96,8 @@ public sealed class SingleUseTake(CounterTake take)
 /// </remarks>
 public sealed class ConsultCallCounter(string dataDir)
 {
-    public static readonly TimeSpan Window = CallerSessions.Remembers;
+    /// <summary>How long a caller's calls are counted from its first one — a Claude session is normally one task, and a day is longer than almost every one.</summary>
+    public static readonly TimeSpan Window = TimeSpan.FromHours(24);
 
     /// <summary>How many failed calls one caller may have handed back in one window.</summary>
     /// <remarks>

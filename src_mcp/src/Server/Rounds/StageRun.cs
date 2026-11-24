@@ -47,6 +47,9 @@ internal sealed record StageRun(
     /// </summary>
     public string Document { get; init; } = string.Empty;
 
+    /// <summary>The plan item the call named (<see cref="WorkItems"/>, already checked and tidied), or empty — written on the round.</summary>
+    public string WorkItem { get; init; } = string.Empty;
+
     /// <summary>
     /// A refusal decided from the resolved commit alone, BEFORE any worktree is made or any reviewer
     /// launched — an empty sentence when the round may go on.
@@ -63,13 +66,6 @@ internal sealed record StageRun(
     /// </remarks>
     public Func<PersistedSession, string, Task<string>> RefuseBeforeBuilding { get; init; } =
         static (_, _) => Task.FromResult(string.Empty);
-
-    /// <summary>
-    /// This call's consultation cadence, filled by <see cref="RefuseBeforeBuilding"/> under the claim and read
-    /// by the rest of the round — the orders, the session's plan and epic, the record's note
-    /// (<c>research/PLAN_consult_on_a_cadence.md</c>). Off for every stage that does not set it.
-    /// </summary>
-    public CadenceTrace Cadence { get; init; } = new();
 
     /// <summary>
     /// How many reviewers ONE vendor runs in this round — the multiplier the deadline is derived

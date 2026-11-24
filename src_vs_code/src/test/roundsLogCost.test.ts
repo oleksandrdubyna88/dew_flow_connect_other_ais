@@ -172,7 +172,7 @@ test('a vendor that billed the round wins over any list price', () => {
 });
 
 test('the column shows in / out / total, and a dash when there is nothing to show', () => {
-  const html = roundsLogHtml(rowsFrom([session([round()])], NOW, PRICES, [used()]), [], 'n');
+  const html = roundsLogHtml(rowsFrom([session([round()])], NOW, PRICES, [used()]), 'n');
 
   assert.match(html, /data-sort="costTotalUsd"/, 'the column sorts like every other');
   assert.match(html, /<th[^>]*>Cost<\/th>/, 'and it is named');

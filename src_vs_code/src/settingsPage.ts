@@ -1,7 +1,6 @@
 import { tabCss } from './tabStrip';
 import { TEXT_CONTROLS_CSS, textControlsStyle } from './textControls';
 import { scalePx } from './zoomControl';
-import { SECURITY_LANE_CSS } from './securityLaneStyle';
 
 /**
  * What the Settings tab adds to the panel's shared document: its strip's look and its tab switching.
@@ -21,7 +20,6 @@ import { SECURITY_LANE_CSS } from './securityLaneStyle';
  */
 export const SETTINGS_CSS = `
 ${tabCss('0 0 12px')}
-${SECURITY_LANE_CSS}
   body { padding: 12px 20px 24px; }
   .settings .tabs { flex-wrap: wrap; }
   .settings .tabs .tab { width: auto; margin: 0; flex: 0 0 auto; }

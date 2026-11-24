@@ -14,49 +14,22 @@ import { bindChatPresets } from './chatPresetsHost';
 import { askWhereDataLives, deleteTheOldDataFolder, moveDataDirectory } from './dataCommands';
 import { openPhrases } from './phrasesPanel';
 import { bindRoles } from './rolesHost';
-import { bindCommands } from './commandsHost';
 import { bindChatSide } from './chatConfig';
 import { registerConfigTransfer } from './configTransferCommands';
-import { ChatPanels } from './chatPanels';
-import {
-  askFromTerminal,
-  chatWithOtherAi,
-  chooseFromBug,
-  addFromTerminal,
-  noteChatDoor,
-  takeFromTerminal,
-  takeTheQuestion,
-} from './chatCommand';
-import { followRenames } from './chatFollow';
-import { heldConversationIds } from './chatRegistry';
-import { keepChatsIn, pulseChatsThrough, rememberChatsIn, retireMemento } from './chatHost';
 import { chatReadsThisSide } from './chatConfig';
-import { conversationWorkspace } from './chatRoots';
-import { forgetPickedConversation, switchConversations } from './conversationPickerCommand';
 import { Choice, manageReviewTrees, TreesDeps } from './reviewTreesCommand';
 import { readTrees, removeTree } from './reviewTreeRead';
 import { openTreeFolder } from './revisionOpen';
-import { goToConversation, goToFromTerminal } from './chatGotoCommand';
-import { backToSource } from './chatReturnCommand';
-import { ChatTabMemory } from './chatTabs';
-import { ChatStoreFile, conversationsDir } from './chatStoreFile';
-import { startHousekeeping } from './chatStoreHousekeeping';
-import { ImportReport, describe as describeImport, importLegacyTabs, importSucceeded } from './chatStoreImport';
-import { RestoreDeps, restoreAfterReload } from './chatRestorePanel';
-import { openLedger, reconcile } from './chatOrphans';
 import { coaiDataDir, DATA_TO_MOVE, serverEnv } from './dataDir';
 import { onDataRootBack, onFindings, refuseUnderMissingRootOnceSettled } from './findingsBoard';
 import { startPathWatch } from './pathWatchHost';
 import { startCliPathKeep } from './cliPathKeepHost';
 import { fileAt, useFileProbe } from './pathFamily';
-import { installFailureHint, SingleFlight } from './coaiInstall';
 import { claudeSnippet, copiedMessage } from './claudeSnippet';
 import { pastedSnippetStatus } from './snippetInWorkspace';
-import { clientTargetsLine, CLIENT_TARGETS, installedMessage, mcpServerBlock } from './mcpBlock';
-import { installedVersion, installLatest, knownServerVersion, latestServerVersion, serverExists, serverOnThisSide, serverPath, thisSide } from './installer';
-import { EscalationWatcher } from './escalationWatcher';
-import { ConsultationWatcher } from './consultationWatcher';
-import { QuestionConsultWatcher } from './questionConsultWatcher';
+import { mcpServerBlock } from './mcpBlock';
+import { knownServerVersion, serverExists, serverPath, thisSide } from './installer';
+import { onServerInstalled } from './serverInstalled';
 import { qconsultLogHtml } from './qconsultLog';
 import { PanelProvider } from './panelProvider';
 import { showHelp } from './helpPanel';
@@ -75,9 +48,8 @@ import { readLog, serverRun, serverRunAt } from './roundsDbRead';
 import { FEATURES, FeaturesCache, hasFeature } from './binaryFeatures';
 import { FIRST_SEEN_KEY, NEW_CONTROLS, seenNow } from './newTags';
 import { sideHereOf, sidesIn, stampThisSide, type SeenSide } from './sidesSeen';
-import { bindRemoteSessions, testDoorOf, type RemoteSessionsTestDoor } from './remoteSessionHost';
-import { bindReattach } from './terminalHost';
-import { bindSkipShell, type SkipShellTestDoor } from './skipShellHost';
+import { type RemoteSessionsTestDoor } from './remoteSessionHost';
+import { type SkipShellTestDoor } from './skipShellHost';
 import { StorageFingerprint } from './dataMove';
 import { flushChatUsage } from './chatUsageFile';
 import { RoundsLogPanel } from './roundsLogPanel';
@@ -96,6 +68,9 @@ import { ON_EXHAUSTED_MIGRATION_KEY } from './onExhaustedMigration';
 import { startOnExhaustedMigration } from './onExhaustedMigrationHost';
 import { vendorsFrom } from './vendors';
 import { askPerson } from './personWait';
+import { measureMark } from './measureMarks';
+import * as bridge from './shellBridge';
+import { type ChatModuleDoor, hostRuntime, loadShellModule, MODULE_CHAT } from './hostRuntime';
 
 /**
  * What activation hands back. Read-only, and read by the `test:host` scenarios — a host cannot reach this extension's
@@ -122,45 +97,45 @@ export interface CoaiExports {
 }
 
 /**
- * ConnectOtherAIs — the human surface. Five commands, one directory watcher, and no port: the
- * review itself lives in `coai-mcp`, which an MCP client owns and starts.
+ * ConnectOtherAIs — the human surface: commands, pages and no port. The review itself lives in
+ * `coai-mcp`, which an MCP client owns and starts.
  *
  * <p>The restraint is deliberate and inherited from CredsForDevs: the config block is OFFERED on
  * the clipboard, never written into another program's file; the binary goes into extension
- * storage, never onto the `PATH`. The one thing the server needs to reach us for — a question for
- * a person — arrives as a FILE in the data directory this extension already reads, which is why
- * there is still nothing listening on a socket.</p>
+ * storage, never onto the `PATH`. (The escalation, consultation and question watchers are gone with the
+ * held gates they watched — v2 E4, story s6-dead-v1-out — so nothing here polls a directory for a question.)</p>
  */
 export function activate(context: vscode.ExtensionContext): CoaiExports {
+  measureMark('oldActivateStart');
   // One per window, kept for the window's life: the page is cheap to redraw and expensive to
   // rebuild, and `retainContextWhenHidden` means a reopened tab keeps its scroll and its tab.
   const notifications = new NotificationsPanel();
+  measureMark('oldNotifications');
 
   // BEFORE even that: WHERE this window keeps its data. Every line below that resolves a path — the
-  // two watchers immediately after this, the chat store, the panel — asks `dataDir.ts`, and until
-  // this has run it answers the DEFAULT directory. A window that read the choice late would watch
-  // the wrong directory for escalations and write a Team-server token where nothing reads it.
+  // chat store, the panel, the path watch — asks `dataDir.ts`, and until this has run it answers the
+  // DEFAULT directory. A window that read the choice late would read the wrong directory and write
+  // a Team-server token where nothing reads it.
   storageReadsThisSide(context);
   // And how this host asks the disk whether a CLI path of the other OS's spelling is a file HERE (paths per side, E1.2):
   // before this every such path is "unknown" and kept. Installed, not imported, because the page's modules may not reach node:fs.
   useFileProbe(fileAt(statSync));
+  measureMark('oldStorageSide');
   // The paths of THIS side, asked of the disk and said when missing (paths per side, E5.3) — started here, before the
   // settings mirror below writes the data directory, because the mirror and every ledger ask the watch's answer first
   // (E5.0): a named data root that is missing is never created by them.
-  const pathWatch = startPathWatch(context);
+  // ONE watch per host: the chat module starts it too (its writers ask the same findings board), whichever loads first wins (`hostRuntime().once`).
+  const pathWatch = hostRuntime().once('pathWatch', () => startPathWatch(context));
   // A per-side CLI path a save by an extension that does not know it dropped is said, and offered back on a click — never
   // restored on its own (paths per side, E3 as built). Looked at now and on every settings change below.
   const cliPathKeep = startCliPathKeep(context);
+  measureMark('oldPathWatch');
   // The review roles know this window's side from the start: the Settings page edits them as well as the Review
   // roles tab, and either can be the first (PLAN_one_model_catalog.md E4.3).
   bindRoles(context);
-  bindCommands(context);
   // The chat reads this side's catalog rows (E4.6a).
   bindChatSide(context);
-  // The road to a `Creds: <host> / <session>` terminal's Claude session (E2.S3): the consent, the picked ids, the hosts command.
-  const remote = bindRemoteSessions(context);
-  // The person's own skip list may hide the terminal keys of CoAI (E3.S3): tell once, offer Add for the user list, never write a workspace.
-  const skipShell = bindSkipShell(context);
+  // The road to a terminal's remote Claude session and the skip-list check moved with the chat (`shell/modules/chat/register.ts`, v2 E4).
   // A model-bearing setting a workspace or folder tried to set is not applied (`modelKeys.ts`); say so
   // once per window, so a team setup in `.vscode/settings.json` is not lost without a word.
   noticeIgnoredWorkspaceModels(context, vscode.workspace.getConfiguration('coai'));
@@ -171,14 +146,7 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
   // and `chatWiring.test.ts` now fails if this line ever drifts below a `registerCommand`.
   chatReadsThisSide(context);
   bindChatPresets(context);
-  const watcher = new EscalationWatcher(dataDir());
-  // The second watcher, and it asks for nothing from anybody: a consultation blocks nothing, so it
-  // has no modal and no status-bar item — it appears in the sidebar where a person is already
-  // looking, and nowhere else.
-  const consultations = new ConsultationWatcher(dataDir());
-  // The third, for Active questions (todo/PLAN_question_consultant.md, S4): a question the consultants are
-  // answering blocks nothing either, so it too is drawn where a person is looking and raises nothing.
-  const questionConsults = new QuestionConsultWatcher(dataDir());
+  measureMark('oldBindings');
 
   // Exports run one at a time: two dialogs answered with the same path would otherwise race,
   // and the file would hold whichever write finished last while both reported success.
@@ -186,38 +154,32 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
   // Declared before the panel so the hooks can reach it; assigned right after.
   let panelRef: PanelProvider;
   const roundsLog = new RoundsLogPanel({
-    onAnswer: async (id) => {
-      const question = watcher.openQuestions.find((q) => q.id === id);
-      if (question !== undefined) {
-        await watcher.answerCommand(question);
-      }
-    },
     // The spending tab's two commands go to the sidebar's provider, which owns the window choice,
     // the price cache and the "forget" marks — one owner, whichever surface shows the numbers.
     // A window press re-asks the Team servers too: their figures are cached per window, and the new one's are not
     // fresh (todo/PLAN_team_usage_by_person.md, 1.1).
     onUsageWindow: async (window) => {
       panelRef.setUsageWindow(window);
-      await askTheTeamServers(roundsLog, watcher, panelRef);
+      await askTheTeamServers(roundsLog, panelRef);
     },
     // *What it keeps missing*'s period: the server counts it, so the log is read again over it.
     onSpotsPeriod: async (period) => {
       panelRef.setSpotsPeriod(period);
-      await refreshRoundsLog(roundsLog, watcher, panelRef, true);
+      await refreshRoundsLog(roundsLog, panelRef, true);
     },
     onForget: async (provider) => {
       await panelRef.forgetUsage(provider);
-      await refreshRoundsLog(roundsLog, watcher, panelRef, true);
+      await refreshRoundsLog(roundsLog, panelRef, true);
     },
     // The log is where every consultation is, including the ones that have lapsed out of the
     // sidebar — so this is the only surface from which the state the issue describes can be ended.
     onCloseConsultation: async (id) => {
       await panelRef.closeConsultation(id);
-      await refreshRoundsLog(roundsLog, watcher, panelRef, true);
+      await refreshRoundsLog(roundsLog, panelRef, true);
     },
     onForgetChat: async (provider, model) => {
       await panelRef.forgetChatUsage(provider, model);
-      await refreshRoundsLog(roundsLog, watcher, panelRef, true);
+      await refreshRoundsLog(roundsLog, panelRef, true);
     },
     // A row was opened. The list no longer carries findings — 3.78 MB of a 3.83 MB payload, for
     // rounds nobody had opened — so this is the read that replaces them, for the one round clicked.
@@ -290,14 +252,14 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
     // pushes the tab at once — "Asking <server>…" — and asks; the answer pushes it again when it lands.
     onTeamWindow: async (id) => {
       panelRef.setTeamWindow(id);
-      await askTheTeamServers(roundsLog, watcher, panelRef);
+      await askTheTeamServers(roundsLog, panelRef);
     },
     onTeamRefresh: async (server) => {
-      await askTheTeamServers(roundsLog, watcher, panelRef, server);
+      await askTheTeamServers(roundsLog, panelRef, server);
     },
     onTeamServer: async (server) => {
       panelRef.setTeamServer(server);
-      await askTheTeamServers(roundsLog, watcher, panelRef);
+      await askTheTeamServers(roundsLog, panelRef);
     },
     // In front again: whatever went stale while it was behind is asked now rather than on the next minute.
     onVisible: (visible) => {
@@ -309,24 +271,15 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
     onTeamTab: async (shown) => {
       panelRef.setTeamTabShown(shown);
       if (shown) {
-        await askTheTeamServers(roundsLog, watcher, panelRef);
+        await askTheTeamServers(roundsLog, panelRef);
       }
     },
   });
-  // One registry per window: a conversation belongs to a Claude Code tab, and tabs are per window.
-  // Made before the sidebar, which hands the review page's bugs to it (issue #487).
-  const chatPanels = new ChatPanels();
-  // A terminal that opens (creds opens its terminals late, after the serializer restored the chats) takes back the conversation of its name (E3.S1).
-  bindReattach(context, chatPanels);
+  measureMark('oldRoundsLog');
   // The page draws what the watch publishes, and repaints when it changes; the server's answer about the roots reaches
   // the watch through the panel's probe (paths per side, E5.3 / E5.6).
   onFindings(() => { void panelRef.render(); });
-  const panel = panelRef = new PanelProvider(context, watcher, dataDir(), async (id) => {
-    const question = watcher.openQuestions.find((q) => q.id === id);
-    if (question !== undefined) {
-      await watcher.answerCommand(question);
-    }
-  }, consultations, (chat) => chooseFromBug(chatPanels, context.extensionUri, chat).catch((reason: unknown) => {
+  const panel = panelRef = new PanelProvider(context, dataDir(), (chat) => loadShellModule<ChatModuleDoor>(MODULE_CHAT).then((chatModule) => chatModule.chooseFromBug(context, chat)).catch((reason: unknown) => {
     // CAUGHT, as `takeTheQuestion` is below: the review page starts this with `void`, and a throw nobody
     // catches is a press that does nothing and explains nothing. (Our own code reviewer, issue #487.)
     console.error('CoAI: choose on a bug failed', reason);
@@ -345,54 +298,17 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
       mirrorSettings(mirroring);
     }
   });
+  measureMark('oldPanelBuilt');
   // What coai-mcp said about its settings by kind reaches the path watch through the panel's probe (paths per side, E5.6).
   panel.onServerProblems = (problems) => { pathWatch.serverSaid(problems); };
   // Whatever a page is still waiting on is settled as not done when the window goes away (inFlight.ts).
   context.subscriptions.push({ dispose: () => { panel.dispose(); } });
   // A Team-server answer landing repaints the rounds log too, not only the sidebar — the page is where the company
   // figures are, and it may be open with the sidebar closed (todo/PLAN_team_usage_by_person.md, 1.1).
-  panel.onTeamUsageChanged = () => { void refreshRoundsLog(roundsLog, watcher, panel); };
+  panel.onTeamUsageChanged = () => { void refreshRoundsLog(roundsLog, panel); };
   // The Rounds page draws from the cached store reach and does not wait for the probe; when the probe changes the cache it repaints.
   // `refreshRoundsLog` returns at once when the page is closed, so a probe landing late never paints a disposed webview.
-  panel.onStoreReachChanged = () => { void refreshRoundsLog(roundsLog, watcher, panel); };
-  // The panel repaints whenever the watcher's state moves, so a question answered in the modal
-  // disappears from the sidebar without anyone asking it to.
-  watcher.onChanged = () => {
-    // What the title bar switches on: green while somebody is waiting on an answer.
-    void vscode.commands.executeCommand('setContext', 'coai.hasQuestions', watcher.openQuestions.length > 0);
-    void panel.render();
-    // And the rounds log, if it is open: a round advances on its own, so the page it is shown on
-    // has to as well. Nothing is read for it when nobody is looking, and nothing is pushed when
-    // nothing changed.
-    void refreshRoundsLog(roundsLog, watcher, panel);
-  };
-  watcher.start();
-
-  // The same contract as above, and only when something a person can SEE moved: the watcher
-  // compares what it read before telling anybody, so a directory polled every five seconds for an
-  // afternoon repaints the sidebar exactly as often as a consultation changes.
-  consultations.onChanged = () => {
-    // A consultation that closed may be the one a plan's cadence was waiting on — ask again before painting.
-    panel.forgetCadence();
-    // And the round counts: a consultation-only session ends no round, and its turns must still move the numbers.
-    panel.forgetRoundCounts();
-    void panel.render();
-    // And the LOG, which draws the same consultations on its own tab. Repainting only the sidebar
-    // left an open Consultations tab showing history from before the conversation started, advanced
-    // or ended — and the page's own ten-second cache could hold that past the LAST watcher event,
-    // so it stayed wrong until somebody clicked something. (CodeRabbit, on the pull request.)
-    panel.forgetRoundsLog();
-    void refreshRoundsLog(roundsLog, watcher, panel, true);
-  };
-  consultations.start();
-
-  panel.questionConsults = questionConsults;
-  questionConsults.onChanged = () => {
-    // A question row that ended spent its vendor too: the round counts' ledger is read again on the next refresh.
-    panel.forgetRoundCounts();
-    void panel.render();
-  };
-  questionConsults.start();
+  panel.onStoreReachChanged = () => { void refreshRoundsLog(roundsLog, panel); };
 
   // A Models card offers a dropped per-side CLI path back with Restore, and repaints when the keeper's list changes (E4.1).
   panel.cliPathKeep = cliPathKeep;
@@ -424,6 +340,7 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
   });
   // The sidebar asks THIS cache too — a page that meets an updated binary re-asks the one the file is written from.
   panel.useFeatures(features);
+  measureMark('oldFeaturesCache');
   const askFeatures = (): ReturnType<FeaturesCache['of']> => features.of(serverPath(context.globalStorageUri)?.fsPath, serverRun);
   const settingsSync = new ServerSettingsSync(
     () => readCoaiConfiguration(context),
@@ -444,7 +361,9 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
     // Never written into a NAMED data root that is missing (E5.7): the watch's answer, waited for (bounded).
     () => pathWatch.dataRootMissing(),
   );
+  measureMark('oldSettingsSync');
   mirrorSettings(settingsSync);
+  measureMark('oldMirrorStarted');
   // Every saved choice of When the rounds run out is reset to Auto once, per profile and for the user settings once for every
   // machine Settings Sync reaches — from activation, never from the panel (onExhaustedMigrationHost.ts). The overlay clear fires
   // no configuration event, so its `after` mirrors and redraws the panel, as the catalog migration's does.
@@ -493,110 +412,7 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
     console.error('ConnectOtherAIs: the sweep of unfinished role deletions failed', reason);
   });
 
-  // Where conversations are kept so a window reload does not empty every chat tab: the store on
-  // disk, one file per conversation beside the two chat ledgers, under the same data directory the
-  // MCP server uses. It is the source of truth — the serializer below reads it.
-  const chatStore = new ChatStoreFile(conversationsDir(coaiDataDir()));
-  // And the MEMENTO every build before this one wrote — `workspaceState`, because a chat tab belongs
-  // to THIS workspace. It is carried into the store ONCE, below, and until that migration has
-  // confirmed every record is on disk the chat writes BOTH: a store that cannot be reached must not
-  // leave a person's next words written nowhere. `retireMemento` is what ends the dual write, and
-  // only a successful migration calls it. Nothing prunes the memento any more: nothing may shrink it
-  // before the migration has read it, and the store's own retention is story B1's sweep.
-  const chatTabMemory = new ChatTabMemory(context.workspaceState);
-  rememberChatsIn(chatTabMemory);
-  keepChatsIn(chatStore);
-  // What restoring a tab needs; one object, so the serializer and every retry read the same store,
-  // the same memento and the same workspace the writers use.
-  const restoreDeps: RestoreDeps = {
-    panels: chatPanels,
-    store: chatStore,
-    memento: chatTabMemory,
-    extensionUri: context.extensionUri,
-    workspace: conversationWorkspace,
-  };
-  // THE MIGRATION, started before anything can read the store and waited for by the serializer — VS
-  // Code deserializes panels during activation, and a conversation not yet carried across would read
-  // as absent and be disposed on the first reload after the upgrade. It compares transcripts, never
-  // ids, and empties the key only once every record is confirmed and indexed; `chatStoreImport.ts`
-  // says why each of those rules exists. It never throws, so the catch below is the outer edge of a
-  // detached call and a defect if it ever speaks — and it re-binds the memento, because a defect
-  // after the seal would otherwise leave this window writing to one store while the other is in charge.
-  const migration: Promise<ImportReport> = importLegacyTabs({
-    memento: context.workspaceState,
-    store: chatStore,
-    workspace: conversationWorkspace(),
-    // THE SEAL — the one place the memento is retired. Unbind first, so nothing new can queue a
-    // write; then drain the queue, so a write issued a moment before the clear cannot land after it
-    // and fill the key again (gemini, A4's code round). The migration calls it only when the key is
-    // empty or every record is confirmed, immediately before the clear.
-    seal: async () => {
-      retireMemento();
-      await chatTabMemory.settled();
-    },
-    // And the way back, when the clear did not happen after all: the memento is still in charge, so
-    // it is written again.
-    unseal: () => {
-      rememberChatsIn(chatTabMemory);
-    },
-  })
-    .then((report) => {
-      (importSucceeded(report) ? console.info : console.warn)(describeImport(report));
-
-      return report;
-    })
-    .catch((reason: unknown): ImportReport => {
-      console.error('ConnectOtherAIs: the chat conversation migration threw; the old store stays in charge', reason);
-      rememberChatsIn(chatTabMemory);
-
-      return { kind: 'incomplete', fates: [], reason: 'the migration threw' };
-    });
-  // HOUSEKEEPING, and the INDEX the picker reads (story B1): this window's heartbeat from now on, the
-  // sweep after the migration, the index published after the sweep. `chatStoreHousekeeping.ts` says
-  // why each order holds; what stays here is the wiring — the keeper bound to the store's own directory
-  // through the store itself, the heartbeat fed by the registry, and the chat pulsing it whenever the
-  // set of open conversations changes. Its `ready` catches its own defects, so nothing is left unhandled here.
-  const housekeeping = startHousekeeping({
-    store: chatStore,
-    held: () => heldConversationIds(chatPanels),
-    after: migration,
-  });
-  pulseChatsThrough(() => {
-    housekeeping.heartbeat.pulse();
-  });
-  // A FILE THAT MOVES takes its conversation with it. `onDidRenameFiles` is the only event that
-  // carries an explicit old-to-new mapping, which is why it is the one followed: saving an untitled
-  // buffer reports no previous uri at all, so a conversation opened from one keeps its `untitled:`
-  // source and is found in the picker instead — `chatSource.ts` says why guessing there would be
-  // worse than not following. The subscription is pushed so a reload takes it down with everything
-  // else; the work itself is detached and catches its own edge.
-  context.subscriptions.push(vscode.workspace.onDidRenameFiles((moved) => {
-    followRenames(chatPanels, housekeeping.index, moved.files.map((one) => ({
-      from: one.oldUri.fsPath,
-      to: one.newUri.fsPath,
-    })));
-  }));
-  // Bound once, and never asked for again: an extension host has one storage directory for its
-  // whole life, and threading it through six functions paired a per-call path with a module-level
-  // list of children — two things that must agree, with nothing making them.
-  openLedger(context.globalStorageUri.fsPath);
-  // What the LAST run left behind. Deactivation ends every chat child, and so does closing a tab —
-  // but neither runs when the editor is force-killed, and what survives that is a vendor CLI signed
-  // in as the person with nobody to stop it. Every candidate is re-identified before anything is
-  // killed; see `chatLedger.ts`, which is where that judgement lives.
-  void reconcile(context.globalStorageUri.fsPath)
-    .then((ended) => {
-      for (const one of ended) {
-        // Named rather than counted: a line saying "ended 1 process" is the one thing nobody can act
-        // on if it was ever the wrong one.
-        console.warn(`[coai] ended a chat process left by a previous session: ${one}`);
-      }
-    })
-    // The outer edge of a detached call ends in a catch that says something — `reliability.md`, and
-    // an unhandled rejection during activation is a defect this repository has already paid for.
-    .catch((reason: unknown) => {
-      console.warn(`[coai] the chat orphan sweep failed: ${reason instanceof Error ? reason.message : reason}`);
-    });
+  measureMark('oldMigrationsKicked');
 
   context.subscriptions.push(
     {
@@ -609,12 +425,6 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
       // its suppression, so a condition the new window has never reported is already silenced.
       // (Three reviewers, the code round.)
       dispose: forgetTheMirror,
-    },
-    // The heartbeat's timer. Its FILE is left on purpose — see `chatStoreHeartbeat.ts`.
-    {
-      dispose: () => {
-        housekeeping.dispose();
-      },
     },
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration('coai')) {
@@ -635,15 +445,12 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
         void scheduleCatalogMigration(context);
       }
     }),
-    vscode.commands.registerCommand('coai.restoreCatalogBackup', () => restoreFromBeforeTheCatalog(context)),
-    watcher,
-    consultations,
-    questionConsults,
-    vscode.window.registerWebviewViewProvider(PanelProvider.viewType, panel),
+    bridge.registerCommand('coai.restoreCatalogBackup', () => restoreFromBeforeTheCatalog(context)),
+    bridge.registerWebviewViewProvider(PanelProvider.viewType, panel),
     // The key is typed HERE or in the tab, and stored in the editor's secret storage either way.
     // A command as well as a button because the tab cannot be opened usefully without a key, and a
     // door that only exists behind the thing it unlocks is not a door.
-    vscode.commands.registerCommand('coai.setBugsAdminKey', async () => {
+    bridge.registerCommand('coai.setBugsAdminKey', async () => {
       // The SAME panel the section button opens, so a key set here redraws a tab that is already
       // open instead of leaving it on the face it had before the key existed.
       await usersPanel(context.secrets, () => bugzServerThisSide(context)).askForKey();
@@ -654,292 +461,75 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
     // one: a door that exists only behind the thing it unlocks is not a door.
     // Bugz keys saved before they were filed per server: the way back to them is this command, which the toast below
     // only opens — nothing is filed by guessing which server issued them (research/PLAN_bugz_keys_per_server.md).
-    vscode.commands.registerCommand('coai.settleOldBugzKeys', () => settleOldBugzKeys(context.secrets, () => bugzServerThisSide(context))),
-    vscode.commands.registerCommand('coai.setBugsContributorKey', async () => {
+    bridge.registerCommand('coai.settleOldBugzKeys', () => settleOldBugzKeys(context.secrets, () => bugzServerThisSide(context))),
+    bridge.registerCommand('coai.setBugsContributorKey', async () => {
       await askForContributorKey(context.secrets, bugzServerThisSide(context));
       await panel.render();
     }),
     // The three tabs these opened are gone (PLAN_one_model_catalog.md E5.1 step 4): each command opens the Settings
     // page at the place that holds its editor now, for one more release.
-    ...editorRedirects((command, run) => vscode.commands.registerCommand(command, run), (place) => { openSettings(panel, place); }),
-    vscode.commands.registerCommand('coai.editPhrases', () => { openPhrases(context); }),
+    ...editorRedirects((command, run) => bridge.registerCommand(command, run), (place) => { openSettings(panel, place); }),
+    bridge.registerCommand('coai.editPhrases', () => { openPhrases(context); }),
     // The page every notification has been going into since S1. One panel for the window, so a
     // second press reveals the one already open rather than stacking another over it.
-    vscode.commands.registerCommand('coai.showNotifications', () => { void notifications.show(); }),
+    bridge.registerCommand('coai.showNotifications', () => { void notifications.show(); }),
 
     // Story 3.2b: seeing what review checkouts this machine holds, and giving one back. A PICKER
     // rather than a block on the review page, and the reason is in `reviewTreesCommand.ts` — chiefly
     // that "one at a time" becomes true by construction when the control returns one item.
-    vscode.commands.registerCommand('coai.reviewTrees', () => {
+    bridge.registerCommand('coai.reviewTrees', () => {
       void manageReviewTrees(reviewTreeDeps(context));
     }),
     // The same question the first install on a side asks, reachable afterwards. One flow: two ways
     // of asking it would be two ways of answering it differently.
-    vscode.commands.registerCommand('coai.changeDataDirectory', async () => {
+    bridge.registerCommand('coai.changeDataDirectory', async () => {
       await askWhereDataLives(context);
       await panel.render();
     }),
-    vscode.commands.registerCommand('coai.moveDataDirectory', async () => {
+    bridge.registerCommand('coai.moveDataDirectory', async () => {
       // The counter is passed IN rather than reached for, because it is the one part of a move that
       // needs a process: rounds are counted in SQL by the server binary, and counting them at the
       // DESTINATION means running that binary against a directory this window is not pointed at yet.
       await moveDataDirectory(context, (directory) => countStorage(context, directory));
       await panel.render();
     }),
-    vscode.commands.registerCommand('coai.deleteOldDataFolder', async () => {
+    bridge.registerCommand('coai.deleteOldDataFolder', async () => {
       // The same counter the move used: the old folder is read ONE more time, right before it is
       // deleted, and compared with what the move recorded. It is the only thing standing between a
       // round written after the copy and a directory that is gone.
       await deleteTheOldDataFolder(context, (directory) => countStorage(context, directory));
       await panel.render();
     }),
-    vscode.commands.registerCommand('coai.help', showHelp),
+    bridge.registerCommand('coai.help', showHelp),
     // The gear in the panel's title bar: everything configured once, in an editor tab of its own, painted by
     // the same provider as the sidebar (research/PLAN_settings_page.md). The argument, when there is one, is a
     // tab id; the title bar and the palette pass none, and anything that is not a tab changes nothing.
-    vscode.commands.registerCommand('coai.openSettings', (tab?: unknown) => { openSettings(panel, tab); }),
-    // Chat with another vendor about a passage. Two doors reach it — this keybinding and the
-    // 'Chat with other AI' item in Claude Code's own right-click menu — and the command tells them
-    // apart by what VS Code hands it, because only one of them can copy the selection itself.
-    vscode.commands.registerCommand('coai.chatWithOtherAi', (...args: unknown[]) => {
-      // RECORDED FIRST, in every one of these. The count on the spending page is of how often
-      // the chat was reached for, so a door that then refuses — no CLI, nothing captured — is still
-      // one of them. Nothing waits for the write.
-      noteChatDoor('key');
-      void chatWithOtherAi(chatPanels, context.extensionUri, args);
-    }),
-    // The terminal's own door: the icon in the terminal panel's title bar and Ctrl+Alt+A typed in a terminal. A terminal is
-    // not a tab, so it has its own command and never goes through the file door's tab match. RECORDED FIRST, like the rest.
-    // The rejection is caught for the same reason `coai.takeTheQuestion`'s is: a press that does nothing explains nothing.
-    vscode.commands.registerCommand('coai.askFromTerminal', () => {
-      noteChatDoor('terminal');
-      askFromTerminal(chatPanels, context.extensionUri, vscode.window.activeTerminal).catch((reason: unknown) => {
-        console.error('coai.askFromTerminal failed', reason);
-        void notify({
-          as: 'warning',
-          class: 'failure',
-          source: 'askFromTerminal',
-          code: 'terminal-door-failed',
-          title: 'The copied text could not be sent to a chat.',
-          detail: asText(reason),
-        });
-      });
-    }),
-    // The two menu items, which differ from the chord in one way: each SAYS what it will do, so
-    // neither reads `coai.chatAutoSend`. An item whose behaviour depends on a setting in another
-    // window is an item nobody can predict from its own label.
-    vscode.commands.registerCommand('coai.chatNow', (...args: unknown[]) => {
-      noteChatDoor('default');
-      void chatWithOtherAi(chatPanels, context.extensionUri, args, true);
-    }),
-    vscode.commands.registerCommand('coai.chatChoose', (...args: unknown[]) => {
-      noteChatDoor('choose');
-      void chatWithOtherAi(chatPanels, context.extensionUri, args, false);
-    }),
-    // Take the question Claude Code is asking and hand it to a second model. Its own door, because
-    // the passage comes from Claude's session file rather than from a selection — that box cannot
-    // be selected, which is why a screenshot was the only way before this.
-    //
-    // The rejection is CAUGHT rather than dropped: a command that fails silently at the activation
-    // boundary is a keypress that does nothing and explains nothing. (CodeRabbit, PR #206.)
-    vscode.commands.registerCommand('coai.takeTheQuestion', () => {
-      noteChatDoor('take');
-      takeTheQuestion(chatPanels, context.extensionUri).catch((reason: unknown) => {
-        // The DETAIL to the console, a short sentence to the person. A stack or a filesystem path in
-        // a toast is neither readable nor theirs to act on, and the path rule says so; dropping it
-        // altogether would leave a keypress that does nothing and explains nothing. (CodeRabbit.)
-        console.error('coai.takeTheQuestion failed', reason);
-        // The short sentence still goes to the person and the detail still goes to the console —
-        // neither changes. What changes is that the detail is also WRITTEN DOWN, so the next
-        // person to ask "why did that key press do nothing" has somewhere to look.
-        void notify({
-          as: 'warning',
-          class: 'failure',
-          source: 'takeTheQuestion',
-          code: 'question-not-taken',
-          title: 'The question could not be taken.',
-          detail: asText(reason),
-        });
-      });
-    }),
-    // The same reader, the other verb: ADDED to what the composer already holds rather than put in
-    // its place. Asked for after using the pair — `choose` had just composed a turn and `take` threw
-    // it away, when what was wanted was the question underneath it as more material.
-    vscode.commands.registerCommand('coai.addTheQuestion', () => {
-      noteChatDoor('add');
-      takeTheQuestion(chatPanels, context.extensionUri, true).catch((reason: unknown) => {
-        console.error('coai.addTheQuestion failed', reason);
-        void notify({
-          as: 'warning',
-          class: 'failure',
-          source: 'addTheQuestion',
-          code: 'question-not-added',
-          title: 'The question could not be added.',
-          detail: asText(reason),
-        });
-      });
-    }),
-    // The same two verbs for a `Creds: <host> / <session>` terminal: the question is read off the Claude session on that machine over ssh
-    // (the road of `remoteSessionHost`), and the items sit in the terminal panel's overflow while the terminal reads a session. Each
-    // records its door FIRST. THE CATCH LOGS A FIXED SENTENCE and passes no error and no message on: a V8 `JSON.parse` error quotes its
-    // input, and here the input is the transcript.
-    vscode.commands.registerCommand('coai.takeFromTerminal', () => {
-      noteChatDoor('take');
-      takeFromTerminal(chatPanels, context.extensionUri, vscode.window.activeTerminal, false).catch(() => {
-        console.error('coai.takeFromTerminal failed');
-        void notify({
-          as: 'warning',
-          class: 'failure',
-          source: 'takeFromTerminal',
-          code: 'question-not-taken-from-terminal',
-          title: 'The question could not be taken from the terminal.',
-        });
-      });
-    }),
-    vscode.commands.registerCommand('coai.addFromTerminal', () => {
-      noteChatDoor('add');
-      addFromTerminal(chatPanels, context.extensionUri, vscode.window.activeTerminal).catch(() => {
-        console.error('coai.addFromTerminal failed');
-        void notify({
-          as: 'warning',
-          class: 'failure',
-          source: 'addFromTerminal',
-          code: 'question-not-added-from-terminal',
-          title: 'The question could not be added from the terminal.',
-        });
-      });
-    }),
-    // The list of conversations — open and closed, this folder or every folder. It opens no chat by
-    // itself: what it opens is a choice, and the choice may be to reveal a tab that is already there.
-    // It is a DOOR all the same, because *Opened* counts the chat being reached for and this is one
-    // of the ways it is reached for; the ledger's own note says a door that then refuses still counts.
-    //
-    // The index it draws from is the housekeeping's, published after the sweep — never a listing taken
-    // here, which at ninety days of conversations is thousands of files on the way to the first frame.
-    // GO TO the conversation this tab already has — story C3, and the other half of what the
-    // operator asked for: the list above is searched by hand, this one is pressed on the tab you are
-    // working in. Its decision is `chatGoto.ts`; everything here is the registration and the door.
-    // Detached with a catch of its own, like every command that awaits: the store answers in
-    // outcomes and never rejects, so anything arriving there is a defect worth a line.
-    vscode.commands.registerCommand('coai.goToConversation', () => {
-      noteChatDoor('goto');
-      void goToConversation(chatPanels, housekeeping.index, chatStore, context.extensionUri)
-        .catch((reason: unknown) => {
-          console.error('ConnectOtherAIs: going to a conversation threw', reason);
-          void notify({
-            as: 'warning',
-            class: 'failure',
-            source: 'goToConversation',
-            code: 'conversation-not-opened',
-            title: 'That conversation could not be opened.',
-            detail: asText(reason),
-          });
-        });
-    }),
-    // GO TO from a terminal (E3.S2): the same go-to, pressed IN a terminal, for THAT terminal — a command of its own because
-    // `coai.goToConversation` reads the active TAB and its chord keeps `!terminalFocus`. It is a door like the others, so it is
-    // recorded FIRST; it reads the active terminal as `coai.askFromTerminal` does and never goes through the tab match.
-    vscode.commands.registerCommand('coai.goToFromTerminal', () => {
-      noteChatDoor('goto');
-      void goToFromTerminal(chatPanels, housekeeping.index, chatStore, context.extensionUri, vscode.window.activeTerminal)
-        .catch((reason: unknown) => {
-          console.error('ConnectOtherAIs: going to a terminal conversation threw', reason);
-          void notify({
-            as: 'warning',
-            class: 'failure',
-            source: 'goToConversation',
-            code: 'conversation-not-opened',
-            title: 'That conversation could not be opened.',
-            detail: asText(reason),
-          });
-        });
-    }),
-    // The road back (issue #314): from a coai chat to the tab, session or file it came from. NOT a
-    // chat door — it opens no conversation — so nothing is recorded for it. Its decision is
-    // `chatReturn.ts`; a right-click hands it the page's conversation id, the chord hands it nothing.
-    vscode.commands.registerCommand('coai.backToSource', (asked?: unknown) => {
-      void backToSource(chatPanels, asked)
-        .catch((reason: unknown) => {
-          console.error('ConnectOtherAIs: going back from a chat threw', reason);
-          void notify({
-            as: 'warning',
-            class: 'failure',
-            source: 'backToSource',
-            code: 'chat-back-failed',
-            title: 'CoAI could not go back to where this chat came from.',
-            detail: asText(reason),
-          });
-        });
-    }),
-    vscode.commands.registerCommand('coai.switchConversations', () => {
-      noteChatDoor('switch');
-      switchConversations(chatPanels, {
-        index: housekeeping.index,
-        store: chatStore,
-        extensionUri: context.extensionUri,
-        workspace: conversationWorkspace,
-      });
-    }),
-    // And forgetting the row under the cursor of that list. NOT a door: it opens no chat, it acts on
-    // the list — which is why it records no invocation, and why `chatWiring.test.ts` excludes a
-    // keybinding scoped to `coai.conversationsPickerOpen` from the doors it derives from the manifest.
-    // It takes no arguments because a keybinding passes none: the row it means is the one being
-    // looked at, and only the picker knows which that is.
-    vscode.commands.registerCommand('coai.forgetPickedConversation', () => {
-      forgetPickedConversation();
-    }),
-    // Deactivation is not a tab closing: nobody has told VS Code about these panels, so both the
-    // panel and the vendor process behind it have to be ended here or they outlive the extension.
-    { dispose: () => chatPanels.closeAll() },
-    // How a chat tab comes back after a window reload. VS Code hands back the panel and whatever the
-    // page saved with `setState` — here, the conversation's own id — and `chatRestorePanel.ts` does
-    // the rest: validates the id, draws *Restoring…* before anything is awaited, waits for the
-    // migration under a ceiling so a record that was still in the memento a moment ago is found, and
-    // reads the STORE. The store answers four ways and `chatRestore.ts` decides each: a record
-    // restores; absent — in the store AND in the memento — disposes, because an empty tab pretending
-    // to be a conversation is worse than none; a record this build cannot read, or a disk that would
-    // not answer, keeps the tab and SAYS so, with a retry where one makes sense. Disposing over either
-    // of those would throw a person's tab away over a permissions error or a downgrade.
-    vscode.window.registerWebviewPanelSerializer('coaiChat', {
-      deserializeWebviewPanel: (panel: vscode.WebviewPanel, state: unknown) =>
-        restoreAfterReload(restoreDeps, panel, state, migration).catch((reason: unknown) => {
-          // The store answers in outcomes and never rejects, so anything here is a defect — said on
-          // the console rather than dropped, and the panel is NOT disposed over it: the rule of this
-          // whole serializer is that a tab is thrown away only for a conversation that is nowhere.
-          console.error('ConnectOtherAIs: a chat tab could not be restored after a reload', reason);
-        }),
-    }),
-    // Both doors repaint. The panel's own button used to be the only path that did — it awaits
-    // the command and then renders — so an update started from THIS menu left the MCP server tab
-    // showing the version it had replaced, which is the very symptom the button was fixed for.
-    vscode.commands.registerCommand('coai.installServer', async () => {
-      await installServer(context);
+    bridge.registerCommand('coai.openSettings', (tab?: unknown) => { openSettings(panel, tab); }),
+    // `coai.installServer` is the install module's (v2 E4, s5-install-module). Both doors still repaint: the module announces a (re)installed server, and this
+    // listener — the panel's own button used to be the only path that repainted — makes the MCP server tab show the version that was just installed.
+    { dispose: onServerInstalled(() => {
       // A (re)installed server reads the roots afresh on its start; the page asks the disk afresh too.
       panel.forgetQconsultRootAnswers();
-      await panel.render();
-    }),
-    vscode.commands.registerCommand('coai.copyConfigBlock', () => copyConfigBlock(context)),
-    vscode.commands.registerCommand('coai.copyClaudeSnippet', copyClaudeSnippet),
+      void panel.render();
+    }) },
+    bridge.registerCommand('coai.copyConfigBlock', () => copyConfigBlock(context)),
+    bridge.registerCommand('coai.copyClaudeSnippet', copyClaudeSnippet),
     ...registerConfigTransfer(context, () => panel.vaultKeyNames()),
-    vscode.commands.registerCommand('coai.showRounds', () => showRoundsLog(roundsLog, watcher, panel)),
-    vscode.commands.registerCommand('coai.answerQuestion', () => answerQuestion(watcher)),
-    // The same action under a second id, so the title bar can show a green icon while a question
-    // is waiting — a menu icon cannot be recoloured by state, but which command is shown can.
-    vscode.commands.registerCommand('coai.answerQuestionWaiting', () => answerQuestion(watcher)),
+    bridge.registerCommand('coai.showRounds', () => showRoundsLog(roundsLog, panel)),
   );
 
-  void offerUpdate(context);
+  measureMark('oldCommandsRegistered');
+  measureMark('oldActivateEnd');
 
   return {
     sidesSeen: () => sidesIn(context.globalState, Date.now()),
-    ...(context.extensionMode === vscode.ExtensionMode.Test ? { remoteSessions: testDoorOf(remote), skipShell } : {}),
-    // A second spread beside the first, not a member of it: `remoteExportGuard.test.ts` and `skipShellWiring.test.ts` pin the shape of that one.
+    // The test doors of the remote sessions and the skip-list check are the chat module's now (`shell/modules/chat/index.ts`).
     ...(context.extensionMode === vscode.ExtensionMode.Test ? { onExhaustedMigration: () => context.globalState.get(ON_EXHAUSTED_MIGRATION_KEY) } : {}),
   };
 }
 
 export async function deactivate(): Promise<void> {
-  // The watcher is a subscription; VS Code disposes it. No server, no port — but the chat ledger's
+  // No server, no port — but the chat ledger's
   // writes are deliberately NOT awaited by the turn that made them (a person's answer must not wait
   // on a disk), so a host closed the instant a turn ends could take the record with it. VS Code
   // awaits what this returns, which is the one moment the queue can be drained for free.
@@ -1404,99 +994,6 @@ function dataDir(): vscode.Uri {
   return vscode.Uri.file(coaiDataDir());
 }
 
-/** Answer an open question by hand — the same path the modal's button takes. */
-async function answerQuestion(watcher: EscalationWatcher): Promise<void> {
-  await watcher.refresh();
-  const open = watcher.openQuestions;
-  if (open.length === 0) {
-    void notify({
-      as: 'information',
-      class: 'refusal',
-      source: 'escalations',
-      code: 'no-question-waiting',
-      title: 'No ConnectOtherAIs review is waiting on an answer.',
-    });
-    return;
-  }
-
-  const picked =
-    open.length === 1
-      ? open[0]
-      : await vscode.window
-          .showQuickPick(
-            open.map((e) => ({ label: e.branch, detail: e.question, escalation: e })),
-            { title: 'Which question?' },
-          )
-          .then((choice) => choice?.escalation);
-
-  if (picked !== undefined) {
-    await watcher.answerCommand(picked);
-  }
-}
-
-
-/** One install at a time: the panel button and the ⋯ menu are two doors to the same work. */
-const installing = new SingleFlight<void>();
-
-async function installServer(context: vscode.ExtensionContext): Promise<void> {
-  await installing.run(() => install(context));
-}
-
-async function install(context: vscode.ExtensionContext): Promise<void> {
-  try {
-    // Asked BEFORE the download, because `installLatest` writes this side's record at the end of it
-    // and the question is "has this side ever installed", not "did that just succeed".
-    const firstTime = installedVersion(context.globalState, context.globalStorageUri) === undefined;
-    const target = await vscode.window.withProgress(
-      { location: vscode.ProgressLocation.Notification, title: 'Installing coai-mcp…' },
-      () => installLatest(context.globalStorageUri, context.globalState),
-    );
-    if (firstTime && await askWhereDataLives(context, true) === 'refused') {
-      // The choice did not land, so the block below would carry a configuration nobody asked for —
-      // and the install record written moments ago stops the question ever being asked again. Say
-      // so instead of copying something misleading. (codex, code round.)
-      void notify({
-        as: 'error',
-        class: 'failure',
-        source: 'installServer',
-        code: 'install-data-directory-not-saved',
-        title: `coai-mcp is installed at ${target.fsPath}, but where its data should live could not be `
-          + 'saved. Nothing has been copied to your clipboard: set it with "ConnectOtherAIs: Change '
-          + 'where your data lives" and paste the block it gives you.',
-        cure: 'Set the folder with "ConnectOtherAIs: Change where your data lives", then copy the block again.',
-      });
-
-      return;
-    }
-    // The block carries the two variables — the ONE configuration a client entry must hold, because
-    // the settings file that carries everything else lives inside the directory they select. See
-    // `serverEnv`, and the guard in `install.test.ts` that allows these two keys and no others.
-    await vscode.env.clipboard.writeText(mcpServerBlock(target.fsPath, serverEnv()));
-    const targets = clientTargetsLine(CLIENT_TARGETS);
-    void notify({
-      as: 'information',
-      class: 'outcome',
-      source: 'installServer',
-      code: 'server-installed',
-      title: `${installedMessage(target.fsPath)} Paste it into: ${targets}`,
-    });
-  } catch (error) {
-    const raw = message(error);
-    const hint = installFailureHint(raw, codeOf(error));
-    void notify({
-      as: 'error',
-      class: 'failure',
-      source: 'installServer',
-      code: 'server-not-installed',
-      title: hint.length > 0 ? `coai-mcp was not updated: ${hint}` : `coai-mcp was not installed: ${raw}`,
-      // The raw reason as well as the hint: a hint that matched nothing is exactly the case where
-      // somebody needs what the process actually said.
-      detail: raw,
-    });
-  }
-}
-
-
 async function copyConfigBlock(context: vscode.ExtensionContext): Promise<void> {
   const path = serverPath(context.globalStorageUri);
   if (path === undefined) {
@@ -1558,23 +1055,20 @@ async function copyClaudeSnippet(): Promise<void> {
  * tables nobody could sort, filter or search, and a rewrite that reloaded the editor on every tick.
  * The page keeps the same command and the same data; only the surface changed.</p>
  */
-async function showRoundsLog(log: RoundsLogPanel, watcher: EscalationWatcher, panel: PanelProvider): Promise<void> {
-  await watcher.refresh();
-
+async function showRoundsLog(log: RoundsLogPanel, panel: PanelProvider): Promise<void> {
   // The page FIRST, from the session files alone — everything it has ever shown comes from those, so
   // it is complete without the database. Reading the database spawns the server, and a person who
   // opened a log should not wait on a process to see it: the findings arrive in the next push, a
   // moment later. Raised by the gate as blocking the panel on an unannounced read.
   log.show(
     await logRows(panel, undefined),
-    watcher.openQuestions,
     await regionOr('spending', () => panel.usageTab()));
   // The page's own clock for the Team-server figures: every minute while it is open, whether or not the sidebar is,
   // and stopped when it closes. Company figures only while the Team server tab is the one showing (teamTabSelection.ts).
   // The page's closing is what ends both — and tells the host the Team server tab is no longer showing, which no
   // message from a closing page ever could (teamTabHost.ts).
   log.whileOpen(() => panel.teamPageOpened());
-  await refreshRoundsLog(log, watcher, panel, true);
+  await refreshRoundsLog(log, panel, true);
 }
 
 /**
@@ -1582,14 +1076,14 @@ async function showRoundsLog(log: RoundsLogPanel, watcher: EscalationWatcher, pa
  * ask; the answer pushes again when it lands, through `onTeamUsageChanged`. `force` is a server whose figures are asked
  * again whatever is fresh: the Refresh button.
  */
-async function askTheTeamServers(log: RoundsLogPanel, watcher: EscalationWatcher, panel: PanelProvider, force = ''): Promise<void> {
+async function askTheTeamServers(log: RoundsLogPanel, panel: PanelProvider, force = ''): Promise<void> {
   const asking = panel.refreshTeamUsage(force);
-  await refreshRoundsLog(log, watcher, panel, true);
+  await refreshRoundsLog(log, panel, true);
   await asking;
 }
 
 /** Keeps an OPEN log current while a round runs. Nothing is read when nobody is looking. */
-async function refreshRoundsLog(log: RoundsLogPanel, watcher: EscalationWatcher, panel: PanelProvider, force = false): Promise<void> {
+async function refreshRoundsLog(log: RoundsLogPanel, panel: PanelProvider, force = false): Promise<void> {
   if (!log.isOpen) {
     return;
   }
@@ -1605,7 +1099,6 @@ async function refreshRoundsLog(log: RoundsLogPanel, watcher: EscalationWatcher,
   const team = teamRegion(panel);
   log.update(
     await logRows(panel, fresh),
-    watcher.openQuestions,
     usage,
     force,
     spots,
@@ -1882,40 +1375,6 @@ async function readSessions(): Promise<SessionFile[]> {
     // No data dir yet — an empty view says so honestly.
   }
   return sessions;
-}
-
-async function offerUpdate(context: vscode.ExtensionContext): Promise<void> {
-  const server = await serverOnThisSide(
-    context.globalStorageUri,
-    context.globalState,
-    (await latestServerVersion()) ?? '',
-  );
-  // `absent` never offers: an install is not an update, and this runs at activation — a machine
-  // with nothing on this side would otherwise be told to update something it does not have.
-  if (!server.updateOffered) {
-    return;
-  }
-  const answer = await notifyAndAsk({
-    as: 'information',
-    class: 'offer',
-    source: 'installServer',
-    code: 'newer-server-published',
-    title: 'A newer coai-mcp is published.',
-    action: 'Install it',
-  });
-  if (answer === 'Install it') {
-    await installServer(context);
-  }
-}
-
-function message(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-/** Node puts an errno here; `vscode.FileSystemError` puts its own name. Absent is empty, never a guess. */
-function codeOf(error: unknown): string {
-  const code = (error as { code?: unknown } | null)?.code;
-  return typeof code === 'string' ? code : '';
 }
 
 /**

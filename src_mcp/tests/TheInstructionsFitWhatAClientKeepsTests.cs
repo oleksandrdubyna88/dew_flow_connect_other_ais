@@ -43,15 +43,13 @@ public sealed class TheInstructionsFitWhatAClientKeepsTests
     public void TheLastParagraphSurvives() =>
         // The half that was actually lost, asserted at its own end rather than by its presence: a
         // sentence 400 characters past the cut is "present" in the constant and absent everywhere else.
-        Program.Instructions.TrimEnd().Should().EndWith("the `consult` PROMPT.",
+        Program.Instructions.TrimEnd().Should().EndWith("the `cons` PROMPT.",
             "the end of the text is what a budget overrun eats first, so the end is what is pinned");
 
     [Fact]
-    public void TheThreeThatOnlyLivedInASharedRuleAreStillHere() =>
-        Program.Instructions.Should().Contain("COMMANDS")
-            .And.Contain("Reject in round ONE")
-            .And.Contain("ENFORCED stop")
-            .And.Contain("answer on the notice card",
+    public void TheTwoThatOnlyLivedInASharedRuleAreStillHere() =>
+        Program.Instructions.Should().Contain("Reject in round ONE")
+            .And.Contain("Nothing holds the gate",
                 "these are the reason the shared rule can be reduced; losing them to a budget would "
                 + "take them off every surface at once");
 }

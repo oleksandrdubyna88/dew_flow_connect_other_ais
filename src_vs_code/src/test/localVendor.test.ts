@@ -45,7 +45,6 @@ function html(vendors: readonly Vendor[], engine: LocalEngine): string {
     side: '',
     perSide: false,
     latestServerVersion: '',
-    questions: [],
     sessions: [],
     openSections: ['reviewers'],
     usage: [],

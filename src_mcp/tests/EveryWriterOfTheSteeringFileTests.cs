@@ -16,7 +16,7 @@ namespace CoaiMcp.Tests;
 /// defect two RUNS had, inside one. A serial collection runs alone, after the parallel ones, so the file can only be seen by the class
 /// that wrote it. Nothing used to check that; a seventh class added outside the collection would have broken the other six at random.</para>
 /// <para>A source scan, so it gets two companions (<c>testing.md</c>, "a structural test that matches nothing passes forever"): the scan
-/// still finds the six known writers, and it is red on a class that writes outside the collection (the parser's own synthetic cases).
+/// still finds the five known writers, and it is red on a class that writes outside the collection (the parser's own synthetic cases).
 /// It was also watched red once on the real tree by taking one class out of the collection.</para>
 /// <para><c>DeleteALeftover</c> is not a write: the assembly fixture calls it once, before any test.</para>
 /// </remarks>
@@ -29,10 +29,9 @@ public sealed class EveryWriterOfTheSteeringFileTests
         @"\bFakeCliSteering\s*\.\s*(?:Write|ReadBack|MinimalFile)\b", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
 
     /// <summary>The six classes that wrote their own copy of the file before the helper replaced the copies.</summary>
-    private static readonly string[] TheSixKnownWriters =
+    private static readonly string[] TheFiveKnownWriters =
     [
         "AKimiRowRunsThroughTheServiceOnWsl2Tests",
-        "AskHumanScenarioTests",
         "AVibeReviewerRunsThroughAFakeVibeTests",
         "QuestionConsultScenarioTests",
         "QuestionRowLookupScenarioTests",
@@ -59,14 +58,14 @@ public sealed class EveryWriterOfTheSteeringFileTests
     }
 
     [Fact]
-    public void TheScan_StillSeesTheSixKnownWriters_AndTheCollectionTheyAreIn()
+    public void TheScan_StillSeesTheFiveKnownWriters_AndTheCollectionTheyAreIn()
     {
         var classes = TestSourceIndex.Classes;
         var writers = TestSourceIndex.Concrete(classes).Where(c => TestSourceIndex.Reaches(c, classes, Writes)).Select(c => c.Name).ToList();
 
-        writers.Should().Contain(TheSixKnownWriters, "a scan that finds nothing passes for ever");
+        writers.Should().Contain(TheFiveKnownWriters, "a scan that finds nothing passes for ever");
         TestSourceIndex.SerialCollections(classes).Should().Contain(Serial, "the collection's definition is where the scan learns that it runs alone");
-        classes.Where(c => TheSixKnownWriters.Contains(c.Name) && !c.Collections.Contains(Serial)).Select(c => c.Name).Should().BeEmpty();
+        classes.Where(c => TheFiveKnownWriters.Contains(c.Name) && !c.Collections.Contains(Serial)).Select(c => c.Name).Should().BeEmpty();
     }
 
     [Fact]

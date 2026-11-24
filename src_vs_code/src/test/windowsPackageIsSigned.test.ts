@@ -495,3 +495,82 @@ test('a glob\'s regex metacharacters are literal, and only `*` is a wildcard', (
   assert.ok(!globToRegex('tree-sitter.dll').test('tree-sitterXdll'), 'a dot is a dot');
   assert.ok(globToRegex('tree-sitter*.dll').test('tree-sitter-rust.dll'), 'a star is a wildcard');
 });
+
+// ---------------------------------------------------------------------------------------------
+// A manual `mcp` build may stamp a 2.x release candidate and keeps its packages as workflow artifacts.
+// It exists for one purpose: a person hand-checks the 2.0 extension with a 2.0 server BEFORE any release
+// is cut. So the tests below hold what keeps it from ever being a release.
+// ---------------------------------------------------------------------------------------------
+
+/** The `run:` body of the step that decides the stamped version. */
+const versionScript = () => {
+  const body = runBodies('mcp-binaries').find((b) => b.includes('INPUT_VERSION'));
+  assert.ok(body, 'mcp-binaries has a step that reads INPUT_VERSION');
+  return body;
+};
+
+/** What the version step does for a ref and an input, run as the runner runs it (bash, a file for GITHUB_ENV). */
+function stampFor(ref: string, refName: string, input: string): { code: number | null; version: string } {
+  const dir = ownedTemp('stamp');
+  const envFile = path.join(dir, 'github_env');
+  fs.writeFileSync(envFile, '');
+  const run = spawnSync('bash', ['-c', versionScript()], {
+    env: { PATH: process.env['PATH'] ?? '', GITHUB_REF: ref, GITHUB_REF_NAME: refName, INPUT_VERSION: input, GITHUB_ENV: envFile },
+    encoding: 'utf8',
+  });
+  const line = fs.readFileSync(envFile, 'utf8').split('\n').find((l) => l.startsWith('VERSION='));
+  return { code: run.status, version: line === undefined ? '' : line.slice('VERSION='.length) };
+}
+
+test('a dispatch may stamp a 2.x release candidate and nothing else; empty keeps the manual stamp', { skip: needsBash }, () => {
+  const dispatch = (input: string) => stampFor('refs/heads/feat/v2-2.0-integration', 'feat/v2-2.0-integration', input);
+
+  assert.deepEqual(dispatch(''), { code: 0, version: '0.0.0-manual' }, 'no input: the stamp it always had');
+  assert.deepEqual(dispatch('2.0.0-rc.1'), { code: 0, version: '2.0.0-rc.1' });
+  assert.deepEqual(dispatch('2.13.4-rc.27'), { code: 0, version: '2.13.4-rc.27' });
+  // The defect: a dispatch that can stamp a plain release number builds something a person takes for a release.
+  for (const refused of ['2.0.0', '1.0.0-rc.1', '0.99.0-rc.1', '2.0.0-rc.', '2.0.0-beta.1', '2.0.0-rc.1+x', ' 2.0.0-rc.1', '2.0.0-rc.1\n2', 'v2.0.0-rc.1', '$(id)', '2.0.0-rc.1;id']) {
+    const answer = dispatch(refused);
+    assert.notEqual(answer.code, 0, `refused: ${JSON.stringify(refused)}`);
+    assert.equal(answer.version, '', `and no version is written for ${JSON.stringify(refused)}`);
+  }
+});
+
+test('a tag stamps the tag\'s version whatever the input says', { skip: needsBash }, () => {
+  assert.deepEqual(stampFor('refs/tags/mcp-v0.89.3', 'mcp-v0.89.3', ''), { code: 0, version: '0.89.3' });
+  assert.deepEqual(stampFor('refs/tags/mcp-v0.89.3', 'mcp-v0.89.3', '2.0.0-rc.1'), { code: 0, version: '0.89.3' });
+});
+
+test('the version input is a string that defaults to empty, and reaches the shell through env only', () => {
+  const head = workflow.slice(workflow.indexOf('\n  workflow_dispatch:\n'), workflow.indexOf('\npermissions:\n'));
+  const input = /\n {6}version:\n((?: {8}.*\n)+)/.exec(head);
+  assert.ok(input, 'workflow_dispatch has an input named version');
+  assert.match(input[1]!, /\n {8}type: string\n/, 'a string');
+  assert.match(input[1]!, /\n {8}default: ''\n/, 'empty by default');
+  assert.match(input[1]!, /\n {8}required: false\n/, 'and not required');
+  assert.match(step('mcp-binaries', 'The version this release stamps'), /\n {10}INPUT_VERSION: \$\{\{ inputs\.version \}\}\n/, 'through env:');
+  assert.doesNotMatch(versionScript(), /\$\{\{/, 'and never as an expression inside the command');
+  // The refusal comes before the half hour of `Build and test`, not after it.
+  const names = stepsOf('mcp-binaries').map((s) => /^ {6}- name: (.*)$/m.exec(s)?.[1] ?? '');
+  assert.ok(names.indexOf('The version this release stamps') < names.indexOf('Build and test'), 'a bad input fails first');
+});
+
+test('a manual build keeps the non-Windows packages as 7-day artifacts, and attaches nothing to any release', () => {
+  const keep = step('mcp-binaries', 'Keep the package as a workflow artifact (a manual build)');
+
+  assert.match(keep, /uses: actions\/upload-artifact@[0-9a-f]{40} # v\d/, 'a pinned upload');
+  assert.match(keep, /if: \$\{\{ github\.event_name == 'workflow_dispatch' && !startsWith\(matrix\.rid, 'win-'\) \}\}/, 'a dispatch, and not the Windows legs (their zip is the signing workflow\'s artifact)');
+  assert.match(keep, /\n\s+name: mcp-\$\{\{ matrix\.rid \}\}\n/, 'named mcp-<rid>');
+  assert.doesNotMatch('mcp-linux-x64', /^mcp-win-/, 'which the Windows download pattern cannot match');
+  assert.match(keep, /\$\{\{ env\.ASSET \}\}\n\s+\$\{\{ env\.ASSET \}\}\.sha256\n/, 'the archive and its checksum');
+  assert.match(keep, /\n\s+retention-days: 7\n/, 'a week');
+  assert.match(keep, /\n\s+if-no-files-found: error\n/, 'an empty upload is red');
+  // The defect this whole group stands against: a dispatch that creates or publishes something.
+  for (const job of ['mcp-binaries', 'mcp-sign', 'mcp-sign-attach']) {
+    for (const s of stepsOf(job)) {
+      if (/gh release (upload|create|edit)/.test(withoutComments(s))) {
+        assert.match(s, /\n\s+if: .*startsWith\(github\.ref, 'refs\/tags\/mcp-v'\)/, `${job}: a step that touches a release is tag-only`);
+      }
+    }
+  }
+});

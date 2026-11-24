@@ -1,0 +1,92 @@
+{
+  "state": {
+    "sessionId": "d99716ba",
+    "repoPath": "/fixture/repo",
+    "branch": "epic-1",
+    "config": {
+      "onExhausted": "Human",
+      "securityLane": {
+        "maxRounds": 2,
+        "threshold": 0,
+        "enabled": false
+      },
+      "roles": {
+        "PlanCritique": {
+          "maxRounds": 1,
+          "threshold": 0,
+          "enabled": true
+        },
+        "Conventions": {
+          "maxRounds": 1,
+          "threshold": 0,
+          "enabled": true
+        },
+        "Architecture": {
+          "maxRounds": 1,
+          "threshold": 0,
+          "enabled": true
+        },
+        "SecurityReliability": {
+          "maxRounds": 1,
+          "threshold": 0,
+          "enabled": true
+        },
+        "UxDxPerformance": {
+          "maxRounds": 1,
+          "threshold": 0,
+          "enabled": true
+        },
+        "DocumentReview": {
+          "maxRounds": 1,
+          "threshold": 0,
+          "enabled": true
+        },
+        "DocumentSummary": {
+          "maxRounds": 1,
+          "threshold": 0,
+          "enabled": true
+        },
+        "FeatureReview": {
+          "maxRounds": 1,
+          "threshold": 0,
+          "enabled": true
+        },
+        "Spec": {
+          "maxRounds": 1,
+          "threshold": 0,
+          "enabled": true
+        }
+      }
+    },
+    "stage": "PlanReview",
+    "roundsRunThisStage": 0,
+    "escalationsUsed": 0,
+    "awaitingResolve": false,
+    "planProceeded": false,
+    "advanceOnResolve": false,
+    "humanGate": false,
+    "rejections": [],
+    "secondRound": "None",
+    "document": "",
+    "isDocumentSession": false,
+    "feature": "",
+    "isFeatureSession": false
+  },
+  "rounds": [],
+  "openedUtc": "2026-11-22T18:34:38.3859765Z",
+  "pending": [],
+  "planText": "",
+  "plan": "",
+  "epic": "",
+  "cadenceRepoId": "",
+  "featureBase": "",
+  "carried": [],
+  "caller": {
+    "vendor": "unknown",
+    "client": "",
+    "clientVersion": "",
+    "model": "",
+    "phrase": "unknown · model not stated"
+  },
+  "usedPrompts": []
+}

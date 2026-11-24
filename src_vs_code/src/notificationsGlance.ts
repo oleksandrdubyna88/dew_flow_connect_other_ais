@@ -14,7 +14,7 @@ import { readSoFarCheaply } from './notificationsSeenCache';
 /**
  * One cheap look at both ledgers: how many are new, and whether older ones are still unopened.
  *
- * <p><b>Cheap is the requirement, not a nicety.</b> `EscalationWatcher` calls `onChanged`
+ * <p><b>Cheap is the requirement, not a nicety.</b> The escalation watcher (since removed) called `onChanged`
  * unconditionally every 5000 ms, so this runs in every window every five seconds whatever
  * happened. A count that meant "parse the newest three thousand records" would be ~1.2 MB of JSON
  * per window per tick, from a directory that may be a NAS. So nothing here parses a record: it

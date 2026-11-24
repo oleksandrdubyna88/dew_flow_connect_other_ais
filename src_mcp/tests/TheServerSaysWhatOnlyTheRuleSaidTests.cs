@@ -20,14 +20,11 @@ namespace CoaiMcp.Tests;
 /// highest-consequence of the three, because autonomy, story splitting and model routing all ride on
 /// it;</item>
 /// <item>reject in round ONE, which is the argument for why the loop converges at all;</item>
-/// <item>that <c>call_human</c> is an ENFORCED stop — <c>review_plan</c> and <c>review_code</c> refuse
-/// while it stands, and recording decisions does not clear it.</item>
+/// <item>that nothing holds the gate — v2 has no <c>call_human</c>: <c>not_reviewed</c> and <c>good_enough</c> advance on
+/// <c>resolve</c>, said out loud.</item>
 /// </list>
 /// <para><b>These cases read the STRING. The behaviour it promises is asserted elsewhere, and that is
-/// deliberate</b> — <see cref="HumanGateHoldsTests"/> drives the refusal at both round entries, that
-/// <c>resolve</c> does not clear the gate, and that only a person's decision does;
-/// <see cref="RoundMachineTests"/> owns the override rule, including the sharp half of it (an
-/// exhausted escalate stage has no rounds left either, so "no rounds" is not "a person was asked").
+/// deliberate</b> — <see cref="RoundMachineTests"/> owns the four outcomes a round can end in.
 /// Writing those again here would be a second implementation of a guarantee that already has one.</para>
 /// <para>The phrasings these pin are SHORT on purpose. The instruction block has a 2 KiB budget
 /// (<see cref="TheInstructionsFitWhatAClientKeepsTests"/>), and the first draft of these three
@@ -35,21 +32,15 @@ namespace CoaiMcp.Tests;
 /// reached a session at all. The claim is what is asserted here; the wording is as long as the
 /// budget allows.</para>
 /// <para>A sentence on a shipping surface that the machine does not implement is worse than no
-/// sentence, so each claim was read against the machine before it was written down. That caught one:
-/// the draft said the override is "refused while rounds remain", which is the rule the code USED to
-/// have and corrected — and the shipped <c>resolve</c> tool description still carried it. Both say the
-/// real rule now: the override applies only after a <c>call_human</c> verdict.</para>
+/// sentence, so each claim is read against the machine before it is written down.</para>
 /// </remarks>
 public sealed class TheServerSaysWhatOnlyTheRuleSaidTests
 {
     private static string Instructions => Program.Instructions;
 
     [Fact]
-    public void ARoundsReplyCanCarryCommandsThatOutrankTheCallersDefaults() =>
-        Instructions.Should().Contain("COMMANDS")
-            .And.Contain("outrank")
-            .And.Contain("empty list",
-                "a caller who never sees a commands list must know that empty is the default, not a fault");
+    public void TheInstructionsSayNothingOfCommands_ARoundOrdersNothingInV2() =>
+        Instructions.Should().NotContain("COMMANDS").And.NotContain("outrank");
 
     [Fact]
     public void RejectInRoundOneIsOnTheServersOwnSurface() =>
@@ -58,25 +49,16 @@ public sealed class TheServerSaysWhatOnlyTheRuleSaidTests
                 "the instruction without its argument reads as a preference, and is followed as one");
 
     [Fact]
-    public void CallHumanIsAnEnforcedStopAndTheToolsSaySo() =>
-        Instructions.Should().Contain("call_human")
-            .And.Contain("REFUSE")
-            .And.Contain("does not clear it",
-                "the verdict stopping the shipping and the tools refusing are different claims, and only "
-                + "the second one is what the round machine does");
-
-    [Fact]
-    public void OnlyAnAnswerOnTheNoticeCardClearsTheGate() =>
-        Instructions.Should().Contain("answer on the notice card")
-            .And.Contain("not any argument of yours",
-                "an AI that could grant itself the override is an AI the stop does not stop — the instruction says "
-                + "where the release comes from and that the AI's own argument is not it")
+    public void NothingHoldsTheGate_AndTheInstructionsSay() =>
+        Instructions.Should().Contain("Nothing holds the gate")
+            .And.Contain("advance on `resolve` like `proceed`")
+            .And.NotContain("call_human", "v2 has no verdict that waits for a person")
+            .And.NotContain("notice card", "no card is written")
             .And.NotContain("pass humanDecision", "the surface used to tell the AI to relay the person's decision (plan §1)")
-            .And.NotContain("humanDecision: \"proceed\"", "no surface offers the argument as a way to proceed")
-            .And.NotContain("you cannot grant yourself", "the claim is the protocol road, not a verified person (plan §11.1)");
+            .And.NotContain("humanDecision: \"proceed\"", "no surface offers the argument as a way to proceed");
 
     /// <summary>
-    /// The `resolve` tool description is the OTHER surface that states the override rule, and it is
+    /// The `resolve` tool description is the OTHER surface that states the gate rule, and it is
     /// the one a caller reads first.
     /// </summary>
     /// <remarks>
@@ -89,19 +71,14 @@ public sealed class TheServerSaysWhatOnlyTheRuleSaidTests
     /// because a source-read test that matches only a fragment survives its own break.</para>
     /// </remarks>
     [Fact]
-    public void TheResolveToolDescriptionStatesTheSameOverrideRule()
+    public void TheResolveToolDescriptionSaysNothingHoldsTheGate()
     {
         var source = File.ReadAllText(ToolsSourcePath());
 
-        source.Should().Contain("is not a decision",
-            "the tool description is where a caller meets the rule before any round runs: the argument decides nothing");
-        source.Should().Contain("refused while a gate is held");
-        source.Should().Contain("answer on the notice card");
+        source.Should().Contain("No verdict holds the gate");
+        source.Should().NotContain("answer on the notice card");
         source.Should().NotContain("Never pass it on your own judgement", "the description used to tell the AI to relay the person's decision");
         source.Should().NotContain("pass humanDecision");
-        source.Should().NotContain("refused while rounds remain",
-            "that is the rule the round machine had and corrected: the override is judged by what it "
-            + "would CHANGE, not by how many rounds are left");
     }
 
     /// <summary>The `review_feature` description named a phone as a second surface; this repository has none (plan §2, "The phone").</summary>
@@ -119,7 +96,7 @@ public sealed class TheServerSaysWhatOnlyTheRuleSaidTests
     {
         var source = string.Join(' ', File.ReadAllText(ToolsSourcePath()).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
 
-        source.Should().Contain("under `auto` it is `good_enough`, or `not_reviewed` when nobody answered in it.");
+        source.Should().Contain("ends as `good_enough`,").And.Contain("or `not_reviewed` when nobody answered in it");
         source.Should().NotContain("every reviewer failed twice", "a retry asks only the reviewers that failed, so one of two failing again already leaves nobody answered")
             .And.NotContain("Under `auto` neither blocks");
     }

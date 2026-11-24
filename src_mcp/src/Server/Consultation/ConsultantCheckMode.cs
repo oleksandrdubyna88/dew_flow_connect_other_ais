@@ -29,7 +29,7 @@ namespace CoaiMcp.Server;
 /// the liveness signal for the OTHER side, where the lock cannot be seen; on this side the lock decides. The final state
 /// is written by the holder, after the heartbeat has stopped, before the lock goes. The deadline in the state is the
 /// PROMISED end — the cancellation plus the teardown after it — computed once, when the check began.</para>
-/// <para>A unit of its own rather than more of <c>Program.cs</c>, for the reason <c>CadenceReadMode</c> gives.</para>
+/// <para>A unit of its own rather than more of <c>Program.cs</c>, like every other one-shot mode.</para>
 /// </remarks>
 internal static class ConsultantCheckMode
 {

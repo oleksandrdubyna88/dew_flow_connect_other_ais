@@ -11,15 +11,13 @@ namespace CoaiMcp.Tests;
 /// The feature stage's second round runs only when it is needed (D23 of the feature-review plan, S3.4).
 /// </summary>
 /// <remarks>
-/// <para>At most two rounds, and round 2 is admitted by the machine on exactly one of three grounds,
-/// recorded on the state: round 1 had a reviewer failure (some or all), round 1 carried a
-/// <c>blocking</c> finding, or the person asked. A round 1 whose findings gate but none of them
+/// <para>At most two rounds, and round 2 is admitted by the machine on exactly one of two grounds,
+/// recorded on the state: round 1 had a reviewer failure (some or all), or round 1 carried a
+/// <c>blocking</c> finding. A round 1 whose findings gate but none of them
 /// blocking CLOSES the review on <c>resolve</c> — the accepted fixes land without a second review — and
 /// <c>again</c> over the same base is then refused naming the grounds. A round 2 that still carries a
-/// blocking finding or fails again calls a person; a third round is refused.</para>
-/// <para>The person's request has a provenance the caller cannot forge: it is a field only
-/// <see cref="RoundMachine.ApplyPersonsRequest"/> writes, from a <see cref="HumanDecision"/> the person's
-/// surfaces produced — never from <c>again</c>, never from <c>humanDecision: proceed</c>.</para>
+/// blocking finding or fails again ends as <c>good_enough</c> (or <c>not_reviewed</c> when nobody answered) with
+/// nobody waited for; a third round is refused.</para>
 /// </remarks>
 public sealed class TheSecondFeatureRoundTests
 {
@@ -27,7 +25,7 @@ public sealed class TheSecondFeatureRoundTests
 
     /// <summary>A feature session with the shipped feature budget: two rounds, at most five open.</summary>
     private static SessionState Feature(int maxRounds = 2, int threshold = 5) =>
-        new("s1", "/repo", SessionKey.FeatureBranch, PanelConfig.Uniform(maxRounds, threshold, StagePolicy.Human)) { Stage = Stage.FeatureReview, Feature = Plan };
+        new("s1", "/repo", SessionKey.FeatureBranch, PanelConfig.Uniform(maxRounds, threshold)) { Stage = Stage.FeatureReview, Feature = Plan };
 
     private static Finding F(Severity severity, string title) =>
         new(severity, Category.Reliability, "src/A.cs", 1, title, "why", "fix", ["codex"]);
@@ -90,9 +88,9 @@ public sealed class TheSecondFeatureRoundTests
 
         var refused = RoundMachine.BeginFeatureRoundAgain(done).Should().BeOfType<Transition.Refused>().Subject;
 
-        refused.Sentence.Should().Contain("reviewer failure").And.Contain("blocking").And.Contain("person",
-            "the three grounds of D23 are what the caller is missing, and the sentence names them");
-        refused.Sentence.Should().Contain("ask_human", "a refusal with no door is a stall: the person's request is the door");
+        refused.Sentence.Should().Contain("reviewer failure").And.Contain("blocking",
+            "the two grounds of D23 are what the caller is missing, and the sentence names them");
+        refused.Sentence.Should().Contain("again: true", "a refusal with no door is a stall: a NEW base is the door");
     }
 
     // ---------- a blocking finding admits round 2 ----------
@@ -112,14 +110,14 @@ public sealed class TheSecondFeatureRoundTests
     }
 
     [Fact]
-    public void ABlockingFindingInRoundTwo_CallsAPerson()
+    public void ABlockingFindingInRoundTwo_EndsGoodEnough_NobodyIsWaitedFor()
     {
         var open = Resolved(Completed(Feature(), OneBlocking(), Both));
 
         var ok = RoundMachine.CompleteRound(open, OneBlocking(), Both).Should().BeOfType<Transition.Ok>().Subject;
 
-        ok.Verdict.Should().BeOfType<RoundVerdict.CallHuman>().Which.Reason.Should().Contain("blocking").And.Contain("second round");
-        ok.State.HumanGate.Should().BeTrue();
+        ok.Verdict.Should().BeOfType<RoundVerdict.GoodEnough>().Which.Reason.Should().Contain("blocking").And.Contain("second round");
+        ok.State.AdvanceOnResolve.Should().BeTrue("the review closes on resolve");
         ok.State.RoundsRunThisStage.Should().Be(2);
     }
 
@@ -156,7 +154,6 @@ public sealed class TheSecondFeatureRoundTests
         var ok = RoundMachine.CompleteRound(Feature(), GateResult.Empty, Nobody).Should().BeOfType<Transition.Ok>().Subject;
 
         ok.Verdict.Should().BeOfType<RoundVerdict.Revise>("D23: some OR all failed admits round 2, which asks everyone");
-        ok.State.HumanGate.Should().BeFalse();
         ok.State.SecondRound.Should().Be(SecondRoundGround.ReviewerFailure);
     }
 
@@ -169,33 +166,33 @@ public sealed class TheSecondFeatureRoundTests
     }
 
     [Fact]
-    public void ARetryThatFailsAgain_CallsAPerson()
+    public void ARetryThatFailsAgain_EndsGoodEnough()
     {
         var open = Resolved(Completed(Feature(), GateResult.Empty, OneOfTwoFailed));
 
         var ok = RoundMachine.CompleteRound(open, GateResult.Empty, OneOfTwoFailed).Should().BeOfType<Transition.Ok>().Subject;
 
-        ok.Verdict.Should().BeOfType<RoundVerdict.CallHuman>().Which.Reason.Should().Contain("second round").And.Contain("gemini/FeatureReview");
-        ok.State.HumanGate.Should().BeTrue();
+        ok.Verdict.Should().BeOfType<RoundVerdict.GoodEnough>().Which.Reason.Should().Contain("second round").And.Contain("gemini/FeatureReview");
+        ok.State.AdvanceOnResolve.Should().BeTrue();
     }
 
     [Fact]
-    public void WhenNobodyAnswersTwice_APersonIsCalled_AndTheGateNeverFailsOpen()
+    public void WhenNobodyAnswersTwice_ItIsNotReviewed_AndTheGateNeverFailsOpen()
     {
         var open = Resolved(Completed(Feature(), GateResult.Empty, Nobody));
 
         var ok = RoundMachine.CompleteRound(open, GateResult.Empty, Nobody).Should().BeOfType<Transition.Ok>().Subject;
 
-        ok.Verdict.Should().BeOfType<RoundVerdict.CallHuman>().Which.Reason.Should().Contain("no reviewer answered");
-        ok.State.HumanGate.Should().BeTrue();
+        ok.Verdict.Should().BeOfType<RoundVerdict.NotReviewed>().Which.Reason.Should().Contain("no reviewer answered");
+        ok.State.AdvanceOnResolve.Should().BeTrue();
     }
 
     [Fact]
-    public void ABudgetOfOneRound_RunsNoRetry_AFailureIsAPersonsCall()
+    public void ABudgetOfOneRound_RunsNoRetry_AFailureEndsGoodEnough()
     {
         var ok = RoundMachine.CompleteRound(Feature(maxRounds: 1), GateResult.Empty, OneOfTwoFailed).Should().BeOfType<Transition.Ok>().Subject;
 
-        ok.Verdict.Should().BeOfType<RoundVerdict.CallHuman>("the operator's budget is one round; D23 caps, it never adds");
+        ok.Verdict.Should().BeOfType<RoundVerdict.GoodEnough>("the operator's budget is one round; D23 caps, it never adds");
     }
 
     // ---------- a third round is refused ----------
@@ -221,89 +218,12 @@ public sealed class TheSecondFeatureRoundTests
     [Fact]
     public void AFreshReview_StartsOverItsGround()
     {
-        var closed = Feature(maxRounds: 2) with { Stage = Stage.Done, RoundsRunThisStage = 2, SecondRound = SecondRoundGround.PersonAsked };
+        var closed = Feature(maxRounds: 2) with { Stage = Stage.Done, RoundsRunThisStage = 2, SecondRound = SecondRoundGround.BlockingFinding };
 
         var fresh = RoundMachine.FreshFeatureReview(closed);
 
         fresh.RoundsRunThisStage.Should().Be(0);
         fresh.SecondRound.Should().Be(SecondRoundGround.None, "a different base is a different review");
-    }
-
-    // ---------- the person's request, and the caller's inability to claim it ----------
-
-    [Fact]
-    public void TheCallerCannotClaimThePersonsRequest_WithAnyArgumentItHas()
-    {
-        var awaiting = Completed(Feature(), SixMajors(), Both);
-
-        // `humanDecision: proceed` is the caller's own argument: it never opens a second round.
-        var done = RoundMachine.Resolve(awaiting, [], callerClaimsProceed: true).Should().BeOfType<Transition.Moved>().Subject.State;
-
-        done.Stage.Should().Be(Stage.Done);
-        done.SecondRound.Should().Be(SecondRoundGround.None, "no argument of the caller's writes the person's field");
-        RoundMachine.BeginFeatureRoundAgain(done).Should().BeOfType<Transition.Refused>("again: true alone never admits round 2 on the person's ground");
-    }
-
-    [Theory]
-    [InlineData(HumanDecision.Continue)]
-    [InlineData(HumanDecision.Fix)]
-    public void ThePersonsRequest_AdmitsTheSecondRound_AsRoundTwoOfTheSameReview(HumanDecision decision)
-    {
-        var done = Resolved(Completed(Feature(), SixMajors(), Both));
-
-        var asked = RoundMachine.ApplyPersonsRequest(done, decision);
-
-        asked.SecondRound.Should().Be(SecondRoundGround.PersonAsked);
-        var reopened = RoundMachine.BeginFeatureRoundAgain(asked).Should().BeOfType<Transition.Moved>().Subject.State;
-        reopened.Stage.Should().Be(Stage.FeatureReview);
-        reopened.RoundsRunThisStage.Should().Be(1, "round two of this review, not round one of a fresh budget");
-        reopened.Rejections.Should().BeEquivalentTo(done.Rejections, "what the review agreed on still stands");
-    }
-
-    [Theory]
-    [InlineData(HumanDecision.Discuss)]
-    [InlineData(HumanDecision.None)]
-    public void AnAnswerThatIsNotARequest_ChangesNothing(HumanDecision decision)
-    {
-        var done = Resolved(Completed(Feature(), SixMajors(), Both));
-
-        RoundMachine.ApplyPersonsRequest(done, decision).Should().BeSameAs(done);
-    }
-
-    [Fact]
-    public void ThePersonsRequest_IsNotAThirdRound_AndNotAFreshSetOnAnOpenGate()
-    {
-        var twoRun = Feature() with { Stage = Stage.Done, RoundsRunThisStage = 2 };
-        RoundMachine.ApplyPersonsRequest(twoRun, HumanDecision.Continue).Should().BeSameAs(twoRun, "two rounds have run; a third is never admitted");
-
-        var held = Feature() with { RoundsRunThisStage = 2, HumanGate = true };
-        RoundMachine.ApplyPersonsRequest(held, HumanDecision.Continue).Should().BeSameAs(held,
-            "a held gate is answered by ApplyHumanDecision, which grants a fresh set — a different promise");
-
-        var code = new SessionState("s2", "/repo", "main", PanelConfig.Uniform(2, 5, StagePolicy.Human)) { Stage = Stage.Done, RoundsRunThisStage = 1 };
-        RoundMachine.ApplyPersonsRequest(code, HumanDecision.Continue).Should().BeSameAs(code, "only a feature review has this ground");
-    }
-
-    [Fact]
-    public void APersonsFreshSet_AfterRoundTwoCalledThem_StartsTheGroundOver()
-    {
-        var open = Resolved(Completed(Feature(), OneBlocking(), Both));
-        var held = Completed(open, OneBlocking(), Both);
-        held.HumanGate.Should().BeTrue();
-
-        var fresh = RoundMachine.ApplyHumanDecision(held, HumanDecision.Continue);
-
-        fresh.RoundsRunThisStage.Should().Be(0);
-        fresh.SecondRound.Should().Be(SecondRoundGround.None);
-    }
-
-    [Fact]
-    public void TheHumanOverride_StillCannotCloseARoundThatAdmittedASecond()
-    {
-        var awaiting = Completed(Feature(), OneBlocking(), Both);
-
-        RoundMachine.Resolve(awaiting, [], callerClaimsProceed: true).Should().BeOfType<Transition.Refused>()
-            .Which.Sentence.Should().Contain("call_human", "the override is honoured only after a person was called");
     }
 
     /// <summary>
@@ -332,7 +252,7 @@ public sealed class TheSecondFeatureRoundTests
     [Fact]
     public void ThePlanAndCodeStages_KeepTheirOwnRule()
     {
-        var plan = new SessionState("s3", "/repo", "main", PanelConfig.Uniform(2, 5, StagePolicy.Human));
+        var plan = new SessionState("s3", "/repo", "main", PanelConfig.Uniform(2, 5));
 
         var ok = RoundMachine.CompleteRound(plan, SixMajors(), Both).Should().BeOfType<Transition.Ok>().Subject;
 

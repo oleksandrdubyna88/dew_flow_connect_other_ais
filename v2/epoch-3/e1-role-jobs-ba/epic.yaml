@@ -1,0 +1,13 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: e1-role-jobs-ba
+title: "External-role jobs + router + failover + work-plan schema + BA role"
+mvp: true
+half: server
+dependsOn: []
+doneWhen:
+  - "start_role/role_status/role_cancel; detached job with lease + generation"
+  - "BA writes the stories and tasks of the next real v2 epic; validate_work passes in ≤ 2 repair turns; the orchestrator changes < 20 % of the task files"
+  - "FakeCli refusal / limit / crash → next model; one log line and one notification per switch"
+  - "work-plan schema with the security flag; validate_work; workMethod limits from the device config"
+  - "complexity 10 or security → the important model list"
+spec: SPEC.md

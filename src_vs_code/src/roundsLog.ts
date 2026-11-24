@@ -3,7 +3,6 @@
    review. `reportUnusedDisableDirectives` turns this line into an error the day that happens. */
 import { PAGE_SIZE, asInstant, compareRows } from './pageTables';
 import { repoNameOf } from './pathTail';
-import { Escalation } from './escalations';
 import { ChatLedgers, roundKey, usageRegion } from './panelView';
 import { TeamServerState } from './teamServerView';
 import { ModelPrice } from './modelPrices';
@@ -944,27 +943,6 @@ export function rowMatches(row: LogRow, filters: LogFilters, search: string): bo
 // The page.
 // ---------------------------------------------------------------------------------------------
 
-/** The open questions, as the block at the top of the page — the same block the tick re-posts. */
-export function questionsHtml(questions: readonly Escalation[]): string {
-  if (questions.length === 0) {
-    return '';
-  }
-  const items = questions.map((q) => {
-    const findings = q.openFindings
-      .map((f) => `<li><code>${escapeHtml(f.severity)}</code> ${escapeHtml(f.category)} `
-        + `${f.file ? `<code>${escapeHtml(f.file)}:${f.line ?? ''}</code> ` : ''}— ${escapeHtml(f.title)}</li>`)
-      .join('');
-    return `<div class="question">
-  <div class="where">${escapeHtml(q.branch)} · ${escapeHtml(q.repoPath)} · asked ${escapeHtml(q.askedUtc)}</div>
-  <p>${escapeHtml(q.question)}</p>
-  ${findings.length > 0 ? `<div class="gating">Still gating:</div><ul>${findings}</ul>` : '<div class="gating">No findings attached.</div>'}
-  <button type="button" data-command="answer" data-id="${escapeHtml(q.id)}">Answer…</button>
-</div>`;
-  });
-
-  return `<h2>Open questions — a review is waiting on you</h2>\n${items.join('\n')}`;
-}
-
 /**
  * What the spending tab shows beside this machine's own ledger — named, so a caller that wants only the chat ledger
  * does not pass a positional placeholder for everything before it.
@@ -1392,7 +1370,6 @@ export const CONSULTATIONS_SHOWN = PAGE_SIZE;
 
 export function roundsLogHtml(
   rows: readonly LogRow[],
-  questions: readonly Escalation[],
   nonce: string,
   usageHtml = '',
   spotsHtml = '',
@@ -1610,7 +1587,6 @@ ${BUSY_CSS}
 ${BUSY_BAR}
 <header><h1>Review rounds</h1>${textControlsHtml(text.size, text.tone)}</header>
 <div id="failed" class="failed" hidden></div>
-<div id="questions">${questionsHtml(questions)}</div>
 <div class="tabs"><button type="button" class="tab on" data-tab="rounds">Rounds</button><button type="button" class="tab" data-tab="conversations">Conversations</button><button type="button" class="tab" data-tab="consultations">Consultations</button><button type="button" class="tab" data-tab="questions">Questions</button><button type="button" class="tab" data-tab="usage">What each AI has used</button><button type="button" class="tab" data-tab="spots">What it keeps missing</button>${TEAM_TAB_BUTTON}</div>
 <section id="tab-rounds" data-section="rounds" class="view-rounds">
 <div class="asChat">${periodButtonsHtml('conversations', DEFAULT_PERIOD)}</div>
@@ -2389,9 +2365,6 @@ ${TEAM_TAB_SCRIPT}
         ? r
         : Object.assign({}, r, { found: was.found, foundState: was.foundState, orders: was.orders });
     });
-    if (typeof message.questions === 'string') {
-      document.getElementById('questions').innerHTML = message.questions;
-    }
     try { render(); } catch (e) { failed(String(e && e.message ? e.message : e)); }
   });
   // The listener is attached, so from this moment a push can actually be RECEIVED. Until this word

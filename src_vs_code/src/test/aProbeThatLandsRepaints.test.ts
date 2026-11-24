@@ -55,7 +55,6 @@ function state(over: Partial<PanelState> = {}): PanelState {
     hostKind: 'windows',
     side: '',
     perSide: false,
-    questions: [],
     sessions: [],
     openSections: [],
     usage: [],
@@ -103,9 +102,6 @@ for (const [what, over] of DRAWN) {
 
 /** Changes only a live region, the page itself, or the caret can make — none of them may reload the page. */
 const NOT_A_REPAINT: ReadonlyArray<readonly [string, Partial<PanelState>]> = [
-  ['a question starts waiting', {
-    questions: [{ id: 'q1', sessionId: 's1', repoPath: 'D:/r', branch: 'main', question: 'Proceed?', openFindings: [], askedUtc: '2026-09-28T12:00:00Z' }],
-  }],
   // F10: the page opened it itself, so a key that moved with it reloaded the webview to show what was
   // already on screen, a few seconds later, dropping the scroll position and any open dropdown.
   ['the person opens a section', { openSections: ['bugz'] }],

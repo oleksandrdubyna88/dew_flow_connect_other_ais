@@ -43,27 +43,11 @@ public sealed record DecisionAt
 
     public Decision Decision { get; }
 
-    /// <summary>
-    /// The value <c>findings.resolution</c> stores for a finding a person's Proceed carried the stage over — beside
-    /// <c>accept</c> and <c>reject</c>. Its own word, so no reader that counts accepted or rejected counts it.
-    /// </summary>
-    public const string ProceededResolution = "proceeded";
-
     /// <summary>What <c>findings.resolution</c> stores for this decision.</summary>
-    public string Resolution => Decision switch
-    {
-        Decision.Accepted => "accept",
-        Decision.ProceededOver => ProceededResolution,
-        _ => "reject",
-    };
+    public string Resolution => Decision is Decision.Accepted ? "accept" : "reject";
 
-    /// <summary>What <c>findings.reason</c> stores: the caller's reason, or the person's Proceed named as the reason; empty for an acceptance.</summary>
-    public string Reason => Decision switch
-    {
-        Decision.Rejected rejected => rejected.Reason,
-        Decision.ProceededOver => RoundMachine.ProceededOver,
-        _ => string.Empty,
-    };
+    /// <summary>What <c>findings.reason</c> stores: the caller's reason; empty for an acceptance.</summary>
+    public string Reason => Decision is Decision.Rejected rejected ? rejected.Reason : string.Empty;
 
     /// <summary>The caller took this finding — or nothing, when the number names none.</summary>
     public static DecisionAt? Accept(IReadOnlyList<Finding> pending, int ordinal) =>
@@ -72,13 +56,6 @@ public sealed record DecisionAt
     /// <summary>The caller argued with this finding — or nothing, when the number names none.</summary>
     public static DecisionAt? Reject(IReadOnlyList<Finding> pending, int ordinal, string reason) =>
         Names(pending, ordinal) ? new DecisionAt(ordinal, new Decision.Rejected(pending[ordinal], reason)) : null;
-
-    /// <summary>
-    /// A person's Proceed carried the stage over this finding — or nothing, when the number names none. Not a rejection: the
-    /// state machine never adds it to the standing rejections (<see cref="Decision.ProceededOver"/>).
-    /// </summary>
-    public static DecisionAt? ProceedOver(IReadOnlyList<Finding> pending, int ordinal) =>
-        Names(pending, ordinal) ? new DecisionAt(ordinal, new Decision.ProceededOver(pending[ordinal])) : null;
 
     private static bool Names(IReadOnlyList<Finding> pending, int ordinal) =>
         ordinal >= 0 && ordinal < pending.Count;

@@ -31,7 +31,6 @@ const state = (): PanelState => ({
   hostKind: 'windows',
   side: '',
   perSide: false,
-  questions: [],
   sessions: [],
   openSections: ['reviewers', 'language', 'prompts', 'gate', 'limits', 'keys', 'server', 'usage', 'rounds'],
   usage: [],
@@ -75,18 +74,4 @@ test('every global control the panel renders is a declared setting', () => {
     [],
     `VS Code will not persist these — they are not registered configuration: ${missing.join(', ')}`,
   );
-});
-
-test('the three gate switches are booleans that default to off', () => {
-  // Off by default is the whole promise of the feature: a switch nobody set changes nothing.
-  const manifest = JSON.parse(
-    readFileSync(join(__dirname, '..', '..', 'package.json'), 'utf8'),
-  ) as { contributes: { configuration: { properties: Record<string, { type: string; default: unknown }> } } };
-  const props = manifest.contributes.configuration.properties;
-
-  for (const key of ['coai.autonomous', 'coai.splitPlan', 'coai.splitWithFable']) {
-    assert.ok(props[key], `${key} is not registered, so ticking it cannot survive a reload`);
-    assert.equal(props[key]!.type, 'boolean', `${key} must be a boolean`);
-    assert.equal(props[key]!.default, false, `${key} must be off until somebody turns it on`);
-  }
 });

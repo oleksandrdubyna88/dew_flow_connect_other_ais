@@ -11,14 +11,6 @@ public abstract record Decision
 
     public sealed record Rejected(Finding Finding, string Reason) : Decision;
 
-    /// <summary>
-    /// A finding a person's Proceed carried the stage over without anyone deciding it. Its own disposition, and NOT a
-    /// rejection: it is recorded and reported, but it is never added to the session's standing rejections and the gate's
-    /// discount never reads it — a Proceed authorises THIS stage transition only, so the same defect raised in a later
-    /// round gates in full. Only the server builds it, and only while consuming a person's Proceed.
-    /// </summary>
-    public sealed record ProceededOver(Finding Finding) : Decision;
-
     private Decision() { }
 }
 
@@ -31,27 +23,17 @@ public abstract record RoundVerdict
     /// <summary>Findings gate — resolve, fix, review again.</summary>
     public sealed record Revise(GateResult Gate, ReviewerSummary Reviewers, int RoundsLeft) : RoundVerdict;
 
-    /// <summary>Rounds exhausted, policy says proceed as-is — said out loud, never silently.</summary>
-    public sealed record ContinueAnyway(GateResult Gate, ReviewerSummary Reviewers) : RoundVerdict;
-
     /// <summary>
-    /// Rounds exhausted, policy says: good enough — take what is true and move on.
+    /// Rounds exhausted with findings still gating — take what is true and move on.
     /// </summary>
     /// <remarks>
     /// The findings travel with it because they are the WORK: the caller reads them, applies the
-    /// ones that hold, records why it rejected the rest, and proceeds. That last part is what keeps
-    /// this different from <see cref="ContinueAnyway"/>, which proceeds and touches nothing.
+    /// ones that hold, records why it rejected the rest, and proceeds. Nobody is waited for: the stage advances on <c>resolve</c>.
     /// </remarks>
     public sealed record GoodEnough(GateResult Gate, ReviewerSummary Reviewers, string Reason = "") : RoundVerdict;
 
-    /// <summary>No reviewer answered and policy auto proceeds WITHOUT a review — never a pass, said out loud.</summary>
+    /// <summary>No reviewer answered and the stage proceeds WITHOUT a review — never a pass, said out loud.</summary>
     public sealed record NotReviewed(GateResult Gate, ReviewerSummary Reviewers, string Reason) : RoundVerdict;
-
-    /// <summary>Rounds exhausted, policy says a person decides.</summary>
-    public sealed record CallHuman(GateResult Gate, ReviewerSummary Reviewers, string Reason) : RoundVerdict;
-
-    /// <summary>Rounds exhausted, policy says climb: this step, then a fresh set of rounds.</summary>
-    public sealed record Escalated(EscalationStep Step, GateResult Gate, ReviewerSummary Reviewers) : RoundVerdict;
 
     private RoundVerdict() { }
 }
@@ -74,54 +56,6 @@ public abstract record Transition
 /// </summary>
 public static class RoundMachine
 {
-    private static readonly ImmutableArray<EscalationStep> Ladder =
-        [EscalationStep.ReviewerEffortUp, EscalationStep.ReviewerModelUp, EscalationStep.ArbiterModelUp];
-
-    /// <summary>
-    /// What a round is refused with once the rounds are spent and a person has not answered.
-    /// </summary>
-    /// <remarks>
-    /// It names every way out, because a refusal with no door is a stall. The AI can fetch the
-    /// person (<c>ask_human</c>); the person ends the hold from the notice card, with one of its buttons —
-    /// including <c>Proceed despite the findings</c>, which ships with the findings open. No argument of the
-    /// AI's does (<c>todo/PLAN_only_a_person_releases_the_gate.md</c>): the sentence names the card, not the argument.
-    /// </remarks>
-    internal const string GateHeld =
-        "the rounds for this stage are spent and the verdict was call_human — a person has to decide " +
-        "before another round runs. Ask them with ask_human — passing `document` or `feature` exactly as " +
-        "you passed it to this review when it is a document's or a feature's, because only the held " +
-        "session's question reaches the person's card: 'Keep going — more rounds' or 'Stop and " +
-        "act on the findings' each grant a fresh set of rounds, and 'Stop and talk to me' advances " +
-        "nothing. To proceed with the findings open the person presses 'Proceed despite the findings' " +
-        "on the ConnectOtherAIs notice for this gate: the gate is released only by an answer on that " +
-        "card, not by any argument of yours. Running the review again is not one of your options.";
-
-    /// <summary>
-    /// What a <c>resolve</c> that claimed <c>humanDecision: proceed</c> is refused with while the gate is held and the
-    /// notice carries no Proceed — the road moved, and the sentence says where to.
-    /// </summary>
-    internal const string ClaimOnAHeldGate =
-        "a person's decision is read from their card, never from this argument — the gate is still held. " +
-        "Ask them to press \"Proceed despite the findings\" on the ConnectOtherAIs notice (ask_human puts the " +
-        "question to them if no card is open), or resolve without humanDecision to record your decisions.";
-
-    /// <summary>
-    /// What the AI is told while a person's Proceed is on file and not yet consumed — by <c>status</c>, and by every
-    /// <c>review_*</c> entry it refuses.
-    /// </summary>
-    public const string ProceedPressed = "a person pressed Proceed on the held gate — call resolve to advance";
-
-    /// <summary>The refusal of a review entry once a Proceed is on file: the sentence, and which call carries it.</summary>
-    public const string ReviewAfterProceed =
-        ProceedPressed + " (with your decisions if the round still awaits them, or none)";
-
-    /// <summary>The reason a finding is recorded with when a person proceeded over it without a decision of the AI's.</summary>
-    public const string ProceededOver = "proceeded over by a person";
-
-    /// <summary>Why a <see cref="Decision.ProceededOver"/> record is refused when no person's Proceed is being consumed.</summary>
-    public const string ProceededOverNeedsAProceed =
-        "a proceeded-over record exists only under a person's Proceed on a held gate — it cannot be recorded any other way";
-
     public static Transition BeginPlanRound(SessionState s) => s switch
     {
         { AwaitingResolve: true } => new Transition.Refused(Unresolved),
@@ -129,10 +63,6 @@ public static class RoundMachine
         { IsFeatureSession: true } => new Transition.Refused(ThisIsAFeatureSession),
         { Stage: not Stage.PlanReview } => new Transition.Refused(
             $"the plan stage is over for this session (stage: {s.Stage}); open a new session for a new plan"),
-        // The budget was never enforced HERE, and that was the defect: it was read only at
-        // completion, to choose a verdict. So `call_human` was advice, and a stage on a three-round
-        // budget reached round ten.
-        { HumanGate: true } => new Transition.Refused(GateHeld),
         _ => new Transition.Moved(s),
     };
 
@@ -171,17 +101,16 @@ public static class RoundMachine
     /// A plan's feature review is finished — and the ways to run another are NAMED (D14, D23).
     /// </summary>
     /// <remarks>
-    /// The same door as <see cref="CodeDone"/>, narrowed by D23: <c>again</c> reopens the review for its
-    /// second round only on the person's request (the other two grounds keep a review OPEN, so it never
-    /// reaches this sentence), and never for a third; a NEW base is a fresh review. Whether the head has
+    /// The same door as <see cref="CodeDone"/>, narrowed by D23: a second round runs only on a reviewer failure or a
+    /// blocking finding (both keep a review OPEN, so it never reaches this sentence), and never a third; against a NEW
+    /// base, <c>again</c> starts a fresh review. Whether the head has
     /// MOVED is the stage's check, not this transition's — it needs the commit, which a pure transition
     /// does not have.
     /// </remarks>
     internal const string FeatureDone =
-        "this plan's feature review is complete. A second round runs only for a reviewer failure, a blocking " +
-        "finding, or when the person asks for one — never a third (D23). With the person's request, call " +
-        "review_feature with again: true, which reopens the feature stage for its second round; against a NEW " +
-        "base, again: true starts a fresh review. The finished rounds stay on the record";
+        "this plan's feature review is complete. A second round runs only for a reviewer failure or a blocking " +
+        "finding — never a third (D23). Against a NEW base, call review_feature with again: true, which starts " +
+        "a fresh review. The finished rounds stay on the record";
 
     /// <summary>D23's cap: a feature review has two rounds at most, whatever the stage's budget says above it.</summary>
     public const int FeatureRoundCap = 2;
@@ -191,16 +120,12 @@ public static class RoundMachine
     /// </summary>
     /// <remarks>
     /// The refusal a caller meets after a non-blocking round closed the review and it asked <c>again</c>
-    /// over the same base. It names all three grounds, because the caller is missing every one of them,
-    /// and says how the third arrives: through the person's own surfaces, never through an argument.
+    /// over the same base. It names both grounds, because the caller is missing every one of them.
     /// </remarks>
     internal static string NoGroundForASecondRound(SessionState s) =>
         "this plan's feature review is one round unless a second is needed (D23), and round 1 gave no ground " +
-        "for one: no reviewer failure, no blocking finding, and the person has not asked. A second round runs " +
-        "only on one of those three. To ask the person, call ask_human with feature: \"" + s.Feature + "\" — their " +
-        "'Keep going — more rounds' (or 'Stop and act on the findings') is the request, and review_feature with " +
-        "again: true then runs round 2; no argument of yours can grant it. Against a NEW base, again: true starts " +
-        "a fresh review";
+        "for one: no reviewer failure and no blocking finding. A second round runs only on one of those two. " +
+        "Against a NEW base, again: true starts a fresh review of \"" + s.Feature + "\"";
 
     /// <summary>Both rounds have run — at most two, ever (D23).</summary>
     internal static string TwoFeatureRoundsRun(SessionState s) =>
@@ -212,7 +137,7 @@ public static class RoundMachine
     /// A document's review is finished — and the way to start another is NAMED.
     /// </summary>
     /// <remarks>
-    /// A refusal with no door is a stall, which is the rule <see cref="GateHeld"/> was written to.
+    /// A refusal with no door is a stall, which is the rule the finished-stage sentences are written to.
     /// Without the door an unchanged policy would be permanently unreviewable: the same document has
     /// the same identity for ever, so it would meet a finished session every time and a person would
     /// have to EDIT their document to get it read again. (codex, the plan round.)
@@ -226,7 +151,6 @@ public static class RoundMachine
     {
         { IsDocumentSession: true } => new Transition.Refused(ThisIsADocumentSession),
         { IsFeatureSession: true } => new Transition.Refused(ThisIsAFeatureSession),
-        { HumanGate: true } => new Transition.Refused(GateHeld),
         { PlanProceeded: false } => new Transition.Refused(
             "no plan round has reached 'proceed' in this session — the plan gate comes first (review_plan)"),
         { AwaitingResolve: true } => new Transition.Refused(Unresolved),
@@ -252,7 +176,7 @@ public static class RoundMachine
     /// The code gate, asked AGAIN: a finished code session is reopened for a fresh code round.
     /// </summary>
     /// <remarks>
-    /// <para>Everything else is exactly <see cref="BeginCodeRound"/>: a held human gate, an unresolved
+    /// <para>Everything else is exactly <see cref="BeginCodeRound"/>: an unresolved
     /// round and a missing plan all still refuse first, and a session that is not finished is simply
     /// begun — asking again of a session that never closed changes nothing.</para>
     /// <para>What is kept is what the stage was AGREED on — <c>PlanProceeded</c>, the plan text, the
@@ -263,12 +187,11 @@ public static class RoundMachine
     /// </remarks>
     public static Transition BeginCodeRoundAgain(SessionState s) => s switch
     {
-        { Stage: Stage.Done, IsDocumentSession: false, HumanGate: false, AwaitingResolve: false, PlanProceeded: true } =>
+        { Stage: Stage.Done, IsDocumentSession: false, AwaitingResolve: false, PlanProceeded: true } =>
             new Transition.Moved(s with
             {
                 Stage = Stage.CodeReview,
                 RoundsRunThisStage = 0,
-                EscalationsUsed = 0,
                 AdvanceOnResolve = false,
             }),
         _ => BeginCodeRound(s),
@@ -286,7 +209,6 @@ public static class RoundMachine
     {
         { IsFeatureSession: true } => new Transition.Refused(ThisIsAFeatureSession),
         { IsDocumentSession: false } => new Transition.Refused(ThisIsACodeSession),
-        { HumanGate: true } => new Transition.Refused(GateHeld),
         { AwaitingResolve: true } => new Transition.Refused(Unresolved),
         { Stage: Stage.Done } => new Transition.Refused(DocumentDone),
         _ => new Transition.Moved(s),
@@ -298,20 +220,14 @@ public static class RoundMachine
     /// D23's two: a review that has run both its rounds, and a second round no ground admits.
     /// </summary>
     /// <remarks>
-    /// <para>The held gate is asked BEFORE the finished stage and before the roster is ever looked at, and
-    /// that order is kept on purpose by the engine too: a standing <c>call_human</c> from a round whose
-    /// reviewers all failed is a person's decision, and un-ticking every vendor must not dissolve it
-    /// into a <c>skipped</c> round (§4.4).</para>
     /// <para><b>The second round is admitted HERE and nowhere else</b> (S3.4): on the ground
-    /// <see cref="CompleteRound"/> recorded from round 1 — a reviewer failure, a blocking finding — or
-    /// the one <see cref="ApplyPersonsRequest"/> recorded from the person. Nothing a caller passes reaches
-    /// <see cref="SessionState.SecondRound"/>. A count of zero is round 1, which needs no ground: a new
-    /// review, a fresh review against another base, or the fresh set a person granted on a held gate.</para>
+    /// <see cref="CompleteRound"/> recorded from round 1 — a reviewer failure, a blocking finding.
+    /// Nothing a caller passes reaches <see cref="SessionState.SecondRound"/>. A count of zero is round 1,
+    /// which needs no ground: a new review, or a fresh review against another base.</para>
     /// </remarks>
     public static Transition BeginFeatureRound(SessionState s) => s switch
     {
         { IsFeatureSession: false } => new Transition.Refused(ThisIsNotAFeatureSession),
-        { HumanGate: true } => new Transition.Refused(GateHeld),
         { AwaitingResolve: true } => new Transition.Refused(Unresolved),
         { Stage: Stage.Done } => new Transition.Refused(FeatureDone),
         { RoundsRunThisStage: >= FeatureRoundCap } => new Transition.Refused(TwoFeatureRoundsRun(s)),
@@ -327,7 +243,7 @@ public static class RoundMachine
     /// <para>What is kept is what the review is OF and what it agreed on — the plan, the standing
     /// rejections — AND its count: a finished review reopened over the same base is on its second round,
     /// not on round one of a budget it never had (the earlier shape reset the count, and with it D23's cap).
-    /// So the reopened state meets <see cref="BeginFeatureRound"/>'s own admission: the person's ground
+    /// So the reopened state meets <see cref="BeginFeatureRound"/>'s own admission: a recorded ground
     /// lets round 2 run, two rounds run refuse a third, and a review closed with no ground is refused
     /// naming what would give one.</para>
     /// <para>That the head has moved, and that the base is the one recorded, are the stage's checks
@@ -338,7 +254,7 @@ public static class RoundMachine
     /// </remarks>
     public static Transition BeginFeatureRoundAgain(SessionState s) => s switch
     {
-        { Stage: Stage.Done, IsFeatureSession: true, HumanGate: false, AwaitingResolve: false } =>
+        { Stage: Stage.Done, IsFeatureSession: true, AwaitingResolve: false } =>
             BeginFeatureRound(s with { Stage = Stage.FeatureReview, AdvanceOnResolve = false }),
         _ => BeginFeatureRound(s),
     };
@@ -359,69 +275,10 @@ public static class RoundMachine
     {
         Stage = Stage.FeatureReview,
         RoundsRunThisStage = 0,
-        EscalationsUsed = 0,
         AdvanceOnResolve = false,
         Rejections = [],
         SecondRound = SecondRoundGround.None,
-        RequestQuestions = [],
     };
-
-    /// <summary>
-    /// Whether a question asked on this session is the GATE's — the one rule that decides both whether
-    /// <c>ask_human</c> puts a card in front of the person and whether <see cref="RecordQuestion"/> binds its
-    /// answer to the session (<c>research/PLAN_ask_human_is_for_the_gate.md</c>, G1).
-    /// </summary>
-    /// <remarks>
-    /// Two states, and only two: a held gate, whose question the person answers with a decision; and a feature
-    /// review in the one state where the person's answer can ask for its second round
-    /// (<see cref="ApplyPersonsRequest"/>'s own precondition). Every other question is the AI's own and is asked
-    /// in its conversation — a card there offered the gate's buttons on a question they could not answer.
-    /// </remarks>
-    public static bool AsksForTheGate(SessionState s) => s.HumanGate || CanBeAskedForASecondRound(s);
-
-    /// <summary>A feature session, one round run, no ground for a second yet, no hold — where a person's "again" means round 2.</summary>
-    private static bool CanBeAskedForASecondRound(SessionState s) =>
-        s is { IsFeatureSession: true, HumanGate: false, RoundsRunThisStage: 1, SecondRound: SecondRoundGround.None };
-
-    /// <summary>
-    /// An <c>ask_human</c> question, recorded where its answer may later count: on the current hold
-    /// (<see cref="SessionState.HoldQuestions"/>), or — on a feature session that can still be asked for its
-    /// second round — as one whose answer may be that request (<see cref="SessionState.RequestQuestions"/>).
-    /// Any other question is asked and not recorded: its answer decides nothing here.
-    /// </summary>
-    /// <remarks>
-    /// <para>A question asked BEFORE the first round is not a request question: an answer to it given after
-    /// round 1 is about whatever it asked, and binding the request to it was the clock rule in a new coat.</para>
-    /// <para>It used to bind every question on a feature session with a round run, two rounds or a ground
-    /// already set included — states in which no answer can admit anything. Narrowed to
-    /// <see cref="AsksForTheGate"/> so the binding and the card are one decision.</para>
-    /// </remarks>
-    public static SessionState RecordQuestion(SessionState s, string id) => s switch
-    {
-        _ when !AsksForTheGate(s) => s,
-        { HumanGate: true } => s with { HoldQuestions = [.. s.HoldQuestions, id] },
-        _ => s with { RequestQuestions = [.. s.RequestQuestions, id] },
-    };
-
-    /// <summary>
-    /// The person's request for a feature review's second round — D23's third ground, applied to the
-    /// state from a decision only a person's surface produces.
-    /// </summary>
-    /// <remarks>
-    /// <para><c>Continue</c> and <c>Fix</c> both say "run the review again", which for a feature review
-    /// that has run one round means its second and last. Recorded only where it can mean that: a feature
-    /// session, one round run, no ground yet, and no held gate — a held gate is answered by
-    /// <see cref="ApplyHumanDecision"/>, which grants a fresh SET, a different promise. Two rounds run is
-    /// refused by the begin whoever asks, so nothing is recorded for it.</para>
-    /// <para>WHICH answer is the request is the engine's check — it needs the answer files — and the rule is
-    /// identity: an answer to one of <see cref="SessionState.RequestQuestions"/>, the questions asked on this
-    /// session after round 1 (<see cref="RecordQuestion"/>). The questions are spent with the request: the
-    /// round they admitted runs, and nothing asked before it can admit another.</para>
-    /// </remarks>
-    public static SessionState ApplyPersonsRequest(SessionState s, HumanDecision decision) =>
-        decision is HumanDecision.Continue or HumanDecision.Fix && CanBeAskedForASecondRound(s)
-            ? s with { SecondRound = SecondRoundGround.PersonAsked, RequestQuestions = [] }
-            : s;
 
     /// <param name="awaiting">How many findings the round leaves for <c>resolve</c> to decide — all of them, the lane's included, as the
     /// ordinary reviewers' <paramref name="reviewers"/> count does not say. Only the words of a round nobody ordinary answered read it.</param>
@@ -441,10 +298,10 @@ public static class RoundMachine
         // failed — one vendor out of quota, the other refusing an untrusted folder — so no
         // findings arrived and the round answered 'proceed'. A panel that did not review is not a
         // panel that approved; an empty result set is the ABSENCE of evidence, not evidence of
-        // absence. One answer is enough to judge on; none is a person's call — or, under policy auto,
-        // the stage proceeds WITHOUT a review and says so (RoundCompletion, AutoVerdicts).
+        // absence. One answer is enough to judge on; none and the stage
+        // proceeds WITHOUT a review, saying so (AutoVerdicts).
         return reviewers.Answered == 0
-            ? RoundCompletion.NobodyAnswered(s, gate, reviewers, roundsRun, awaiting)
+            ? AutoVerdicts.NobodyAnswered(s, gate, reviewers, roundsRun, awaiting)
             : Judged(s, gate, reviewers, roundsRun);
     }
 
@@ -482,11 +339,11 @@ public static class RoundMachine
     /// on the state for the begin to read; the operator's own budget still caps this (a budget of one runs
     /// no second round, and D23 caps a bigger one at two).</para>
     /// <para><b>Round 2.</b> No ground → closes on resolve as round 1 would. A ground — a blocking finding
-    /// still standing, a failure again — → <c>call_human</c>, the gate held: two rounds is the cap, and a
-    /// review that needs a third is a person's call.</para>
+    /// still standing, a failure again — → <c>good_enough</c> (<c>not_reviewed</c> when nobody answered): two rounds
+    /// is the cap, and nobody is waited for.</para>
     /// <para><b>The gate must not fail open here either.</b> Nobody answering is a reviewer failure
     /// whatever the failure list says — a round of stood-down reviewers reviewed nothing — so it buys a
-    /// retry in round 1 and a person in round 2, never a <c>proceed</c> over an empty result.</para>
+    /// retry in round 1 and <c>not_reviewed</c> in round 2, never a <c>proceed</c> over an empty result.</para>
     /// <para>A blocking finding outranks a failure as the ground: a fix wants every reviewer's eyes, while a
     /// retry asks only the ones that failed.</para>
     /// </remarks>
@@ -494,8 +351,7 @@ public static class RoundMachine
     {
         var roundsRun = s.RoundsRunThisStage + 1;
         var ground = GroundFor(gate, reviewers);
-        // The questions that may request a second round are the ones asked AFTER this one completed.
-        var next = s with { RoundsRunThisStage = roundsRun, AwaitingResolve = true, RequestQuestions = [] };
+        var next = s with { RoundsRunThisStage = roundsRun, AwaitingResolve = true };
 
         if (ground == SecondRoundGround.None)
         {
@@ -504,69 +360,17 @@ public static class RoundMachine
                 gate.Passed ? new RoundVerdict.Proceed(gate, reviewers) : new RoundVerdict.GoodEnough(gate, reviewers));
         }
 
-        if (roundsRun < Math.Min(FeatureRoundCap, FeatureBudgetFor(s, gate, reviewers, ground)))
+        if (roundsRun < Math.Min(FeatureRoundCap, FeatureBudgetFor(s)))
         {
             return new Transition.Ok(next with { SecondRound = ground }, new RoundVerdict.Revise(gate, reviewers, 1));
         }
 
-        // At its cap with a ground: a person under every policy but auto, which decides and says what it decided.
-        return RoundCompletion.FeatureAtItsCap(s, next, gate, reviewers, ground, roundsRun, awaiting);
+        // At its cap with a ground: nobody is waited for — the round ends as not_reviewed or good_enough, saying why.
+        return AutoVerdicts.FeatureAtItsCap(next, gate, reviewers, ground, roundsRun, awaiting);
     }
 
-    /// <summary>
-    /// The feature budget a second round is measured against: the ordinary roles' own, widened to the
-    /// security lane's only when the lane ALONE needs the round.
-    /// </summary>
-    /// <remarks>
-    /// The lane's budget is the lane's. A ground an ordinary reviewer gave — its failure, its blocking
-    /// finding — is judged on the ordinary roles' budget alone, even beside a lane finding, because the
-    /// round the lane's budget would buy runs without them: it could not retry the reviewer that failed
-    /// or re-read the ordinary finding, and a lane answer in their place would be the lane standing in
-    /// for an ordinary reviewer.
-    /// </remarks>
-    private static int FeatureBudgetFor(SessionState s, GateResult gate, ReviewerSummary reviewers, SecondRoundGround ground)
-    {
-        var ordinary = s.Config.For(s.Stage).MaxRounds;
-        return ground == SecondRoundGround.BlockingFinding && OnlyTheLaneNeedsARound(s, gate, reviewers)
-            ? Math.Max(ordinary, s.Config.SecurityLane.MaxRounds)
-            : ordinary;
-    }
-
-    /// <summary>
-    /// The round about to begin lies past every ordinary role's budget, so only the security lane's
-    /// budget can have admitted it.
-    /// </summary>
-    /// <remarks>
-    /// <para>The code stage revises for the roles over their threshold (<see cref="BudgetOfRolesWithWorkLeft"/>),
-    /// and only the lane's budget reaches past the widest ordinary role's. The feature stage admits a
-    /// round past the ordinary budget only on a blocking lane finding (<see cref="FeatureBudgetFor"/>);
-    /// its other grounds stay the ordinary roles' own. Round one is never the lane's alone.</para>
-    /// <para>Read from the state rather than from the lane's settings on purpose: a lane switched off
-    /// after admitting the round has still admitted it — which is why its <c>Enabled</c> is not asked.
-    /// Its BUDGET is: a round past the lane's own budget as well was admitted by nobody's, and keeps the
-    /// ordinary "nobody to ask" answer rather than running empty in the lane's name. (coai code round 9.)</para>
-    /// </remarks>
-    public static bool AdmittedOnlyForTheLane(SessionState s) =>
-        s.RoundsRunThisStage > 0
-        && s.RoundsRunThisStage >= s.Config.For(s.Stage).MaxRounds
-        && s.RoundsRunThisStage < s.Config.SecurityLane.MaxRounds
-        && LaneCanAdmit(s);
-
-    private static bool LaneCanAdmit(SessionState s) => s.Stage switch
-    {
-        Stage.CodeReview => true,
-        Stage.FeatureReview => s.SecondRound == SecondRoundGround.BlockingFinding,
-        _ => false,
-    };
-
-    /// <summary>Every blocking finding is the switched-on lane's own, and no ordinary reviewer failed.</summary>
-    private static bool OnlyTheLaneNeedsARound(SessionState s, GateResult gate, ReviewerSummary reviewers) =>
-        s.Config.SecurityLane.Enabled
-        && reviewers.Failures.IsDefaultOrEmpty
-        && BlockingFindingsAreTheLanes(gate);
-
-    private static bool BlockingFindingsAreTheLanes(GateResult gate) =>
-        gate.Gating.Where(f => f.Severity == Severity.Blocking).All(f => f.Role == Security.SecurityCatalog.Gate);
+    /// <summary>The feature budget a second round is measured against: the stage's own — the roles' widest.</summary>
+    private static int FeatureBudgetFor(SessionState s) => s.Config.For(s.Stage).MaxRounds;
 
     /// <summary>Why a feature round needs another — or <see cref="SecondRoundGround.None"/>.</summary>
     private static SecondRoundGround GroundFor(GateResult gate, ReviewerSummary reviewers) =>
@@ -605,89 +409,11 @@ public static class RoundMachine
             : named.Max(r => s.Config.For(r).MaxRounds);
     }
 
-    /// <summary>
-    /// The person's answer, applied to the state — the only thing that reopens a held gate.
-    /// </summary>
-    /// <remarks>
-    /// <para><c>Continue</c> and <c>Fix</c> both grant a FRESH set of rounds, because that is what
-    /// the panel already tells the person they mean: "the stage gets a fresh set of rounds and the
-    /// review runs again". One more round would be a different promise.</para>
-    /// <para><c>Discuss</c> deliberately changes nothing. It says "stop and talk to me", and a
-    /// state that advanced would be the opposite of stopping.</para>
-    /// <para><c>None</c> is prose with no button pressed. It reaches the AI as their words, and it
-    /// is not a decision: the gate holds.</para>
-    /// </remarks>
-    public static SessionState ApplyHumanDecision(SessionState s, HumanDecision decision) => decision switch
-    {
-        // The feature stage's ground starts over with the set: what admitted the round that called the
-        // person has been spent, and the fresh set's own first round decides whether it needs a second.
-        // The hold's questions go with the hold: an answer to one of them, found later, must not release
-        // a hold raised after this one (the epic 3 risk consultation, 2026-09-26).
-        HumanDecision.Continue or HumanDecision.Fix =>
-            s with { HumanGate = false, RoundsRunThisStage = 0, SecondRound = SecondRoundGround.None, HoldQuestions = [], RequestQuestions = [] },
-        _ => s,
-    };
-
+    /// <summary>Rounds spent with findings still gating: good enough — nobody is waited for, and the stage advances on <c>resolve</c>.</summary>
     private static Transition Exhausted(SessionState s, GateResult gate, ReviewerSummary reviewers, int roundsRun) =>
-        s.Config.OnExhausted switch
-        {
-            // First, so that a config under policy auto can never reach the call_human arm, whatever OnExhausted says.
-            _ when s.Config.IsAutonomous => new Transition.Ok(
-                s with { RoundsRunThisStage = roundsRun, AwaitingResolve = true, AdvanceOnResolve = true },
-                new RoundVerdict.GoodEnough(gate, reviewers, AutoVerdicts.ExhaustedReason(gate, roundsRun))),
-
-            StagePolicy.Continue => new Transition.Ok(
-                s with { RoundsRunThisStage = roundsRun, AwaitingResolve = true, AdvanceOnResolve = true },
-                new RoundVerdict.ContinueAnyway(gate, reviewers)),
-
-            // Advances like Continue and differs entirely in the INSTRUCTION: this one tells the
-            // caller to read the findings and apply the ones that hold before moving on.
-            StagePolicy.GoodEnough => new Transition.Ok(
-                s with { RoundsRunThisStage = roundsRun, AwaitingResolve = true, AdvanceOnResolve = true },
-                new RoundVerdict.GoodEnough(gate, reviewers)),
-
-            StagePolicy.Escalate when s.EscalationsUsed < Ladder.Length => new Transition.Ok(
-                s with { RoundsRunThisStage = 0, AwaitingResolve = true, EscalationsUsed = s.EscalationsUsed + 1 },
-                new RoundVerdict.Escalated(Ladder[s.EscalationsUsed], gate, reviewers)),
-
-            // Escalate with the ladder exhausted falls through to a human — there is nothing left to raise.
-            _ => new Transition.Ok(
-                s with { RoundsRunThisStage = roundsRun, AwaitingResolve = true, HumanGate = true },
-                new RoundVerdict.CallHuman(
-                    gate,
-                    reviewers,
-                    $"{gate.GatingCount} finding(s) still gate after {roundsRun} round(s)" +
-                    (s.Config.OnExhausted == StagePolicy.Escalate ? " and the escalation ladder is exhausted" : string.Empty))),
-        };
-
-    private static bool GrantsAFreshSet(SessionState s, HumanDecision personsDecision) =>
-        s.HumanGate && personsDecision is HumanDecision.Continue or HumanDecision.Fix;
-
-    /// <summary>
-    /// Why a <c>resolve</c> that came with a caller's claim is refused — or empty when the claim changes nothing and is ignored.
-    /// </summary>
-    /// <remarks>
-    /// <para>The claim (<c>humanDecision: proceed</c>) is judged by what it would CHANGE, not by how many rounds are left.
-    /// Refused when it would have: the gate is held and no person's Proceed is on file, or the gate is not held and the stage
-    /// would not advance anyway (the reachable bypass the code gate's own review of this file found — an exhausted Escalate
-    /// stage has no rounds left either). Ignored when redundant: the person's Proceed is on file, or the gate already decided to
-    /// advance, because refusing the whole resolve over a redundant argument would throw away a legitimate round's decisions.</para>
-    /// <para>One judge for the claim, public so the service can ask it BEFORE it counts the findings that await a decision —
-    /// a claim refused for the wrong reason is a refusal with no door.</para>
-    /// </remarks>
-    public static string ClaimRefusal(SessionState s, HumanDecision personsDecision, bool callerClaimsProceed) =>
-        callerClaimsProceed && !ProceedsOnAHeldGate(s, personsDecision) ? RefusalOfAClaimWithNoProceedOnFile(s) : string.Empty;
-
-    /// <summary>Why a claim, with no person's Proceed on file, is refused — or empty when the stage advances anyway and it is ignored.</summary>
-    private static string RefusalOfAClaimWithNoProceedOnFile(SessionState s) =>
-        s.HumanGate ? ClaimOnAHeldGate
-        : s.AdvanceOnResolve ? string.Empty
-        : "a human override applies only after the verdict was call_human — until then the gate decides, " +
-          "so revise and review again";
-
-    /// <summary>A Proceed means something only on a held gate (D2): anywhere else it is <see cref="HumanDecision.None"/>.</summary>
-    private static bool ProceedsOnAHeldGate(SessionState s, HumanDecision personsDecision) =>
-        personsDecision == HumanDecision.Proceed && s.HumanGate;
+        new Transition.Ok(
+            s with { RoundsRunThisStage = roundsRun, AwaitingResolve = true, AdvanceOnResolve = true },
+            new RoundVerdict.GoodEnough(gate, reviewers, AutoVerdicts.ExhaustedReason(gate, roundsRun)));
 
     /// <summary>
     /// The document clause exists because of the shape of the mistake, not the shape of the
@@ -701,37 +427,15 @@ public static class RoundMachine
       + "resolving a DOCUMENT round, pass its document: a document review is its own "
       + "session, keyed by the document rather than by the branch.";
 
-    /// <summary>The sentence a resolve is refused with before any decision is read, or empty.</summary>
-    private static string RefusalBeforeDecisions(SessionState s, HumanDecision personsDecision, bool callerClaimsProceed) =>
-        !s.AwaitingResolve && !ProceedsOnAHeldGate(s, personsDecision)
-            ? RefusalOfAResolveWithNothingToResolve(s, callerClaimsProceed)
-            : ClaimRefusal(s, personsDecision, callerClaimsProceed);
-
-    /// <summary>A resolve on a session with no round awaiting decisions: the held gate's sentence when a claim came with it, else the idle one.</summary>
-    private static string RefusalOfAResolveWithNothingToResolve(SessionState s, bool callerClaimsProceed) =>
-        callerClaimsProceed && s.HumanGate ? ClaimOnAHeldGate : NoRoundAwaitingDecisions;
-
-    /// <param name="personsDecision">
-    /// What the PERSON chose on the hold's own notice, read by the server from the answer file — never from a tool argument.
-    /// <see cref="HumanDecision.Proceed"/> after a <see cref="RoundVerdict.CallHuman"/> is the override: the rounds are spent,
-    /// findings still gate, and a person decided to go anyway. It releases the hold and advances the stage, and — because it is
-    /// the person's — it is also honoured on a held gate whose round the AI already resolved (G6). On a gate that is not held it
-    /// is <see cref="HumanDecision.None"/>. <see cref="HumanDecision.Continue"/> and <see cref="HumanDecision.Fix"/> reset the
-    /// stage's round count here; the engine's read before the next round is what opens the gate.
-    /// </param>
-    /// <param name="callerClaimsProceed">
-    /// What the calling AI passed as <c>humanDecision: proceed</c>. It decides nothing: <see cref="ClaimRefusal"/> judges it and
-    /// it never reaches the state.
-    /// </param>
-    public static Transition Resolve(
-        SessionState s,
-        IReadOnlyList<Decision> decisions,
-        HumanDecision personsDecision = HumanDecision.None,
-        bool callerClaimsProceed = false)
+    /// <summary>
+    /// Records the decisions on the last round and, when the round's verdict ended the stage, advances it. A rejection without a
+    /// reason is refused; a resolve with no round awaiting decisions is refused.
+    /// </summary>
+    public static Transition Resolve(SessionState s, IReadOnlyList<Decision> decisions)
     {
-        if (RefusalBeforeDecisions(s, personsDecision, callerClaimsProceed) is { Length: > 0 } refusal)
+        if (!s.AwaitingResolve)
         {
-            return new Transition.Refused(refusal);
+            return new Transition.Refused(NoRoundAwaitingDecisions);
         }
 
         var unreasoned = decisions.OfType<Decision.Rejected>().Where(d => string.IsNullOrWhiteSpace(d.Reason)).ToList();
@@ -741,31 +445,12 @@ public static class RoundMachine
                 $"a rejection without a reason is not a decision — {unreasoned.Count} rejection(s) carry none");
         }
 
-        var proceeds = ProceedsOnAHeldGate(s, personsDecision);
-        if (!proceeds && decisions.OfType<Decision.ProceededOver>().Any())
-        {
-            return new Transition.Refused(ProceededOverNeedsAProceed);
-        }
-
-        // Only a REJECTION stands: a proceeded-over finding is recorded by the caller of this method and read by nobody here.
+        // Only a REJECTION stands: it discounts the same finding in a later round.
         var rejections = s.Rejections.AddRange(
             decisions.OfType<Decision.Rejected>().Select(d => new PriorRejection(d.Finding, d.Reason)));
 
-        // The gate is NOT cleared by recording decisions. It used to be, unconditionally, which
-        // meant the AI reopened the gate it had just been stopped by simply by doing the next
-        // thing the protocol asks of it. Only a person clears it: their Proceed here, or a
-        // decision through ApplyHumanDecision.
-        var next = s with
-        {
-            AwaitingResolve = false,
-            Rejections = rejections,
-            HumanGate = s.HumanGate && !proceeds,
-            // A fresh set of rounds is the person's doing, and a held gate's Continue/Fix is what grants it.
-            RoundsRunThisStage = GrantsAFreshSet(s, personsDecision) ? 0 : s.RoundsRunThisStage,
-            // The person's override releases the hold the way their decision does: its questions go with it.
-            HoldQuestions = proceeds ? [] : s.HoldQuestions,
-        };
-        if (s.AdvanceOnResolve || proceeds)
+        var next = s with { AwaitingResolve = false, Rejections = rejections };
+        if (s.AdvanceOnResolve)
         {
             next = next with
             {

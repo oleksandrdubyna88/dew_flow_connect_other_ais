@@ -234,27 +234,20 @@ public sealed class PanelServiceHost : IPanelServiceSource
     private PanelService Assemble(bool first, SettingsLayer.Layered layer)
     {
         var unread = layer.Unread.Length > 0;
-        // The policy is a default taken from a failed read only when nothing in the process environment named it: a policy that came from the
-        // environment was READ, and the file cannot change it (the environment wins, key by key).
-        var policyNamed = _env(PanelSettings.Key.Exhausted) is { Length: > 0 };
-        var settings = PanelSettings.FromEnvironment(layer.Lookup) with { PolicyUnread = unread && !policyNamed };
+        var settings = PanelSettings.FromEnvironment(layer.Lookup);
         Reloaded(settings, first);
         if (unread)
         {
             // On the first build too: Program reads this file once more for ITS notes and never says this, so this is the only one.
             var path = SettingsFile.PathFor(SettingsFile.DataDirFrom(_env).Path);
-            StartupNotices.SettingsUnread(UnreadSentence(path, layer.Unread, policyNamed), path, _noticing, _log);
+            StartupNotices.SettingsUnread(UnreadSentence(path, layer.Unread), path, _noticing, _log);
         }
 
         return new PanelService(settings, _keys, _vaultReadUtc, _launcher, _log, _noticing, hostStopping: _hostStopping);
     }
 
-    private static string UnreadSentence(string path, string why, bool policyNamed) =>
-        $"{path} could not be read ({why}). "
-        + (policyNamed
-            ? $"Every setting in it is at its default; {PanelSettings.Key.Exhausted} comes from this server's own environment and stands."
-            : "Every setting in it is at its default, so When the rounds run out is Auto by default: the gate holds for nobody, "
-              + "and a hold from a build before Auto is not released until this file can be read.")
+    private static string UnreadSentence(string path, string why) =>
+        $"{path} could not be read ({why}). Every setting in it is at its default."
         + " Repair or remove the file, or save the settings once from the panel — it is read again on the next call.";
 
     /// <summary>

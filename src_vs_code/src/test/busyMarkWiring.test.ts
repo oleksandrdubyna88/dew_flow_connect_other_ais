@@ -27,12 +27,11 @@ function body(signature: string, text = source): string {
   return rest.slice(0, rest.indexOf('\n  }\n') >= 0 ? rest.indexOf('\n  }\n') : rest.indexOf('\r\n  }\r\n'));
 }
 
-test('a setting and a prompt are queued first, then settled — in that order, in the same turn', () => {
+test('a setting is queued first, then settled — in that order, in the same turn', () => {
   const receive = body('private receive(from: SurfaceSlot, m: PanelMessage): void {');
 
   assert.match(receive, /this\.enqueue\(\(\) => this\.write\(settingMessageFrom\(m\), from\)\);\s*this\.settleQueued\(from, m\);/,
     'a write is not followed by its settle, or the settle comes first and takes its mark before the write exists');
-  assert.match(receive, /this\.enqueue\(\(\) => this\.choosePrompt\(role, round, String\(m\.value\), from\)\);\s*this\.settleQueued\(from, m\);/);
   assert.match(body('private settleQueued(from: SurfaceSlot, m: PanelMessage): void {'),
     /this\.track\(from, m, settleAfterWrite\(this\.writes, this\.renders\), false\)/,
     'the settle no longer waits for the queue and a render after its mark');

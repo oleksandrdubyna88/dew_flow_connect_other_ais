@@ -333,26 +333,25 @@ public sealed class ConsultationService(
         return records.Count;
     }
 
-    /// <summary>The sentence for a feature a person switched off — one copy, for the tool and the cadence gate.</summary>
+    /// <summary>The sentence for a feature a person switched off — one copy, for the tool and the preflight.</summary>
     private const string SwitchedOff =
-        "consulting another vendor is switched off in this installation "
-        + "(COAI_CONSULT_ENABLED) — ConnectOtherAIs > Consultant turns it "
+        "cons is switched off in this installation "
+        + "(COAI_CONS_ENABLED) — ConnectOtherAIs > Cons turns it "
         + "back on. Nothing was sent anywhere; carry on with the person instead";
 
     /// <summary>The sentence for a routing setting that does not parse — one copy, for the tool and the gate.</summary>
     private const string RoutingUnreadable =
-        "the consultant routing (COAI_CONSULTANTS) could not be read, so this installation "
+        "the cons routing (COAI_CONSULTANTS) could not be read, so this installation "
         + "does not know which vendor you chose — and it will not pick one for you. Fix the "
-        + "settings in ConnectOtherAIs > Consultant. Nothing was sent anywhere";
+        + "settings in ConnectOtherAIs > Cons. Nothing was sent anywhere";
 
     /// <summary>
     /// Whether a NEW consultation could be had by THIS caller right now, and the sentence the tool would
     /// refuse with when it could not.
     /// </summary>
     /// <remarks>
-    /// <para><c>research/PLAN_consult_on_a_cadence.md</c>, story 2.1. The cadence gate asks this before it refuses a
-    /// code round for want of a consultation: a consultant that cannot be had must stand the refusal down,
-    /// never deadlock the work (decision 12).</para>
+    /// <para>The consultants report asks this before it launches anything: a consultant that cannot be had says
+    /// why, and nothing is spent.</para>
     /// <para><b>Every</b> refusal the vendor path makes before the counter and the launch — switched off,
     /// routing unreadable, nothing resolved, no runtime, no answer schema — and in the SAME words, because
     /// each one is built by the method <see cref="AskAsync(string, string, string, string, CancellationToken)"/>
@@ -398,12 +397,7 @@ public sealed class ConsultationService(
         return runtime.NeedsAnswerSchema && !AnswerSchema.Ready ? AnswerSchema.Problem : string.Empty;
     }
 
-    public Task<string> AskAsync(string repoPath, string problem, string suspectedFilesJson, string consultationId, CancellationToken ct = default) =>
-        AskAsync(repoPath, problem, suspectedFilesJson, consultationId, ConsultAim.Stuck, ct);
-
-    /// <param name="aim">What the consultation is FOR — stuck, or a group or risk item the cadence ordered.
-    /// Ignored on a follow-up, which keeps the kind its record was opened with.</param>
-    public async Task<string> AskAsync(string repoPath, string problem, string suspectedFilesJson, string consultationId, ConsultAim aim, CancellationToken ct = default)
+    public async Task<string> AskAsync(string repoPath, string problem, string suspectedFilesJson, string consultationId, CancellationToken ct = default, string workItem = "")
     {
         // FIRST, before the shape of the call is examined at all: somebody who switched the feature
         // off is owed the sentence saying so, not a complaint about an empty argument. And it is a
@@ -442,7 +436,7 @@ public sealed class ConsultationService(
 
         try
         {
-            return await WithConsultantAsync(repo, ConsultantPrompt.BoundedProblem(problem), ConsultantPrompt.BoundedFiles(files), consultationId.Trim(), aim, ct);
+            return await WithConsultantAsync(repo, ConsultantPrompt.BoundedProblem(problem), ConsultantPrompt.BoundedFiles(files), consultationId.Trim(), workItem, ct);
         }
         catch (ContextException e)
         {
@@ -452,19 +446,16 @@ public sealed class ConsultationService(
             // (local, code round.)
             log.Warning("consultation: git refused a command in {Repo}: {Reason}", repo, e.Message);
 
-            return Error($"the working tree at {repo} could not be read: {e.Message} — no consultant was launched");
+            return Error($"the working tree at {repo} could not be read: {e.Message} — cons was not launched");
         }
     }
 
     // ---------- choosing the consultant ----------
 
-    private async Task<string> WithConsultantAsync(string repo, string problem, IReadOnlyList<string> files, string consultationId, ConsultAim aim, CancellationToken ct)
+    private async Task<string> WithConsultantAsync(string repo, string problem, IReadOnlyList<string> files, string consultationId, string workItem, CancellationToken ct)
     {
         var kind = CallerIdentity.KindFrom(env);
         var caller = CallerOf(repo);
-        // The repository, not the checkout: a cadence consultation taken in one worktree counts for the
-        // plan in another. Asked only when it will be used — a stuck consultation records none.
-        var repoId = aim.IsStuck ? string.Empty : await context.CommonDirAsync(repo, ct);
 
         // THE LOCK IS TAKEN BEFORE THE RECORD IS READ, and that order is the fix for a race the code
         // round found: two follow-ups could both read an `open` record, the second wait for the lock,
@@ -476,13 +467,13 @@ public sealed class ConsultationService(
             return Error($"another consultation is running in {repo} right now (waited {RepositoryLock.DefaultWait.TotalSeconds:0} s) — try again in a moment");
         }
 
-        return await UnderTheLockAsync(new TurnCaller(kind, caller, string.Empty), repo, problem, files, consultationId, new Aimed(aim, repoId), ct);
+        return await UnderTheLockAsync(new TurnCaller(kind, caller, string.Empty), repo, problem, files, consultationId, workItem, ct);
     }
 
-    private async Task<string> UnderTheLockAsync(TurnCaller caller, string repo, string problem, IReadOnlyList<string> files, string consultationId, Aimed aimed, CancellationToken ct)
+    private async Task<string> UnderTheLockAsync(TurnCaller caller, string repo, string problem, IReadOnlyList<string> files, string consultationId, string workItem, CancellationToken ct)
     {
         var (record, refusal) = consultationId.Length == 0
-            ? (null, Duplicate(aimed))
+            ? (null, null)
             : Existing(consultationId, caller.Id, repo, problem);
         if (refusal is not null)
         {
@@ -504,50 +495,10 @@ public sealed class ConsultationService(
         return resolved switch
         {
             ResolvedConsultant.Unavailable no => Error(no.Why),
-            ResolvedConsultant.Definition definition => await OnTheVendorAsync(definition.Vendor, caller, record, repo, problem, files, aimed, ct),
+            ResolvedConsultant.Definition definition => await OnTheVendorAsync(definition.Vendor, caller, record, repo, problem, files, workItem, ct),
             _ => throw new InvalidOperationException("the union is closed"),
         };
     }
-
-    /// <summary>What a new consultation is for, with the repository it will be recorded under.</summary>
-    private sealed record Aimed(ConsultAim Aim, string RepoId);
-
-    /// <summary>
-    /// A new cadence or risk consultation that is already had, or already under way — or null.
-    /// </summary>
-    /// <remarks>
-    /// D5 of <c>research/PLAN_consult_on_a_cadence.md</c>: an ordered consultation spends none of the stuck budget,
-    /// so "none" must not become "unlimited". The ceiling is structural — one per group and one per named
-    /// item, per plan. Two sentences, because they are two situations (epic 2's plan round, gemini): one
-    /// already CLOSED with a verdict needs nothing more; one still OPEN is followed up, not duplicated. A
-    /// lapsed or failed one is neither, so a new one may be taken — or the lapsed one given its outcome.
-    /// </remarks>
-    private string? Duplicate(Aimed aimed)
-    {
-        if (aimed.Aim.IsStuck)
-        {
-            return null;
-        }
-        var same = _store.All().Where(record => Covers(record, aimed.RepoId, aimed.Aim)).ToList();
-        if (same.FirstOrDefault(record => record.IsOver && ConsultationOutcomes.IsVerdict(record.Outcome)) is { } had)
-        {
-            return $"epics {aimed.Aim.Epics} of {aimed.Aim.Plan} already have a closed {aimed.Aim.Kind} consultation — {had.Id}, "
-                   + $"closed as '{had.Outcome}' on {had.EndedUtc} — so nothing more is owed for them; carry on with the work";
-        }
-
-        return same.FirstOrDefault(record => !record.IsOver) is { } open
-            ? $"a {aimed.Aim.Kind} consultation for epics {aimed.Aim.Epics} of {aimed.Aim.Plan} is still open — follow it up with "
-              + $"consultationId {open.Id} rather than starting a second, and end it with close_consult and an outcome"
-            : null;
-    }
-
-    /// <summary>Whether a record is a consultation for this aim: same kind, repository, plan key and epics.</summary>
-    internal static bool Covers(ConsultationRecord record, string repoId, ConsultAim aim) =>
-        record.Kind == aim.Kind
-        && repoId.Length > 0
-        && record.RepoId == repoId
-        && record.Epics == aim.Epics
-        && Core.Cadence.EpicRef.PlanKey(record.Plan) == aim.PlanKey;
 
     /// <summary>The checks that need the vendor row — adapter, schema, the cap — and then the launch.</summary>
     /// <remarks>
@@ -556,10 +507,9 @@ public sealed class ConsultationService(
     /// and nothing about how it was built: the same checks for a definition, a legacy reference and a
     /// resumed record.
     /// </remarks>
-    private async Task<string> OnTheVendorAsync(ProviderSettings row, TurnCaller caller, ConsultationRecord? record, string repo, string problem, IReadOnlyList<string> files, Aimed aimed, CancellationToken ct)
+    private async Task<string> OnTheVendorAsync(ProviderSettings row, TurnCaller caller, ConsultationRecord? record, string repo, string problem, IReadOnlyList<string> files, string workItem, CancellationToken ct)
     {
-        // The same two refusals the preflight gives, from the same method — so the cadence gate stands
-        // down on exactly the sentences this tool refuses with.
+        // The same two refusals the preflight gives, from the same method.
         if (VendorRefusal(row) is { Length: > 0 } refused)
         {
             return Error(refused);
@@ -573,17 +523,10 @@ public sealed class ConsultationService(
         // caller's calls without a consultant ever running. `ConsultCallCounter` has no refund, so the
         // cap could be exhausted entirely on refusals. Counting here means the number measures what
         // it is named after: consultations. (CodeRabbit, on the pull request.)
-        //
-        // And only a STUCK consultation is counted (decision 11 of research/PLAN_consult_on_a_cadence.md): the cap
-        // was sized for the calls an agent makes on its own, and an ordered one — a group of epics, a risky
-        // piece — is bounded by `Duplicate` instead. A follow-up is counted by the kind its record holds.
-        var stuck = record is null ? aimed.Aim.IsStuck : record.Kind == ConsultKinds.Stuck;
-        var counted = stuck
-            ? _counter.TryTake(caller.Id, settings.ConsultCallsPerSession, DateTime.UtcNow)
-            : new CounterOutcome(true, 0, string.Empty);
+        var counted = _counter.TryTake(caller.Id, settings.ConsultCallsPerSession, DateTime.UtcNow);
         if (!counted.Allowed)
         {
-            return Error($"this caller session has made {counted.Used} consult calls, the cap (COAI_CONSULT_CALLS_PER_SESSION = {settings.ConsultCallsPerSession}) — "
+            return Error($"this caller session has made {counted.Used} cons calls, the cap (COAI_CONS_CALLS_PER_SESSION = {settings.ConsultCallsPerSession}) — "
                          + $"the window is {ConsultCallCounter.Window.TotalHours:0} hours from the first call; if you are still stuck, this is the moment to ask the person"
                          + (counted.Note.Length > 0 ? $" ({counted.Note})" : string.Empty));
         }
@@ -594,7 +537,7 @@ public sealed class ConsultationService(
         // consultation is the leak the record's "frozen" claim never allowed.
         var consultant = new TurnConsultant(runtime, row, row.Model, caller with { CounterNote = counted.Note, Take = counted.Take });
 
-        return await RunTurnAsync(consultant, record ?? await NewRecordAsync(consultant, repo, aimed, DateTime.UtcNow, ct), repo, problem, files, ct);
+        return await RunTurnAsync(consultant, record ?? await NewRecordAsync(consultant, repo, DateTime.UtcNow, workItem, ct), repo, problem, files, ct);
     }
 
     private (ConsultationRecord? Record, string? Refusal) Existing(string consultationId, string caller, string repo, string problem)
@@ -619,7 +562,7 @@ public sealed class ConsultationService(
             : (record, null);
     }
 
-    private async Task<ConsultationRecord> NewRecordAsync(TurnConsultant consultant, string repo, Aimed aimed, DateTime now, CancellationToken ct)
+    private async Task<ConsultationRecord> NewRecordAsync(TurnConsultant consultant, string repo, DateTime now, string workItem, CancellationToken ct)
     {
         var (sha, branch) = await context.HeadAsync(repo, ct);
 
@@ -643,13 +586,10 @@ public sealed class ConsultationService(
             // Frozen with the rest: the budget the adapter declared when this conversation opened is
             // what every turn of it carries, whatever a later build declares.
             CarryBudget = consultant.Runtime.Memory is ConsultantMemory.WeRemember carried ? carried.CarryBudget : 0,
-            // What it is FOR, in the canonical form the cadence gate matches on.
-            Kind = aimed.Aim.Kind,
-            Plan = aimed.Aim.Plan,
-            Epics = aimed.Aim.Epics,
-            RepoId = aimed.RepoId,
             // Frozen with the model: the row's own instruction as it stands now, for every turn of this conversation (C2).
             RowInstruction = consultant.Row.SystemPrompt,
+            // Frozen with the first turn: a follow-up that names another item does not move the conversation to it (schema step 25, E3.S8).
+            WorkItem = workItem,
         };
     }
 
@@ -699,7 +639,7 @@ public sealed class ConsultationService(
         // so the turn can no longer leave it stuck at `asking`. (The 2026-09-26 incident: the answer
         // arrived, the record write threw, and nothing after the launch was guarded — so the turn left
         // `asking` naming its own live pid, `close_consult` refused it as running, and the pid sweep
-        // kept it for ever while the cadence gate refused the epic's code round.)
+        // kept it for ever.)
         // The whole turn's deadline, derived from the launch's own budget the way a round's is
         // (ConsultationDeadline / RoundBudget). Longer than the launch, so the launcher's own kill of a
         // hung child wins and that turn stays resumable; this fires only for what the launcher does not

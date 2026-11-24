@@ -1,0 +1,10 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: e5-kit-devices-page
+title: "Kit 0.3.0 + Devices page (roles → model lists, work method)"
+half: extension
+dependsOn:
+  - e1-hub-slice
+doneWhen:
+  - "kit 0.3.0 released with K1-K6, each with a story, fakeDom and axe test"
+  - "Devices: tree VM → user / WSL / Windows, per-device settings and logs, enrolment lines, update everywhere with progress"
+  - "412 handled: reload, changed elsewhere, no overwrite"

@@ -20,7 +20,7 @@ namespace CoaiMcp.Tests;
 public sealed class RoleGateTests
 {
     private static PanelConfig Config(params (string Role, int Rounds, int Threshold)[] roles) =>
-        new(roles.ToDictionary(r => r.Role, r => new RoleGate(r.Rounds, r.Threshold)), StagePolicy.Human);
+        new(roles.ToDictionary(r => r.Role, r => new RoleGate(r.Rounds, r.Threshold)));
 
     private static Finding From(string role, string title) =>
         new(Severity.Major, Category.Reliability, "a.cs", 1, title, "why", "fix", []) { Role = role };
@@ -210,7 +210,7 @@ public sealed class RoleGateTests
         // default, so a pristine install sends none and THIS is what runs. The two disagreed for a
         // day — panel showing one round, server running three. `panelServerDefaultsAgreement.test.ts`
         // reads these constants out of the C# and fails when they drift again.
-        var config = new PanelConfig(OnExhausted: StagePolicy.Human);
+        var config = new PanelConfig();
 
         config.For(RoleCatalog.PlanRole).Should().Be(new RoleGate(1, 6));
         config.For(RoleCatalog.ArchitectureRole).Should().Be(new RoleGate(1, 5));
@@ -254,7 +254,7 @@ public sealed class RoleGateTests
             ["Architecture"] = new(3, 9),
             ["SecurityReliability"] = new(3, 9),
             ["UxDxPerformance"] = new(1, 0),
-        }, StagePolicy.Human);
+        });
         var state = new SessionState("s", "D:/r", "main", config) with
         {
             Stage = Stage.CodeReview,
@@ -267,7 +267,7 @@ public sealed class RoleGateTests
             role => config.For(role).Threshold);
 
         var ok = (Transition.Ok)RoundMachine.CompleteRound(state, gate, ReviewerSummary.AllAnswered(3));
-        ok.Verdict.Should().BeOfType<RoundVerdict.CallHuman>(
+        ok.Verdict.Should().BeOfType<RoundVerdict.GoodEnough>(
             "the only role with work left cannot run again, so the rounds are spent");
     }
 
@@ -280,7 +280,7 @@ public sealed class RoleGateTests
             ["Architecture"] = new(1, 9),
             ["SecurityReliability"] = new(3, 0),
             ["UxDxPerformance"] = new(1, 9),
-        }, StagePolicy.Human);
+        });
         var state = new SessionState("s", "D:/r", "main", config) with { Stage = Stage.CodeReview };
 
         var gate = GateRule.Evaluate(
@@ -309,8 +309,7 @@ public sealed class RoleGateTests
                 [RoleCatalog.ArchitectureRole] = new(2, 3, Enabled: false),
                 [RoleCatalog.SecurityRole] = new(2, 3),
                 [RoleCatalog.UxDxRole] = new(2, 3),
-            },
-            StagePolicy.Human);
+            });
 
         config.RolesForRound(Stage.CodeReview, round: 1).Should().NotContain(RoleCatalog.ArchitectureRole);
         config.RolesForRound(Stage.CodeReview, round: 2).Should().NotContain(RoleCatalog.ArchitectureRole);
@@ -330,8 +329,7 @@ public sealed class RoleGateTests
                 [RoleCatalog.ArchitectureRole] = new(5, 9, Enabled: false),
                 [RoleCatalog.SecurityRole] = new(2, 3),
                 [RoleCatalog.UxDxRole] = new(1, 2),
-            },
-            StagePolicy.Human);
+            });
 
         config.For(Stage.CodeReview).MaxRounds.Should().Be(2, "architecture's five rounds are switched off");
         config.For(Stage.CodeReview).Threshold.Should().Be(3, "and so is its threshold of nine");
@@ -343,8 +341,7 @@ public sealed class RoleGateTests
         // The all-off case is DECIDED here rather than crashing here: `Max` over an empty sequence
         // throws, and the round that must be refused is refused by the caller reading this.
         var config = new PanelConfig(
-            PanelConfig.CodeRoleNames.ToDictionary(r => r, _ => new RoleGate(2, 3, Enabled: false)),
-            StagePolicy.Human);
+            PanelConfig.CodeRoleNames.ToDictionary(r => r, _ => new RoleGate(2, 3, Enabled: false)));
 
         config.EnabledRolesOf(Stage.CodeReview).Should().BeEmpty();
         config.For(Stage.CodeReview).Should().Be(new StageGate(0, 0));
@@ -357,8 +354,7 @@ public sealed class RoleGateTests
         // Code review only, by the operator's ruling. A plan stage with one role and a switch that
         // turns it off is a different feature nobody asked for.
         var config = new PanelConfig(
-            new Dictionary<string, RoleGate> { [RoleCatalog.PlanRole] = new(1, 6) },
-            StagePolicy.Human);
+            new Dictionary<string, RoleGate> { [RoleCatalog.PlanRole] = new(1, 6) });
 
         config.For(RoleCatalog.PlanRole).Enabled.Should().BeTrue();
         config.RolesForRound(Stage.PlanReview, round: 1).Should().BeEquivalentTo([RoleCatalog.PlanRole]);
@@ -392,7 +388,7 @@ public sealed class RoleGateTests
             new RoleEntry("Requirements", Stage: RoleStages.Result,
                 Prompts: [new PromptEntry("req-general", "General", "Whether the requirement is met.")]),
         ]);
-        var config = new PanelConfig(Roles: null, StagePolicy.Human) { Catalog = catalog };
+        var config = new PanelConfig(Roles: null) { Catalog = catalog };
 
         config.RolesForRound(Stage.CodeReview, round: 1).Should().Contain("Requirements");
         config.For("Requirements").Should().Be(PanelConfig.CodeDefault,
@@ -405,7 +401,7 @@ public sealed class RoleGateTests
         var catalog = RoleComposition.Compose([
             new RoleEntry(RoleCatalog.ArchitectureRole, Active: false),
         ]);
-        var config = new PanelConfig(Roles: null, StagePolicy.Human) { Catalog = catalog };
+        var config = new PanelConfig(Roles: null) { Catalog = catalog };
 
         config.RolesForRound(Stage.CodeReview, round: 1).Should().NotContain(RoleCatalog.ArchitectureRole);
         config.EnabledRolesOf(Stage.CodeReview).Should().NotContain(RoleCatalog.ArchitectureRole);
@@ -428,7 +424,7 @@ public sealed class RoleGateTests
             new RoleEntry("Requirements", Name: "Requirements we wrote", Stage: RoleStages.Result,
                 Active: false, Prompts: [new PromptEntry("req-general", "General", "Whether it is met.")]),
         ]);
-        var config = new PanelConfig(Roles: null, StagePolicy.Human) { Catalog = catalog };
+        var config = new PanelConfig(Roles: null) { Catalog = catalog };
 
         catalog.ById("Requirements").Should().NotBeNull("switched off is not dropped");
         catalog.Dropped.Should().BeEmpty();

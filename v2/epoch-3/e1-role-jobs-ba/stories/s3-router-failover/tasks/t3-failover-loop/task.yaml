@@ -1,0 +1,19 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t3-failover-loop
+title: "Stop classification, attempt loop, switch line and notices"
+kind: code
+complexity: 8
+dependsOn:
+  - t1-stop-signals
+  - t2-router
+parallel: false
+files:
+  - src_mcp/src/Server/RoleJobs
+  - src_mcp/core/Notices/ServerNoticeCodes.cs
+  - src_mcp/tests_fakecli
+  - src_mcp/tests
+dod:
+  - id: d1
+    item: "A7 to A11 and A13 pass with FakeCli"
+  - id: d2
+    item: "one usage-ledger line for each launch; the new codes pass the redaction test"

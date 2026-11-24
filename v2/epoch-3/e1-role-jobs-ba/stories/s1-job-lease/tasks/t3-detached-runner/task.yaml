@@ -1,0 +1,20 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t3-detached-runner
+title: "One-shot --role-run and the detached launcher"
+kind: code
+complexity: 8
+dependsOn:
+  - t1-detach-measure
+  - t2-job-store
+parallel: false
+files:
+  - src_mcp/runners/Detach
+  - src_mcp/src/Server/RoleJobs/RoleRunMode.cs
+  - src_mcp/src/Program.cs
+  - .agents/PROJECT.md
+  - src_mcp/tests
+dod:
+  - id: d1
+    item: "A1 and A14 pass; without a user manager the systemd case is skipped with a reason"
+  - id: d2
+    item: "unknown job id exits 65, never 64; mode listed in PROJECT.md"

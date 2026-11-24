@@ -1,0 +1,18 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t3-validator
+title: "core/Work: IYamlReader, model, IWorkFolder, WorkPlanValidator"
+kind: code
+complexity: 8
+dependsOn:
+  - t1-yaml-aot-spike
+  - t2-schema-vectors-limits
+parallel: false
+files:
+  - src_mcp/core/Work
+  - Directory.Packages.props
+  - src_mcp/tests
+dod:
+  - id: d1
+    item: "B1 to B10 and B13 pass"
+  - id: d2
+    item: "no limit constant in the validator"

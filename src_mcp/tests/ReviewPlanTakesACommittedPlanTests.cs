@@ -74,7 +74,7 @@ public sealed class ReviewPlanTakesACommittedPlanTests : FakeCliRoundTests
         try
         {
             Script(Clean);
-            var answer = Parse(await service.ReviewPlanAsync(_repo, branch, input, CadenceArgs.None, TestContext.Current.CancellationToken));
+            var answer = Parse(await service.ReviewPlanAsync(_repo, branch, input, TestContext.Current.CancellationToken));
             string[] prompts = [.. Directory.GetFiles(record, "*.argv").Select(f => LaunchRecords.Read(f).Split('\0')[^1])];
 
             return (answer, prompts);
@@ -204,7 +204,7 @@ public sealed class ReviewPlanTakesACommittedPlanTests : FakeCliRoundTests
     [Fact]
     public async Task ThePlanIsReadAtTheCommitTheBranchResolvesTo_AndTheRoundRunsOnThatCommit()
     {
-        // T12. The branch moves between the resolve and the engine's own resolve; the plan, the cadence outline and the
+        // T12. The branch moves between the resolve and the engine's own resolve; the plan and the
         // record must still be ONE commit. The seam answers A (older) while the branch tip is B (newer, other text).
         var a = await CommitAsync(Branch, "plan.md", "the plan as A had it\n");
         var b = await CommitAsync(Branch, "plan.md", "the plan as B has it\n");

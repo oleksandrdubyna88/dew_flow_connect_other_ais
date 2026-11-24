@@ -1,0 +1,5 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: s4-migrate-v2
+title: "--migrate-v2: held sessions, cards, stores, settings keys"
+dependsOn:
+  - s1-verdicts-and-holds

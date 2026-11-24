@@ -10,7 +10,7 @@ import { ConsultantHealthWatcher } from './consultantHealthWatcher';
 import { CONSULTANTS_CAP_MS, ConsultantsProbe } from './consultantsProbe';
 import { type HealthSide, healthSides, thisSideLabel } from './consultantSides';
 import { textCopier } from './copyText';
-import { alsoWatchDataDirectories } from './escalationWatcher';
+import { alsoWatchDataDirectories } from './alsoWatch';
 import { watchGlob } from './fileWatch';
 import { serverPath } from './installer';
 import { notify, notifyAndAsk } from './notify';

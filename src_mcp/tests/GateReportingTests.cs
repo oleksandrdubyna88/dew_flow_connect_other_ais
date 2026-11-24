@@ -344,19 +344,18 @@ public sealed class GateReportingTests
                 "unset must stay unset so the id can answer — forcing 'codex' here is what hid the claude bug");
     }
 
-    // ---------- D6: the human can always answer a call_human ----------
+    // ---------- nobody answered: said out loud, never a pass ----------
 
     [Fact]
-    public void WhenNobodyAnswered_ThePersonsProceed_CanStillBeDelivered()
+    public void WhenNobodyAnswered_TheStageProceedsWithoutAReview_AndSaysSo()
     {
-        // The gate correctly refuses to pass a round nobody reviewed. It must not also refuse the
-        // person it just called: that is a dead end, not a gate.
+        // The gate correctly refuses to call a round nobody reviewed a pass — and nobody is waited for either.
         var nobody = new ReviewerSummary(2, 0, ["codex: exit 1", "gemini: quota"]);
         var ok = (Transition.Ok)RoundMachine.CompleteRound(
-            new SessionState("s", "D:/r", "main", new PanelConfig(OnExhausted: StagePolicy.Human)), Core.Gate.GateResult.Empty, nobody);
+            new SessionState("s", "D:/r", "main", new PanelConfig()), Core.Gate.GateResult.Empty, nobody);
 
-        ok.Verdict.Should().BeOfType<RoundVerdict.CallHuman>();
-        RoundMachine.Resolve(ok.State, [], HumanDecision.Proceed)
+        ok.Verdict.Should().BeOfType<RoundVerdict.NotReviewed>();
+        RoundMachine.Resolve(ok.State, [])
             .Should().BeOfType<Transition.Moved>().Which.State.Stage.Should().Be(Stage.CodeReview);
     }
 

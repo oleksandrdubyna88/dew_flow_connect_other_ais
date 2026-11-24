@@ -1,0 +1,34 @@
+{
+  "id": "dcf7bd32ff1a",
+  "sessionId": "d1aafe01",
+  "repoPath": "/fixture/repo",
+  "branch": "epic-1",
+  "question": "The code review gate needs your decision: 1 finding(s) still gate after 1 round(s). Proceed anyway, or fix the findings and review again?",
+  "questionOriginal": "",
+  "language": "en",
+  "translationNote": "",
+  "openFindings": [
+    {
+      "severity": 0,
+      "category": 2,
+      "file": "",
+      "line": 0,
+      "title": "the poll has no timeout",
+      "why": "a hung peer hangs the loop",
+      "fix": "add one",
+      "providers": [
+        "codex"
+      ],
+      "role": "Architecture",
+      "reproduction": null,
+      "capReason": "",
+      "alsoSeenBy": [],
+      "isGating": true
+    }
+  ],
+  "askedUtc": "2026-11-22T18:34:40.8977283Z",
+  "consultId": "",
+  "productionRisk": false,
+  "riskReason": "",
+  "consultantAnswers": []
+}

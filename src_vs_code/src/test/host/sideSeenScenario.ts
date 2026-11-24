@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 import { thisSideLabel } from '../../consultantSides';
 import { familyOf } from '../../pathFamily';
 import { STAMP_EVERY_MS, type SeenSide } from '../../sidesSeen';
+import { activated } from './hostHelpers';
 
 /**
  * Activation stamps this window's side, in a REAL editor (research/PLAN_paths_per_side.md E2.4 — the release requirement of
@@ -25,7 +26,7 @@ import { STAMP_EVERY_MS, type SeenSide } from '../../sidesSeen';
 export async function activationStampsThisSideInARealEditor(): Promise<void> {
   const extension = vscode.extensions.getExtension<{ readonly sidesSeen?: () => readonly SeenSide[] }>('remsoftdev.connect-other-ais');
   assert.ok(extension !== undefined, 'the extension under test is not installed in this host');
-  const exports = await extension.activate();
+  const exports = await activated(extension);
   const sidesSeen = exports?.sidesSeen;
   assert.ok(typeof sidesSeen === 'function', 'activation returned no sidesSeen, so this host cannot read the side registry');
 

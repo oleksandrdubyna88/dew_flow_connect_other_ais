@@ -1,0 +1,5 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: s6-dead-v1-out
+title: "Dead v1 watchers and controls out of the bundle"
+dependsOn:
+  - s4-chat-carried

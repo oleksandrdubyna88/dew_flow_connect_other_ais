@@ -18,7 +18,7 @@ const source = (file: string): string =>
   fs.readFileSync(path.join(__dirname, '..', '..', 'src', file), 'utf8');
 
 test('the extension starts housekeeping on the store’s own directory, after the migration, fed by the registry', () => {
-  const wiring = source('extension.ts');
+  const wiring = source('../shell/modules/chat/register.ts');
   const start = wiring.indexOf('startHousekeeping({');
 
   assert.notEqual(start, -1, 'nothing starts the sweep, the index or the heartbeat — the store keeps everything for ever');
@@ -32,7 +32,9 @@ test('the extension starts housekeeping on the store’s own directory, after th
   assert.match(call, /after: migration,/u, 'the sweep does not wait for the migration — a record still in the memento reads as debris');
   assert.ok(wiring.indexOf('importLegacyTabs(') < start, 'housekeeping is started before the migration exists to wait for');
   assert.match(wiring, /pulseChatsThrough\(\(\) => \{\s*\n\s*housekeeping\.heartbeat\.pulse\(\);/u, 'the chat has no way to tell the heartbeat that its tabs changed');
-  assert.match(wiring, /dispose: \(\) => \{\s*\n\s*housekeeping\.dispose\(\);/u, 'the heartbeat timer is never stopped');
+  // Stopped ONCE, by the one closure the host's disposal and `deactivate` share (v2 E4: `deactivate` of the chat module stops it too).
+  assert.match(wiring, /const stopHeartbeat = \(\): void => \{\s*\n\s*if \(!heartbeatStopped\) \{\s*\n\s*heartbeatStopped = true;\s*\n\s*housekeeping\.dispose\(\);/u, 'the heartbeat timer is never stopped');
+  assert.match(wiring, /\{ dispose: stopHeartbeat \},/u, 'the host\'s disposal does not stop the heartbeat');
 });
 
 test('the chat pulses the heartbeat at every place the set of open conversations changes', () => {

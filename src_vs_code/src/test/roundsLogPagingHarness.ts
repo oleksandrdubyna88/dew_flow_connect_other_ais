@@ -51,7 +51,7 @@ export function open(rows: readonly LogRow[], totals: DbTotals = TOTALS, extra =
   // the only way to prove the handler DRIVES what the marker finds rather than merely asking for
   // it: every real section is also reachable by a literal id, so a build that kept the three
   // getElementById lines and added a dead query would satisfy every other assertion here.
-  const built = roundsLogHtml(rows, [], 'n0nce', 'usage', 'spots', totals);
+  const built = roundsLogHtml(rows, 'n0nce', 'usage', 'spots', totals);
   const html = extra === '' ? built : built.replace('<script', extra + '<script');
   const tag = html.slice(html.indexOf('<script'), html.lastIndexOf('</script>'));
   const body = tag.slice(tag.indexOf('>') + 1);

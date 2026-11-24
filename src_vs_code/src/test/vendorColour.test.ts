@@ -253,7 +253,6 @@ function state(vendors: readonly Vendor[] = []): PanelState {
     side: '',
     perSide: false,
     latestServerVersion: '',
-    questions: [],
     sessions: [running()],
     openSections: ['rounds'],
     usage: [],

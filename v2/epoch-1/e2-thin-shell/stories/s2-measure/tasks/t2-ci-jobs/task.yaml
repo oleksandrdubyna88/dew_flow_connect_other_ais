@@ -1,0 +1,13 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t2-ci-jobs
+title: "CI jobs: measure on ubuntu (xvfb) and windows-latest"
+kind: config
+complexity: 4
+dependsOn:
+  - t1-measure-launch
+parallel: false
+files:
+  - .github/workflows/ci.yml
+dod:
+  - id: d1
+    item: "both jobs required; a missing ack fails the job"

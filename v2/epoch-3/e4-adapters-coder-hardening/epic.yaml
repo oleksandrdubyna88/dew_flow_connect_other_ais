@@ -1,0 +1,14 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: e4-adapters-coder-hardening
+title: "Adapters dotnet + node + coder hardening"
+half: server
+dependsOn:
+  - e2-coder-one-task
+doneWhen:
+  - "golden detection and argv on fixture repos (both trees, base..head diff)"
+  - "parsers tested on recorded real output"
+  - ".coai/toolchain.yaml override; not_configured is never green"
+  - "this repository is a fixture that runs a real test"
+  - "same session resumed (claude, codex, agy); caps and no-progress stop; flaky re-run"
+  - "write boundary at launch; task session inherits the feature's plan proceed"
+  - "job lease with generation; survives an MCP client restart"

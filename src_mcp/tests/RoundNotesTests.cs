@@ -92,6 +92,8 @@ public sealed class RoundNotesTests : IDisposable
         return (long)read.ExecuteScalar()!;
     }
 
+    private const string Note = "released by policy auto: this hold was raised by a build before auto";
+
     [Fact]
     public void Write_ChangesOneColumnOfOneRow_AndCreatesNoRow()
     {
@@ -99,18 +101,18 @@ public sealed class RoundNotesTests : IDisposable
         var roundOne = RowOf("PlanReview", 1);
         var roundTwoBefore = RowOf("PlanReview", 2);
 
-        RoundNotes.Write(db, SessionId, "PlanReview", 2, LegacyHold.Note).Should().Be(1);
-        RowOf("PlanReview", 2)["note"].Should().Be(LegacyHold.Note);
+        RoundNotes.Write(db, SessionId, "PlanReview", 2, Note).Should().Be(1);
+        RowOf("PlanReview", 2)["note"].Should().Be(Note);
 
-        RoundNotes.Write(db, SessionId, "PlanReview", 2, LegacyHold.Note).Should().Be(1, "written twice, it writes the same note");
+        RoundNotes.Write(db, SessionId, "PlanReview", 2, Note).Should().Be(1, "written twice, it writes the same note");
         var roundTwo = RowOf("PlanReview", 2);
-        roundTwo["note"].Should().Be(LegacyHold.Note);
+        roundTwo["note"].Should().Be(Note);
         foreach (var (column, value) in roundTwoBefore.Where(c => c.Key != "note"))
         {
             roundTwo[column].Should().Be(value, $"column {column} of the written row is not touched");
         }
 
-        RoundNotes.Write(db, SessionId, "CodeReview", 1, LegacyHold.Note).Should().Be(0, "the database holds no such round");
+        RoundNotes.Write(db, SessionId, "CodeReview", 1, Note).Should().Be(0, "the database holds no such round");
         RowCount().Should().Be(2, "nothing is inserted");
 
         RowOf("PlanReview", 1).Should().Equal(roundOne, "round 1's row is what it was, every column");

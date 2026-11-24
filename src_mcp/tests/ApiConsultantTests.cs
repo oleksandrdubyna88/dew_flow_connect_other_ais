@@ -133,7 +133,7 @@ public sealed class ApiConsultantTests : IAsyncLifetime
         var identity = new VendorIdentity(provider, runtime, baseUrl);
 
         QuestionResolution.For(identity).Should().BeNull();
-        QuestionResolution.CannotAnswer(identity).Should().Contain(provider).And.Contain("question consultant");
+        QuestionResolution.CannotAnswer(identity).Should().Contain(provider).And.Contain("consask");
     }
 
     [Fact]

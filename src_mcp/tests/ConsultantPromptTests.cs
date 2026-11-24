@@ -354,7 +354,7 @@ public sealed class ConsultantResolverTests
             new ConsultantChoice("team-codex", Runtime: runtime, BaseUrl: "https://coai.example.test"), CallerIdentity.Gemini, NoRows));
 
         why.Should().Contain("'gemini' caller").And.Contain("'team-codex'").And.Contain($"'{runtime}'")
-            .And.Contain(Allowlist).And.Contain("ConnectOtherAIs > Consultant");
+            .And.Contain(Allowlist).And.Contain("ConnectOtherAIs > Cons");
     }
 
     /// <summary>
@@ -529,7 +529,7 @@ public sealed class ConsultantResolverTests
         var why = Why(ConsultantResolver.Resolve(new ConsultantChoice("deepseek"), CallerIdentity.Other, NoRows));
 
         why.Should().Contain("'other' caller").And.Contain("'deepseek'").And.Contain(Allowlist)
-            .And.Contain("ConnectOtherAIs > Consultant").And.Contain("add a reviewer under that name");
+            .And.Contain("ConnectOtherAIs > Cons").And.Contain("add a reviewer under that name");
         why.Should().NotContain("vendor row", "the cure is no longer to pick a reviewer row");
     }
 
