@@ -125,7 +125,8 @@ public sealed class ClaudeConsultant(IReviewerRuntime inner, string vendor = "cl
             ClaudeWriteCapability.Ready ready => new ConsultantPreparation.Ready(
                 launch with { Settings = launch.Settings with { ClaudeCli = ClaudeCapability.WithRestricted } },
                 ClaudeCapability.WithRestricted.Qualifier,
-                $"coder write launch: claude {ready.Version} declares --restricted, --permission-prompts and acceptEdits") { CliVersion = ready.Version },
+                $"coder write launch: claude {ready.Version} declares --restricted, --permission-prompts and acceptEdits")
+            { CliVersion = ready.Version },
             ClaudeWriteCapability.Refused { CouldNotStart: true } refused =>
                 new ConsultantPreparation.Refused(new ConsultFailure.CliNotFound(refused.Said, ConsultFailures.InstallCureFor("claude"))),
             ClaudeWriteCapability.Refused refused => new ConsultantPreparation.Refused(new ConsultFailure.VendorRefused(refused.Said, refused.Cure)),

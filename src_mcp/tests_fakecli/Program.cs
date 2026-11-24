@@ -353,7 +353,7 @@ switch (args0)
         return 0;
 
     // Epoch 3 E2 s2 t5: the fake as a CODER. `write-files` tries each path and says which it could not write (the OS layer's answer, on stderr), exiting 0; `hold-in` says it is working by writing `ready` into a folder, then waits.
-    case ["write-files", ..var writePaths]:
+    case ["write-files", .. var writePaths]:
         return CoaiMcp.FakeCli.CoderVerbs.WriteFiles(writePaths);
 
     case ["hold-in", var holdFolder, var holdMs]:

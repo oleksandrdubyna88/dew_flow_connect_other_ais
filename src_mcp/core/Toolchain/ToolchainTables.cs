@@ -54,7 +54,10 @@ public static class ToolchainTables
         "toolchain",
         new Dictionary<string, ToolchainField>
         {
-            ["version"] = ToolchainField.Integer, ["projects"] = ToolchainField.Projects, ["skip"] = ToolchainField.SkipList, ["timeouts"] = ToolchainField.Timeouts,
+            ["version"] = ToolchainField.Integer,
+            ["projects"] = ToolchainField.Projects,
+            ["skip"] = ToolchainField.SkipList,
+            ["timeouts"] = ToolchainField.Timeouts,
         },
         ["version", "projects"]);
 
@@ -62,7 +65,11 @@ public static class ToolchainTables
         "project",
         new Dictionary<string, ToolchainField>
         {
-            ["path"] = ToolchainField.Text, ["adapter"] = ToolchainField.Text, ["build"] = ToolchainField.Argv, ["test"] = ToolchainField.Argv, ["memoryMb"] = ToolchainField.Integer,
+            ["path"] = ToolchainField.Text,
+            ["adapter"] = ToolchainField.Text,
+            ["build"] = ToolchainField.Argv,
+            ["test"] = ToolchainField.Argv,
+            ["memoryMb"] = ToolchainField.Integer,
         },
         ["path", "adapter"]);
 
