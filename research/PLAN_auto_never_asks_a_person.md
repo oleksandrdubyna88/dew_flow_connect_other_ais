@@ -733,6 +733,39 @@ What shipped differently from the plan as approved, or was found while building 
 - **§ 4.8, residual A — an old rule promised a second feature round on the person's request until its bump.** Closed by the nine bumps of E3. Detailed: § 4.8 A and the E3 stories document (the stale-promise residual).
 - **The coai MCP server lost the conventions gate session twice;** the plan and code rounds were rerun. Detailed: nowhere beyond this line (the rounds rerun left no document).
 
+### After the promotion (2026-11-19, added 2026-11-24)
+
+P7 and P2 above, and two conventions-side follow-ups of E3 (post-deploy item 3 could not show the four coai rules read;
+the behaviour harness had no moment for `not_reviewed` and `consult_first`), were closed the same day by the conventions
+plan `dew_flow_conventions · research/PLAN_coai_auto_followups.md` (#185, `release` `c598a11`). What it changed for this
+repository, carried over:
+
+- **P7 closed.** `coai-feature` v5: a blocking `good_enough` finding at the cap is verified like any other — a true one
+  lands as a NEW pull request, a false one is rejected with its reason. Here: the pin bump #1027 regenerated the snippet
+  (v20, `FEATURE_VERSION` 5, `SNIPPET_BODY_SHA` `edc9eea979fd2b2d`), and extension **0.89.2** shipped it (#1029, #1030).
+- **P2 closed** in conventions: a plan round that ended `not_reviewed` under `auto` opens epoch 1 `by nobody` — a counting
+  baseline, never an approval; the interim re-review path is open to such a branch. Nothing here changed.
+- **Post-deploy item 3 met.** `smoke-rules --task implement --only <id>…`, run in this repository at `main` `8ff658d5`,
+  showed all four coai gate rules read completely by Claude and by Codex.
+- **P6 stays open** — an E1 residual of this repository; nothing above touched it.
+
+Problems met on the way, each with where it is recorded:
+
+- **The pin bump released nothing.** #1027 was squash-merged with a `chore(rules):` title, which release-please does not
+  release. A CHANGELOG-only `fix(extension):` (#1028) was refused by the docs-only guard, as the operator's rule wants, and
+  closed. The release went through a `Release-As: 0.89.2` commit that touches only `src_vs_code` code (#1029), the shape
+  [PLAN_the_release_guards_contradict.md](PLAN_the_release_guards_contradict.md) records (#605). Recorded in
+  [module_extension.md](module_extension.md) § *A pin bump that regenerates the snippet must be a releasing commit*.
+- **The installed extension did not update itself.** On 2026-11-19 the owner's WSL window still ran 0.87.0 while 0.89.1
+  was on the Marketplace, so the *Auto* option was not in the menu; on 2026-11-24 it still ran 0.89.1 with 0.89.2 out
+  for five days. Both were installed by hand (`code --install-extension …@<version> --force`). Why the automatic update
+  did not run there was not investigated. The first hand install on 2026-11-19 failed: the WSL `code` CLI could not
+  reach the Windows side (`UtilAcceptVsock … accept4 failed 110`); it worked on 2026-11-24.
+- **A snippet assertion cannot be seen red by moving the mount back.** `prepare-gate` refuses a conventions checkout
+  that differs from the index gitlink, so the build fails before the test runs. The RED for the v5 assertions was taken by
+  changing the generated half (`src/generated/featureRule.ts`). Recorded in [module_tests.md](module_tests.md).
+- **The real-editor scenario *skip-list Add* (S3-H1) failed again** on #1027 and passed on its rerun.
+
 ## Epics
 
 Three epics on the three release boundaries of § 8, in that order: one pull request and one release each, and an epic
