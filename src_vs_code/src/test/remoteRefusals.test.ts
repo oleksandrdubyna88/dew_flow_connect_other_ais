@@ -193,3 +193,22 @@ test('A1-T22 and A1-T26 over the real lock, the real atomic write and the real m
   assert.equal(await disk.mark('{}'), undefined, 'the 33rd marker was made');
   assert.equal(EMPTY_FILE.gen, 0);
 });
+
+test('A1-T22 (step 5): a writer that slept before its last look at the claim does not replace', async () => {
+  const disk = new FakeDisk();
+  const a = refusalsStore(disk, () => disk.now, instant);
+  const b = refusalsStore(disk, () => disk.now, instant);
+  await a.commit({ kind: 'refuse', host: 'x', utc: T });
+  let entered: () => void = () => undefined;
+  let release: () => void = () => undefined;
+  const reached = new Promise<void>((resolve) => { entered = resolve; });
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  disk.beforeSweep = async () => { disk.beforeSweep = undefined; entered(); await gate; };
+  const frozen = a.commit({ kind: 'refuse', host: 'g', utc: T });
+  await reached;
+  disk.now += 40_000;
+  assert.equal((await b.commit({ kind: 'refuse', host: 'h', utc: T }, 'person')).kind, 'written');
+  release();
+  assert.equal((await frozen).kind, 'written');
+  assert.deepEqual(disk.refusedHosts(), ['g', 'h', 'x'], 'a writer that slept for 40 s wrote over a refusal given meanwhile');
+});
