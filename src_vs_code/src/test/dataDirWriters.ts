@@ -46,6 +46,7 @@ export const WRITERS: Readonly<Record<string, Writer>> = {
   'extension.ts': { sites: 1, guard: 'board', why: 'the settings file and its lock — one road, createDataDirectory; the file itself is written and renamed with Node, never VS Code' },
   'installer.ts': { sites: 5, guard: 'extension storage', why: 'the binary and its download scratch live in globalStorageUri, never in the data directory' },
   'jsonlLedger.ts': { sites: 1, guard: 'board', why: 'the notifications, seen, chat-usage and door ledgers all append through it' },
+  'remoteRefusalsDisk.ts': { sites: 1, guard: 'extension storage', why: 'a marker of an unsaved refusal is made beside the refusals file, in the extension\'s own storage folder (globalStorageUri/terminal-hosts), never the data directory' },
   'roundsDbRead.ts': { sites: 1, guard: 'extension storage', why: 'the --findings-many keys file is written to the folder the caller names: the extension\'s own storage' },
   'securityPromptOverride.ts': { sites: 1, guard: 'board', why: 'opening a security prompt override for editing creates the empty file under the data directory' },
   'teamServerAuth.ts': { sites: 1, guard: 'board', why: 'a sign-in writes the token file under the data directory' },
