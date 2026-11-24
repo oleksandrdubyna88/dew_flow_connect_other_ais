@@ -55,12 +55,6 @@ export interface TerminalAccountsTestDoor {
   readonly memoryHosts: () => readonly string[];
   /** The labels, descriptions, details and kinds of the items last given to the list. */
   readonly lastItems: () => readonly ShownItem[];
-  /**
-   * TEST ONLY. Reads the standings again, as the window does on every change signal the product sends. A scenario that puts the store back with
-   * the raw `restore` of the road's door sends no signal, so the hosts this window still holds as known are the ones the scenario removed; the
-   * next round's own write would then read as a Forget, bump the generation and drop the round's result. Awaited, so nothing is in flight.
-   */
-  readonly resync: () => Promise<void>;
 }
 
 /** One item of the list as it was handed to the QuickPick. */
@@ -116,7 +110,6 @@ class AccountsWindow implements TerminalAccounts {
       armed: async () => (await this.decision(false)) === 'arm-first',
       memoryHosts: () => [...this.memoryNow.keys()].sort(byCodeUnit),
       lastItems: () => this.shown,
-      resync: () => this.changedList(),
     };
   }
 

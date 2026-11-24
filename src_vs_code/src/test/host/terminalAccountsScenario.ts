@@ -34,20 +34,18 @@ async function doorsOf(): Promise<Doors> {
 }
 
 /**
- * The profile put back, and the window told. `restore` writes the store behind the window's back and sends no change signal, so the hosts the window
- * still holds as known are the ones the scenario removed. The next scenario's round writes its own automatic "yes", the window sees a known host gone,
- * reads it as a Forget and bumps the generation: the round's result is dropped, its memory stays empty, and a list has no group to draw.
+ * The call and the profile put back. The road's `restore` sends the change signal a commit sends, so the window's known hosts and its generation follow
+ * the restored store. Without it the next scenario's round writes its own automatic "yes", the window sees a known host gone, reads it as a Forget and
+ * bumps the generation: the round's result is dropped, its memory stays empty, and a list has no group to draw.
  */
 async function putBack(accounts: Doors['accounts'], sessions: Doors['sessions'], before: Awaited<ReturnType<Doors['sessions']['stored']>>): Promise<void> {
   accounts.replaceCall(undefined);
   await sessions.restore(before);
-  await accounts.resync();
 }
 
 export async function theAccountsRoundCallsEachHostOnceAndStopsWithItsTerminals(): Promise<void> {
   const { accounts, sessions } = await doorsOf();
   const before = await sessions.stored();
-  await accounts.resync();
   const events: string[] = [];
   const modes: AccountsMode[] = [];
   accounts.replaceCall(async (host, mode): Promise<RemoteRun> => {
@@ -116,7 +114,6 @@ const REPLY = [
 export async function theAccountsListShowsTheGroupsAndTheHosts(): Promise<void> {
   const { accounts, sessions } = await doorsOf();
   const before = await sessions.stored();
-  await accounts.resync();
   assert.ok((await vscode.commands.getCommands(true)).includes('coai.terminalAccounts'), 'coai.terminalAccounts is not a registered command');
   accounts.replaceCall(() => Promise.resolve<RemoteRun>({ kind: 'answered', code: 0, stdout: REPLY }));
   const name = `Creds: ${HOST_A} / s1`;

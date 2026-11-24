@@ -333,6 +333,9 @@ let boundRun: RoadSeams['run'] = runRemote;
 /** The context key the terminal panel's two overflow items follow: the active terminal reads a session and its host is not answered "no" (`readsKey`). */
 const READS_KEY = 'coai.terminalReadsSession';
 
+/** The change signal of the bound road, for the test door's `restore` alone: nothing else calls it. */
+let signalChange: (() => void) | undefined;
+
 /** The value last given to the key: a context key cannot be read back from the host, so a host scenario reads it here (test door only). */
 let lastKey: boolean | undefined;
 
@@ -383,6 +386,7 @@ export function bindRemoteSessions(context: vscode.ExtensionContext, folder: str
   const changes = new vscode.EventEmitter<void>();
   const sessions = remoteSessionsOf(keeperOf(context, folder, () => { void setReadsKey(sessions); changes.fire(); }), (host, session, operands, script) => boundRun(host, session, operands, script), changes.event);
   bound = sessions;
+  signalChange = () => { changes.fire(); };
   void setReadsKey(sessions);
   context.subscriptions.push(
     changes,
@@ -413,7 +417,7 @@ export interface RemoteSessionsTestDoor {
   readonly stored: () => Promise<{ readonly list: unknown; readonly file: string | undefined }>;
   /**
    * TEST ONLY. Puts both back whole — the list by one raw write, the file by one raw write or a removal — removes every marker and
-   * the lock, and empties what this window holds as not saved and what it remembers of the file.
+   * the lock, empties what this window holds as not saved and what it remembers of the file, and sends the change signal a commit sends.
    */
   readonly restore: (before: { readonly list: unknown; readonly file: string | undefined }) => Promise<void>;
   /** The Stop, through the product's own road. */
@@ -445,6 +449,8 @@ export const testDoorOf = (sessions: RemoteSessions, state: vscode.Memento, fold
     }
     sessions.keeper.forgetHeld();
     void setReadsKey(sessions);
+    // The raw writes above sent no change signal: tell the listeners (the accounts window's known hosts and generation) what the store now holds, as a commit does.
+    signalChange?.();
   },
   stopRound: sessions.stopRound,
   startRound: sessions.startRound,
