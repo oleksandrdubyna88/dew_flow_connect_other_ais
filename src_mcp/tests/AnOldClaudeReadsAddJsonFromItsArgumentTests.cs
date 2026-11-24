@@ -24,12 +24,31 @@ public sealed class AnOldClaudeReadsAddJsonFromItsArgumentTests
         JsonNode.Parse(File.ReadAllText(Path.Combine(world.BackupFolders.Single(), "manifest.json")))!["targets"]!.AsArray()
             .Select(node => node!.AsObject()).Single(one => one["cli"]!.GetValue<string>() == cli && one["kind"]!.GetValue<string>() == kind);
 
+    /// <summary>On Windows the world's claude stand-in is a <c>claude.cmd</c> shim, and the argument road is refused for a shim by design (the test below, and AClaudeEntryNeverReachesACommandLineItCannotTrustTests): what these scenarios assert is the POSIX road.</summary>
+    private static void NoShim() => Assert.SkipWhen(OperatingSystem.IsWindows(), "the stand-in claude is a .cmd shim here, and the argument road is refused for a shim");
+
+    [Fact]
+    public async Task OnWindows_TheStandInIsACmdShim_SoAClaudeWithoutStdinIsRefusedWithTheShimReason_BeforeAnyRemove()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "the stand-in is a .cmd shim only on Windows");
+        using var world = InstallWorld.Create(codex: false);
+        world.Steer(Client.Claude, oldAddJson: true, version: OldVersion);
+
+        var (code, output, err) = await world.RunAsync("--binary", world.Binary);
+
+        code.Should().Be(78, err);
+        output.Target("claude", "mcp").GetProperty("reason").GetString().Should().StartWith("claude at ").And.EndWith(".cmd is a .cmd/.bat shim; coai will not pass the entry on its command line; update Claude Code (claude update) so it reads stdin");
+        AddJsonCalls(world).Should().BeEmpty();
+        world.ClaudeJsonText.Should().NotContain("coai-mcp");
+    }
+
     private static IEnumerable<string> AddJsonCalls(InstallWorld world) =>
         world.Calls.Where(line => line.StartsWith("claude mcp add-json ", StringComparison.Ordinal) && !line.Contains(" --help | ", StringComparison.Ordinal));
 
     [Fact]
     public async Task AnOldHelp_AndNoEnvironment_WritesTheEntryThroughTheArgument()
     {
+        NoShim();
         using var world = InstallWorld.Create(codex: false);
         world.Steer(Client.Claude, oldAddJson: true, version: OldVersion);
 
@@ -48,6 +67,7 @@ public sealed class AnOldClaudeReadsAddJsonFromItsArgumentTests
     [Fact]
     public async Task AnOldHelp_AndAnEntryWithoutEnvironmentOrArguments_IsUpdatedThroughTheArgument()
     {
+        NoShim();
         using var world = InstallWorld.Create(codex: false);
         world.Steer(Client.Claude, oldAddJson: true, version: OldVersion);
         world.Put(world.ClaudeJson, """{ "numStartups": 3, "mcpServers": { "coai": { "type": "stdio", "command": "/old/coai/versions/1.0.0/coai-mcp", "args": [] } } }""");
@@ -64,6 +84,7 @@ public sealed class AnOldClaudeReadsAddJsonFromItsArgumentTests
     [Fact]
     public async Task AnOldHelp_AndAnEntryWithArguments_IsRefusedWithTheStdinReason_BeforeAnyRemove()
     {
+        NoShim();
         using var world = InstallWorld.Create(codex: false);
         world.Steer(Client.Claude, oldAddJson: true, version: OldVersion);
         var before = $$"""
@@ -84,6 +105,7 @@ public sealed class AnOldClaudeReadsAddJsonFromItsArgumentTests
     [Fact]
     public async Task AnOldHelp_AndAnEnvironmentValue_IsRefusedWithTheReason_NothingIsRun_AndNoValueIsOnArgv()
     {
+        NoShim();
         using var world = InstallWorld.Create(codex: false);
         world.Steer(Client.Claude, oldAddJson: true, version: OldVersion);
         var before = $$"""
@@ -111,6 +133,7 @@ public sealed class AnOldClaudeReadsAddJsonFromItsArgumentTests
     [Fact]
     public async Task AHelpThatCannotBeRead_IsNoStdin_AnEnvironmentValueIsRefused_AndAnEntryWithoutOneIsWrittenThroughTheArgument()
     {
+        NoShim();
         using var withValue = InstallWorld.Create(codex: false);
         withValue.Steer(Client.Claude, fail: "help", version: "2.1.331");
         InstallOutput.WithOldEntries(withValue);
@@ -134,6 +157,7 @@ public sealed class AnOldClaudeReadsAddJsonFromItsArgumentTests
     [Fact]
     public async Task AnUnknownVersion_IsLeftOutOfTheRefusalSentence()
     {
+        NoShim();
         using var world = InstallWorld.Create(codex: false);
         world.Steer(Client.Claude, fail: "help,version");
         InstallOutput.WithOldEntries(world);
@@ -193,6 +217,7 @@ public sealed class AnOldClaudeReadsAddJsonFromItsArgumentTests
     [Fact]
     public async Task AClientsReason_NamesTheTargetThatDidNotEndDone_NotTheOnesThatDid()
     {
+        NoShim();
         using var world = InstallWorld.Create(codex: false);
         world.Steer(Client.Claude, oldAddJson: true, version: OldVersion);
         InstallOutput.WithOldEntries(world);
