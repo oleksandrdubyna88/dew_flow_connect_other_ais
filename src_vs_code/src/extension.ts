@@ -158,7 +158,9 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
   // The chat reads this side's catalog rows (E4.6a).
   bindChatSide(context);
   // The road to a `Creds: <host> / <session>` terminal's Claude session (E2.S3): the consent, the picked ids, the hosts command.
-  const remote = bindRemoteSessions(context);
+  // The refusals file lives in a folder of this side's storage: the ONE place that names it, handed on to the road and to the test door.
+  const hostsFolder = vscode.Uri.joinPath(context.globalStorageUri, 'terminal-hosts').fsPath;
+  const remote = bindRemoteSessions(context, hostsFolder);
   // The person's own skip list may hide the terminal keys of CoAI (E3.S3): tell once, offer Add for the user list, never write a workspace.
   const skipShell = bindSkipShell(context);
   // A model-bearing setting a workspace or folder tried to set is not applied (`modelKeys.ts`); say so
@@ -932,7 +934,7 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
 
   return {
     sidesSeen: () => sidesIn(context.globalState, Date.now()),
-    ...(context.extensionMode === vscode.ExtensionMode.Test ? { remoteSessions: testDoorOf(remote), skipShell } : {}),
+    ...(context.extensionMode === vscode.ExtensionMode.Test ? { remoteSessions: testDoorOf(remote, context.globalState, hostsFolder), skipShell } : {}),
     // A second spread beside the first, not a member of it: `remoteExportGuard.test.ts` and `skipShellWiring.test.ts` pin the shape of that one.
     ...(context.extensionMode === vscode.ExtensionMode.Test ? { onExhaustedMigration: () => context.globalState.get(ON_EXHAUSTED_MIGRATION_KEY) } : {}),
   };

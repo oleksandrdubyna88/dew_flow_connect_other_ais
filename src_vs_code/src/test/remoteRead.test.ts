@@ -8,9 +8,12 @@ import { projectDirNames, promptsFrom } from '../claudeSessions';
 import { MOST_PER_PROMPT, MOST_PROMPTS, NOTHING_OF_YOURS } from '../sessionPrompts';
 import { RemoteRead, UNREADABLE_SAID } from '../remoteFrame';
 import {
-  HostAnswer, PickRow, Picked, RemoteAnswer, RoadSeams,
-  answerFrom, answersOf, consentOf, nextStep, onePerTerminal, promptsSaid, reachOf, readsKey, remoteRoad, withAnswer, withoutHost,
+  PickRow, Picked, RemoteAnswer, RoadSeams,
+  answerFrom, nextStep, onePerTerminal, promptsSaid, reachOf, readsKey, remoteRoad,
 } from '../remoteRead';
+import type { HostAnswer, HostStanding } from '../remoteHosts';
+import { HOSTS_SAID } from '../remoteHostsSaid';
+import { Backing, FakeDisk, KEY, windowOver } from './hostsFakes';
 import { RemoteCall, TAIL_MAX, operandsOf } from '../remoteScript';
 import { RemoteRun } from '../remoteSsh';
 
@@ -105,9 +108,16 @@ interface Options {
 const yesFor = (host: string): readonly HostAnswer[] => [{ host, answer: 'yes', askedUtc: '2026-11-01T00:00:00.000Z' }];
 
 function world(options: Options = {}) {
+  const backing = new Backing();
+  backing.values.set(KEY, 'list' in options ? options.list : yesFor(H));
+  const disk = new FakeDisk();
+  const win = windowOver(backing, disk);
   const w = {
-    list: options.list ?? yesFor(H),
-    writes: [] as (readonly HostAnswer[])[],
+    backing,
+    disk,
+    keeper: win.keeper,
+    view: win.view,
+    setting: win.setting,
     asks: [] as string[],
     runs: [] as (readonly string[])[],
     picks: [] as (readonly PickRow[])[],
@@ -118,8 +128,7 @@ function world(options: Options = {}) {
     releases: [] as (() => void)[],
   };
   const seams: RoadSeams = {
-    store: { read: () => w.list, write: async (rows) => { w.list = rows; w.writes.push(rows); } },
-    now: () => NOW,
+    store: { consent: (host) => win.keeper.consent(host), answer: (host, answer) => win.keeper.commit({ kind: 'person', host, answer }) },
     ask: async (host) => {
       w.asks.push(host);
       if (options.slowAsk === true) {
@@ -150,49 +159,36 @@ const refusal = (answer: { readonly kind: string; readonly refusal?: string }): 
 const linesOf = (answer: RemoteAnswer): readonly string[] => (answer.kind === 'lines' ? answer.lines : []);
 const id = (call: RemoteCall): readonly string[] => operandsOf(call);
 
-test('S3-T1: an answer is kept per host, and a damaged list is not a "yes"', () => {
-  assert.equal(consentOf([], 'h'), 'ask');
-  const none = withAnswer([], 'h', 'no', NOW);
-  assert.equal(consentOf(none, 'h'), 'no');
-  assert.equal(consentOf(none, 'H'), 'ask', 'a host is compared exactly, not by case');
-  assert.equal(consentOf(none, 'h2'), 'ask');
-  assert.equal(consentOf(withAnswer(none, 'h', 'yes', NOW), 'h'), 'yes', 'the host\'s old row was not replaced');
-  assert.equal(withAnswer(none, 'h', 'yes', NOW).length, 1, 'a changed answer made a second row');
+test('S3-T1: an answer is kept per host, and a damaged list is not a "yes" (replaces the damaged half of the old S3-T1)', async () => {
+  const w = world({ list: [] });
+  assert.equal(await w.w.keeper.consent('h'), 'ask');
+  await w.w.keeper.commit({ kind: 'person', host: 'h', answer: 'no' });
+  assert.equal(await w.w.keeper.consent('h'), 'no');
+  assert.equal(await w.w.keeper.consent('H'), 'ask', 'a host is compared exactly, not by case');
+  assert.equal(await w.w.keeper.consent('h2'), 'ask');
+  await w.w.keeper.commit({ kind: 'person', host: 'h', answer: 'yes' });
+  assert.equal(await w.w.keeper.consent('h'), 'yes', 'the host\'s old row was not replaced');
+  assert.equal((w.w.backing.values.get(KEY) as unknown[]).length, 1, 'a changed answer made a second row');
 
-  for (const damaged of ['junk', null, undefined, 7, {}, [{ host: 'h' }], [{ host: 'h', answer: 'yes' }], [{ host: 'h', answer: 'maybe', askedUtc: NOW }],
+  for (const damaged of ['junk', null, 7, {}, [{ host: 'h' }], [{ host: 'h', answer: 'yes' }], [{ host: 'h', answer: 'maybe', askedUtc: NOW }],
     [{ host: '', answer: 'yes', askedUtc: NOW }], [{ host: 'h', answer: 'yes', askedUtc: 5 }], [null], ['h'],
     [{ host: 'h', answer: 'yes', askedUtc: NOW }, 'junk']]) {
-    assert.equal(consentOf(damaged, 'h'), 'ask', `a damaged answer list let ssh run: ${JSON.stringify(damaged)}`);
+    const bad = world({ list: damaged });
+    assert.equal(await bad.w.keeper.consent('h'), 'damaged', `a damaged list let ssh run: ${JSON.stringify(damaged)}`);
+    const road = await remoteRoad(bad.seams, NAME, 'question');
+    assert.equal(refusal(road), HOSTS_SAID.cannotRead, 'the road did not say the list cannot be read');
+    assert.equal(bad.w.asks.length + bad.w.runs.length, 0, 'a damaged list was asked about or read');
+    assert.equal(bad.w.backing.values.get(KEY), damaged, 'a damaged list was written over by the road');
   }
-  assert.deepEqual(withAnswer('junk', 'h', 'no', NOW), [{ host: 'h', answer: 'no', askedUtc: NOW }], 'a damaged list is not carried into the new one');
 });
 
-test('S3-T2: the list is capped at 100 and the oldest answer goes', () => {
-  const rows: HostAnswer[] = Array.from({ length: 100 }, (_, n) => ({ host: `h${n}`, answer: 'yes', askedUtc: `2026-10-${String(10 + (n % 20)).padStart(2, '0')}T00:00:00.000Z` }));
-  rows[37] = { host: 'oldest', answer: 'no', askedUtc: '2026-01-01T00:00:00.000Z' };
-  const before = JSON.stringify(rows);
-  const next = withAnswer(rows, 'new-host', 'yes', NOW);
-
-  assert.equal(next.length, 100, `the list grew past 100 rows (${next.length})`);
-  assert.ok(!next.some((row) => row.host === 'oldest'), 'the oldest answer was kept');
-  assert.ok(next.some((row) => row.host === 'new-host' && row.answer === 'yes' && row.askedUtc === NOW), 'the new answer is not there');
-  assert.equal(consentOf(next, 'oldest'), 'ask', 'the dropped host is not asked again');
-  assert.equal(JSON.stringify(rows), before, 'the input array was changed');
-  assert.equal(withAnswer(rows, 'h5', 'no', NOW).length, 100, 'a changed answer of a known host dropped a row');
-  assert.ok(withAnswer(rows, 'h5', 'no', NOW).some((row) => row.host === 'oldest'), 'a changed answer of a known host dropped the oldest');
-});
-
-test('S3-T2b: the panel lists every remembered host, and Forget removes one row', () => {
-  const list = withAnswer(withAnswer([], 'b-host', 'no', NOW), 'a-host', 'yes', NOW);
-  assert.deepEqual(answersOf(list).map((row) => row.host), ['a-host', 'b-host'], 'the hosts are not listed by name');
-  assert.deepEqual(answersOf('junk'), [], 'a damaged list was listed');
-
-  const without = withoutHost(list, 'b-host');
-  assert.equal(consentOf(without, 'b-host'), 'ask', 'a forgotten host was still remembered');
-  assert.equal(consentOf(without, 'a-host'), 'yes', 'Forget removed another host\'s row');
-  assert.equal(list.length, 2, 'the input array was changed');
-  assert.equal(withoutHost(list, 'nobody').length, 2, 'Forget of an unknown host removed a row');
-  assert.deepEqual(withoutHost('junk', 'a-host'), [], 'a damaged list was carried through Forget');
+test('S3-T2 and S3-T2b are replaced by A1-T7 and A1-T8 of remoteHosts.test.ts: the cap keeps every "no", and a damaged list is not an empty one', async () => {
+  const rows: HostAnswer[] = Array.from({ length: 99 }, (_, n) => ({ host: `h${n}`, answer: 'yes', askedUtc: `2026-10-${String(10 + (n % 20)).padStart(2, '0')}T00:00:00.000Z` }));
+  const w = world({ list: [...rows, { host: 'oldest', answer: 'no', askedUtc: '2026-01-01T00:00:00.000Z' }] });
+  await w.w.keeper.commit({ kind: 'person', host: 'new-host', answer: 'yes' });
+  assert.equal(await w.w.keeper.consent('oldest'), 'no', 'the cap dropped a "Not this host"');
+  assert.equal(await w.w.keeper.consent('new-host'), 'yes');
+  assert.equal((w.w.backing.values.get(KEY) as unknown[]).length, 100);
 });
 
 test('S3-T3: no ssh before a "yes"', async () => {
@@ -200,17 +196,17 @@ test('S3-T3: no ssh before a "yes"', async () => {
   const off = await remoteRoad(notThis.seams, NAME, 'question');
   assert.equal(refusal(off), `Reading the Claude session on “${H}” is turned off. Only the text you copied can be sent; turn it on in CoAI: hosts read over ssh.`);
   assert.equal(notThis.w.runs.length, 0, 'ssh was spawned for a host nobody agreed to');
-  assert.equal(consentOf(notThis.w.list, H), 'no', 'the "no" was not written');
+  assert.equal(await notThis.w.keeper.consent(H), 'no', 'the "no" was not written');
   assert.deepEqual(notThis.w.asks, [H]);
 
   const escaped = world({ list: [], answer: undefined });
   const nothing = await remoteRoad(escaped.seams, NAME, 'question');
   assert.equal(nothing.kind, 'refused');
   assert.equal(escaped.w.runs.length, 0, 'ssh was spawned for a host nobody agreed to');
-  assert.equal(escaped.w.writes.length, 0, 'Escape wrote an answer');
-  assert.equal(consentOf(escaped.w.list, H), 'ask');
+  assert.equal(escaped.w.view.updates.length, 0, 'Escape wrote an answer');
+  assert.equal(await escaped.w.keeper.consent(H), 'ask');
 
-  const remembered = world({ list: withAnswer([], H, 'no', NOW), answer: 'yes' });
+  const remembered = world({ list: [{ host: H, answer: 'no', askedUtc: NOW }], answer: 'yes' });
   const again = await remoteRoad(remembered.seams, NAME, 'question');
   assert.equal(remembered.w.runs.length, 0, 'ssh was spawned for a host nobody agreed to');
   assert.equal(remembered.w.asks.length, 0, 'a remembered "no" asked again');
@@ -219,8 +215,8 @@ test('S3-T3: no ssh before a "yes"', async () => {
   const yes = world({ list: [], answer: 'yes' });
   const read = await remoteRoad(yes.seams, NAME, 'question');
   assert.equal(read.kind, 'lines');
-  assert.equal(consentOf(yes.w.list, H), 'yes', 'the "yes" was not written');
-  assert.deepEqual(yes.w.writes.map((rows) => rows.length), [1]);
+  assert.equal(await yes.w.keeper.consent(H), 'yes', 'the "yes" was not written');
+  assert.equal(yes.w.view.updates.length, 1, 'the answer was written more than once');
   assert.equal(yes.w.runs.length, 1);
   assert.ok(yes.w.progress >= 1, 'the read was not under the progress line');
 
@@ -236,7 +232,7 @@ test('S3-T3b: a name that is not a creds name is refused before any consent or s
   const malformed = refusal(await remoteRoad(bad.seams, 'Creds: -oProxyCommand=x / s', 'question'));
   assert.match(malformed, /not a name ssh can be given safely/u);
   for (const one of [other, bad]) {
-    assert.equal(one.w.asks.length + one.w.runs.length + one.w.writes.length, 0, 'a name that is not a session asked, wrote or spawned');
+    assert.equal(one.w.asks.length + one.w.runs.length + one.w.view.updates.length, 0, 'a name that is not a session asked, wrote or spawned');
   }
 });
 
@@ -496,19 +492,18 @@ test('S3-T10b: the cut is read in remoteRead.ts only — no module that takes th
 });
 
 test('S4-T9: the context key follows the name and the answer', () => {
-  const ask: unknown = [];
-  const no = withAnswer([], H, 'no', NOW);
-  const yes = withAnswer([], H, 'yes', NOW);
+  const none: readonly HostStanding[] = [];
+  const no: readonly HostStanding[] = [{ host: H, answer: 'no', how: 'person', askedUtc: NOW }];
+  const yes: readonly HostStanding[] = [{ host: H, answer: 'yes', how: 'person', askedUtc: NOW }];
 
-  assert.equal(readsKey(NAME, ask), true, 'a Creds terminal with no answer yet hides the items');
+  assert.equal(readsKey(NAME, none), true, 'a Creds terminal with no answer yet hides the items');
   assert.equal(readsKey(NAME, yes), true, 'a host that said yes hides the items');
   assert.equal(readsKey(NAME, no), false, 'a host that said no still shows the items');
-  assert.equal(readsKey('Creds: before x', ask), true, 'a bad creds name hides the items that explain it');
+  assert.equal(readsKey('Creds: before x', none), true, 'a bad creds name hides the items that explain it');
   assert.equal(readsKey('Creds: h / s.x', no), true, 'a bad creds name was judged by an answer of some host');
   for (const other of ['bash', 'pwsh', 'Creds run: x', 'Creds VPN: x', 'creds: h / s', '']) {
     assert.equal(readsKey(other, yes), false, `the terminal “${other}” shows the items`);
   }
-  assert.equal(readsKey(NAME, 'junk'), true, 'a damaged answer list hid the items instead of asking again');
   assert.equal(readsKey(`Creds: other-host / ${S}`, no), true, 'the answer of one host was applied to another');
 });
 
@@ -598,7 +593,10 @@ test('S3-T12: a double press starts one child and one question', async () => {
 
   const first = road(terminal);
   const second = road(terminal);
-  await Promise.resolve();
+  // The consent is asked of the keeper's queue now, so the question arrives a few steps later than it did.
+  while (one.w.releases.length === 0) {
+    await new Promise<void>((resolve) => { setImmediate(resolve); });
+  }
   one.w.releases.forEach((release) => { release(); });
   const [a, b] = await Promise.all([first, second]);
 

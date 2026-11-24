@@ -2,7 +2,6 @@ import * as assert from 'node:assert/strict';
 import * as vscode from 'vscode';
 
 import type { CoaiExports } from '../../extension';
-import { answersOf, consentOf, withAnswer } from '../../remoteRead';
 import type { RemoteRun } from '../../remoteSsh';
 import { until } from './hostHelpers';
 
@@ -52,20 +51,20 @@ export async function theConsentOfAHostIsKeptInTheRealGlobalState(): Promise<voi
 
     return answer(operands);
   });
-  const before = answersOf(door.answers.read());
+  const before = await door.stored();
   const terminal = vscode.window.createTerminal({ name: `Creds: ${HOST} / ${SESSION}` });
   try {
     terminal.show();
-    await door.answers.write(withAnswer(before, HOST, 'no', new Date().toISOString()));
-    assert.equal(consentOf(door.answers.read(), HOST), 'no', 'a "no" written through globalState was not read back from it');
+    await door.commit({ kind: 'person', host: HOST, answer: 'no' });
+    assert.equal((await door.standings()).find((row) => row.host === HOST)?.answer, 'no', 'a "no" committed through globalState was not read back from it');
 
     const off = await door.read(terminal, 'question');
     assert.equal(calls.length, 0, 'ssh was spawned for a host nobody agreed to');
     assert.equal(off.kind, 'refused', 'a press on a host answered "no" did not refuse');
     assert.ok(off.kind === 'refused' && off.refusal.includes('is turned off'), `the refusal is not the "turned off" sentence: ${JSON.stringify(off)}`);
 
-    await door.answers.write(withAnswer(door.answers.read(), HOST, 'yes', new Date().toISOString()));
-    const fresh = answersOf(door.answers.read());
+    await door.commit({ kind: 'person', host: HOST, answer: 'yes' });
+    const fresh = await door.standings();
     assert.ok(fresh.some((row) => row.host === HOST && row.answer === 'yes'), `the "yes" is not in the list read back from globalState: ${JSON.stringify(fresh)}`);
 
     const on = await door.read(terminal, 'question');
@@ -84,7 +83,7 @@ export async function theConsentOfAHostIsKeptInTheRealGlobalState(): Promise<voi
     await until(() => door.pickedOf(terminal) === undefined, 'the picked id of a closed terminal is still kept');
   } finally {
     door.replaceRun(undefined);
-    await door.answers.write(before);
+    await door.restore(before);
     terminal.dispose();
   }
 }

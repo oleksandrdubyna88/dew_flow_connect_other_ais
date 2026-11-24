@@ -5,6 +5,8 @@ import { CredsName, credsSession } from './credsSession';
 import { oneAtATime } from './oneAtATime';
 import { RemoteCandidate, RemoteRead, TitledSession, UNREADABLE_SAID, Unreadable, readRemote } from './remoteFrame';
 import { FOLDERS_MAX, REMOTE_SCRIPT, RemoteCall, isFolderName, operandsOf } from './remoteScript';
+import type { Committed, Consent, HostStanding } from './remoteHosts';
+import { HOSTS_SAID } from './remoteHostsSaid';
 import type { RemoteRun } from './remoteSsh';
 import { LiveTerminal, NamedTerminal, oneLiveNamed } from './terminalSource';
 
@@ -24,18 +26,6 @@ import { LiveTerminal, NamedTerminal, oneLiveNamed } from './terminalSource';
  * <p>No `console` and no `notify` here, and no sentence holds stdout: the sentences name a host, a tmux session, a session id the
  * person chose, the pane's folder (control characters taken out) and a fixed clause of `UNREADABLE_SAID`.</p>
  */
-
-/** One host's answer, as it is kept in `globalState`. */
-export interface HostAnswer {
-  readonly host: string;
-  readonly answer: 'yes' | 'no';
-  readonly askedUtc: string;
-}
-
-export type Consent = 'yes' | 'no' | 'ask';
-
-/** The most hosts the list keeps: past it the OLDEST answer goes, and that host is simply asked again. */
-export const HOSTS_MAX = 100;
 
 /** What the road is read for: the waiting question, or the prompts a person wrote (the Asked note). */
 export type Purpose = 'question' | 'prompts';
@@ -111,59 +101,17 @@ const SAID = {
 
 // ─────────────────────────────── The consent ───────────────────────────────
 
-const asRecord = (value: unknown): Readonly<Record<string, unknown>> =>
-  (typeof value === 'object' && value !== null ? (value as Readonly<Record<string, unknown>>) : {});
-
-const isAnswer = (value: unknown): value is 'yes' | 'no' => value === 'yes' || value === 'no';
-
-/** A row is whole or it is not a row: a host, a yes or a no, and the instant it was asked. */
-function isRow(row: unknown): row is HostAnswer {
-  const one = asRecord(row);
-
-  return typeof one['host'] === 'string' && one['host'].length > 0 && isAnswer(one['answer']) && typeof one['askedUtc'] === 'string';
-}
-
-/** The rows of a list, or none: a list that is not an array of valid rows reads as empty, so it asks again and never says yes. */
-const rowsOf = (list: unknown): readonly HostAnswer[] => (Array.isArray(list) && list.every(isRow) ? list : []);
-
-/** What this host answered: a "no" wins over any other row of the same host, and no row at all is "ask". The host is compared exactly. */
-export function consentOf(list: unknown, host: string): Consent {
-  const mine = rowsOf(list).filter((row) => row.host === host);
-  if (mine.some((row) => row.answer === 'no')) {
-    return 'no';
-  }
-
-  return mine.length > 0 ? 'yes' : 'ask';
-}
-
-const byAsked = (a: HostAnswer, b: HostAnswer): number => Number(a.askedUtc > b.askedUtc) - Number(a.askedUtc < b.askedUtc);
-
-/** A NEW list with this answer: the host's old row replaced, and at the cap the OLDEST answer dropped. */
-export function withAnswer(list: unknown, host: string, answer: 'yes' | 'no', now: string): readonly HostAnswer[] {
-  const kept = rowsOf(list).filter((row) => row.host !== host);
-  const dropped = new Set([...kept].sort(byAsked).slice(0, Math.max(0, kept.length - (HOSTS_MAX - 1))));
-
-  return [...kept.filter((row) => !dropped.has(row)), { host, answer, askedUtc: now }];
-}
-
 /**
  * Whether the terminal's two overflow items are shown (the context key `coai.terminalReadsSession`): a name that starts with
- * `Creds: ` and whose host is not answered "no". A name that is not well made is TRUE on purpose — its press says which part
- * failed — and a name that does not start so is false. A damaged answer list reads as no answer, so the items stay.
+ * `Creds: ` and whose host is not answered "no" — in the refusals file, in the list, or in what waits to be saved (`standings`). A name that is not well made is TRUE on
+ * purpose — its press says which part failed — and a name that does not start so is false. A damaged list reads as no answer, so
+ * the items stay.
  */
-export function readsKey(name: string, list: unknown): boolean {
+export function readsKey(name: string, standings: readonly HostStanding[]): boolean {
   const creds = credsSession(name);
 
-  return creds.kind === 'malformed' || (creds.kind === 'session' && consentOf(list, creds.host) !== 'no');
+  return creds.kind === 'malformed' || (creds.kind === 'session' && !standings.some((one) => one.host === creds.host && one.answer === 'no'));
 }
-
-const byHost = (a: HostAnswer, b: HostAnswer): number => Number(a.host > b.host) - Number(a.host < b.host);
-
-/** The remembered answers, by host name, for the panel's list; a damaged list is none. */
-export const answersOf = (list: unknown): readonly HostAnswer[] => [...rowsOf(list)].sort(byHost);
-
-/** A NEW list without this host: *Forget*. The host is asked again the next time. */
-export const withoutHost = (list: unknown, host: string): readonly HostAnswer[] => rowsOf(list).filter((row) => row.host !== host);
 
 // ─────────────────────────────── The identity ───────────────────────────────
 
@@ -321,10 +269,13 @@ export function promptsSaid(answer: RemoteAnswer): { readonly asked: readonly st
 
 /** The effects of the road. The host supplies the real ones; a test supplies fakes. */
 export interface RoadSeams {
-  /** The answers kept per host: `read()` is whatever the store holds (a damaged value reads as empty), `write` replaces it. */
-  readonly store: { readonly read: () => unknown; readonly write: (rows: readonly HostAnswer[]) => PromiseLike<void> };
-  /** The instant an answer is written under, UTC ISO. */
-  readonly now: () => string;
+  /** The answers kept per host. The road is given no list to write: it asks, and it commits the person's answer. */
+  readonly store: {
+    /** Whether this host may be read now: `consentOf` over the refusals file, the list and the setting, all read afresh. */
+    readonly consent: (host: string) => PromiseLike<Consent>;
+    /** The person's answer to the question, committed. */
+    readonly answer: (host: string, answer: 'yes' | 'no') => PromiseLike<Committed>;
+  };
   /** The question to the person; `undefined` is Escape. */
   readonly ask: (host: string) => PromiseLike<'yes' | 'no' | undefined>;
   /** The terminal's LIVE name, or `undefined` when it is no longer open. Asked just before EACH spawn. */
@@ -352,21 +303,34 @@ interface Trip extends Where {
 /** The most spawns in one press: the registry path, the titles of the folders, the tail by id. */
 const CALLS_MAX = 3;
 
+/** What an answer that was not kept says: the list is full of refusals, cannot be read, or the file did not take it. */
+function notKept(host: string, result: Committed): string {
+  return result.kind === 'full' ? HOSTS_SAID.fullOfRefusals(host) : result.kind === 'damaged' ? HOSTS_SAID.cannotRead : HOSTS_SAID.notSaved(host);
+}
+
 /** The person's answer, asked once for a host that has none; the refusal when the host is not to be read, else nothing. */
 async function asked(seams: RoadSeams, host: string): Promise<string | undefined> {
   const answer = await seams.ask(host);
   if (answer === undefined) {
     return SAID.noAnswer(host);
   }
-  await seams.store.write(withAnswer(seams.store.read(), host, answer, seams.now()));
+  const result = await seams.store.answer(host, answer);
+  if (result.kind !== 'written' && result.kind !== 'kept') {
+    return notKept(host, result);
+  }
 
   return answer === 'yes' ? undefined : SAID.turnedOff(host);
 }
 
-async function consented(seams: RoadSeams, host: string): Promise<string | undefined> {
-  const kept = consentOf(seams.store.read(), host);
+const DOORS: Readonly<Record<Consent, (seams: RoadSeams, host: string) => PromiseLike<string | undefined> | string | undefined>> = {
+  ask: asked,
+  no: (_seams, host) => SAID.turnedOff(host),
+  damaged: () => HOSTS_SAID.cannotRead,
+  yes: () => undefined,
+};
 
-  return kept === 'ask' ? asked(seams, host) : kept === 'no' ? SAID.turnedOff(host) : undefined;
+async function consented(seams: RoadSeams, host: string): Promise<string | undefined> {
+  return DOORS[await seams.store.consent(host)](seams, host);
 }
 
 /** Whether the terminal is still open and its live name still gives this host and session. */
