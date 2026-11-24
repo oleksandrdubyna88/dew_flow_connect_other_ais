@@ -8,7 +8,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// A session opened under one policy ends its next round under the CURRENT one, and a hold raised by a build before policy auto keeps its
-/// config as it was loaded (<c>todo/PLAN_auto_never_asks_a_person_E1_S1_spec.md</c>, § S1.10.4, D8).
+/// config as it was loaded (<c>research/PLAN_auto_never_asks_a_person_E1_S1_spec.md</c>, § S1.10.4, D8).
 /// </summary>
 /// <remarks>
 /// Real <c>review_plan</c> rounds over the fake CLI, in a throwaway repository and data folder. The stamp is the begin's, after the person's

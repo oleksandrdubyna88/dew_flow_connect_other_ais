@@ -7,7 +7,7 @@ import { HELP_ARTICLES, HELP_LANGUAGES, bodyFor } from '../helpContent';
 
 /**
  * The help for When the rounds run out under policy Auto, in five languages (E2.S3 of
- * todo/PLAN_auto_never_asks_a_person_E2.md, section 9.2). The guarantee is requirement 5's, exactly: the gate raises no
+ * research/PLAN_auto_never_asks_a_person_E2.md, section 9.2). The guarantee is requirement 5's, exactly: the gate raises no
  * new hold, never waits and never writes a card; the AI's own question after its consultants can still reach a person.
  * No text may promise that nothing ever asks.
  */
@@ -44,6 +44,7 @@ test('the English article states the guarantee in requirement 5’s words', () =
   assert.match(text, /raises no new hold and never waits for you, and it never writes a card/u);
   assert.match(text, /its consultants could not settle, or when no consultant can be had/u);
   assert.match(text, /predates Auto/u);
+  assert.match(text, /declares a production risk, with a reason, reaches you at once in the Planning or Released phase, where no consultant is asked first/u, 'the English article lost the production-risk exception to the only-road sentence');
   assert.match(text, /an unanswered FIRST round is retried, and only an unanswered round at its cap proceeds as `not_reviewed`/u, 'the English article lost the feature-review retry');
   assert.match(text, /nobody has answered is released — when the gate next loads that session/u, 'the English article lost when an older build\u2019s hold is released');
   assert.match(text, /not at the moment you change the setting, and a release that fails is tried again by the next call/u);
@@ -57,7 +58,9 @@ test('the English article states the guarantee in requirement 5’s words', () =
  * would leave unguarded: (a) the one road left to a person includes the case where no consultant can be had, (b) the
  * value this side holds wins over a workspace's and the user's, (c) not_reviewed is never a pass; and three that say where the
  * release promise stops: (d) an unanswered FIRST feature round is retried, (e) a hold the person already answered stays theirs,
- * (f) the release comes with the next load of the session and not with the setting.
+ * (f) the release comes with the next load of the session and not with the setting; and one more that keeps the road-to-a-person
+ * sentence from being wider than the server: (g) a question declared a production risk reaches the person at once in the Planning
+ * or Released phase, without a consultant first.
  */
 interface Clauses {
   noConsultant: string;
@@ -66,13 +69,14 @@ interface Clauses {
   featureRetry: string;
   answeredStays: string;
   notAtTheSetting: string;
+  productionRisk: string;
 }
 
 const CLAUSES: Record<Exclude<(typeof HELP_LANGUAGES)[number], 'en'>, Clauses> = {
-  de: { noConsultant: 'oder wenn kein Konsultant zu haben ist', sideWins: 'außer diese Seite hat einen eigenen Wert, der über beiden steht', neverAPass: 'nie als bestanden', featureRetry: 'wird eine unbeantwortete ERSTE Runde wiederholt', answeredStays: 'bleibt gesperrt und gehört weiter Ihnen', notAtTheSetting: 'nicht in dem Moment, in dem Sie die Einstellung ändern' },
-  es: { noConsultant: 'cuando no hay ningún consultor disponible', sideWins: 'salvo que este lado tenga un valor propio, que gana a ambos', neverAPass: 'nunca como aprobada', featureRetry: 'una PRIMERA ronda sin respuesta se repite', answeredStays: 'sigue retenida y le toca a usted', notAtTheSetting: 'no en el momento en que usted cambia el ajuste' },
-  ru: { noConsultant: 'или когда ни одного консультанта получить нельзя', sideWins: 'если только у этой стороны нет собственного значения: оно сильнее обоих', neverAPass: 'никогда не как «пройдено»', featureRetry: 'первый раунд без ответов повторяется', answeredStays: 'остаётся наложенной и за вами', notAtTheSetting: 'а не в момент смены настройки' },
-  uk: { noConsultant: 'або коли жодного консультанта не вдалося залучити', sideWins: 'хіба що ця сторона має власне значення: воно сильніше за обидва', neverAPass: 'ніколи не як «пройдено»', featureRetry: 'перший раунд без відповідей повторюється', answeredStays: 'лишається накладеним і за вами', notAtTheSetting: 'а не в момент зміни налаштування' },
+  de: { noConsultant: 'oder wenn kein Konsultant zu haben ist', sideWins: 'außer diese Seite hat einen eigenen Wert, der über beiden steht', neverAPass: 'nie als bestanden', featureRetry: 'wird eine unbeantwortete ERSTE Runde wiederholt', answeredStays: 'bleibt gesperrt und gehört weiter Ihnen', notAtTheSetting: 'nicht in dem Moment, in dem Sie die Einstellung ändern', productionRisk: 'als Produktionsrisiko kennzeichnet, erreicht Sie in der Planungs- oder der Freigabephase sofort' },
+  es: { noConsultant: 'cuando no hay ningún consultor disponible', sideWins: 'salvo que este lado tenga un valor propio, que gana a ambos', neverAPass: 'nunca como aprobada', featureRetry: 'una PRIMERA ronda sin respuesta se repite', answeredStays: 'sigue retenida y le toca a usted', notAtTheSetting: 'no en el momento en que usted cambia el ajuste', productionRisk: 'declara riesgo de producción, con un motivo, le llega de inmediato' },
+  ru: { noConsultant: 'или когда ни одного консультанта получить нельзя', sideWins: 'если только у этой стороны нет собственного значения: оно сильнее обоих', neverAPass: 'никогда не как «пройдено»', featureRetry: 'первый раунд без ответов повторяется', answeredStays: 'остаётся наложенной и за вами', notAtTheSetting: 'а не в момент смены настройки', productionRisk: 'объявляет риском для продакшена, с причиной, доходит до вас сразу' },
+  uk: { noConsultant: 'або коли жодного консультанта не вдалося залучити', sideWins: 'хіба що ця сторона має власне значення: воно сильніше за обидва', neverAPass: 'ніколи не як «пройдено»', featureRetry: 'перший раунд без відповідей повторюється', answeredStays: 'лишається накладеним і за вами', notAtTheSetting: 'а не в момент зміни налаштування', productionRisk: 'оголошує ризиком для продакшену, з причиною, доходить до вас одразу' },
 };
 
 test('every translation keeps the no-consultant road, the side-wins clause, never-a-pass and the three limits of the release promise', () => {
@@ -85,6 +89,7 @@ test('every translation keeps the no-consultant road, the side-wins clause, neve
     assert.ok(text.includes(clauses.featureRetry), `the ${language} article lost the feature review's retry: ${clauses.featureRetry}`);
     assert.ok(text.includes(clauses.answeredStays), `the ${language} article lost that an answered hold stays the person's: ${clauses.answeredStays}`);
     assert.ok(text.includes(clauses.notAtTheSetting), `the ${language} article lost that the release is not at the setting: ${clauses.notAtTheSetting}`);
+    assert.ok(text.includes(clauses.productionRisk), `the ${language} article lost that a production-risk question keeps its own path to the person: ${clauses.productionRisk}`);
   }
 });
 

@@ -517,7 +517,7 @@ rest of the card.
 
 > Added 2026-11-17 by the auto plan's E1.S3 (its § 7, the same table shortened in each of the four documents it touches) — a boundary section, not a change to this plan's scope.
 
-[PLAN_auto_never_asks_a_person.md](PLAN_auto_never_asks_a_person.md) adds policy `auto`, the default of `COAI_ON_EXHAUSTED`: it raises no hold at all and never waits for a person. Where the two meet:
+[PLAN_auto_never_asks_a_person.md](../research/PLAN_auto_never_asks_a_person.md) adds policy `auto`, the default of `COAI_ON_EXHAUSTED`: it raises no hold at all and never waits for a person. Where the two meet:
 
 | Item | This plan | The auto plan's part |
 |---|---|---|

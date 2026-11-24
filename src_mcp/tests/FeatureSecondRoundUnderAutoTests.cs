@@ -9,7 +9,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// What a feature review says to its caller under policy auto: no person is called, and none is asked for a second round
-/// (<c>todo/PLAN_auto_never_asks_a_person_E1.md</c>, § 8.1 item 4).
+/// (<c>research/PLAN_auto_never_asks_a_person_E1.md</c>, § 8.1 item 4).
 /// </summary>
 /// <remarks>Pure: <see cref="FeatureSecondRound.Apply"/> over a hand-built answer and the state the round completed into.</remarks>
 public sealed class FeatureSecondRoundUnderAutoTests

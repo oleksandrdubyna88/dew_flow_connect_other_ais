@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.89.2](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.89.1...extension-v0.89.2) (2026-11-19)
+
+
+### Miscellaneous Chores
+
+* **extension:** release the v20 snippet (coai-feature v5) as extension 0.89.2 ([#1029](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/1029)) ([55ab555](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/55ab5557991d90deb1de599ea18acc290d7e5bcc))
+
+## [0.89.1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.89.0...extension-v0.89.1) (2026-11-19)
+
+
+### Bug Fixes
+
+* **extension:** the CLAUDE.md snippet speaks policy auto — not_reviewed, consult_first, call_human as the operator's choice (v19; E3 of the auto plan) ([#1024](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/1024)) ([4ec6cf3](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/4ec6cf3d9e84959c1b959d8217c017e85bf34226))
+
+## [0.89.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.88.0...extension-v0.89.0) (2026-11-18)
+
+
+### Features
+
+* **extension:** policy Auto is the default — the one-time reset, what the server is sent, and what a person reads (E2 of the auto plan) ([#1018](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/1018)) ([a5855ec](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/a5855ec1c06d24bd3f70af96ec2f47a65fc7ad22))
+
 ## [0.88.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.87.0...extension-v0.88.0) (2026-11-17)
 
 

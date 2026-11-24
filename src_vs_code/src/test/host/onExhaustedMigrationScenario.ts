@@ -6,7 +6,7 @@ import { until } from './hostHelpers';
 
 /**
  * The one-time reset of *When the rounds run out* to Auto completes in a REAL editor
- * (todo/PLAN_auto_never_asks_a_person_E2_S2_spec.md T31, D16).
+ * (research/PLAN_auto_never_asks_a_person_E2_S2_spec.md T31, D16).
  *
  * <p><b>What it drives for real.</b> The shipped extension, activated by the editor, and VS Code's own settings registry and
  * settings file: the witness setting is known to the registry although the manifest declares it with no default (D13's signal,

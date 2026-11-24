@@ -26,7 +26,7 @@ import {
 import { type LiveTerminal, terminalMatch } from '../terminalSource';
 
 /**
- * Re-attach of a terminal's conversation after a reload (todo/PLAN_the_chat_opens_from_a_terminal_E3.md, S1): the rule, the second look
+ * Re-attach of a terminal's conversation after a reload (research/PLAN_the_chat_opens_from_a_terminal_E3.md, S1): the rule, the second look
  * before the re-key, the provisional bind and its undo.
  *
  * <p>Pure, like the module: no `vscode`. A `Terminal` is any object here — the key is the object, never its name. The orchestration

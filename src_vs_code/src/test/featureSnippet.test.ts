@@ -34,14 +34,17 @@ function mountedBody(file: string): string {
   return source.slice(marker);
 }
 
-test('the feature half is a row of the table, at v3, and travels in the paste', () => {
+test('the feature half is a row of the table, at v5, and travels in the paste', () => {
   const half = featureHalf();
 
   // v2: the half stopped telling callers to pass a `head` the tool did not declare (§9.30).
   // v3: the shared rule — the one-round budget and its three grounds (conventions #58).
-  assert.equal(half.version, 3);
+  // v4: what the gate does under policy `auto` — `not_reviewed`, and only the first two grounds remain
+  // (conventions #182).
+  // v5: a blocking `good_enough` finding at the cap under `auto` is verified like any other (conventions #185).
+  assert.equal(half.version, 5);
   assert.ok(HALF_IDS.includes(FEATURE_ID));
-  assert.ok(claudeSnippet().includes('<!-- coai-feature v3 -->'));
+  assert.ok(claudeSnippet().includes('<!-- coai-feature v5 -->'));
   // The feature half's v2 moved the artefact from 13 to 14; any later change to the paste only raises it
   // (15: the consultant half's v4; 16: this half's v3). An exact pin here broke on every unrelated half.
   assert.ok(ARTEFACT_VERSION >= 16, `the feature half moved to the shared v3, so the artefact moved past 15 — it is ${ARTEFACT_VERSION}`);
@@ -135,6 +138,17 @@ test('a paste made before the feature half is OLDER, naming it', () => {
 
   assert.deepEqual(status, { kind: 'older', behind: [FEATURE_ID], current: ARTEFACT_VERSION });
   assert.match(snippetNote(status), /the feature gate/);
+});
+
+test('a paste of the v4 feature half (before conventions #185) is OLDER, naming the feature gate alone', () => {
+  // 0.89.2: the feature half moved v4 → v5 (a blocking good_enough finding at the cap is verified first); a 0.89.1 paste
+  // carries v4 and must read older until it is pasted again, as the CHANGELOG promises.
+  const v4 = claudeSnippet().replace(/<!-- coai-feature v5 -->/, '<!-- coai-feature v4 -->');
+  assert.notEqual(v4, claudeSnippet(), 'the current paste carries the v5 marker');
+  const status = snippetStatus(v4);
+
+  assert.deepEqual(status, { kind: 'older', behind: [FEATURE_ID], current: ARTEFACT_VERSION });
+  assert.deepEqual(snippetStatus(claudeSnippet()).kind, 'current', 'the regenerated paste reads current');
 });
 
 /**

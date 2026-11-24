@@ -169,7 +169,8 @@ raises no new hold, never waits for a person and never writes a card, so a round
 proceeds as `not_reviewed` (never a pass; a feature review's first round is retried first) and spent rounds proceed as
 `good_enough`, each logged and noted on the round. A hold this version raised under *ask a human* stays yours to
 answer, and your AI may still ask you a question its consultants could not settle, or when no
-consultant can be had: that question is the only road to a person under Auto. The other four are
+consultant can be had; and a question it declares a production risk, with a reason, reaches you at once in the Planning or
+Released phase, where no consultant is asked first. Those are the only roads to a person under Auto. The other four are
 **ask a human** (the gate stops and puts the decision in front of you), **continue anyway** (it
 proceeds and says out loud that findings remain), **good enough** (the agent applies what is true,
 rejects the rest *with reasons*, and proceeds), and **escalate** (more reviewer effort, then a

@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import { bodyOf, sourceFiles, sourceOf } from './sourceReading';
 
 /**
- * The write of the skip list, as the host code is written (todo/PLAN_the_chat_opens_from_a_terminal_E3.md, S3-T10).
+ * The write of the skip list, as the host code is written (research/PLAN_the_chat_opens_from_a_terminal_E3.md, S3-T10).
  *
  * <p>`skipShellHost.ts` imports `vscode`, so no test can call it: the one write of E3 is held by reading it. The pure road is
  * covered by `skipShell.test.ts` over fake seams; what no seam shows is WHICH layer the real `update` targets, and that nothing

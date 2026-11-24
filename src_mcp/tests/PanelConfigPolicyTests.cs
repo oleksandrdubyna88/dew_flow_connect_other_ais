@@ -7,7 +7,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// What a <see cref="PanelConfig"/> says about policy auto, and who may write it
-/// (<c>todo/PLAN_auto_never_asks_a_person_E1_S1_spec.md</c>, § S1.2).
+/// (<c>research/PLAN_auto_never_asks_a_person_E1_S1_spec.md</c>, § S1.2).
 /// </summary>
 /// <remarks>
 /// A config made in code always says <c>true</c> or <c>false</c>; only the constructor a session FILE is read through can

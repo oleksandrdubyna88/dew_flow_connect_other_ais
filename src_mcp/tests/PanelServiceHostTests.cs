@@ -300,7 +300,7 @@ public sealed class PanelServiceHostTests : IDisposable
         CodexModel(host).Should().Be(DefaultCodexModel(), "an empty file is an explicit thing too: defaults, as before");
     }
 
-    // ---------- a settings read that failed (todo/PLAN_auto_never_asks_a_person_E1_S1_spec.md, § S1.5.2) ----------
+    // ---------- a settings read that failed (research/PLAN_auto_never_asks_a_person_E1_S1_spec.md, § S1.5.2) ----------
 
     private sealed record Heard(List<Serilog.Events.LogEvent> Events, List<CoaiMcp.Core.Notices.ServerNotice> Notices)
     {

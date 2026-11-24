@@ -1,9 +1,9 @@
 # PLAN — E1 stories: the terminal door
 
-> Status: **revised for epoch 2, 2026-11-11 — the parent is stopped for re-review at change 1.2 (the terminal door takes the
-> clipboard). S1, S2 and S3 are coded on `feat/chat-from-a-terminal` (PR #971, not merged); the re-review judged S2 and most of
-> S3 `fits` and S1's terminal copy `cut`. The fix forward is § 5 *E1.S1 — epoch-2 revision*: not coded, and not started
-> until the owner approves epoch 2 (the record says `Narrowed: yes`).** Epic E1 of
+> Status: **IMPLEMENTED, 2026-11-18 — promoted with its parent.** S1, S2 and S3 were coded on `feat/chat-from-a-terminal`; the parent's change 1.2
+> (the terminal door takes the clipboard) stopped the plan, the re-review judged S2 and most of S3 `fits` and S1's terminal copy `cut`, and § 5
+> *E1.S1 — epoch-2 revision* was the fix forward in the same PR. Merged (#971, 0851f074) after R1, R2, R3 (second run), R4, R5 and R9 passed on
+> VSIX 0.85.902, and released as extension 0.86.0 on 2026-11-11. Epic E1 of
 > [PLAN_the_chat_opens_from_a_terminal.md](PLAN_the_chat_opens_from_a_terminal.md) (its `## Epics`, and its § *Stage 1*).
 > Written by Opus when the epic started. A stories document keeps no change ledger: a change to this epic is an entry
 > in the parent.
@@ -358,7 +358,7 @@ T11) is `fits` and kept.*
 
 ### E1.S2 — The terminal source and its identity (CORNERSTONE)
 
-`model: fable` — the scenarios and the brief are Fable's, in `todo/PLAN_the_chat_opens_from_a_terminal_E1_S2_spec.md`.
+`model: fable` — the scenarios and the brief are Fable's, in `research/PLAN_the_chat_opens_from_a_terminal_E1_S2_spec.md`.
 Coder: sonnet · review: opus · area (b). Why this story and not another: the record is on disk from the first release,
 E2 and E3 read it as it is, and a wrong identity or a stolen conversation gives no error. Area (a) has loud failures
 that S1's tests and R1/R3 catch before E2; area (c)'s first part is a small rule the types enforce (S3).
@@ -648,8 +648,9 @@ Carried to later epics (found while the S2 spec was written, 2026-11-10; not E1 
       the pull request.
 - [ ] `research/module_extension.md`, `research/module_tests.md` and `research/architecture.md` updated; the help in
       five languages.
-- [ ] The pull request merged; the owner's R1–R5 and R9 recorded in the parent's R-table from the VSIX of the merged
+- [x] The pull request merged; the owner's R1–R5 and R9 recorded in the parent's R-table from the VSIX of the merged
       head.
-- [ ] The extension release cut from `main`: its changelog prose in the release-please pull request, the tag pushed
+- [x] The extension release cut from `main`: its changelog prose in the release-please pull request, the tag pushed
       alone, its run observed.
-- [ ] `node .agents/conventions/tools/plan-lifecycle.mjs` clean.
+      Recorded 2026-11-18: extension 0.86.0, tag `extension-v0.86.0` on `45b070a2` (release PR #978); the run itself is not recorded in this document.
+- [x] `node .agents/conventions/tools/plan-lifecycle.mjs` clean.

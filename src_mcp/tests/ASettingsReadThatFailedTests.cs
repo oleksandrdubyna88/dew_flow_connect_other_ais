@@ -6,7 +6,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// A settings file that is THERE and gave no values is told apart from one that is not there, and from one held open by its writer
-/// (<c>todo/PLAN_auto_never_asks_a_person_E1_S1_spec.md</c>, § S1.5.2).
+/// (<c>research/PLAN_auto_never_asks_a_person_E1_S1_spec.md</c>, § S1.5.2).
 /// </summary>
 /// <remarks>
 /// Why it matters: the default a failed read gives is policy auto, which ends rounds and holds the gate for nobody. A server that cannot

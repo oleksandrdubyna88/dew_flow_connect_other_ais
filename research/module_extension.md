@@ -2604,7 +2604,7 @@ triggers as they were plus trigger 7, the cadence), and this repository takes it
 |---|---|
 | **The generator reads the mount.** `CONSULTANT_SOURCE` is `.agents/conventions/common/coai-consultant.md`; `consultantBody` is `ruleBody` with the consultant marker, so the frontmatter and `owns:` lines are stripped as they are for the other three. A pin from before the move fails naming the file and the fix (move the pin). The output module is unchanged. | `scripts/prepare-gate.mjs` |
 | **The local copy is deleted**, and a test asserts it stays deleted: two sources for one half is the drift the move ended. | `src_vs_code/src/consultantRule.md` (gone), `snippetVersion.test.ts` |
-| **Versions**: `CONSULTANT_VERSION` 3, `ARTEFACT_VERSION` 12, the menu title `(v12)`, `SNIPPET_BODY_SHA` recorded — the gate half's pointer sentence moved the body too, and its marker stays frozen at v5. | `claudeSnippet.ts`, `package.json` |
+| **Versions**: `CONSULTANT_VERSION` 3, `ARTEFACT_VERSION` 12, the menu title `(v12)`, `SNIPPET_BODY_SHA` recorded — the gate half's pointer sentence moved the body too, and its marker stayed frozen at v5 (the freeze ended 2026-09-15; v6 on 2026-11-18). | `claudeSnippet.ts`, `package.json` |
 | **Discovery reads a mount with its siblings.** A repository that mounts the rules and pasted nothing holds its halves as four files; reading the gate rule alone told it that it was behind on three halves it had. `readSnippetStatus` now joins the selected mount's `MOUNTED_SIBLINGS`, only for that mount — a half is never filled from another — and an actual paste still wins. | `claudeSnippet.ts` (`withMountedSiblings`) |
 
 The risk consultation for this story named the trap in the old test: corrupting the consultant file once
@@ -4196,10 +4196,13 @@ So `src_vs_code/src/consultantRule.md` is ours, `prepare-gate.mjs` emits it besi
 > mount like the other three halves; the local file is gone. See *The consultant rule is read from the
 > mount* below.
 
-**Every half carries its own marker, and that is not a preference either.** `coai-review-gate.md` is
-one of the 24 rule bodies the conventions repository hashes against its migration baseline, so its
-`<!-- coai-snippet v5 -->` cannot be raised: the gate half is frozen at v5 and will be until that
-inventory retires. A change that arrives as a whole new half therefore brings a marker of its own —
+**Every half carries its own marker, and that is not a preference either.** `coai-review-gate.md` was
+one of the 24 rule bodies the conventions repository hashed against its migration baseline, so its
+`<!-- coai-snippet v5 -->` could not be raised and the gate half sat at v5; that freeze ended on
+2026-09-15 (conventions `747887d`), and the gate half moved to v6 with E3 of the auto plan (the words for
+policy `auto`, conventions `25d551b8`, artefact v19; the feature half moved to v5 and the artefact to v20 with conventions release `c598a11`: a `blocking` `good_enough` finding at the cap under `auto` is verified like any other, not always landed). The halves stay separate files each with a marker of
+its own (merging some back is the conventions' manuals plan's step 4). A change that arrives as a whole
+new half therefore brings a marker of its own —
 `coai-document`, `coai-caller`, `coai-consultant`, each at v1 when it arrived, and each raised since
 by a change to its own rule (v3, v2 and v2 as of 2026-09-16 — `KNOWN_HALVES` in
 `claudeSnippet.ts` is the live answer, and these numbers are a record of one day rather than a
@@ -4207,8 +4210,9 @@ claim about today) — and `snippetStatus` compares a pasted
 copy half by half. A paste missing one of them is `older` by its ABSENCE rather than by a number,
 which is what lets a copy made before a half existed be recognised at all.
 
-A marker cannot tell an old paste of the FROZEN gate half from a current one, because that marker never
-moves — so a rule change there (the 2026-11 pin made the gate say "Never pass `humanDecision` yourself"
+A marker could not tell an old paste of the gate half from a current one while it stayed at v5, because
+the marker did not move — `RETIRED_TEXT` remains for a paste whose text changed and whose marker did not,
+and the rule change there (the 2026-11 pin made the gate say "Never pass `humanDecision` yourself"
 where it had said to pass `humanDecision: "proceed"` to `resolve`) left a v17 paste reading `current`.
 `RETIRED_TEXT` in `claudeSnippet.ts` is the answer: a table of sentences an old paste carried, per half,
 and a half whose own SEGMENT — from each copy of its marker to the next `<!-- coai-… v<n> -->` marker, or the end of the text — contains one of its own is `older` exactly as if its marker were lower. The phrase outside that segment (a person's notes, a changelog, another half) counts for nothing. A test holds
@@ -4226,7 +4230,7 @@ that the current artefact quotes none of them.
 
 The menu item said **“Copy the CLAUDE.md snippet (v5)”** from the day the label was added, through
 three changes to what the clipboard carries. The label was pinned to `SNIPPET_VERSION` — the one
-number in `claudeSnippet.ts` that is frozen by the conventions baseline — so it could not move, and a
+number in `claudeSnippet.ts` that was then frozen by the conventions baseline (the freeze ended 2026-09-15; v6 on 2026-11-18) — so it could not move, and a
 person reading the menu had no way to learn that the block in their repository was not what the click
 would now give them. That is the defect the label was introduced to fix, arriving through the one door
 left open, and the operator reported it twice.
@@ -4783,8 +4787,8 @@ flowchart LR
 
 ## Policy Auto in the panel (E2 of the auto plan)
 
-*Written 2026-11-17 from `todo/PLAN_auto_never_asks_a_person.md` § 4.6 (epoch 3) and the stories document
-`todo/PLAN_auto_never_asks_a_person_E2.md`. The value, the wire, the gate section and the rounds-log note are code on
+*Written 2026-11-17 from `research/PLAN_auto_never_asks_a_person.md` § 4.6 (epoch 3) and the stories document
+`research/PLAN_auto_never_asks_a_person_E2.md`. The value, the wire, the gate section and the rounds-log note are code on
 `feat/auto-mode-e2`. The migration's module names and mechanics are the stories document's C4–C6 and the S2 spec's; read this section
 against `src/onExhaustedMigration.ts` and `src/onExhaustedMigrationHost.ts` before trusting a detail of the migration.*
 
@@ -4792,8 +4796,11 @@ The panel's `When the rounds run out` (`coai.onExhausted`) has five values and *
 in `DEFAULTS` and in the server (an absent `COAI_ON_EXHAUSTED` is policy `auto`; `panelServerDefaultsAgreement.test.ts`
 reads the C# and fails if the two drift). The guarantee the panel's words make is the parent's requirement 5 and nothing
 wider: under Auto coai raises no new hold, never waits and never writes a card; a hold this build raised under Ask a
-human before the switch stays the person's; the only road to a person is the AI's own question after its consultants,
-or when no consultant can be had, which the AI chose to ask. No text says "never asks you anything".
+human before the switch stays the person's; the only roads to a person are the AI's own question after its consultants,
+or when no consultant can be had, and a question it declares `productionRisk: true` with a reason in the Planning or
+Released phase, where `AskGate` asks no consultant — each of which the AI chose to ask. (Corrected 2026-11-19: this
+paragraph, the README and the help once said the first road alone, which is wider than the server; the same words stood
+in 0.89.0's CHANGELOG entry, and the 0.89.1 entry says so.) No text says "never asks you anything".
 
 **The value and its labels.** `OnExhausted` (`onExhaustedPanel.ts`) is `auto | human | continue | good_enough |
 escalate`. `ON_EXHAUSTED_CHOICES` is the one list of labels, Auto first, and every page, sentence and test that names a
@@ -8622,8 +8629,8 @@ they ran: five shipped code roles active, and the page refusing to switch on a s
 that the server would have accepted.
 
 `claudeSnippet()` hands out TWO rule bodies now — the gate rule and `coai-document-gate.md` — because
-the first is one of the 24 bodies the conventions repository hashes against its migration baseline
-and cannot grow a section. `SNIPPET_VERSION` is that frozen file's own marker and cannot move either,
+the first was one of the 24 bodies the conventions repository hashed against its migration baseline
+and could not grow a section (the freeze ended 2026-09-15; v6 on 2026-11-18). `SNIPPET_VERSION` is that file's own marker and could not move either,
 so `DOCUMENT_VERSION` is what records a change to the pasted text, and a paste carrying no document
 half is reported as OLDER: the AI obeying it will never call `review_document`.
 
@@ -13532,7 +13539,7 @@ flowchart LR
 
 ## The chat opens from a terminal (E1)
 
-Plan: `todo/PLAN_the_chat_opens_from_a_terminal_E1.md` (2026-11-10). This section grows with each story of E1; S1 is the capture, S2 the source, S3 the door.
+Plan: `research/PLAN_the_chat_opens_from_a_terminal_E1.md` (2026-11-10). This section grows with each story of E1; S1 is the capture, S2 the source, S3 the door.
 
 - **The terminal door reads the clipboard (epoch 2, change 1.2).** The first real-window check (VSIX 0.85.901, 2026-11-11) showed why a
   copy command cannot serve this door: in a `Creds:` tmux terminal running the Claude CLI, a mouse drag is Claude's own selection, already
@@ -13566,7 +13573,7 @@ Plan: `todo/PLAN_the_chat_opens_from_a_terminal_E1.md` (2026-11-10). This sectio
 
 ### The terminal source and its identity (E1.S2)
 
-Spec: `todo/PLAN_the_chat_opens_from_a_terminal_E1_S2_spec.md`. A conversation opened from a terminal is filed under a
+Spec: `research/PLAN_the_chat_opens_from_a_terminal_E1_S2_spec.md`. A conversation opened from a terminal is filed under a
 `terminal` source, and the rest of E1 builds on it.
 
 - **The kind.** `ConversationSource` has a fourth kind, `{ kind: 'terminal'; name }`: the terminal's FULL name as the host reported it at the
@@ -13692,7 +13699,7 @@ Spec: `todo/PLAN_the_chat_opens_from_a_terminal_E1_S2_spec.md`. A conversation o
 
 ## The chat reads the remote Claude session (E2)
 
-Plan: `todo/PLAN_the_chat_opens_from_a_terminal_E2.md` (2026-11-11). This section grows with each story of E2; S1 is which terminal reads a session.
+Plan: `research/PLAN_the_chat_opens_from_a_terminal_E2.md` (2026-11-11). This section grows with each story of E2; S1 is which terminal reads a session.
 
 - **Which terminal reads a session, and no local walk for a terminal (E2.S1).** `credsSession(name)` in `src/credsSession.ts` (pure, no imports) reads the
   terminal's FULL name with the plan's one pattern, `^Creds: ([A-Za-z0-9][A-Za-z0-9._-]*) / ([A-Za-z0-9][A-Za-z0-9_-]*)$`, and answers `session` (host and
@@ -13716,7 +13723,7 @@ Plan: `todo/PLAN_the_chat_opens_from_a_terminal_E2.md` (2026-11-11). This sectio
 
 ### The remote reader's contract: the script, the frame and the ssh edge (E2.S2)
 
-Spec: `todo/PLAN_the_chat_opens_from_a_terminal_E2_S2_spec.md` (Fable, reviewed by Opus). Four new modules and two widened ones; none imports `vscode`. Everything an
+Spec: `research/PLAN_the_chat_opens_from_a_terminal_E2_S2_spec.md` (Fable, reviewed by Opus). Four new modules and two widened ones; none imports `vscode`. Everything an
 ssh option does below is said as "we pass": the effect on the configuration ssh would use was seen (S2-T21, M-G2, M-G3), the effect against a real server was not
 (M-O1…M-O7, below).
 
@@ -13793,7 +13800,7 @@ ssh option does below is said as "we pass": the effect on the configuration ssh 
 
 ### One road to the VM: the consent, the registry path, the fallback and the pick list (E2.S3)
 
-Plan: `todo/PLAN_the_chat_opens_from_a_terminal_E2.md`, § 4 (C4) and § 5 *E2.S3*. Two new modules: `src/remoteRead.ts` (pure — it imports no `vscode`, and `sonarExclusions.test.ts` holds it out of the host
+Plan: `research/PLAN_the_chat_opens_from_a_terminal_E2.md`, § 4 (C4) and § 5 *E2.S3*. Two new modules: `src/remoteRead.ts` (pure — it imports no `vscode`, and `sonarExclusions.test.ts` holds it out of the host
 list) and `src/remoteSessionHost.ts` (host: only the `vscode` seams; it is listed in `sonar.coverage.exclusions`). `remoteScript.ts` exports `FOLDERS_MAX` so the road does not type the bound again. Nothing here is
 reached by a door yet: the two doors and *Asked* are E2.S4's, and they call `readRemoteSession(terminal, purpose)`.
 
@@ -13834,7 +13841,7 @@ reached by a door yet: the two doors and *Asked* are E2.S4's, and they call `rea
 
 ### The doors: take and add from a terminal, *Asked* through the reach, the words, the help (E2.S4)
 
-Plan: `todo/PLAN_the_chat_opens_from_a_terminal_E2.md`, § 4 (C4, C5 as revised by gate G6) and § 5 *E2.S4*. This is what a person presses; the road under it is E2.S3's.
+Plan: `research/PLAN_the_chat_opens_from_a_terminal_E2.md`, § 4 (C4, C5 as revised by gate G6) and § 5 *E2.S4*. This is what a person presses; the road under it is E2.S3's.
 
 - **The words moved first (C5).** The `Waiting` → sentence mapping of `questionWaitingHere` is the pure `waitingSaid(found)` in `src/waitingSaid.ts`, moved word for word in its own commit (`waitingSaid.test.ts`, S4-T1: every sentence is
   typed in the test, so a changed word fails by name). The local road (a tab, over the window's folders) and the remote road (a terminal) both call it, so one situation has one sentence. The same file holds `questionSaid(answer)`:
@@ -13867,7 +13874,7 @@ Plan: `todo/PLAN_the_chat_opens_from_a_terminal_E2.md`, § 4 (C4, C5 as revised 
 
 ## The chat finds its terminal again (E3)
 
-Plan: `todo/PLAN_the_chat_opens_from_a_terminal_E3.md` (its parent `todo/PLAN_the_chat_opens_from_a_terminal.md`, § *Stage 3*). Epic E3 has three stories: re-attach after a reload (S1, below), go-to from a terminal (S2) and the skip list (S3).
+Plan: `research/PLAN_the_chat_opens_from_a_terminal_E3.md` (its parent `research/PLAN_the_chat_opens_from_a_terminal.md`, § *Stage 3*). Epic E3 has three stories: re-attach after a reload (S1, below), go-to from a terminal (S2) and the skip list (S3).
 
 ### Re-attach after a reload (E3.S1)
 
@@ -13901,7 +13908,7 @@ A reload gives a restored chat tab a key of its own (a plain `{}`), and creds br
 
 ## The skip list of the terminal keys (E3.S3)
 
-Plan: `todo/PLAN_the_chat_opens_from_a_terminal_E3.md`, § 4 (C4) and § 5 *E3.S3*. The manifest puts every command bound under `terminalFocus` into the DEFAULT of `terminal.integrated.commandsToSkipShell`, so Ctrl+Alt+A in a terminal reaches VS Code and not the shell.
+Plan: `research/PLAN_the_chat_opens_from_a_terminal_E3.md`, § 4 (C4) and § 5 *E3.S3*. The manifest puts every command bound under `terminalFocus` into the DEFAULT of `terminal.integrated.commandsToSkipShell`, so Ctrl+Alt+A in a terminal reaches VS Code and not the shell.
 A list of the person's OWN hides that default (the layers do not merge), and the chord goes to the shell. This is the check that tells them, and — only after a press — repairs their user list. It is the one place the extension appends to a VS Code setting it does not own.
 
 - **The pure module** (`src/skipShell.ts`, no `vscode`; every effect is a seam). `SKIP_SHELL_IDS` is `coai.askFromTerminal`, `coai.goToFromTerminal` (the manifest default, in its order; `terminalDoorWiring.test.ts` S3-T9 holds the constant, the default and the set of commands bound under

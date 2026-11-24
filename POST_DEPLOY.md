@@ -19,7 +19,31 @@ one of them arriving wrong.
 
 Target: the released **extension** version — `--target 0.33.1`. The MCP binary ships on its own tag and its own number, so item 1 reads `MCP_VERSION` (`mcp-v<version>`) rather than the target.
 
-Last verified: 2026-11-18 · server **0.16.3** deployed (run 44349602108) — the box served 0.16.2 before the deploy and
+Last verified: 2026-11-18 · extension **0.88.0** (released: `extension-v0.88.0` on 5b9ab66c, cut by a release-please
+dispatch after release PR #1013; release run 44360357872, its `extension` job green with "Publish to the Marketplace" at
+17:38:57 UTC; every other job skipped, as on an extension-only tag) · mcp **0.66.0** unchanged · server **0.16.3** served
+by the box. Run locally: `MCP_VERSION=0.66.0 SERVER_VERSION=0.16.3 node .agents/conventions/tools/post-deploy-check.mjs
+--target 0.88.0`. The first run, at 17:39:18 UTC, printed `PASS 1`, `FAIL 2 — marketplace serves 0.87.0` (the
+Marketplace's own delay), `PASS 6`, `PASS 9` and `PASS 10`. Re-run each minute, it printed every automated item PASS at
+17:46:53 UTC: `PASS 1 — all six RIDs present`, `PASS 2 — marketplace serves 0.88.0`, `PASS 6` (the row labelled 7) —
+client-config 200 and the catalog 401 without a session, the expected answer, `PASS 9 — all six RIDs present` and
+`PASS 10 — 200 {"ok":true,"version":"0.16.3"}`. The released vsix (`connect-other-ais-0.88.0.vsix`, sha256
+`e47dc77fbaf10580d1b7705b093e5fa09384e858e2500f015be3aed25282bc48`) was opened: `package.json` says 0.88.0 and contributes
+`coai.askFromTerminal`, `coai.takeFromTerminal`, `coai.addFromTerminal` and `coai.goToFromTerminal`, with Ctrl+Alt+G
+under `terminalFocus` for the go-to and `&& !terminalFocus` on the road back's Ctrl+Alt+G; the bundled
+`dist/extension.js` holds the skip-list check (`commandsToSkipShell`) and the title fallback's "Not every session on the
+host was read". In this release: #1015 (E3 of the terminal door — re-attach after a reload, go-to from a terminal, the
+skip-list Add), #1019 (change 3.1, the title fallback asks when its scan was cut) and #1011 (policy Auto: server and MCP
+only; in the extension a test script). The owner's R8, R10 and R11 passed on the pre-release VSIX 0.87.901 (b3abb791),
+and the owner's smoke on 0.87.902 (b7173359, the merged fix) passed before the tag. **Known issue shipped**: the host
+scenario S3-H1 (the skip-list Add) can fail in CI because its single read-back sees the old value — it failed once on
+the release PR's head (run 44350882163) and passed on re-run; a person may see a false "not read back" warning. It is
+in the 0.88.0 changelog and tracked by
+[todo/PLAN_the_skip_list_add_reads_back_after_the_write.md](todo/PLAN_the_skip_list_add_reads_back_after_the_write.md).
+Completion question for E3: no new item — what E3 adds lives in each person's window and settings, and no check of the
+installed extension can see it. Manual items 3, 4, 5, 7, 8, 11 and 12 were not run.
+
+Previously verified: 2026-11-18 · server **0.16.3** deployed (run 44349602108) — the box served 0.16.2 before the deploy and
 serves 0.16.3 after it · mcp **0.66.0** (the newest; 0.65.4 carries the same hook fix) · extension **0.87.0** as the
 target, unchanged. Before the deploy the canary token had expired (`--check-token`: HTTP 401, the file dated
 2026-11-09); the owner pasted a fresh one on 2026-11-18 and `--check-token` said `canary token: accepted`. The claude

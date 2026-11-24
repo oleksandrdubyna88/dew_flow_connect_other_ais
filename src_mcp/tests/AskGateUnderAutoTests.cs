@@ -5,8 +5,8 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// The gate behind <c>ask_human</c> under policy auto (<c>todo/PLAN_auto_never_asks_a_person.md</c> § 4.4, owner decision O3;
-/// <c>todo/PLAN_auto_never_asks_a_person_E1.md</c> § 9.1): the AI's own question goes to the consultants first, whatever the phase,
+/// The gate behind <c>ask_human</c> under policy auto (<c>research/PLAN_auto_never_asks_a_person.md</c> § 4.4, owner decision O3;
+/// <c>research/PLAN_auto_never_asks_a_person_E1.md</c> § 9.1): the AI's own question goes to the consultants first, whatever the phase,
 /// the mode and the free batches say; the person is asked only with a proof, or when no consultant can be had. Pure, like
 /// <see cref="AskGateTests"/>, whose every row is the same gate with <c>Autonomous</c> false.
 /// </summary>

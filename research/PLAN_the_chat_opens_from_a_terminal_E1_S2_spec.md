@@ -1,6 +1,6 @@
 # PLAN — E1.S2 spec: the terminal source and its identity (CORNERSTONE)
 
-> Status: **coded, 2026-11-10 — written by Fable before its code; implemented in 1f7c14a5, Opus review accept with fixes (applied); not merged.** Cornerstone spec, written before its code. Story
+> Status: **IMPLEMENTED, 2026-11-11 — promoted with its parent.** Written by Fable before its code; coded 2026-11-10 in 1f7c14a5, Opus review accept with fixes (applied); merged (#971, 0851f074) and released as extension 0.86.0 on 2026-11-11. Cornerstone spec, written before its code. Story
 > E1.S2 of [PLAN_the_chat_opens_from_a_terminal_E1.md](PLAN_the_chat_opens_from_a_terminal_E1.md) (parent
 > [PLAN_the_chat_opens_from_a_terminal.md](PLAN_the_chat_opens_from_a_terminal.md), § *Stage 1*, ledger entry 1.1). Its own
 > file because the stories document goes whole to a review gate and must stay short. It keeps no change ledger: a change
@@ -917,4 +917,4 @@ node scripts/count-notifications.mjs --write                   # expect NO chang
 - [ ] S2-H1 and S2-H2 green in CI's `extension · a real editor` job on the head commit, read from that job.
 - [ ] `research/module_extension.md` and `research/module_tests.md` updated; the comments at `chatGoto.ts:44` and `:235` corrected.
 - [ ] The release note of § S2.11 is carried into the release-please pull request of the epic.
-- [ ] `node .agents/conventions/tools/plan-lifecycle.mjs` clean.
+- [x] `node .agents/conventions/tools/plan-lifecycle.mjs` clean.

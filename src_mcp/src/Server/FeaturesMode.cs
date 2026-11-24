@@ -48,7 +48,7 @@ internal static class FeaturesMode
         // in the reply (research/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md). `providers` carries it back when set.
         "maxPromptKib",
         // The policy `auto` for When the rounds run out, the meaning of an absent COAI_ON_EXHAUSTED: no hold, no wait, no card;
-        // not_reviewed, consult_first (todo/PLAN_auto_never_asks_a_person.md, E1).
+        // not_reviewed, consult_first (research/PLAN_auto_never_asks_a_person.md, E1).
         "onExhaustedAuto",
     ];
 

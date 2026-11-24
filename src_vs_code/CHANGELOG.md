@@ -1,5 +1,71 @@
 # Changelog
 
+## Extension 0.89.2 — 2026-11-19
+
+**The CLAUDE.md snippet is now v20: its feature half is `coai-feature` v5.** The text your AI reads comes from the conventions release `c598a11`; one rule changed in it, and the clipboard moved from v19 to v20 with it.
+
+What the feature half now says, for an AI that reads it: under policy Auto, at the cap, a `good_enough` verdict can carry a `blocking` finding the second round did not clear. v4 said to land it as a new pull request like the rest. v5 says to **verify it like any other finding**: land a true one as a NEW pull request and name it in the summary, reject a false one with its reason. The summary still says what was taken and what was declined.
+
+A paste reads `older` until it is pasted again, and a mounted rule until its repository's pin bump (move the pin, don't paste); nothing is rewritten for you. The menu says "Copy the CLAUDE.md snippet (v20)".
+
+Nothing else in the extension changed: the help, in five languages, and the README never said a blocking finding is always landed, so they stay as they are. The MCP server to pair it with is `coai-mcp` 0.66.0, unchanged.
+
+## Extension 0.89.1 — 2026-11-19
+
+**The CLAUDE.md snippet now speaks policy Auto: the clipboard is v19.** The text your AI reads — the gate, the document gate, the feature gate and the question rule, from the conventions release `5d2d5ec` — says what a server running Auto does, so a repository that pastes it, or mounts it, no longer tells its AI to wait for a person the gate will never ask.
+
+What changed for an AI that reads it:
+
+- **`not_reviewed`.** Under Auto, a round nobody answered proceeds as `not_reviewed`, which is not a review and approves nothing; the rule says so for the plan round, the code round, a document and a feature review (under Auto only the first two grounds for a further feature round remain).
+- **`consult_first`.** When the server answers a question with `consult_first`, the AI asks its consultants before anyone else; under Auto the question rule's floor rises to the rule's own bar in every phase.
+- **`call_human` only under a policy that asks a person.** Under Auto the gate never says `call_human`; it is the operator's choice (Ask a human, or another value they set, including one a repository's workspace settings keep in force) or a server too old to know Auto, which still asks by default — there the rule says to stop and surface the findings to the person.
+
+A correction to 0.89.0's entry. It said "The one road left to a person is your AI's own question after its consultants, or when no consultant can be had …" That is true of the gate and of an ordinary question, and wider than the server for one case. Under Auto **the gate** never asks a person, and **your AI's own question** reaches the person after its consultants, or at once when none can be had. A question the AI marks as a production risk keeps its own path: in the planning or released phase, or with the question mode off, it may reach the person without the consultants first. The rule text in this version says exactly that.
+
+A paste reads `older` until it is pasted again, and a mounted rule until its repository's pin bump (move the pin, don't paste); nothing is rewritten for you. The menu says "Copy the CLAUDE.md snippet (v19)".
+
+The README and the help, in five languages, are corrected in this release too: they said the AI's own question was the only road to a person under Auto, and now name the production-risk exception.
+
+The MCP server to pair it with is `coai-mcp` 0.66.0, unchanged.
+
+## Extension 0.89.0 — 2026-11-18
+
+**Auto is now what *When the rounds run out* starts on, and a value you chose before is reset to Auto once.** Under Auto the
+gate raises no new hold, never waits for a person and never writes a card. A round nobody answered proceeds as
+`not_reviewed`, which is never a pass, and spent rounds proceed as `good_enough`, each logged and noted on the round.
+
+| | was | now |
+|---|---|---|
+| *When the rounds run out*, default | Ask a human | **Auto** |
+| A value you chose (your settings, each side's own settings) | kept | **reset to Auto once**; a choice made afterwards is kept, also on the other machines Settings Sync reaches, and the reset is told with one notification, both outside the rare windows `research/module_extension.md` names |
+| A value in a workspace's `.vscode/settings.json` | in force | in force, never changed, and named in Reviews › The gate |
+| Ask a human chosen in the panel | written as nothing (it was the default), so Server 0.66.0 ran Auto | written as `human` and honoured |
+| A coai-mcp older than 0.66.0 | — | sent Good enough, and The gate says "predates Auto" |
+| The rounds log | a note only on a skipped round | the note of every round, `not_reviewed` among the verdicts |
+
+What Auto promises, exactly: coai raises no new hold, never waits and never writes a card. A hold this version raised under
+Ask a human stays yours to answer. The one road left to a person is your AI's own question after its
+consultants, or when no consultant can be had, which the AI chooses to ask.
+
+The extension writes one key, `coai.onExhaustedResetToAuto`, into your user settings; Settings Sync carries it. Design
+decision: the witness's value is one fixed word, the same on every machine, so Settings Sync merges two machines'
+witnesses without a conflict.
+
+This is the extension side of policy Auto that 0.88.0 named as not yet released: the reset and its notification that Server 0.66.0 promised.
+
+If you put `COAI_ON_EXHAUSTED=human` in your MCP client's env block, as the Server 0.66.0 note suggested, choose Ask a human
+in the panel and remove it there.
+
+The MCP server to pair it with is `coai-mcp` 0.66.0.
+
+To go back: 0.88.0 shows Ask a human but writes nothing, so a 0.66.0 server runs Auto for it.
+
+Update the extension on every side — each WSL or SSH remote — together: a side still on 0.88.0 or earlier keeps writing its settings
+file the old way.
+
+The help is rewritten in English, German, Spanish, Russian and Ukrainian, and the READMEs, `ARCHITECTURE.md` and
+`research/module_extension.md` describe Auto.
+
 ## Extension 0.88.0 — 2026-11-18
 
 **Added: after a reload, a `Creds:` chat finds its terminal again.** When VS Code or CredsForDevs brings a `Creds: <host> / <session>` terminal back, the chat of that name is tied to it again. This happens only when exactly one open terminal and exactly one chat carry the name. When a second terminal or a second chat of the name appears before you first use the terminal, the tie is undone, and nothing is guessed. Other terminals stay as in 0.87.0.

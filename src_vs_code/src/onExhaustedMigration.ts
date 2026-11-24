@@ -14,7 +14,7 @@ function byCodeUnit(a: string, b: string): number {
 
 /**
  * The one-time migration that resets every saved *When the rounds run out* to Auto (E2.S2; the decisions are
- * todo/PLAN_auto_never_asks_a_person_E2_S2_spec.md § S2.1, the run is § S2.4). Pure and `vscode`-free: the host hands in a
+ * research/PLAN_auto_never_asks_a_person_E2_S2_spec.md § S2.1, the run is § S2.4). Pure and `vscode`-free: the host hands in a
  * store, the person's own settings layer and a few functions, and every test drives it that way, without a panel.
  */
 

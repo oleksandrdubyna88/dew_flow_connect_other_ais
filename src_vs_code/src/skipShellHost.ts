@@ -13,7 +13,7 @@ import {
 } from './skipShell';
 
 /**
- * The host half of the skip-shell check (todo/PLAN_the_chat_opens_from_a_terminal_E3.md, E3.S3): it only supplies the `vscode`
+ * The host half of the skip-shell check (research/PLAN_the_chat_opens_from_a_terminal_E3.md, E3.S3): it only supplies the `vscode`
  * seams to `skipShell.ts`, which decides everything. The one write of the whole feature is `update` below, and it targets the
  * USER settings — the global target — and nothing else. `skipShellWiring.test.ts` holds that.
  */

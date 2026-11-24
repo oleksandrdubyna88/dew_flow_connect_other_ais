@@ -470,7 +470,7 @@ public sealed class ASessionFileKeepsWhatANewerServerWroteTests : IDisposable
     {
         // The member policy auto adds to a config. A build that has the bag but does not know the member must keep it as it
         // found it — absent stays absent, a value stays that value — because "absent" is what marks a hold raised before
-        // policy auto existed (todo/PLAN_auto_never_asks_a_person_E1_S1_spec.md, D2 and residual A8). Written against the tree before the member
+        // policy auto existed (research/PLAN_auto_never_asks_a_person_E1_S1_spec.md, D2 and residual A8). Written against the tree before the member
         // exists, on purpose: that tree IS such a build, and after the member lands this same test pins this build's own load and save.
         var store = new SessionStore(_data);
         var file = Plant(store, []);

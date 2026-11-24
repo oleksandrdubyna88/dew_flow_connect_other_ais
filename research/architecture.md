@@ -638,7 +638,7 @@ refusal naming the session. Nothing else in this extension depends on Claude Cod
 
 A terminal comes forward through VS Code's own `Terminal.show()` (the E1 terminal road of the same command, `chatReturnCommand.ts`); no other extension is called for it.
 
-### And one arrow OUT of the machine: the extension host → the system `ssh` → a VM the person agreed to (2026-11-11, E2.S2 of [../todo/PLAN_the_chat_opens_from_a_terminal_E2.md](../todo/PLAN_the_chat_opens_from_a_terminal_E2.md))
+### And one arrow OUT of the machine: the extension host → the system `ssh` → a VM the person agreed to (2026-11-11, E2.S2 of [PLAN_the_chat_opens_from_a_terminal_E2.md](PLAN_the_chat_opens_from_a_terminal_E2.md))
 
 *Asked* in a `Creds: <host> / <session>` terminal reads the Claude session that runs in that terminal's tmux session — on another machine. The extension reaches it by `ssh`: one call, `sh -s` on the VM,
 the script on stdin, and a typed answer parsed here (`remoteScript.ts` the script and the operands, `remoteFrame.ts` the parser, `remoteSsh.ts` the call; the three import no `vscode`). It is the first edge of this

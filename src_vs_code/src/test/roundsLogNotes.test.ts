@@ -7,7 +7,7 @@ import {
 } from './roundsLogPageHarness';
 
 /**
- * The note on a rounds-log row that RAN (story E2.S3, `todo/PLAN_auto_never_asks_a_person_E2.md` § 9.1).
+ * The note on a rounds-log row that RAN (story E2.S3, `research/PLAN_auto_never_asks_a_person_E2.md` § 9.1).
  *
  * <p>Policy `auto` records what it decided for a round — why nobody was asked, or that it released a hold an older
  * build had raised — in the row's note. A skipped round already says its note in its own branch; every other opened
