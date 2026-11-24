@@ -311,6 +311,12 @@ what stage 3 touches and the text above did not name:
   terminal called `Creds: x / y`. So the first remote read for a host asks *"Read the Claude session on
   “x” over ssh?"*; the answer is remembered per host in `globalState`, and a "no" makes that host
   clipboard-only until the person changes it from the panel.
+  **Changed by a later plan (2026-11-24, a documentation note and no ledger entry of this plan):**
+  [PLAN_the_terminal_panel_shows_the_accounts_and_their_usage.md](../todo/PLAN_the_terminal_panel_shows_the_accounts_and_their_usage.md)
+  widens what this answer covers and changes who asks: the same per-host answer also allows the AI accounts read, which a timer
+  makes every 10 minutes with no press; with the setting `coai.terminalAccountsAllowNewHosts` on (the default) a host with no
+  answer is allowed by that plan's round itself, so this question is in practice no longer asked first; and a "no" is kept in a
+  file of each side of the machine, which the press reads too. What is written here is what 0.87.0 built.
 - **One ssh call per question on the registry path, read-only.** Local `ssh` (Windows OpenSSH where the host is Windows, the
   side the terminals run on), argv only, no shell, and **no `-n`** (it would give the remote `sh -s` an empty
   stdin — plan round 1): `-T -o BatchMode=yes -o ConnectTimeout=5 -o

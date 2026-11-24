@@ -1263,3 +1263,65 @@ entry 1.1; K3 and K6 are fitted to the parent's text, and are not changes.** The
 - [ ] The code gate passed; the pull request merged; a pre-release VSIX of the merged head built for E2, with the
       Claude usage read off.
 - [ ] `node .agents/conventions/tools/plan-lifecycle.mjs` clean.
+
+## 12. The release notes, drafted in E1
+
+Written by the coder of E1.S5 from the code as it stands (2026-11-24). `src_vs_code/CHANGELOG.md` is NOT edited in E1: the
+release is ONE release for the whole plan, after E2 and C1, so the version and the date are not known and its prose goes
+into the release-please pull request then (`release-please-config.json:3-30`: the narrative changelog is a human record
+and is not generated). This is the draft of that prose, for what E1 built. **What E2 and C1 add is not written here**: the
+sentences about the usage read (the usage is read OFF in E1's build), about what a usage read writes and starts on a VM (W6, W7)
+and about the install of `jq` (C1) are written after E2 and C1, from what was seen.
+
+**Draft, to be placed under `## Extension <version> — <date>` at the release:**
+
+> **A list of the AI accounts on your ssh hosts, in the title bar of the terminal panel.** A new button, **AI accounts and
+> usage** (an account icon, right after **Ask other AI**, and in the command palette), opens a list of the Claude Code, Codex
+> and Antigravity accounts that are signed in on the hosts of your open `Creds: <host> / <session>` terminals. The accounts are
+> grouped: one Claude Code account on two hosts is one group, named with its email and organization. A number is said as what
+> is LEFT (`5h 44% left · resets in 2h 10m · week 23% left`), and a number the host did not give is a dash, never `0%`. Under
+> the groups, every host has its own sentence: turned off, not asked yet, never read yet, the last read failed, `jq` is
+> missing (with the exact command to run there, which CoAI never runs), or allowed automatically on a day.
+>
+> **It reads by itself.** A round starts 30 seconds after the window has such a terminal, and then 10 minutes after the end of
+> each round, with no press, and reads one host at a time over your own `ssh` with one fixed, read-only script. **Refresh now**
+> reads at once (not within a minute of the last round); **Stop the accounts round** stops the reads in every window of the
+> same side of the machine until you start them again from the list. Codex does not state an account name, so its group says
+> so; agy states neither an account nor a usage, so only its version and whether it is signed in are read. Nothing of a reading
+> is stored: after a reload the next round brings it back.
+>
+> **Security: a host nobody was asked about is now read, by a terminal's name.** Until now CoAI asked once, in a question, before
+> it read the Claude session of a host. Now a host that has no answer yet is allowed by the accounts round itself, and CoAI tells
+> you at most once a day which hosts it allowed that way. Any program that can open a terminal in your window can call it
+> `Creds: <host> / x`; within 30 seconds to 10 minutes CoAI then logs in to that host as you and runs its fixed script. The name
+> chooses only the host. CoAI passes `StrictHostKeyChecking=yes`, `BatchMode=yes` and `ForwardAgent=no`, so ssh is asked to refuse
+> a host whose key is not in your `known_hosts`, to ask for no password and to forward no agent. **To be asked first, turn off
+> `coai.terminalAccountsAllowNewHosts`** in your own user settings (a workspace cannot set it). Only **Not this host** stops a
+> host, and it always wins: it is kept in a file of each side of the machine (Windows, a WSL distro, a remote machine), read from
+> the disk before every call, and only your own press lifts it; **Read** or **Forget** in any window of that side lifts it, and on
+> another side you choose it there. The same answer now covers the Claude session read by *take* and *add the question* and the
+> AI accounts list. The sentences that said a host is asked once, and that the reads change nothing on the machine, are gone from
+> the help: the script CoAI sends writes nothing on a host.
+>
+> **Limits:** a "no" given in a window of an older build is only a copy until a window of this build reads
+> it; a disk that takes no write keeps a refusal in one window, and then no window of that side reads a host until you press
+> **Save now**; `SECURITY.md`, *The extension's outward ssh calls*, lists all thirteen. **Not changed:** the ssh options, the pick list of the session
+> reader, the MCP server and the Team server.
+
+(Each sentence of the Security paragraph says what CoAI PASSES, not what ssh then does: the refusal of an unknown host key on a
+real host is still owed, M-O3, and the sentence says "asked to refuse".)
+
+### The `POST_DEPLOY.md` question
+
+`POST_DEPLOY.md` is at its cap of twelve items (the rule, `common/post-deploy-checks.md`; the file's own note at `POST_DEPLOY.md:468`
+says a new item enters "under the cap of twelve"), so a thirteenth item enters only with a NAMED weaker one leaving, in the
+same edit. **The proposed item** (manual; what a person loses: the list never fills, or CoAI logs in to a host the person refused;
+what differs between the build and the machine that runs it: the published extension, the person's `~/.ssh/config`, `known_hosts`,
+the user-level setting and the storage folder of a side): *with the released extension, the icon of the terminal panel opens the
+list, and its first round logs in once on each host that is not refused — and not at all on a host that was refused with Not this
+host.* The check is a person's: open a `Creds: <host> / <session>` terminal, wait for the round (30 s) or press **Refresh now**,
+read the host's row, then press **Not this host** and confirm that the next round logs in nowhere (the host's own ssh log shows it).
+
+**Which item leaves is the question, and E1 does not decide it.** It goes to the consultants first, then to the owner, before the
+release; the rule asks for a named weaker one and for the commit to say why it is now the weakest. `POST_DEPLOY.md` is not edited
+in E1.
