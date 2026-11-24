@@ -1,6 +1,6 @@
 # PLAN — `auto`: the gate never asks a person, logs what went wrong and moves on
 
-> Status: **IMPLEMENTED, 2026-11-19.** E1: #1011, released as coai-mcp 0.66.0 (#1012), 2026-11-17. E2: #1018, released as extension 0.89.0 (#1022), 2026-11-18; verified (VSIX: default `auto`, the witness key and the migration bundled; Marketplace 0.89.0). E3: conventions #182 (rule text: `coai-snippet` v6, `coai-document` v4, `coai-feature` v4, `coai-question` v2) and #183 (the release pre-checks); `release` promoted to `5d2d5ec` on 2026-11-19 with the owner's approval; nine pin bumps merged — benchmark #229, mcp #83, sidecar_rust #82, vscode_kit #36, wsl_care #200, creds #384, amd_r9700 #38, rag_qln #134 (also its benchmark and mcp code pins) and this repository's #1024 (the regenerated snippet, v19); extension 0.89.1 released (#1025, tag `extension-v0.89.1`; the VSIX carries v6/v4/v4/v2 and "Copy the CLAUDE.md snippet (v19)"). The conventions post-deploy check against coai `main` `4ec6cf3d`, 2026-11-19: items 1–2 PASS; item 3, the native-agent smoke: the claude and codex inspect runs `allSourcesRead` true, and the held-gate behaviour smoke on the v6 text PASS (answers `ask_human`, `point_to_notice_card`, `resolve`, `ask_human`; USD 0.90). `review_feature` over the three epics (baseRef `e829bba8`): `proceed`, 2 of 2 reviewers, 0 findings; both noted their source budget did not reach every file. The change ledger is closed: epoch 3 stands as recorded, entry 3.1 its last change. **What shipped differently is in § *Deviations*, just before `## Epics`.** The rest of this block is the plan's history, kept as written. Before that: **E3: S1 merged in conventions 2026-11-18 as #182 (`25d551b8`); the release pre-checks recorded in conventions #183 and, with the owner's approval, `release` promoted to `5d2d5ec` on 2026-11-19. This repository's bump with the regenerated snippet (v19) is PR #1024 (pin `5d2d5ec`); the other eight bumps are open or merging. Remaining: the eight bumps and #1024 merged, the post-deploy check with the native-agent smoke, `review_feature`, the patch release, and the promotion of the plan.** Before that: **E3: S1 merged in conventions 2026-11-18 as #182 (`25d551b8`) and NOT yet promoted to the `release` branch (it waits for the owner's word on in-flight consumer releases and on the PR cap, § 5.1). This repository's bump is built on `docs/auto-mode-e3` (the pin at `25d551b8`, the snippet v19, the constants and the tests green; not yet a PR). Remaining: the promotion, the nine pin bumps, the post-deploy check with the native-agent smoke, `review_feature`, the patch release, and the promotion of the plan.** Before that: **E3 started 2026-11-18: its stories document, [PLAN_auto_never_asks_a_person_E3.md](PLAN_auto_never_asks_a_person_E3.md), written by Opus; nothing built. E2 merged 2026-11-18 as #1018 and released as extension 0.89.0 (#1022).** Before that: **E2 built 2026-11-17 in PR #1018 (S1, S2, S3; the coai code gate `proceed`); not yet merged or released. E3 not started.** Before that: **epoch 3 open, 2026-11-17 — approved by the owner (the revision is `Narrowed: yes`), after the interim document
+> Status: **CLOSED, 2026-11-24 — what is done and what is not: § *Closure*.** Before that: **IMPLEMENTED, 2026-11-19.** E1: #1011, released as coai-mcp 0.66.0 (#1012), 2026-11-17. E2: #1018, released as extension 0.89.0 (#1022), 2026-11-18; verified (VSIX: default `auto`, the witness key and the migration bundled; Marketplace 0.89.0). E3: conventions #182 (rule text: `coai-snippet` v6, `coai-document` v4, `coai-feature` v4, `coai-question` v2) and #183 (the release pre-checks); `release` promoted to `5d2d5ec` on 2026-11-19 with the owner's approval; nine pin bumps merged — benchmark #229, mcp #83, sidecar_rust #82, vscode_kit #36, wsl_care #200, creds #384, amd_r9700 #38, rag_qln #134 (also its benchmark and mcp code pins) and this repository's #1024 (the regenerated snippet, v19); extension 0.89.1 released (#1025, tag `extension-v0.89.1`; the VSIX carries v6/v4/v4/v2 and "Copy the CLAUDE.md snippet (v19)"). The conventions post-deploy check against coai `main` `4ec6cf3d`, 2026-11-19: items 1–2 PASS; item 3, the native-agent smoke: the claude and codex inspect runs `allSourcesRead` true, and the held-gate behaviour smoke on the v6 text PASS (answers `ask_human`, `point_to_notice_card`, `resolve`, `ask_human`; USD 0.90). `review_feature` over the three epics (baseRef `e829bba8`): `proceed`, 2 of 2 reviewers, 0 findings; both noted their source budget did not reach every file. The change ledger is closed: epoch 3 stands as recorded, entry 3.1 its last change. **What shipped differently is in § *Deviations*, just before `## Epics`.** The rest of this block is the plan's history, kept as written. Before that: **E3: S1 merged in conventions 2026-11-18 as #182 (`25d551b8`); the release pre-checks recorded in conventions #183 and, with the owner's approval, `release` promoted to `5d2d5ec` on 2026-11-19. This repository's bump with the regenerated snippet (v19) is PR #1024 (pin `5d2d5ec`); the other eight bumps are open or merging. Remaining: the eight bumps and #1024 merged, the post-deploy check with the native-agent smoke, `review_feature`, the patch release, and the promotion of the plan.** Before that: **E3: S1 merged in conventions 2026-11-18 as #182 (`25d551b8`) and NOT yet promoted to the `release` branch (it waits for the owner's word on in-flight consumer releases and on the PR cap, § 5.1). This repository's bump is built on `docs/auto-mode-e3` (the pin at `25d551b8`, the snippet v19, the constants and the tests green; not yet a PR). Remaining: the promotion, the nine pin bumps, the post-deploy check with the native-agent smoke, `review_feature`, the patch release, and the promotion of the plan.** Before that: **E3 started 2026-11-18: its stories document, [PLAN_auto_never_asks_a_person_E3.md](PLAN_auto_never_asks_a_person_E3.md), written by Opus; nothing built. E2 merged 2026-11-18 as #1018 and released as extension 0.89.0 (#1022).** Before that: **E2 built 2026-11-17 in PR #1018 (S1, S2, S3; the coai code gate `proceed`); not yet merged or released. E3 not started.** Before that: **epoch 3 open, 2026-11-17 — approved by the owner (the revision is `Narrowed: yes`), after the interim document
 > review of the whole plan returned `proceed` (4 of 4 reviewers; three wording findings folded). E2 resumes: the S1 fix
 > forward and Fable's S2 spec revision, then S2, then S3.** Before that: **epoch 2 stopped for re-review, 2026-11-17, at its second change (entry 2.2, Settings Sync and the
 > migration's witness). No new code on any epic until the whole plan is reviewed again. The whole plan was revised the
@@ -765,6 +765,46 @@ Problems met on the way, each with where it is recorded:
   that differs from the index gitlink, so the build fails before the test runs. The RED for the v5 assertions was taken by
   changing the generated half (`src/generated/featureRule.ts`). Recorded in [module_tests.md](module_tests.md).
 - **The real-editor scenario *skip-list Add* (S3-H1) failed again** on #1027 and passed on its rerun.
+
+## Closure (2026-11-24)
+
+The plan is closed: no more work is done under it. Anything below under *Not done* that is taken up later gets a plan of
+its own (or the plan named beside it); it does not reopen this one. The ledger stays as it is — epoch 3 was the last
+approval, and no entry is added.
+
+**Done**
+
+- **E1, the server:** the whole `auto` contract — `not_reviewed`, `good_enough` with its reason, the legacy-hold release,
+  `consult_first`, the logging — merged #1011, released as coai-mcp 0.66.0 (#1012).
+- **E2, the extension:** `auto` is the default for everyone, with the one-time reset, its Settings Sync witness and the
+  two-window claim; the rounds-log page — merged #1018, released as 0.89.0 (#1022), VSIX and Marketplace checked.
+- **E3, the conventions text:** the four coai gate rules speak `auto` (snippet v6, document v4, feature v4, question v2),
+  conventions #182 and #183, `release` `5d2d5ec`, nine pin bumps (#1024 here), extension 0.89.1 (snippet v19).
+- **The feature review** of the three epics: `proceed`, 0 findings.
+- **The follow-ups, P7 and P2, closed** by conventions `c598a11` (#185): `coai-feature` v5 and the epoch `by nobody`; here
+  the pin bump #1027 and extension 0.89.2 (#1029, #1030), snippet v20.
+- **Post-deploy item 3 met** at `main` `8ff658d5`: Claude and Codex read all four coai gate rules completely.
+- **The owner's machine** runs 0.89.2 (installed by hand on 2026-11-24, see below).
+
+**Not done**
+
+- **P6 — `ask_human` is silent about a legacy hold it released** (review calls and `status` say it). An E1 residual; not
+  built.
+- **The four E2 deviations** recorded in #1018's body stay as they are: no RED first for some E2.S2 scenarios,
+  `onExhaustedMigration.ts` over the spec's size, an extra source scan, a second `ExtensionMode.Test` spread.
+- **The short descriptions do not name the production-risk path.** The setting's description in `src_vs_code/package.json`
+  and the matching help line in `src_vs_code/src/help.ts` say the AI "may still ask you a question its consultants could
+  not settle, or when no consultant can be had"; neither says that a production-risk question reaches the person at once
+  in the Planning or Released phase. The long help and the README were corrected in #1024; these two were not.
+- **The help in German, Spanish, Russian and Ukrainian** (written by a Sonnet coder in E3) has not been read by a native
+  speaker.
+- **Why the extension did not update itself in the owner's WSL window** (0.87.0 on 2026-11-19, 0.89.1 on 2026-11-24) was
+  not investigated; both updates were installed by hand.
+- **The real-editor flake *skip-list Add* (S3-H1)** still fails now and then (#1027, #1040, each passed on a rerun). Its fix
+  belongs to [todo/PLAN_the_skip_list_add_reads_back_after_the_write.md](../todo/PLAN_the_skip_list_add_reads_back_after_the_write.md),
+  not to this plan.
+- **The behaviour checks of the conventions** (`held-gate`, `auto-gate`) drive Claude only; Codex is not covered
+  (`dew_flow_conventions · research/PLAN_coai_auto_followups.md` § *Closure*).
 
 ## Epics
 
