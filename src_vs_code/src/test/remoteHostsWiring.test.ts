@@ -152,6 +152,6 @@ test('R8: the torn cure is raised with the title of W9 and its own cure', () => 
 
 test('R7: the host tells the person what "Save now" came to', () => {
   assert.match(host, /saveWaiting\(\)\.then\(\(result\) => after\(result\)\)/u, 'the result of "Save now" is dropped');
-  assert.match(host, /pressSaid\(host, result\)/u, 'the result of "Save now" is not turned into W6\'s words');
+  assert.match(host, /pressSaid\(failedHostOf\(result\), result\)/u, 'the result of "Save now" is not turned into W6\'s words');
   assert.equal(countIn(host, /notKeptSaid\(/gu), 2, 'what was not kept is said in more than the change and the press');
 });

@@ -284,6 +284,13 @@ const APPLY: { readonly [K in HostChange['kind']]: (rows: readonly HostAnswer[],
 
 const appliedTo: Apply = (rows, change, now) => (APPLY[change.kind] as Apply)(rows, change, now);
 
+/** A mend over a damaged list: the readable rows are written whatever the answer — a *Forget* for a host with no row repairs the list too. */
+function mended(rows: readonly HostAnswer[], change: Of<'mend'>, now: string): Outcome {
+  const kept = mendedRows(rows);
+
+  return change.answer === 'forget' ? { next: { value: without(kept, change.host) }, result: { kind: 'written', row: undefined, evicted: [] } } : appliedTo(kept, change, now);
+}
+
 /** The merge of the list, for one host, at the instant `now`: the table of the spec. A damaged list is written over by a `mend` only. */
 export const hostMerge = (now: string): Merge<HostChange, Committed> => (stored, change) => {
   const list = hostsOf(stored);
@@ -291,5 +298,5 @@ export const hostMerge = (now: string): Merge<HostChange, Committed> => (stored,
     return appliedTo(list.rows, change, now);
   }
 
-  return change.kind === 'mend' ? appliedTo(mendedRows(list.rows), change, now) : DAMAGED;
+  return change.kind === 'mend' ? mended(list.rows, change, now) : DAMAGED;
 };

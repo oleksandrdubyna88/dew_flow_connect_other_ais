@@ -10,7 +10,7 @@ import { thisSideLabel } from './consultantSides';
 import { credsSession } from './credsSession';
 import { Committed, HostChange, HostStanding, listedHosts, readableOf } from './remoteHosts';
 import { HOSTS_SAID, UnkeptWhy, notKeptSaid } from './remoteHostsSaid';
-import { HostKeeper, hostKeeper } from './remoteKeeper';
+import { HostKeeper, failedHostOf, hostKeeper } from './remoteKeeper';
 import { PickRow, Picked, Purpose, RemoteAnswer, RoadSeams, onePerTerminal, reachOf, readsKey, remoteRoad } from './remoteRead';
 import { refusalsStore } from './remoteRefusals';
 import { refusalsDiskOver } from './remoteRefusalsDisk';
@@ -249,7 +249,7 @@ async function askHostOf(keeper: HostKeeper, host: string): Promise<void> {
 
 /**
  * What a press of *Save now* that came to `full` or `damaged` says, in W6's words. An `unwritten` press is told by the keeper, as W9, with its new
- * reason. `host` is the notice's: a Stop has none, and W6's "full" sentence names a host.
+ * reason. `host` is the host of the item that failed (`failedHostOf`): a Stop has none, and W6's "full" sentence names a host.
  */
 const pressSaid = (host: string | undefined, result: Committed): string | undefined =>
   (result.kind === 'full' && host === undefined ? undefined : notKeptSaid(host ?? '', 'no', result));
@@ -335,11 +335,11 @@ async function setReadsKey(sessions: RemoteSessions): Promise<void> {
 }
 
 /** After a press of *Save now*: W9's torn cure when a note that could not be read was removed, and W6's words when the file or the list is not whole. */
-function afterPress(live: HostKeeper, host: string | undefined, result: Committed): void {
+function afterPress(live: HostKeeper, result: Committed): void {
   if (live.savedTorn()) {
     raiseUnkept(live, 'accounts-round', HOSTS_SAID.unkeptStop('elsewhere', sideLabel()), HOSTS_SAID.cureTorn, () => undefined);
   }
-  const said = pressSaid(host, result);
+  const said = pressSaid(failedHostOf(result), result);
   if (said !== undefined) {
     void tell(said);
   }
@@ -359,7 +359,7 @@ function keeperOf(context: vscode.ExtensionContext, folder: string, changed: () 
     unkept: (host, why, marked) => {
       const live = keeperRef.current as HostKeeper;
       const title = host === undefined ? HOSTS_SAID.unkeptStop(why, sideLabel()) : HOSTS_SAID.unkeptHost(host, why as UnkeptWhy, sideLabel());
-      raiseUnkept(live, host ?? 'accounts-round', title, marked ? HOSTS_SAID.cureMarked : HOSTS_SAID.cureUnmarked, (result) => afterPress(live, host, result));
+      raiseUnkept(live, host ?? 'accounts-round', title, marked ? HOSTS_SAID.cureMarked : HOSTS_SAID.cureUnmarked, (result) => afterPress(live, result));
     },
   });
   keeperRef.current = keeper;

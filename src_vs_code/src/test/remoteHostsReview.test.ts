@@ -147,3 +147,32 @@ test('R7: "Save now" that fails tells the person again, with the new reason', as
   await a.keeper.admit('g');
   assert.equal(a.unkept.length, 2, 'a retry by itself raised the notice again');
 });
+
+test('R10: a Forget over a damaged list is ONE mend: the readable rows are written, also for a host with no row', async () => {
+  for (const damaged of ['junk', [row('z', 'yes'), 'junk']]) {
+    const backing = new Backing();
+    backing.values.set(KEY, damaged);
+    const a = windowOver(backing, new FakeDisk());
+    assert.equal((await a.keeper.commit({ kind: 'mend', host: 'q', answer: 'forget' })).kind, 'written', 'a Forget for a host with no row did not repair the list');
+    assert.deepEqual(listOf(backing).map((one) => `${one.host}:${one.answer}`), damaged === 'junk' ? [] : ['z:yes']);
+  }
+  // over a list that can be read, a plain Forget of a host with no row is still `kept`
+  const readable = new Backing();
+  readable.values.set(KEY, [row('z', 'yes')]);
+  assert.equal((await windowOver(readable, new FakeDisk()).keeper.commit({ kind: 'forget', host: 'q' })).kind, 'kept');
+  assert.equal((await windowOver(readable, new FakeDisk()).keeper.commit({ kind: 'mend', host: 'q', answer: 'forget' })).kind, 'kept');
+});
+
+test('R11: a "Save now" that is not whole names the host of the item that failed', async () => {
+  const disk = new FakeDisk();
+  disk.lock = { token: 'hung' };
+  const a = windowOver(new Backing(), disk);
+  await a.keeper.commit({ kind: 'person', host: 'h1', answer: 'no' });
+  await a.keeper.commit({ kind: 'person', host: 'h2', answer: 'no' });
+  // the file takes h1 (99 others and h1 make 100) and has no room for h2
+  disk.files.set('refused.json', fileOf(...Array.from({ length: 99 }, (_, n) => `r${n}`)));
+  const result = await a.keeper.saveWaiting();
+  assert.equal(result.kind, 'full');
+  assert.equal((result as { failedHost?: string }).failedHost, 'h2', 'the press did not name the host that did not fit');
+  assert.ok(disk.refusedHosts().includes('h1'));
+});

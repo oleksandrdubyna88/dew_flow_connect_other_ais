@@ -51,6 +51,12 @@ export interface HostKeeper {
   readonly forgetHeld: () => void;
 }
 
+/** What a press of *Save now* answers when a change did not land: the result, with the host of the change that failed (none for the Stop). Still a `Committed`. */
+export type Failed = Committed & { readonly failedHost?: string };
+
+/** The host of the change that failed in a press, if the result says. */
+export const failedHostOf = (result: Committed): string | undefined => (result as Failed).failedHost;
+
 /** A refusal or the Stop that the file did not take, held by this window. */
 interface Held {
   readonly kind: 'refuse' | 'stop';
@@ -240,11 +246,15 @@ class Keeper implements HostKeeper {
     await this.dropLanded(read);
     let last: Committed | undefined;
     for (const [key, item] of this.todo(read)) {
-      last = (await this.settle(key, item, await this.seams.refusals.commit(changeOf(item), take), read, take === 'person')) ?? last;
+      const failed = await this.settle(key, item, await this.seams.refusals.commit(changeOf(item), take), read, take === 'person');
+      last = failed === undefined ? last : this.naming(failed, item);
     }
 
     return last;
   }
+
+  /** The result that did not land, with the host of its change. */
+  private naming = (result: Committed, item: Held): Failed => (item.kind === 'stop' ? result : { ...result, failedHost: item.host });
 
   /** `undefined` when the change landed; else the result that did not, after the marker is tried again and the notice. `press`: a person's *Save now*. */
   private async settle(key: string, item: Held, result: Committed, read: RefusalsRead, press: boolean): Promise<Committed | undefined> {
