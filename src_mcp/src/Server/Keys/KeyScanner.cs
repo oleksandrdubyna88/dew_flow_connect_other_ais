@@ -63,7 +63,7 @@ internal static class KeyScanner
             : Directory.EnumerateFiles(path, "*", new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true, AttributesToSkip = FileAttributes.ReparsePoint });
 
     private static bool IsUnder(string file, string folder) =>
-        file.StartsWith(folder + Path.DirectorySeparatorChar, StringComparison.Ordinal) || file == folder;
+        folder.Length > 0 && (file.StartsWith(folder + Path.DirectorySeparatorChar, StringComparison.Ordinal) || file == folder);
 
     private static void AddFound(List<ClaudeKeySecret> found, IReadOnlyList<ClaudeKeySecret> secrets, ReadOnlySpan<byte> window)
     {

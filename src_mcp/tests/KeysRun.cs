@@ -1,5 +1,6 @@
 using System.Text;
 using CoaiMcp.Server.Keys;
+using FluentAssertions;
 
 namespace CoaiMcp.Tests;
 
@@ -53,5 +54,34 @@ internal sealed class KeysRun(KeyWorld world)
         var listed = Do(string.Empty, "list", "--json");
 
         return System.Text.Json.JsonDocument.Parse(listed.Out).RootElement.Clone();
+    }
+}
+
+/// <summary>The real <c>coai-mcp</c> binary run with its own data folder and a text on standard input — exactly as a person or a boot script runs it.</summary>
+internal static class KeysBinary
+{
+    internal static (int Code, string Out, string Err) Run(string dataDir, string stdin, params string[] args)
+    {
+        var info = OneShotProcess.StartInfo(dataDir, args);
+        info.RedirectStandardInput = true;
+        using var process = System.Diagnostics.Process.Start(info)!;
+        var output = process.StandardOutput.ReadToEndAsync();
+        var error = process.StandardError.ReadToEndAsync();
+        using (var input = process.StandardInput)
+        {
+            try
+            {
+                input.BaseStream.Write(Encoding.UTF8.GetBytes(stdin));
+            }
+            catch (IOException)
+            {
+                // The child refused a long line and closed its stdin first: that is the answer under test.
+            }
+        }
+
+        process.WaitForExit(TimeSpan.FromMinutes(2)).Should().BeTrue();
+        Task.WaitAll([output, error], 10_000).Should().BeTrue();
+
+        return (process.ExitCode, output.Result, error.Result);
     }
 }

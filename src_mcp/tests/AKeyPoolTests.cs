@@ -284,23 +284,7 @@ public sealed class AKeyPoolTests
         // NOT RUN HERE: a second operating-system user picking from the same folder. This machine has one user; the run is recorded as not made.
     }
 
-    private static int RealAdd(string dataDir, string tag)
-    {
-        var info = OneShotProcess.StartInfo(dataDir, "--keys", "add", "--label", tag);
-        info.RedirectStandardInput = true;
-        using var process = Process.Start(info)!;
-        var output = process.StandardOutput.ReadToEndAsync();
-        var error = process.StandardError.ReadToEndAsync();
-        using (var input = process.StandardInput)
-        {
-            input.BaseStream.Write(Encoding.UTF8.GetBytes(KeyWorld.Token(tag) + "\n"));
-        }
-
-        process.WaitForExit(TimeSpan.FromMinutes(2)).Should().BeTrue();
-        Task.WaitAll([output, error], 10_000).Should().BeTrue();
-
-        return process.ExitCode;
-    }
+    private static int RealAdd(string dataDir, string tag) => KeysBinary.Run(dataDir, KeyWorld.Token(tag) + "\n", "--keys", "add", "--label", tag).Code;
 
     // ---------- d3: limit, throttle, success ----------
 

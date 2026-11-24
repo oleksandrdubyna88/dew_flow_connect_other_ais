@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using CoaiMcp.Server.Keys;
@@ -189,8 +188,8 @@ public sealed class AKeysModeTests
     {
         using var data = TempDir.For("coai-keysmode-");
 
-        var added = RealBinary(data.Path, KeyWorld.Token("a") + "\n", "--keys", "add", "--label", "real", "--json");
-        var tooLong = RealBinary(data.Path, new string('s', 5000), "--keys", "add", "--label", "long");
+        var added = KeysBinary.Run(data.Path, KeyWorld.Token("a") + "\n", "--keys", "add", "--label", "real", "--json");
+        var tooLong = KeysBinary.Run(data.Path, new string('s', 5000), "--keys", "add", "--label", "long");
 
         added.Code.Should().Be(0, added.Err);
         (added.Out + added.Err).Should().NotContain(KeyWorld.Sentinel);
@@ -397,31 +396,4 @@ public sealed class AKeysModeTests
         run.List().GetProperty("rows")[0].GetProperty("label").GetString().Should().Be("somebody else did this");
     }
 
-    // ---------- the real binary, with stdin ----------
-
-    private static (int Code, string Out, string Err) RealBinary(string dataDir, string stdin, params string[] args)
-    {
-        var info = OneShotProcess.StartInfo(dataDir, args);
-        info.RedirectStandardInput = true;
-        using var process = Process.Start(info)!;
-        var output = process.StandardOutput.ReadToEndAsync();
-        var error = process.StandardError.ReadToEndAsync();
-        using (var input = process.StandardInput)
-        {
-            var bytes = Encoding.UTF8.GetBytes(stdin);
-            try
-            {
-                input.BaseStream.Write(bytes);
-            }
-            catch (IOException)
-            {
-                // The child refused a long line and closed its stdin first: that is the answer under test.
-            }
-        }
-
-        process.WaitForExit(TimeSpan.FromMinutes(1)).Should().BeTrue();
-        Task.WaitAll([output, error], 10_000).Should().BeTrue();
-
-        return (process.ExitCode, output.Result, error.Result);
-    }
 }
