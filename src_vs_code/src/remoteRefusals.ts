@@ -91,10 +91,14 @@ const recordOf = (value: unknown): Readonly<Record<string, unknown>> | undefined
 
 const isText = (value: unknown): value is string => typeof value === 'string';
 
+type Rec = Readonly<Record<string, unknown>>;
+
+const hostOk = (one: Rec): boolean => isText(one['host']) && one['host'].length > 0;
+
 const refusalOf = (value: unknown): Refusal | undefined => {
   const one = recordOf(value);
 
-  return one !== undefined && isText(one['host']) && one['host'].length > 0 && isText(one['utc']) ? { host: one['host'], utc: one['utc'] } : undefined;
+  return one !== undefined && hostOk(one) && isText(one['utc']) ? { host: one['host'] as string, utc: one['utc'] } : undefined;
 };
 
 const stopOf = (value: unknown): { readonly utc: string } | undefined | 'bad' => {
@@ -118,48 +122,83 @@ function refusedOf(value: unknown): readonly Refusal[] | undefined {
 
 const isGen = (value: unknown): value is number => typeof value === 'number' && Number.isInteger(value) && value >= 1;
 
-/** The ONE parser of the file's text. `undefined` is damage: anything that is not a whole file of version 1. */
-export function refusalsOf(text: string): RefusalsFile | undefined {
+/** The record in a text, or nothing: too large, not JSON, or not an object. */
+function recordFromText(text: string): Rec | undefined {
   if (Buffer.byteLength(text, 'utf8') > REFUSALS_BYTES_MAX) {
     return undefined;
   }
-  let raw: Readonly<Record<string, unknown>> | undefined;
   try {
-    raw = recordOf(JSON.parse(text));
+    return recordOf(JSON.parse(text));
   } catch {
     return undefined;
   }
-  const refused = refusedOf(raw?.['refused']);
-  const stop = stopOf(raw?.['stop']);
-  const migrated = raw?.['migratedUtc'];
-  if (raw === undefined || raw['v'] !== 1 || !isGen(raw['gen']) || !isText(raw['by']) || raw['by'].length === 0 || refused === undefined || stop === 'bad' || (migrated !== undefined && !isText(migrated))) {
+}
+
+/** What every file of version 1 holds: the version, the generation, the writer's token, and a record or nothing for the time of the copy-in. */
+const HEADER: readonly ((raw: Rec) => boolean)[] = [
+  (raw) => raw['v'] === 1,
+  (raw) => isGen(raw['gen']),
+  (raw) => isText(raw['by']) && raw['by'].length > 0,
+  (raw) => raw['migratedUtc'] === undefined || isText(raw['migratedUtc']),
+];
+
+interface Parts {
+  readonly refused: readonly Refusal[];
+  readonly stop: { readonly utc: string } | undefined;
+}
+
+function partsOf(raw: Rec): Parts | undefined {
+  const refused = refusedOf(raw['refused']);
+  const stop = stopOf(raw['stop']);
+
+  return refused === undefined || stop === 'bad' ? undefined : { refused, stop };
+}
+
+function validated(text: string): { readonly raw: Rec; readonly parts: Parts } | undefined {
+  const raw = recordFromText(text);
+  if (raw === undefined || !HEADER.every((ok) => ok(raw))) {
     return undefined;
   }
+  const parts = partsOf(raw);
 
-  return { ...raw, v: 1, gen: raw['gen'], by: raw['by'], refused, ...(stop === undefined ? {} : { stop }), ...(isText(migrated) ? { migratedUtc: migrated } : {}) } as RefusalsFile;
+  return parts === undefined ? undefined : { raw, parts };
 }
+
+/** The ONE parser of the file's text. `undefined` is damage: anything that is not a whole file of version 1. */
+export function refusalsOf(text: string): RefusalsFile | undefined {
+  const read = validated(text);
+  if (read === undefined) {
+    return undefined;
+  }
+  const { raw, parts } = read;
+  const migrated = raw['migratedUtc'];
+
+  return { ...raw, v: 1, gen: raw['gen'] as number, by: raw['by'] as string, refused: parts.refused, ...(parts.stop === undefined ? {} : { stop: parts.stop }), ...(isText(migrated) ? { migratedUtc: migrated } : {}) };
+}
+
+const hasUtc = (one: Rec): boolean => one['v'] === 1 && isText(one['utc']);
+
+type MarkerBuilder = (name: string, one: Rec) => Waiting | undefined;
+
+const MARKERS: ReadonlyMap<string, MarkerBuilder> = new Map<string, MarkerBuilder>([
+  ['stop', (name, one) => ({ name, kind: 'stop', utc: one['utc'] as string })],
+  ['refuse', (name, one) => (hostOk(one) ? { name, kind: 'refuse', host: one['host'] as string, utc: one['utc'] as string } : undefined)],
+]);
+
+const noMarker: MarkerBuilder = () => undefined;
 
 /** The marker's text as a change that waits, or `torn`. The name is the file's name. */
 export function waitingOf(name: string, text: string | undefined): Waiting {
-  const torn: Waiting = { name, kind: 'torn' };
-  if (text === undefined || Buffer.byteLength(text, 'utf8') > UNSURE_BYTES_MAX) {
-    return torn;
-  }
-  let one: Readonly<Record<string, unknown>> | undefined;
-  try {
-    one = recordOf(JSON.parse(text));
-  } catch {
-    return torn;
-  }
-  if (one?.['v'] !== 1 || !isText(one['utc'])) {
-    return torn;
-  }
-  if (one['kind'] === 'stop') {
-    return { name, kind: 'stop', utc: one['utc'] };
-  }
-
-  return one['kind'] === 'refuse' && isText(one['host']) && one['host'].length > 0 ? { name, kind: 'refuse', host: one['host'], utc: one['utc'] } : torn;
+  return (text === undefined ? undefined : markerFrom(name, text)) ?? { name, kind: 'torn' };
 }
+
+function markerFrom(name: string, text: string): Waiting | undefined {
+  const one = Buffer.byteLength(text, 'utf8') > UNSURE_BYTES_MAX ? undefined : recordFromText(text);
+
+  return one !== undefined && hasUtc(one) ? builderOf(one)(name, one) : undefined;
+}
+
+const builderOf = (one: Rec): MarkerBuilder => MARKERS.get(String(one['kind'])) ?? noMarker;
 
 export const textOf = (file: RefusalsFile): string => JSON.stringify(file);
 
@@ -234,10 +273,13 @@ const migrate: Merger<'migrate'> = (file, change, by) => {
 
 const regain: Merger<'regain'> = (file, change, by) => {
   const { add } = addable(file, change.rows);
-  const stopToo = change.stop !== undefined && file.stop === undefined;
+  const stop = stopToAdd(file, change.stop);
 
-  return add.length === 0 && !stopToo ? KEPT : next(file, by, { refused: [...file.refused, ...add], ...(stopToo ? { stop: change.stop } : {}) }, change.gen);
+  return add.length === 0 && stop === undefined ? KEPT : next(file, by, { refused: [...file.refused, ...add], ...(stop === undefined ? {} : { stop }) }, change.gen);
 };
+
+/** The Stop a regain carries, when the file has none. */
+const stopToAdd = (file: RefusalsFile, stop: { readonly utc: string } | undefined): { readonly utc: string } | undefined => (file.stop === undefined ? stop : undefined);
 
 const MERGERS: { readonly [K in RefusalChange['kind']]: Merger<K> | undefined } = {
   refuse, lift, stop, start, migrate, regain, mend: undefined,
@@ -272,22 +314,28 @@ function sized(result: Changed): Changed {
   return result.kind === 'written' && Buffer.byteLength(textOf(result.file), 'utf8') > REFUSALS_BYTES_MAX ? FULL : result;
 }
 
-/** Whether a change is in the file as it now is — step 8 when another writer wrote since. `before` is the file the change was merged into. */
-export function holds(change: RefusalChange, before: RefusalsFile | 'damaged', after: RefusalsFile): boolean {
-  switch (change.kind) {
-    case 'refuse': return hostsOf(after.refused).has(change.host);
-    case 'stop': return after.stop !== undefined;
-    case 'lift': {
-      const gone = new Set(before === 'damaged' ? [] : before.refused.filter((one) => one.host === change.host).map((one) => one.utc));
+const refusedBy = (before: RefusalsFile | 'damaged', host: string): readonly string[] =>
+  (before === 'damaged' ? [] : before.refused.filter((one) => one.host === host).map((one) => one.utc));
 
-      return !after.refused.some((one) => one.host === change.host && gone.has(one.utc));
-    }
-    case 'start': return before === 'damaged' || before.stop === undefined || after.stop?.utc !== before.stop.utc;
-    case 'migrate':
-    case 'regain': return addable(after, change.rows).missing === 0 && (change.kind !== 'regain' || change.stop === undefined || after.stop !== undefined);
-    case 'mend': return after.migratedUtc !== undefined;
-  }
-}
+const stillThere = (after: RefusalsFile, host: string, utcs: readonly string[]): boolean => after.refused.some((one) => one.host === host && utcs.includes(one.utc));
+
+const stopOfBefore = (before: RefusalsFile | 'damaged'): string | undefined => (before === 'damaged' ? undefined : before.stop?.utc);
+
+type Holds<K extends RefusalChange['kind']> = (change: Extract<RefusalChange, { readonly kind: K }>, before: RefusalsFile | 'damaged', after: RefusalsFile) => boolean;
+
+const HOLDS: { readonly [K in RefusalChange['kind']]: Holds<K> } = {
+  refuse: (change, _before, after) => hostsOf(after.refused).has(change.host),
+  stop: (_change, _before, after) => after.stop !== undefined,
+  lift: (change, before, after) => !stillThere(after, change.host, refusedBy(before, change.host)),
+  start: (_change, before, after) => stopOfBefore(before) === undefined || after.stop?.utc !== stopOfBefore(before),
+  migrate: (change, _before, after) => addable(after, change.rows).missing === 0,
+  regain: (change, _before, after) => addable(after, change.rows).missing === 0 && (change.stop === undefined || after.stop !== undefined),
+  mend: (_change, _before, after) => after.migratedUtc !== undefined,
+};
+
+/** Whether a change is in the file as it now is — step 8 when another writer wrote since. `before` is the file the change was merged into. */
+export const holds = (change: RefusalChange, before: RefusalsFile | 'damaged', after: RefusalsFile): boolean =>
+  (HOLDS[change.kind] as Holds<RefusalChange['kind']>)(change, before, after);
 
 // ─────────────────────────────── The writer ───────────────────────────────
 
@@ -326,29 +374,42 @@ const realSleep = (ms: number): Promise<void> => new Promise((resolve) => { setT
 /** `restart`: the claim went stale or was taken over, so nothing was written. `lost`: the write is not in the file at the read-back. */
 type Step = 'restart' | 'lost' | Committed;
 
-/** The writer over a disk. `sleep` is the pause between tries; a test hands in one that does not wait. */
-export function refusalsStore(disk: RefusalsDisk, clock: () => number, sleep: (ms: number) => Promise<void> = realSleep): RefusalsStore {
+const KEPT_STEP: Step = { kind: 'kept', row: undefined };
+const WROTE_STEP: Step = { kind: 'written', row: undefined, evicted: [] };
+const unwritten = (why: 'busy' | 'disk' | 'lost'): Step => ({ kind: 'unwritten', why });
+
+/** Nothing was kept: the write did not stay, or the claim kept going stale. */
+const giveUp = (lost: number): Committed => unwritten(lost > 0 ? 'lost' : 'busy') as Committed;
+
+const sameWrite = (now: RefusalsFile, wrote: RefusalsFile): boolean => now.gen === wrote.gen && now.by === wrote.by;
+
+/** The writer over a disk. */
+class Writer {
+  constructor(private readonly disk: RefusalsDisk, private readonly clock: () => number, private readonly sleep: (ms: number) => Promise<void>) {}
+
+  /** One try of the file's read: the file, `undefined` when it cannot be read, or `retry` when the read failed. */
+  private async readOnce(): Promise<RefusalsFile | undefined | 'retry'> {
+    const got = await this.disk.read();
+
+    return got.kind === 'absent' ? EMPTY_FILE : got.kind === 'text' ? refusalsOf(got.text) : 'retry';
+  }
+
   /** The file, or `undefined` when it cannot be read; `absent` is the empty file. A failing read is asked again twice. */
-  async function readFileOnce(): Promise<RefusalsFile | undefined> {
+  async readFile(): Promise<RefusalsFile | undefined> {
     for (let tries = 1; tries <= READ_TRIES; tries += 1) {
-      const got = await disk.read();
-      if (got.kind === 'absent') {
-        return EMPTY_FILE;
+      const one = await this.readOnce();
+      if (one !== 'retry') {
+        return one;
       }
-      if (got.kind === 'text') {
-        return refusalsOf(got.text);
-      }
-      if (tries < READ_TRIES) {
-        await sleep(READ_PAUSE_MS);
-      }
+      await this.sleep(READ_PAUSE_MS);
     }
 
     return undefined;
   }
 
-  async function read(): Promise<RefusalsRead> {
-    const file = await readFileOnce();
-    const marks = await disk.marks();
+  async read(): Promise<RefusalsRead> {
+    const file = await this.readFile();
+    const marks = await this.disk.marks();
     if (file === undefined || marks === 'failed') {
       return { kind: 'damaged' };
     }
@@ -356,77 +417,110 @@ export function refusalsStore(disk: RefusalsDisk, clock: () => number, sleep: (m
     return { kind: 'file', file, waiting: marks.map((one) => waitingOf(one.name, one.text)) };
   }
 
-  async function claimed(doing: string, take: 'person' | undefined): Promise<Claim> {
+  private async claimed(doing: string, take: 'person' | undefined): Promise<Claim> {
     let got: Claim = { kind: 'held' };
-    for (let round = 1; round <= CLAIM_ROUNDS && got.kind === 'held'; round += 1) {
-      got = await disk.claim(doing, take);
-      if (got.kind === 'held' && round < CLAIM_ROUNDS) {
-        await sleep(CLAIM_PAUSE_MS);
+    for (let round = 1; round <= CLAIM_ROUNDS; round += 1) {
+      got = await this.disk.claim(doing, take);
+      if (got.kind !== 'held') {
+        break;
       }
+      await this.sleep(CLAIM_PAUSE_MS);
     }
 
     return got;
   }
 
-  /** Steps 2 to 8 under a claim that is ours. */
-  async function underClaim(change: RefusalChange, claim: Extract<Claim, { kind: 'claimed' }>, began: number): Promise<Step> {
-    const before = await readFileOnce();
-    const merged = withChange(before ?? 'damaged', change, claim.token);
-    if (merged.kind !== 'written') {
-      await claim.release();
-
-      return merged.kind === 'kept' ? { kind: 'kept', row: undefined } : merged;
-    }
-    await disk.sweep(BESIDE_STALE_MS);
-    if (clock() - began >= CLAIM_FRESH_MS || !await disk.stillOurs(claim)) {
-      await claim.release();
-
-      return 'restart';
-    }
-    try {
-      await disk.replace(textOf(merged.file));
-    } catch {
-      await claim.release();
-
-      return { kind: 'unwritten', why: 'disk' };
-    }
-    const ours = await disk.stillOurs(claim);
+  private async released(claim: Extract<Claim, { kind: 'claimed' }>, step: Step): Promise<Step> {
     await claim.release();
 
-    return ours ? readBack(change, before ?? 'damaged', merged.file) : 'restart';
+    return step;
+  }
+
+  /** Step 5: the claim is younger than `CLAIM_FRESH_MS` by this window's clock and still on the disk. */
+  private async stale(claim: Extract<Claim, { kind: 'claimed' }>, began: number): Promise<boolean> {
+    return this.clock() - began >= CLAIM_FRESH_MS || !(await this.disk.stillOurs(claim));
+  }
+
+  /** Step 6: the file replaced; `false` when the disk refused. */
+  private async replaced(text: string): Promise<boolean> {
+    try {
+      await this.disk.replace(text);
+
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Steps 2 and 3 under a claim that is ours; then the rest. */
+  private async underClaim(change: RefusalChange, claim: Extract<Claim, { kind: 'claimed' }>, began: number): Promise<Step> {
+    const before = (await this.readFile()) ?? 'damaged';
+    const merged = withChange(before, change, claim.token);
+    if (merged.kind !== 'written') {
+      return this.released(claim, merged.kind === 'kept' ? KEPT_STEP : merged);
+    }
+
+    return this.writeIt(change, claim, { began, before, file: merged.file });
+  }
+
+  /** Steps 4 to 8. */
+  private async writeIt(change: RefusalChange, claim: Extract<Claim, { kind: 'claimed' }>, at: { readonly began: number; readonly before: RefusalsFile | 'damaged'; readonly file: RefusalsFile }): Promise<Step> {
+    await this.disk.sweep(BESIDE_STALE_MS);
+    if (await this.stale(claim, at.began)) {
+      return this.released(claim, 'restart');
+    }
+    if (!(await this.replaced(textOf(at.file)))) {
+      return this.released(claim, unwritten('disk'));
+    }
+    const ours = await this.disk.stillOurs(claim);
+    await claim.release();
+
+    return ours ? this.readBack(change, at.before, at.file) : 'restart';
   }
 
   /** Step 8: the file as it now is shows this write, or this change. */
-  async function readBack(change: RefusalChange, before: RefusalsFile | 'damaged', wrote: RefusalsFile): Promise<Step> {
-    const now = await readFileOnce();
+  private async readBack(change: RefusalChange, before: RefusalsFile | 'damaged', wrote: RefusalsFile): Promise<Step> {
+    const now = await this.readFile();
     if (now === undefined) {
       return 'lost';
     }
-    const ours = now.gen === wrote.gen && now.by === wrote.by;
 
-    return ours || holds(change, before, now) ? { kind: 'written', row: undefined, evicted: [] } : 'lost';
+    return sameWrite(now, wrote) || holds(change, before, now) ? WROTE_STEP : 'lost';
   }
 
-  async function commit(change: RefusalChange, take?: 'person'): Promise<Committed> {
-    let lost = 0;
-    for (let round = 0; round < RESTARTS_MAX + WRITE_ROUNDS && lost < WRITE_ROUNDS; round += 1) {
-      const claim = await claimed(change.kind, take);
-      if (claim.kind !== 'claimed') {
-        return { kind: 'unwritten', why: claim.kind === 'held' ? 'busy' : 'disk' };
-      }
-      const step = await underClaim(change, claim, clock());
-      if (step !== 'restart' && step !== 'lost') {
-        return step;
-      }
-      lost += step === 'lost' ? 1 : 0;
+  private async attempt(change: RefusalChange, take: 'person' | undefined): Promise<Step> {
+    const claim = await this.claimed(change.kind, take);
+    if (claim.kind !== 'claimed') {
+      return unwritten(claim.kind === 'held' ? 'busy' : 'disk');
     }
 
-    return { kind: 'unwritten', why: lost > 0 ? 'lost' : 'busy' };
+    return this.underClaim(change, claim, this.clock());
   }
 
+  async commit(change: RefusalChange, take?: 'person'): Promise<Committed> {
+    const tally = { restart: 0, lost: 0 };
+    for (let round = 0; round < RESTARTS_MAX + WRITE_ROUNDS; round += 1) {
+      const step = await this.attempt(change, take);
+      if (typeof step !== 'string') {
+        return step;
+      }
+      tally[step] += 1;
+      if (tally.lost >= WRITE_ROUNDS) {
+        break;
+      }
+    }
+
+    return giveUp(tally.lost);
+  }
+}
+
+/** The writer over a disk. `sleep` is the pause between tries; a test hands in one that does not wait. */
+export function refusalsStore(disk: RefusalsDisk, clock: () => number, sleep: (ms: number) => Promise<void> = realSleep): RefusalsStore {
+  const writer = new Writer(disk, clock, sleep);
+
   return {
-    read,
-    commit,
+    read: () => writer.read(),
+    commit: (change, take) => writer.commit(change, take),
     mark: async (waiting) => (await disk.mark(JSON.stringify({ v: 1, ...waiting }))) !== undefined,
     unmark: (name) => disk.unmark(name),
   };

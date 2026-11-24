@@ -377,21 +377,25 @@ export const thisMachine: OwnerSeam = { host: hostname, boot: () => bootId, aliv
  */
 export const ownerGone = (seam: OwnerSeam): TakeRule => (lock) => {
   const note = lock.note;
-  if (note === undefined || note.host !== seam.host()) {
-    return undefined;
-  }
-  const mine = seam.boot();
-  if (note.boot !== undefined && mine !== undefined && note.boot !== mine) {
-    return 'was taken over: its owner is gone (another boot)';
+
+  return note !== undefined && note.host === seam.host() && ownerIsGone(seam, note) ? 'was taken over: its owner is gone' : undefined;
+};
+
+const anotherBoot = (mine: string | undefined, theirs: string | undefined): boolean => theirs !== undefined && mine !== undefined && theirs !== mine;
+
+/** Another boot, or no process of that number. */
+function ownerIsGone(seam: OwnerSeam, note: LockNote): boolean {
+  if (anotherBoot(seam.boot(), note.boot)) {
+    return true;
   }
   try {
     seam.alive(note.pid);
   } catch (reason) {
-    return codeOf(reason) === 'ESRCH' ? 'was taken over: its owner is gone' : undefined;
+    return codeOf(reason) === 'ESRCH';
   }
 
-  return undefined;
-};
+  return false;
+}
 
 /** The rule of a person's press: a held lock is taken over whatever its owner. */
 export const takenByPerson: TakeRule = () => 'was taken over by a person\'s press';

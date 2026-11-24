@@ -314,12 +314,15 @@ async function asked(seams: RoadSeams, host: string): Promise<string | undefined
   if (answer === undefined) {
     return SAID.noAnswer(host);
   }
-  const result = await seams.store.answer(host, answer);
-  if (result.kind !== 'written' && result.kind !== 'kept') {
-    return notKept(host, result);
-  }
 
-  return answer === 'yes' ? undefined : SAID.turnedOff(host);
+  return sayKept(host, answer, await seams.store.answer(host, answer));
+}
+
+/** What an answer that was kept says: nothing for a "yes", the sentence of today for a "no", and why for one that was not kept. */
+function sayKept(host: string, answer: 'yes' | 'no', result: Committed): string | undefined {
+  const kept = result.kind === 'written' || result.kind === 'kept';
+
+  return kept ? (answer === 'yes' ? undefined : SAID.turnedOff(host)) : notKept(host, result);
 }
 
 const DOORS: Readonly<Record<Consent, (seams: RoadSeams, host: string) => PromiseLike<string | undefined> | string | undefined>> = {

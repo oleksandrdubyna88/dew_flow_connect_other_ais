@@ -49,20 +49,20 @@ export interface DiskNames {
   readonly markerPrefix: string;
 }
 
-/** The disk of one side's folder. `owner` is the seam of the lock's owner rule; `now` is the clock the claim stamps its note with. */
-export function refusalsDiskOver(dir: string, names: DiskNames, owner: OwnerSeam, now: () => number = Date.now): RefusalsDisk {
-  const path = join(dir, names.file);
-  let counter = 0;
-  const markers = async (): Promise<readonly string[]> => {
-    try {
-      return (await readdir(dir)).filter((name) => name.startsWith(names.markerPrefix));
-    } catch (reason) {
-      if (codeOf(reason) === 'ENOENT') {
-        return [];
-      }
-      throw reason;
+const markerList = async (dir: string, prefix: string): Promise<readonly string[]> => {
+  try {
+    return (await readdir(dir)).filter((name) => name.startsWith(prefix));
+  } catch (reason) {
+    if (codeOf(reason) === 'ENOENT') {
+      return [];
     }
-  };
+    throw reason;
+  }
+};
+
+/** The file's half: read at most the cap plus one byte, replace atomically, sweep the beside-files a crash left. */
+function fileHalf(dir: string, file: string, now: () => number): Pick<RefusalsDisk, 'read' | 'replace' | 'sweep'> {
+  const path = join(dir, file);
 
   return {
     read: async () => {
@@ -74,12 +74,10 @@ export function refusalsDiskOver(dir: string, names: DiskNames, owner: OwnerSeam
         return { kind: 'failed' };
       }
     },
-    claim: (doing, take): Promise<Claim> => claimFile(dir, LOCK_ID, doing, now(), WHAT, take === 'person' ? takenByPerson : ownerGone(owner)),
-    stillOurs: (claim) => lockHolds(claim.path, claim.token),
     replace: (text) => writeFileAtomically(path, text),
     sweep: async (ms) => {
       try {
-        for (const name of (await readdir(dir)).filter((one) => one.startsWith(`${names.file}.`) && one.endsWith(BESIDE_SUFFIX))) {
+        for (const name of (await readdir(dir)).filter((one) => one.startsWith(`${file}.`) && one.endsWith(BESIDE_SUFFIX))) {
           if (now() - (await stat(join(dir, name))).mtimeMs > ms) {
             await rm(join(dir, name), { force: true });
           }
@@ -88,13 +86,29 @@ export function refusalsDiskOver(dir: string, names: DiskNames, owner: OwnerSeam
         // A sweep never throws: a beside-file it could not remove stays until the next write.
       }
     },
+  };
+}
+
+/** The lock's half: the chat store's claim, with the rule that asks whether the owner is gone, and a person's take-over. */
+function lockHalf(dir: string, owner: OwnerSeam, now: () => number): Pick<RefusalsDisk, 'claim' | 'stillOurs'> {
+  return {
+    claim: (doing, take): Promise<Claim> => claimFile(dir, LOCK_ID, doing, now(), WHAT, take === 'person' ? takenByPerson : ownerGone(owner)),
+    stillOurs: (claim) => lockHolds(claim.path, claim.token),
+  };
+}
+
+/** The markers' half: made by an exclusive create with no claim, listed with their text, removed by name. */
+function markerHalf(dir: string, prefix: string): Pick<RefusalsDisk, 'mark' | 'marks' | 'unmark'> {
+  let counter = 0;
+
+  return {
     mark: async (text) => {
       try {
-        if ((await markers()).length >= UNSURE_MAX || !(await makeDataDirectory(dir)).made) {
+        if ((await markerList(dir, prefix)).length >= UNSURE_MAX || !(await makeDataDirectory(dir)).made) {
           return undefined;
         }
         counter += 1;
-        const name = `${names.markerPrefix}${process.pid}-${counter}-${randomBytes(4).toString('hex')}.json`;
+        const name = `${prefix}${process.pid}-${counter}-${randomBytes(4).toString('hex')}.json`;
         await writeFile(join(dir, name), text, { encoding: 'utf8', flag: 'wx' });
 
         return name;
@@ -102,22 +116,29 @@ export function refusalsDiskOver(dir: string, names: DiskNames, owner: OwnerSeam
         return undefined;
       }
     },
-    marks: async () => {
-      for (let tries = 1; tries <= LIST_TRIES; tries += 1) {
-        try {
-          const listed = await markers();
-
-          const read = await Promise.all(listed.map(async (name) => ({ name, got: await headOf(join(dir, name), UNSURE_BYTES_MAX + 1).then((text) => ({ text }), () => ({ text: undefined, torn: true })) })));
-
-          // A marker that vanished between the listing and the read was landed by another window: it is gone, not torn.
-          return read.filter((one) => one.got.text !== undefined || 'torn' in one.got).map((one) => ({ name: one.name, text: one.got.text }));
-        } catch {
-          await pause(LIST_PAUSE_MS);
-        }
-      }
-
-      return 'failed';
-    },
+    marks: () => listedMarkers(dir, prefix),
     unmark: async (name) => { await rm(join(dir, name), { force: true }).catch(() => undefined); },
   };
+}
+
+type Marks = Awaited<ReturnType<RefusalsDisk['marks']>>;
+
+async function listedMarkers(dir: string, prefix: string): Promise<Marks> {
+  for (let tries = 1; tries <= LIST_TRIES; tries += 1) {
+    try {
+      const read = await Promise.all((await markerList(dir, prefix)).map(async (name) => ({ name, got: await headOf(join(dir, name), UNSURE_BYTES_MAX + 1).then((text) => ({ text, torn: false }), () => ({ text: undefined, torn: true })) })));
+
+      // A marker that vanished between the listing and the read was landed by another window: it is gone, not torn.
+      return read.filter((one) => one.got.text !== undefined || one.got.torn).map((one) => ({ name: one.name, text: one.got.text }));
+    } catch {
+      await pause(LIST_PAUSE_MS);
+    }
+  }
+
+  return 'failed';
+}
+
+/** The disk of one side's folder. `owner` is the seam of the lock's owner rule; `now` is the clock the claim stamps its note with. */
+export function refusalsDiskOver(dir: string, names: DiskNames, owner: OwnerSeam, now: () => number = Date.now): RefusalsDisk {
+  return { ...fileHalf(dir, names.file, now), ...lockHalf(dir, owner, now), ...markerHalf(dir, names.markerPrefix) };
 }

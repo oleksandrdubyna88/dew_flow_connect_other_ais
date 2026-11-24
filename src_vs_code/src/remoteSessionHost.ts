@@ -184,16 +184,25 @@ const askChange = (host: string, detail: string): Promise<string | undefined> =>
 });
 
 /** The change a button means: over damage a `mend`, else a plain change. `undefined` for Escape. */
+const BUTTON_ANSWER: ReadonlyMap<string | undefined, 'yes' | 'no' | 'forget'> = new Map([[READ, 'yes'], [NOT_THIS_HOST, 'no'], [FORGET, 'forget']]);
+
 function changeFor(button: string | undefined, host: string, damaged: boolean): HostChange | undefined {
-  const answer = button === READ ? 'yes' : button === NOT_THIS_HOST ? 'no' : button === FORGET ? 'forget' : undefined;
+  const answer = BUTTON_ANSWER.get(button);
   if (answer === undefined) {
     return undefined;
   }
-  if (damaged) {
-    return { kind: 'mend', host, answer };
-  }
 
-  return answer === 'forget' ? { kind: 'forget', host } : { kind: 'person', host, answer };
+  return damaged ? { kind: 'mend', host, answer } : plainChange(host, answer);
+}
+
+const plainChange = (host: string, answer: 'yes' | 'no' | 'forget'): HostChange => (answer === 'forget' ? { kind: 'forget', host } : { kind: 'person', host, answer });
+
+/** Commits a person's answer for a host and tells the person when the store did not keep it. */
+async function committedAndTold(keeper: HostKeeper, host: string, change: HostChange): Promise<void> {
+  const said = keptSaid(host, await keeper.commit(change));
+  if (said !== undefined) {
+    await tell(said);
+  }
 }
 
 /** The change question for one host, and the chosen change committed. A change the store did not keep is told. */
@@ -202,10 +211,7 @@ async function changeHostOf(keeper: HostKeeper, host: string): Promise<void> {
   const { detail, damaged } = await changeDetail(keeper, host, allowNew);
   const change = changeFor(await askChange(host, detail), host, damaged);
   if (change !== undefined) {
-    const said = keptSaid(host, await keeper.commit(change));
-    if (said !== undefined) {
-      await tell(said);
-    }
+    await committedAndTold(keeper, host, change);
   }
 }
 
@@ -238,16 +244,12 @@ async function changeHostsOf(keeper: HostKeeper): Promise<void> {
 
 /** The question for a host with no answer: committed as a person's answer; over damage it is the change question. */
 async function askHostOf(keeper: HostKeeper, host: string): Promise<void> {
-  const damaged = readableOf(keeper.stored()).damaged || (await keeper.roundStop()) === 'damaged';
-  if (damaged) {
+  if (readableOf(keeper.stored()).damaged || (await keeper.roundStop()) === 'damaged') {
     return changeHostOf(keeper, host);
   }
   const answer = await askQuestion(host);
   if (answer !== undefined) {
-    const said = keptSaid(host, await keeper.commit({ kind: 'person', host, answer }));
-    if (said !== undefined) {
-      await tell(said);
-    }
+    await committedAndTold(keeper, host, { kind: 'person', host, answer });
   }
 }
 

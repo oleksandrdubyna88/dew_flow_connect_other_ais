@@ -63,13 +63,18 @@ export interface HostStanding {
 const asRecord = (value: unknown): Readonly<Record<string, unknown>> =>
   (typeof value === 'object' && value !== null ? (value as Readonly<Record<string, unknown>>) : {});
 
-/** A row is whole or it is not a row. `how` is absent, or `'auto'` beside a "yes": any other marker is unknown and makes the list damaged. */
+const hasHost = (one: Readonly<Record<string, unknown>>): boolean => typeof one['host'] === 'string' && one['host'].length > 0;
+
+const hasAnswer = (one: Readonly<Record<string, unknown>>): boolean => one['answer'] === 'yes' || one['answer'] === 'no';
+
+/** `how` is absent, or `'auto'` beside a "yes": any other marker is unknown. */
+const hasKnownHow = (one: Readonly<Record<string, unknown>>): boolean => one['how'] === undefined || (one['how'] === 'auto' && one['answer'] === 'yes');
+
+/** A row is whole or it is not a row. A marker this build does not know makes the list damaged. */
 function isRow(row: unknown): row is HostAnswer {
   const one = asRecord(row);
-  const how = one['how'];
 
-  return typeof one['host'] === 'string' && one['host'].length > 0 && (one['answer'] === 'yes' || one['answer'] === 'no')
-    && typeof one['askedUtc'] === 'string' && (how === undefined || (how === 'auto' && one['answer'] === 'yes'));
+  return hasHost(one) && hasAnswer(one) && typeof one['askedUtc'] === 'string' && hasKnownHow(one);
 }
 
 interface Hosts {
@@ -113,18 +118,22 @@ function strongest(rows: readonly HostAnswer[], host: string): HostAnswer | unde
 export function consentOf(file: RefusalsRead, value: unknown, host: string, allowNew: boolean): Consent {
   const list = hostsOf(value);
   const row = strongest(list.rows, host);
-  if (row?.answer === 'no' || (file.kind === 'file' && file.file.refused.some((one) => one.host === host))) {
+  if (isRefused(file, row, host)) {
     return 'no';
   }
-  if (file.kind === 'damaged' || list.damaged) {
+  if (cannotRead(file, list)) {
     return 'damaged';
   }
-  if (row === undefined) {
-    return 'ask';
-  }
 
-  return row.how === 'auto' && !allowNew ? 'ask' : 'yes';
+  return row === undefined ? 'ask' : yesOf(row, allowNew);
 }
+
+const isRefused = (file: RefusalsRead, row: HostAnswer | undefined, host: string): boolean =>
+  row?.answer === 'no' || (file.kind === 'file' && file.file.refused.some((one) => one.host === host));
+
+const cannotRead = (file: RefusalsRead, list: Hosts): boolean => file.kind === 'damaged' || list.damaged;
+
+const yesOf = (row: HostAnswer, allowNew: boolean): Consent => (row.how === 'auto' && !allowNew ? 'ask' : 'yes');
 
 /** Whether the terminal's two overflow items are shown: a host that is not answered "no". Used with a read file. */
 export const refusedBy = (file: RefusalsRead, value: unknown, host: string): boolean => consentOf(file, value, host, true) === 'no';
@@ -256,14 +265,17 @@ function mendedRows(rows: readonly HostAnswer[]): readonly HostAnswer[] {
   return [...one.filter((row) => row.answer === 'no').sort(byAsked), ...one.filter((row) => row.answer === 'yes').sort(byAsked).reverse()].slice(0, HOSTS_MAX);
 }
 
-function appliedTo(rows: readonly HostAnswer[], change: HostChange, now: string): Outcome {
-  switch (change.kind) {
-    case 'person': return personal(rows, change.host, change.answer, now);
-    case 'forget': return forgotten(rows, change.host);
-    case 'auto': return automatic(rows, change.host, now);
-    case 'mend': return change.answer === 'forget' ? forgotten(rows, change.host) : personal(rows, change.host, change.answer, now);
-  }
-}
+type Of<K extends HostChange['kind']> = Extract<HostChange, { readonly kind: K }>;
+type Apply = (rows: readonly HostAnswer[], change: HostChange, now: string) => Outcome;
+
+const APPLY: { readonly [K in HostChange['kind']]: (rows: readonly HostAnswer[], change: Of<K>, now: string) => Outcome } = {
+  person: (rows, change, now) => personal(rows, change.host, change.answer, now),
+  forget: (rows, change) => forgotten(rows, change.host),
+  auto: (rows, change, now) => automatic(rows, change.host, now),
+  mend: (rows, change, now) => (change.answer === 'forget' ? forgotten(rows, change.host) : personal(rows, change.host, change.answer, now)),
+};
+
+const appliedTo: Apply = (rows, change, now) => (APPLY[change.kind] as Apply)(rows, change, now);
 
 /** The merge of the list, for one host, at the instant `now`: the table of the spec. A damaged list is written over by a `mend` only. */
 export const hostMerge = (now: string): Merge<HostChange, Committed> => (stored, change) => {
