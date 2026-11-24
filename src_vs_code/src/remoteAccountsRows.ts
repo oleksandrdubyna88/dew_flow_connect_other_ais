@@ -29,7 +29,8 @@ export function forList(text: string, max: number): string {
   return plain.length > max ? `${plain.slice(0, Math.max(0, max - 1)).join('')}…` : plain.join('');
 }
 
-const EMAIL_MAX = 120;
+/** The longest valid address: the owner decided the full email is in the list (O2). `plainValue` still cuts any VM text at 200 characters. */
+const EMAIL_MAX = 254;
 const NAME_MAX = 60;
 const SENTENCE_MAX = 200;
 
@@ -97,7 +98,7 @@ interface Seen {
 }
 
 const seenOf = (host: string, memory: HostMemory | undefined): readonly Seen[] =>
-  (memory?.reading === undefined ? [] : [{ host, read: memory.reading.read, atMs: memory.reading.atMs, failed: memory.failure !== undefined }]);
+  (memory?.reading === undefined ? [] : [{ host, read: memory.reading.read, atMs: memory.reading.atMs, failed: memory.failure !== undefined || memory.unreadable !== undefined }]);
 
 const newestOf = <T extends Seen>(members: readonly T[]): T | undefined => members.reduce<T | undefined>((best, one) => (best === undefined || one.atMs > best.atMs ? one : best), undefined);
 
@@ -312,9 +313,12 @@ const unasked = (view: AccountsView, standing: HostStanding | undefined): boolea
 
 type BlockKind = keyof typeof ADMISSION_SAID;
 
+/** What the door answered last, except a refusal: "turned off" comes from a "no" among the standings, so a Read given since shows at once. */
+const remembered = (memory: HostMemory): BlockKind | undefined => (memory.admission === 'refused' ? undefined : memory.admission);
+
 /** Why a host is not read: a "no", what the door answered, or no question asked yet with the setting off. */
 const blockedKind = (view: AccountsView, standing: HostStanding | undefined, memory: HostMemory): BlockKind | undefined =>
-  (isNo(standing) ? 'refused' : (memory.admission ?? (unasked(view, standing) ? 'not-asked' : undefined)));
+  (isNo(standing) ? 'refused' : (remembered(memory) ?? (unasked(view, standing) ? 'not-asked' : undefined)));
 
 function blocked(view: AccountsView, standing: HostStanding | undefined, memory: HostMemory): Said | undefined {
   const kind = blockedKind(view, standing, memory);
@@ -420,22 +424,26 @@ const autoDue = (state: AccountsState, standings: readonly HostStanding[], nowMs
   return dueAgain(last, nowMs) ? standings.filter((one) => isAuto(one) && (last === undefined || one.askedUtc > last)).map((one) => one.host) : [];
 };
 
-const firstDue = (state: AccountsState, standings: readonly HostStanding[], firstRoundEnded: boolean): readonly string[] =>
-  (firstRoundEnded && state.toldUtc === undefined ? standings.filter((one) => one.answer === 'yes' && one.how === 'person').map((one) => one.host) : []);
+const olderThan = (one: HostStanding, roundStartMs: number): boolean => one.answer === 'yes' && one.how === 'person' && one.askedUtc < new Date(roundStartMs).toISOString();
+
+const firstDue = (state: AccountsState, standings: readonly HostStanding[], firstRoundEnded: boolean, roundStartMs: number): readonly string[] =>
+  (firstRoundEnded && state.toldUtc === undefined ? standings.filter((one) => olderThan(one, roundStartMs)).map((one) => one.host) : []);
 
 /**
  * The hosts a notice is due for. `autoHosts`: the automatic "yes" rows allowed after the last such notice, once a day. `first`: the
  * person's own "yes" rows, once, at the end of the first round, while the person was never told. The host commits `{ told }` whether or
  * not `first` is empty (it checks `toldUtc` and the round itself).
  */
-export const noticesDue = (state: AccountsState, standings: readonly HostStanding[], firstRoundEnded: boolean, nowMs: number): { readonly autoHosts: readonly string[]; readonly first: readonly string[] } =>
-  ({ autoHosts: autoDue(state, standings, nowMs), first: firstDue(state, standings, firstRoundEnded) });
+export const noticesDue = (state: AccountsState, standings: readonly HostStanding[], firstRoundEnded: boolean, nowMs: number, roundStartMs: number = nowMs): { readonly autoHosts: readonly string[]; readonly first: readonly string[] } =>
+  ({ autoHosts: autoDue(state, standings, nowMs), first: firstDue(state, standings, firstRoundEnded, roundStartMs) });
 
 /** What the notices need of the window. `state` is `undefined` over a state row that cannot be read: then nobody is told and nothing is written. */
 export interface NoticeSeams {
   readonly state: () => AccountsState | undefined;
   readonly standings: () => Promise<readonly HostStanding[]>;
   readonly nowMs: () => number;
+  /** When the round that just ended started. */
+  readonly roundStartMs: () => number;
   /** The daily notice: these hosts were allowed by the round itself. */
   readonly allowed: (hosts: readonly string[]) => void;
   /** The first-round notice: these hosts, which the person allowed before, are now read every 10 minutes. */
@@ -469,7 +477,7 @@ export async function tellAfterRound(seams: NoticeSeams, firstRoundEnded: boolea
   if (state === undefined) {
     return;
   }
-  const due = noticesDue(state, await seams.standings(), firstRoundEnded, seams.nowMs());
+  const due = noticesDue(state, await seams.standings(), firstRoundEnded, seams.nowMs(), seams.roundStartMs());
   await dailyNotice(seams, due.autoHosts);
   await firstNotice(seams, due.first, firstRoundEnded && state.toldUtc === undefined);
 }

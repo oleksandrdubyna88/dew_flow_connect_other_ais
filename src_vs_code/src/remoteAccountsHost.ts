@@ -86,6 +86,8 @@ class AccountsWindow implements TerminalAccounts {
   private memoryNow: Memory = new Map();
   private round = 0;
   private lastEndMs: number | undefined;
+  /** When the round that runs, or ran last, started: the first-round notice names only the "yes" rows older than it. */
+  private roundStartedMs = 0;
   private timer: ReturnType<typeof setTimeout> | undefined;
   private armed = false;
   private running = false;
@@ -169,6 +171,7 @@ class AccountsWindow implements TerminalAccounts {
   runNow(trigger: Trigger): Promise<RoundResult | undefined> {
     return this.latch(async () => {
       this.running = true;
+      this.roundStartedMs = Date.now();
       this.landed.fire();
       try {
         return await settleRound(
@@ -209,6 +212,7 @@ class AccountsWindow implements TerminalAccounts {
       state: () => { const read = accountsStateOf(this.context.globalState.get(STATE_KEY)); return read.kind === 'state' ? read.state : undefined; },
       standings: () => this.sessions.hostStandings(),
       nowMs: () => Date.now(),
+      roundStartMs: () => this.roundStartedMs,
       allowed: allowedNotice,
       everyTen: everyTenNotice,
       commit: (change) => this.sessions.commitKey(STATE_KEY, change, stateMerge),
@@ -240,8 +244,8 @@ class AccountsWindow implements TerminalAccounts {
     this.timer = undefined;
     this.armed = false;
     this.memoryNow = new Map();
-    this.landed.fire();
     await stopTheRound(this.sessions, new Date().toISOString());
+    this.landed.fire();
   }
 
   async start(): Promise<boolean> {
@@ -447,13 +451,13 @@ class AccountsList {
     this.drawn += 1;
     const mine = this.drawn;
     const extra = { floor: this.floor, startUnwritten: this.startUnwritten };
-    this.floor = false;
     const view = await this.accounts.view(extra);
     if (!this.onScreen || mine !== this.drawn) {
       return;
     }
     this.pick.busy = view.busy;
     this.pick.items = accountsRows(view, Date.now()).map(itemOf);
+    this.floor = false;
     this.accounts.noteShown(this.pick.items.map(shownOf));
   }
 

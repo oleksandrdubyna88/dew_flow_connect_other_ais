@@ -191,6 +191,14 @@ test('A4-T7: a later failed read keeps the older numbers and says so', () => {
   assert.ok(row?.detail.includes('the later read of hB failed'), `the detail is ${String(row?.detail)}`);
 });
 
+test('A4-T7 (F2): a later answer that could not be read keeps the older numbers and says the later read failed', () => {
+  const memory = memoryOf(['hA', seen(reading({ claude: usageFound({ usage: usageOf(10, 10, 10) }) }), 2, { unreadable: { why: 'cut', atMs: NOW } })]);
+  const [row] = usageRows(rowsOf({ memory, hosts: ['hA'] }));
+
+  assert.ok(row?.label.startsWith('5h 90% left'), 'the older numbers were dropped');
+  assert.ok(row?.detail.includes('the later read of hA failed'), `the detail is ${String(row?.detail)}`);
+});
+
 test('A4-T7: a newer reading that read no usage does not hide the numbers of an older one', () => {
   const memory = memoryOf(['hA', seen(reading({ claude: usageFound({ usage: usageOf(10, 10, 10) }) }), 4)], ['hB', seen(reading({ claude: usageFound({ usage: { state: 'skipped' } }) }), 1)]);
   const [row] = usageRows(rowsOf({ memory, hosts: ['hA', 'hB'] }));
@@ -248,6 +256,13 @@ test('A4-T8: the damaged, full and not-asked rows come from the memory of the do
   assert.equal(hostRow(rows, 'hDamaged').description, HOSTS_SAID.rowDamagedList, 'a host that is not read over a damaged list says never read yet');
   assert.equal(hostRow(standingsWorld({ damagedFile: true }), 'hDamaged').description, HOSTS_SAID.rowDamagedFile);
   assert.equal(hostRow(rows, 'hWait').description, HOSTS_SAID.rowWaiting);
+});
+
+test('A4-T8 (F1): "turned off" comes from a "no" among the standings, not from a remembered refusal, so a Read given after it shows at once', () => {
+  const memory = memoryOf(['hX', { admission: 'refused' }]);
+
+  assert.equal(hostRow(rowsOf({ memory, hosts: ['hX'], standings: [person('hX')] }), 'hX').description, 'never read yet', 'a host that was given a Read still says it is turned off');
+  assert.equal(hostRow(rowsOf({ memory, hosts: ['hX'], standings: [person('hX', 'no')] }), 'hX').description, 'turned off: your answer for this host is “Not this host”');
 });
 
 test('A4-T8: with no standing and the setting off a host that was never admitted is not asked yet; with it on it is never read yet', () => {
@@ -419,6 +434,14 @@ test('A4-T11: a group whose usage nobody read says why — never a row of dashes
 
 // ───────────────── A4-T12: VM text is made plain at one road ─────────────────
 
+test('A4-T12 (F7): a 200-character email is shown whole in the separator', () => {
+  const email = `${'a'.repeat(187)}@example.test`;
+  const memory = memoryOf(['hA', seen(reading({ claude: usageFound({ email }) }), 1)]);
+
+  assert.equal(email.length, 200);
+  assert.ok(separators(rowsOf({ memory, hosts: ['hA'] })).some((one) => one.includes(email)), 'a long email was cut');
+});
+
 test('A4-T12: forList takes out the bidi override, the zero-width space and the bell, breaks $( and cuts at max with an ellipsis', () => {
   const bidi = String.fromCodePoint(0x202e);
   const zero = String.fromCodePoint(0x200b);
@@ -463,7 +486,8 @@ function forListSpans(text: string): readonly (readonly [number, number])[] {
 }
 
 /** Every access of a text field of a reply or of the runner's sentence that is not inside a forList( call. */
-const FIELD = /\??\.(?:email|org|plan|version|model|sentence)\b/gu;
+const FIELDS = 'email|org|plan|version|model|sentence';
+const FIELD = new RegExp(`\\??\\.(?:${FIELDS})\\b|\\{[^{}]*\\b(?:${FIELDS})\\b[^{}]*\\}\\s*=(?!=)`, 'gu');
 function barefields(text: string): readonly string[] {
   const spans = forListSpans(text);
 
@@ -482,6 +506,9 @@ test('A4-T12 (scan): every text field of a reply and the failure sentence reach 
 test('A4-T12 (scan companions): the scan finds a bare field, a field inside forList(, and the sentence only inside forList(', () => {
   assert.equal(barefields('const a = found.email;').length, 1, 'the scan misses a bare field');
   assert.equal(barefields('const a = forList(found.email, 9);').length, 0, 'the scan flags a field inside forList(');
+  assert.equal(barefields('const { email } = found;').length, 1, 'the scan misses a destructured field');
+  assert.equal(barefields('const { email: shown, org } = found.read;').length, 1, 'the scan misses a renamed destructured field');
+  assert.equal(barefields('const { host, found } = one;').length, 0, 'the scan flags a destructure of other names');
   assert.equal(barefields('const a = forList(memory.failure?.sentence, 9) + b.sentence;').length, 1, 'the scan misses a bare sentence beside a wrapped one');
   const source = sourceOf('remoteAccountsRows.ts');
   assert.ok(forListSpans(source).length >= 6, 'the scan found no forList( call in the module, so it looked at nothing');
@@ -509,6 +536,14 @@ test('A4-T13: the first automatic host is told at once; two hours later nobody i
 test('A4-T13: no host allowed by itself means no notice, and a person\'s own "yes" is not an automatic one', () => {
   assert.deepEqual(noticesDue(state(), [], true, NOW).autoHosts, []);
   assert.deepEqual(noticesDue(state(), [person('hA'), person('hB', 'no')], true, NOW).autoHosts, []);
+});
+
+test('A4-T13 (F3): the first-round notice names only the "yes" rows older than the round that just ended', () => {
+  const start = NOW;
+  const old = { host: 'hOld', answer: 'yes', how: 'person', askedUtc: iso(start - hour(5)) } as const;
+  const during = { host: 'hNew', answer: 'yes', how: 'person', askedUtc: iso(start + min(2)) } as const;
+
+  assert.deepEqual(noticesDue(state(), [old, during], true, start + min(10), start).first, ['hOld'], 'a "yes" given during the round was told as one from before');
 });
 
 test('A4-T13: the first-round notice names the person\'s "yes" rows once, while it was never told', () => {

@@ -136,6 +136,7 @@ function noticesOver(state: AccountsState | undefined, standings: readonly HostS
     state: () => state,
     standings: () => Promise.resolve(standings),
     nowMs: () => nowMs,
+    roundStartMs: () => nowMs - 600_000,
     allowed: (hosts) => { log.push(`allowed ${hosts.join(',')}`); },
     everyTen: (hosts) => { log.push(`every-ten ${hosts.join(',')}`); },
     commit: (change: StateChange) => { log.push(`commit ${JSON.stringify(change)}`); return Promise.resolve(); },
@@ -146,6 +147,14 @@ function noticesOver(state: AccountsState | undefined, standings: readonly HostS
 
 const autoRow = (host: string, askedUtc: string): HostStanding => ({ host, answer: 'yes', how: 'auto', askedUtc });
 const personRow = (host: string): HostStanding => ({ host, answer: 'yes', how: 'person', askedUtc: at(-48) });
+
+test('A4-T13 (F3): the orchestration hands the round\'s own start to the notice, so a "yes" given during the round is not told as an old one', async () => {
+  const during: HostStanding = { host: 'hNew', answer: 'yes', how: 'person', askedUtc: new Date(NOW - 300_000).toISOString() };
+  const told = noticesOver({}, [personRow('hOld'), during]);
+  await tellAfterRound(told.seams, true);
+
+  assert.ok(told.log.includes('every-ten hOld') && !told.log.some((line) => line.includes('hNew')), told.log.join(' | '));
+});
 
 test('A4-T13: after the first round the daily notice and the first-round notice are each told once, and each commits its time', async () => {
   const told = noticesOver({}, [autoRow('hA', at(-0.1)), personRow('hB')]);

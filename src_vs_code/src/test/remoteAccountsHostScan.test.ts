@@ -1,7 +1,7 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { sourceOf } from './sourceReading';
+import { bodyOf, sourceOf } from './sourceReading';
 
 /**
  * What `remoteAccountsHost.ts` may and may not do, read from its source (E1.S3, A3-T24 and A3-T26 and A3-T27, the host halves). The module imports
@@ -20,6 +20,20 @@ test('A3-T24 (host): nothing of a reading is stored by the host', () => {
   assert.equal(count('writeFile(path, JSON.stringify(memory));', STORES), 2, 'companion: the scan finds a file write and a stringify');
   assert.ok(count(host, /globalState\.get\(/gu) >= 1, 'companion: the host reads the state row, so the scan looked at the right file');
   assert.ok(!/\bconsole\./u.test(host), 'the host writes to the console: its log goes through the one default seam');
+});
+
+test('A4-T14 (F4): the list clears its "ran less than a minute ago" mark only after the items are set, so an overtaken draw keeps it', () => {
+  const draw = bodyOf(host, '  private async draw(');
+  const cleared = draw.indexOf('this.floor = false');
+  assert.ok(cleared > 0, 'the scan does not find where the mark is cleared');
+  assert.ok(cleared > draw.indexOf('this.pick.items ='), 'the mark is cleared before the items are set');
+});
+
+test('A4-T14 (F5): the Stop fires the redraw only after the Stop is written', () => {
+  const stop = bodyOf(host, '  async stop(');
+  const written = stop.indexOf('await stopTheRound(');
+  assert.ok(written > 0, 'the scan does not find the write of the Stop');
+  assert.ok(stop.indexOf('this.landed.fire()') > written, 'the redraw is fired before the Stop is written, so the list reads the old state');
 });
 
 test('A3-T26 (host): readAccounts( is called once, with three arguments, inside the parse seam', () => {
