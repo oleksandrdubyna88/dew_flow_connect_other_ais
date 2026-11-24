@@ -4315,6 +4315,24 @@ version disagree*, and a story must be committable with its tests green. `SNIPPE
 `ARTEFACT_VERSION` docblock that said the two numbers "differ by one" was corrected in passing — it
 had been false since 8 against 5.
 
+### A pin bump that regenerates the snippet must be a releasing commit (2026-11-19)
+
+The snippet is generated from the mounted rules at build time (`scripts/prepare-gate.mjs` → `src/generated/*.ts`), so a
+conventions pin bump that moves a marker IS an extension change: the paste a person copies differs. It reaches anyone
+only through an extension release, and release-please releases the extension only for a releasing commit type (`feat`,
+`fix`, `perf`, `revert`, or `!`) that touches `src_vs_code` with something other than documentation.
+
+- **Title such a bump `fix(extension): …`** (as #1024 did for v19). On 2026-11-19 the v20 bump (#1027, `coai-feature` v5)
+  was squash-merged as `chore(rules): …`; release-please's dispatch then opened no release pull request.
+- **A CHANGELOG line does not repair it.** A `fix(extension):` that changes only `src_vs_code/CHANGELOG.md` is refused by
+  `.github/scripts/docs-only-title.mjs` — documentation alone never opens a release, the operator's rule (#1028, closed).
+- **The repair is a `Release-As` commit** that touches only `src_vs_code` code (a docblock sentence beside
+  `FEATURE_VERSION`, #1029) and whose squash body carries `Release-As: <version>`, the #605 shape of
+  [PLAN_the_release_guards_contradict.md](PLAN_the_release_guards_contradict.md). It opened #1030 (0.89.2).
+- **Check the release head before merging the release pull request:** the full suite, and a VSIX built from that head
+  whose bundled `extension.js` carries the new marker and clause and not the old one (done for 0.89.2, and again on the
+  published asset).
+
 ### The Consultant section: who a stuck AI asks, and the one box that is a FILE (2026-09-13)
 
 It sits directly after *Chat with other AI*, and the placement is the argument: the two are one idea
