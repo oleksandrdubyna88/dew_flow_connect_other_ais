@@ -75,6 +75,7 @@ import { readLog, serverRun, serverRunAt } from './roundsDbRead';
 import { FEATURES, FeaturesCache, hasFeature } from './binaryFeatures';
 import { FIRST_SEEN_KEY, NEW_CONTROLS, seenNow } from './newTags';
 import { sideHereOf, sidesIn, stampThisSide, type SeenSide } from './sidesSeen';
+import { bindTerminalAccounts, terminalAccountsTestDoorOf, type TerminalAccounts, type TerminalAccountsTestDoor } from './remoteAccountsHost';
 import { bindRemoteSessions, testDoorOf, type RemoteSessionsTestDoor } from './remoteSessionHost';
 import { bindReattach } from './terminalHost';
 import { bindSkipShell, type SkipShellTestDoor } from './skipShellHost';
@@ -110,6 +111,11 @@ export interface CoaiExports {
    */
   readonly remoteSessions?: RemoteSessionsTestDoor;
   /**
+   * The accounts round of the open ssh hosts, for a host scenario (E1.S3, A3-H1): replace the call, run a round, ask what is armed. Present ONLY in test
+   * mode, for the same reason: in production no other extension can start a round or replace the ssh call. `remoteExportGuard.test.ts` holds that.
+   */
+  readonly terminalAccounts?: TerminalAccountsTestDoor;
+  /**
    * The BOUND skip-shell check, for a host scenario (E3.S3): replace the offer, run the check, save and restore the memory. Present ONLY in test
    * mode, for the same reason: in production no other extension can answer the offer or write this profile's memory. `skipShellWiring.test.ts` holds that.
    */
@@ -119,6 +125,11 @@ export interface CoaiExports {
    * has no other way into this extension's `globalState`. Present ONLY in test mode, as `remoteSessions` is.
    */
   readonly onExhaustedMigration?: () => unknown;
+}
+
+/** The accounts round's test door, in test mode only: in production the field is absent, so no other extension can start a round or replace the ssh call. */
+function accountsDoorOf(context: vscode.ExtensionContext, accounts: TerminalAccounts): { readonly terminalAccounts?: TerminalAccountsTestDoor } {
+  return context.extensionMode === vscode.ExtensionMode.Test ? { terminalAccounts: terminalAccountsTestDoorOf(accounts) } : {};
 }
 
 /**
@@ -161,6 +172,8 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
   // The refusals file lives in a folder of this side's storage: the ONE place that names it, handed on to the road and to the test door.
   const hostsFolder = vscode.Uri.joinPath(context.globalStorageUri, 'terminal-hosts').fsPath;
   const remote = bindRemoteSessions(context, hostsFolder);
+  // The accounts of the open ssh hosts (E1.S3): a round 30 s after the first eligible terminal, then 10 minutes after each one ended. In test mode it never arms itself.
+  const terminalAccounts = bindTerminalAccounts(context, remote, context.extensionMode === vscode.ExtensionMode.Test);
   // The person's own skip list may hide the terminal keys of CoAI (E3.S3): tell once, offer Add for the user list, never write a workspace.
   const skipShell = bindSkipShell(context);
   // A model-bearing setting a workspace or folder tried to set is not applied (`modelKeys.ts`); say so
@@ -937,6 +950,8 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
     ...(context.extensionMode === vscode.ExtensionMode.Test ? { remoteSessions: testDoorOf(remote, context.globalState, hostsFolder), skipShell } : {}),
     // A second spread beside the first, not a member of it: `remoteExportGuard.test.ts` and `skipShellWiring.test.ts` pin the shape of that one.
     ...(context.extensionMode === vscode.ExtensionMode.Test ? { onExhaustedMigration: () => context.globalState.get(ON_EXHAUSTED_MIGRATION_KEY) } : {}),
+    // A third spread of its own: the accounts door is not a member of either of the others.
+    ...accountsDoorOf(context, terminalAccounts),
   };
 }
 

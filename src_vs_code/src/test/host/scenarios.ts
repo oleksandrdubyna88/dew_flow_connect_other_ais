@@ -22,6 +22,7 @@ import { aStillMissingPathIsSaidOnceAcrossSettingsChanges } from './missingPathS
 import { activationStampsThisSideInARealEditor } from './sideSeenScenario';
 import { aTerminalPressTakesTheCopiedTextAndLeavesTheClipboard, theSkipListDefaultHoldsTheTerminalDoor } from './terminalCaptureScenario';
 import { aPressOnACredsTerminalReachesTheBoundRoadOnce, theTerminalItemsFollowTheActiveTerminalAndTheAnswer } from './terminalDoorsScenario';
+import { theAccountsRoundCallsEachHostOnceAndStopsWithItsTerminals } from './terminalAccountsScenario';
 import { theConsentOfAHostIsKeptInTheRealGlobalState, theHostsStoreWritesTheListAndTheRefusalsFile, theSettingReachesTheDoorThroughTheRealConfiguration } from './terminalHostsScenario';
 import { theSkipListAddAppendsToTheUserSettingOnce } from './skipShellScenario';
 import { twoCliPathFieldsKeepThisSidesValueInARealEditor } from './twoPathFieldsScenario';
@@ -973,6 +974,11 @@ const SCENARIOS: readonly Scenario[] = [
     // A1-H2 (E1.S1): the setting through the real configuration; the scenario fails, it does not skip, when the editor refuses the user-level key.
     name: 'the setting terminalAccountsAllowNewHosts reaches the round door through the real configuration',
     run: theSettingReachesTheDoorThroughTheRealConfiguration,
+  },
+  {
+    // A3-H1 (E1.S3): the accounts round in a real editor — the call replaced through the test door, one call for each host with no usage, the automatic yes in the store, and nothing armed once the terminals are gone. CI only: it cannot start here.
+    name: 'the accounts round calls each host once without usage, in order, and arms nothing when its terminals are gone',
+    run: theAccountsRoundCallsEachHostOnceAndStopsWithItsTerminals,
   },
   {
     // S3-H1 of the E3 stories document (the chat opens from a terminal): through the test door of the BOUND skip-shell check, with the offer replaced by a

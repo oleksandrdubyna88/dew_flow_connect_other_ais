@@ -204,7 +204,8 @@ type Step =
 
 const put = (memory: Memory, host: string, next: HostMemory): Memory => new Map<string, HostMemory>([...memory, [host, next]]);
 
-const liveOnly = (memory: Memory, hosts: readonly string[]): Memory => new Map([...memory].filter(([host]) => hosts.includes(host)));
+/** The memory of the hosts that are still in the list: a host whose last terminal closed is dropped. */
+export const liveOnly = (memory: Memory, hosts: readonly string[]): Memory => new Map([...memory].filter(([host]) => hosts.includes(host)));
 
 const hostLive = (seams: RoundSeams, host: string): boolean => accountsHosts(seams.live()).includes(host);
 
@@ -386,21 +387,41 @@ export function armFor(input: { readonly eligible: boolean; readonly armed: bool
 
 const refusedIn = (standings: readonly HostStanding[], host: string): boolean => standings.some((one) => one.host === host && one.answer === 'no');
 
+/** The hosts the list says "no" to. */
+export const refusedHosts = (standings: readonly HostStanding[]): ReadonlySet<string> => new Set(standings.filter((one) => one.answer === 'no').map((one) => one.host));
+
+/**
+ * Whether the list's change signal shows a host that is NEWLY refused, or a standing that is gone (a Forget): a result in flight is then to be dropped,
+ * so the host bumps its generation. A new row — the automatic "yes" this very round wrote — bumps nothing.
+ */
+export function standingsBump(known: ReadonlySet<string>, refused: ReadonlySet<string>, standings: readonly HostStanding[]): boolean {
+  const forgotten = [...known].some((host) => !standings.some((one) => one.host === host));
+
+  return forgotten || standings.some((one) => one.answer === 'no' && !refused.has(one.host));
+}
+
 /** The hosts of live terminals whose standing is not a "no". A host with no row is eligible: the round allows it by itself. */
 export const eligibleOf = (hosts: readonly string[], standings: readonly HostStanding[]): readonly string[] => hosts.filter((host) => !refusedIn(standings, host));
 
+export type NextRound = { readonly kind: 'at'; readonly atMs: number } | { readonly kind: 'clear' };
+
 export type TimerAction = { readonly kind: 'none' } | { readonly kind: 'clear' } | { readonly kind: 'start'; readonly ms: number };
 
-/** The first test-mode lock: in a test run no timer is ever started, whatever `armFor` answered. */
-export function timerFor(decision: ArmDecision, test: boolean): TimerAction {
-  if (test || decision === 'keep') {
+const afterRound = (next: NextRound, nowMs: number): TimerAction => (next.kind === 'at' ? { kind: 'start', ms: Math.max(0, next.atMs - nowMs) } : { kind: 'clear' });
+
+const ARMED: Readonly<Record<ArmDecision, TimerAction>> = { 'arm-first': { kind: 'start', ms: FIRST_DELAY_MS }, clear: { kind: 'clear' }, keep: { kind: 'none' } };
+
+/**
+ * The first test-mode lock, and the ONE road from a decision to a timer: in a test run no timer is ever started, whatever `armFor` or
+ * `nextAfterRound` answered. A decision after a round is an absolute time; the wait is counted from `nowMs`.
+ */
+export function timerFor(decision: ArmDecision | NextRound, test: boolean, nowMs = 0): TimerAction {
+  if (test) {
     return { kind: 'none' };
   }
 
-  return decision === 'clear' ? { kind: 'clear' } : { kind: 'start', ms: FIRST_DELAY_MS };
+  return typeof decision === 'string' ? ARMED[decision] : afterRound(decision, nowMs);
 }
-
-export type NextRound = { readonly kind: 'at'; readonly atMs: number } | { readonly kind: 'clear' };
 
 /** After a round: the next one `ROUND_GAP_MS` from the END of this one, or no timer. */
 export const nextAfterRound = (input: { readonly stopped: boolean; readonly eligible: boolean; readonly endedMs: number }): NextRound =>

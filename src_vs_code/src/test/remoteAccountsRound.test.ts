@@ -4,7 +4,7 @@ import test from 'node:test';
 import {
   FIRST_DELAY_MS, HOURLY_MS, ROUND_GAP_MS, REFRESH_FLOOR_MS, USAGE_POLICY, STUB_SENTENCE,
   accountsHosts, armFor, blockedAfter, callFor, claudeAccountKey, due, eligibleOf, logGate, memoryAfter, modeFor, needsSecondCall,
-  nextAfterRound, openStarts, refreshAnswer, roundOrder, runRound, timerFor, unreadHost,
+  nextAfterRound, openStarts, refreshAnswer, roundOrder, runRound, standingsBump, timerFor, unreadHost,
 } from '../remoteAccountsRound';
 import type { ArmDecision, HostMemory, Memory, RoundSeams } from '../remoteAccountsRound';
 import type { Admission, HostStanding } from '../remoteHosts';
@@ -433,6 +433,15 @@ test('A3-T27: the two test-mode locks, pure', async () => {
   assert.deepEqual(timerFor('clear', false), { kind: 'clear' });
   assert.deepEqual(timerFor('keep', false), { kind: 'none' });
 
+  // The timer after a round goes through the same lock: the next round is the gap from the END of the last, counted from now.
+  const next = nextAfterRound({ stopped: false, eligible: true, endedMs: 1_000_000 });
+  assert.deepEqual(timerFor(next, true, 1_000_000), { kind: 'none' }, 'a round armed itself in a test run');
+  assert.deepEqual(timerFor(next, false, 1_000_000), { kind: 'start', ms: ROUND_GAP_MS });
+  assert.deepEqual(timerFor(next, false, 1_100_000), { kind: 'start', ms: ROUND_GAP_MS - 100_000 }, 'the gap was counted from the wrong moment');
+  assert.deepEqual(timerFor(next, false, 9_000_000), { kind: 'start', ms: 0 }, 'a gap that is over waited a negative time');
+  assert.deepEqual(timerFor({ kind: 'clear' }, false), { kind: 'clear' });
+  assert.deepEqual(timerFor({ kind: 'clear' }, true), { kind: 'none' });
+
   const real: string[] = [];
   const realCall = (host: string): Promise<RemoteRun> => { real.push(host); return Promise.resolve({ kind: 'answered', code: 0, stdout: '' }); };
   const fakeCall = (): Promise<RemoteRun> => Promise.resolve({ kind: 'answered', code: 1, stdout: 'fake' });
@@ -588,4 +597,19 @@ test('A3-T32: a changed account whose new account was already read gets no usage
   const reversed = world({ hosts: ['a', 'b'], reply: same });
   await roundOf(reversed, ahead, 1);
   assert.deepEqual(callsOf(reversed), ['b N', 'b U', 'a N'], 'the reversed order read X twice');
+});
+
+// ───────────────── A3-T29, A3-T30 (the host's half): what the change signal of the list makes of the generation ─────────────────
+
+test('A3-T30: a refusal or a Forget shown by the change signal bumps the generation; a new row does not', () => {
+  const row = (host: string, answer: 'yes' | 'no'): HostStanding => ({ host, answer, how: 'person', askedUtc: '2026-11-01T00:00:00.000Z' });
+  const known = new Set(['a', 'b']);
+  const refused = new Set(['b']);
+
+  assert.equal(standingsBump(known, refused, [row('a', 'yes'), row('b', 'no')]), false, 'a signal that changed nothing bumped the generation');
+  assert.equal(standingsBump(known, refused, [row('a', 'yes'), row('b', 'no'), row('c', 'yes')]), false, 'a new row (the automatic "yes" of this very round) bumped the generation');
+  assert.equal(standingsBump(known, refused, [row('a', 'no'), row('b', 'no')]), true, 'a refusal in flight did not bump the generation');
+  assert.equal(standingsBump(known, refused, [row('a', 'yes')]), true, 'a Forget did not bump the generation');
+  assert.equal(standingsBump(new Set(), new Set(), [row('a', 'no')]), true, 'a refusal shown to a window that knew nothing did not bump the generation');
+  assert.equal(standingsBump(new Set(), new Set(), []), false);
 });

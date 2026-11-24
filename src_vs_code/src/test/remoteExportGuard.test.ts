@@ -25,3 +25,16 @@ test('nothing else in the extension builds a remote road for a caller', () => {
   assert.ok(!/remoteSessionsOf\(/u.test(text), 'extension.ts builds a second road beside the bound one');
   assert.equal([...text.matchAll(/bindRemoteSessions\(/gu)].length, 1, 'the road is not bound exactly once');
 });
+
+// ───────────────── A3-T27: the accounts round's test door (E1.S3) ─────────────────
+
+test('A3-T27: the accounts test door is built only behind the test-mode check, and the round is bound with the test flag and nothing else', () => {
+  const built = [...text.matchAll(/terminalAccounts\s*:\s*terminalAccountsTestDoorOf\(/gu)];
+  assert.equal(built.length, 1, `the scan expected ONE place that builds the accounts door, found ${built.length}`);
+  const before = text.slice(Math.max(0, (built[0]?.index ?? 0) - 160), built[0]?.index ?? 0);
+  assert.match(before, /extensionMode\s*===\s*vscode\.ExtensionMode\.Test\s*\?\s*\{\s*$/u, 'the accounts test door is reachable outside test mode: it is not built behind ExtensionMode.Test');
+  assert.ok(!/remoteSessions\s*:\s*testDoorOf\([^\n]*terminalAccounts/u.test(text), 'the accounts door shares a spread with the remote road\'s: it must have a spread of its own');
+  assert.match(text, /readonly terminalAccounts\?:\s*TerminalAccountsTestDoor/u, 'the field of CoaiExports is not optional, so production would have to supply it');
+  assert.equal([...text.matchAll(/bindTerminalAccounts\(/gu)].length, 1, 'the round is not bound exactly once');
+  assert.match(text, /bindTerminalAccounts\(\s*context\s*,\s*remote\s*,\s*context\.extensionMode\s*===\s*vscode\.ExtensionMode\.Test\s*\)/u, 'the third argument of bindTerminalAccounts is not context.extensionMode === vscode.ExtensionMode.Test and nothing else');
+});

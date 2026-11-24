@@ -117,6 +117,8 @@ export interface RemoteSessions {
   readonly askHost: (host: string) => Promise<void>;
   readonly allowsNewHosts: () => boolean;
   readonly ignoredLayer: () => 'workspace' | 'folder' | undefined;
+  /** Fires after every commit that wrote (the keeper's change signal): the accounts round learns of a refusal or a Forget from it. */
+  readonly onChanged: vscode.Event<void>;
   /** *CoAI: hosts read over ssh*: list the hosts, change one answer or forget it. */
   readonly changeHosts: () => Promise<void>;
   /** The keeper, for the test door only. */
@@ -272,11 +274,14 @@ function raiseUnkept(keeper: HostKeeper, subject: string, title: string, cure: s
   });
 }
 
+/** The change event of a road that has no keeper to listen to: nobody is ever told. */
+const noChange: vscode.Event<void> = () => ({ dispose: () => undefined });
+
 /**
  * The road over a keeper and a run seam. `run` is `runRemote` unless a test says otherwise. The per-terminal state — the picked id
  * and the latch — lives here, in `WeakMap`s keyed by the terminal object, so it goes with it.
  */
-export function remoteSessionsOf(keeper: HostKeeper, run: RoadSeams['run'] = runRemote): RemoteSessions {
+export function remoteSessionsOf(keeper: HostKeeper, run: RoadSeams['run'] = runRemote, onChanged: vscode.Event<void> = noChange): RemoteSessions {
   const picked = new WeakMap<vscode.Terminal, Picked>();
   const latch = onePerTerminal<vscode.Terminal>();
   const seamsOf = (terminal: vscode.Terminal): RoadSeams => ({
@@ -313,6 +318,7 @@ export function remoteSessionsOf(keeper: HostKeeper, run: RoadSeams['run'] = run
     askHost: (host) => askHostOf(keeper, host),
     allowsNewHosts: () => allowsNewHosts(configNow()),
     ignoredLayer: () => ignoredLayerFor(configNow(), ALLOW_NEW_HOSTS_KEY),
+    onChanged,
     changeHosts: () => changeHostsOf(keeper),
     keeper,
   };
@@ -373,10 +379,12 @@ function keeperOf(context: vscode.ExtensionContext, folder: string, changed: () 
  */
 export function bindRemoteSessions(context: vscode.ExtensionContext, folder: string): RemoteSessions {
   // The key is set again whenever a change was written — by the first read of a host, or from the panel's list.
-  const sessions = remoteSessionsOf(keeperOf(context, folder, () => { void setReadsKey(sessions); }), (host, session, operands, script) => boundRun(host, session, operands, script));
+  const changes = new vscode.EventEmitter<void>();
+  const sessions = remoteSessionsOf(keeperOf(context, folder, () => { void setReadsKey(sessions); changes.fire(); }), (host, session, operands, script) => boundRun(host, session, operands, script), changes.event);
   bound = sessions;
   void setReadsKey(sessions);
   context.subscriptions.push(
+    changes,
     vscode.window.onDidChangeActiveTerminal(() => { void setReadsKey(sessions); }),
     vscode.window.onDidCloseTerminal((closed) => { sessions.forget(closed); }),
     vscode.commands.registerCommand('coai.terminalHosts', () => sessions.changeHosts()),
