@@ -29,6 +29,26 @@
 > `.agents/` or are a file of the repository root. **Nothing was compiled or run for this spec:** the worktree has no
 > `node_modules`. Every "RED today" below is read from today's code, not observed.
 
+## Entry 2.1, the layout as built
+
+The parent's entry 2.1 (the owner, 2026-11-24). Where this section and a named file, site or signature below
+disagree, this section holds. Behaviour, the words W*, the notice codes and the census (186) are unchanged.
+
+| Spec text | As built |
+|---|---|
+| `hostKeeper` (step 5), no file named | `src/remoteKeeper.ts`; `HostKeeper` also has `savedTorn()` (W9's third cure) and `forgetHeld()` (the test door's restore) |
+| the words table moves out of `remoteHosts.ts` if it is too long | `src/remoteHostsSaid.ts`, W1–W13 |
+| the `RefusalsDisk` in `remoteSessionHost.ts` (step 8) | `src/remoteRefusalsDisk.ts`; `remoteSessionHost.ts` passes `'refused.json'` and the `'unsure-'` prefix in, so both literals stay in `remoteSessionHost.ts`, once each. The scans of A1-T5 and A1-T18 for `writeFileAtomically(` and the raw write name `remoteRefusalsDisk.ts` in place of `bindRemoteSessions` |
+| `remoteRefusals.ts` under 400 lines | 527 lines |
+| `refusalsStore(disk, clock)` | `refusalsStore(disk, clock, sleep?)`; tests pass a macrotask yield |
+| `RoadSeams` has a `now` seam | no `now` seam |
+| `consentOf(` is called in `remoteHosts.ts` and in `readsKey` | `readsKey` takes the standings; `consentOf(` is called in `remoteHosts.ts` and `remoteKeeper.ts`. `consentOf` takes a structural side type, so no import cycle forms |
+| `chatStoreLock.ts` take rule gives a boolean | it gives the log phrase or `undefined`, so the chat store's log line stays the same byte for byte |
+| a marker whose change is in the file | removed at the next read (`sync` drops landed markers first) |
+
+Not done here: test-first was not kept for S1 (the tests came after the code). Every break-it was then applied to
+the code and seen RED, and the code was restored.
+
 ## Changes to the parent
 
 **Two, and the second stopped the plan.**

@@ -13,7 +13,8 @@
 > answered O1–O7, N1–N5, Q1–Q2 and decision 20; no question for the owner was open before the stop below. This text was cut from 154 KB:
 > the decision history, the findings F1 and F2 in full, the step 0 tables and the installer's design are in
 > [PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_appendix.md](PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_appendix.md),
-> word for word where they were moved. **Epoch 2 open, approved by the owner 2026-11-24, no E1 code yet. Before it: STOPPED at 1.2; re-review `4082dc2c` `proceed` (5 findings folded into the
+> word for word where they were moved. **Epoch 2 open, approved by the owner 2026-11-24, with ONE change, 2.1 (the S1 layout). E1.S1 and E1.S2 are
+> coded on their story branches; S3, S4 and S5 are not started. Before it: STOPPED at 1.2; re-review `4082dc2c` `proceed` (5 findings folded into the
 > revision); the owner approved epoch 2.** Epoch 1 is closed: its first change was 1.1
 > (K5 of E1, gate G2), and its second, 1.2, moves the person's refusals and the Stop out of `globalState` into a file
 > that is merged under a lock. The text of § 3, § *Security*, § *Growth surfaces*, the residuals, R12 and C4 below is
@@ -92,6 +93,11 @@ Narrowed: no — nothing left the scope, the Definition of Done, the merge condi
   accounts list. So the stated justification of candidate C4b is not met, and C4b stays a candidate.)
 
 > Epoch 2 · approved 2026-11-24 · by owner · state: open
+
+- 2.1 · 2026-11-24 · owner · contract — E1.S1 module layout and seams differ from its spec; the spec's named sites follow the code
+  (The owner chose to record it, 2026-11-24. The coai consultants could not be asked: the server refused every tool
+  because its data folder was missing at its start. Behaviour, words, notice codes and the census of 186 are as the
+  spec says. What moved is listed in the S1 spec, section "Entry 2.1, the layout as built".)
 
 ## The goal
 
