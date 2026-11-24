@@ -935,3 +935,74 @@ test('A4-T17: the accounts list has an article in all five languages with five s
     }
   }
 });
+
+// ─────────── E1.S5 of the accounts plan: the documents ───────────
+// The control names are English in every language, so the articles can be asked for them. A sentence that a translation says in its own
+// words is asked for by a phrase of that language, named here: an English phrase would pass a file that was never translated.
+
+const accountsArticleText = (language: (typeof HELP_LANGUAGES)[number], id: string): string => {
+  const article = HELP_ARTICLES.find((one) => one.id === id);
+  assert.ok(article !== undefined, `the article ${id} has been renamed, and this test is now asserting nothing`);
+  const { body, fallback } = bodyFor(article, language);
+  assert.equal(fallback, false, `untranslated: ${id}/${language}`);
+
+  return Object.values(body).join(' ');
+};
+
+/** The sentence of the chat article that said a host is asked once at its first read: gone, in every language. */
+const ASKED_ONCE: Readonly<Record<string, string>> = {
+  en: 'The first time for each host you are asked once',
+  de: 'Beim ersten Mal wird für jeden Host einmal gefragt',
+  es: 'La primera vez que se usa un host se le pregunta una sola vez',
+  ru: 'Для каждого хоста вас спросят один раз при первом чтении',
+  uk: 'Для кожного хоста вас запитають один раз під час першого читання',
+};
+
+/** The sentence that said the reads change nothing on the machine, as every language had it. The usage read of Claude Code writes its own files, so it is no longer said so. */
+const CHANGE_NOTHING: Readonly<Record<string, string>> = {
+  en: 'They only read: they change nothing on that machine',
+  de: 'Sie ändern nichts auf dem anderen Rechner',
+  es: 'no cambian nada en esa máquina',
+  ru: 'ничего не меняют на той машине',
+  uk: 'нічого не змінюють на тій машині',
+};
+
+/** The clause of the parent's entry 1.2 (S1's W3): a "Not this host" is kept on the side of the machine where it was given. */
+const KEPT_ON_ITS_SIDE: Readonly<Record<string, string>> = {
+  en: 'is kept on the side of this machine where you gave it',
+  de: 'wird auf der Seite dieses Rechners gespeichert, auf der Sie es gegeben haben',
+  es: 'se guarda en el lado de esta máquina donde lo dio',
+  ru: 'хранится на той стороне этой машины, где вы его дали',
+  uk: 'зберігається на тому боці цієї машини, де ви його дали',
+};
+
+test('A5-T1: every language’s accounts article names its controls, the setting and jq', () => {
+  for (const language of HELP_LANGUAGES) {
+    const text = accountsArticleText(language, 'ai-accounts-and-usage');
+    for (const word of ['**AI accounts and usage**', '**Refresh now**', '**Stop the accounts round**', '**Not this host**', '`coai.terminalAccountsAllowNewHosts`', 'jq']) {
+      assert.ok(text.includes(word), `the ${language} accounts article never names ${word}`);
+    }
+    for (const word of ['**Claude Code**', '**Codex**', '**Antigravity**', '*account name not shown by Codex*', '`~/.claude`']) {
+      assert.ok(text.includes(word), `the ${language} accounts article does not say what is read on each program, or what Claude Code writes (${word})`);
+    }
+  }
+});
+
+test('A5-T2: every language’s chat article says the answer covers the accounts, what Forget does, and on which side a refusal is kept', () => {
+  for (const language of HELP_LANGUAGES) {
+    const text = accountsArticleText(language, 'chat-with-other-ai');
+    assert.ok(text.includes('**CoAI: hosts read over ssh**'), `the ${language} chat article never names the hosts command`);
+    assert.ok(text.includes('**AI accounts and usage**'), `the ${language} chat article does not say that its answer covers the AI accounts`);
+    assert.ok(text.includes('`coai.terminalAccountsAllowNewHosts`'), `the ${language} chat article does not name the setting`);
+    assert.ok(text.includes('**Forget**'), `the ${language} chat article does not say what Forget does`);
+    assert.ok(text.includes(KEPT_ON_ITS_SIDE[language] as string), `the ${language} chat article does not say that a refusal is kept on the side where it was given, and lifted from any window of that side`);
+    assert.ok(!text.includes(ASKED_ONCE[language] as string), `the ${language} chat article still says a host is asked once, at its first read`);
+  }
+});
+
+test('A5-T3: no language’s chat article still says the reads change nothing on that machine', () => {
+  for (const language of HELP_LANGUAGES) {
+    const text = accountsArticleText(language, 'chat-with-other-ai');
+    assert.ok(!text.includes(CHANGE_NOTHING[language] as string), `the ${language} chat article still has the sentence that the reads change nothing on the machine`);
+  }
+});
