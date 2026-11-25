@@ -98,7 +98,7 @@ A role is a model that is not yours, run as a **detached job**. Four tools and o
 
 | Surface | What it does |
 |---|---|
-| `start_role(role, repoPath, taskFile \| brief, model?, timeoutMinutes?, workItem?)` | Starts the job and answers at once with `{jobId, state, route[], launcher}`. The job is run by its own process (`coai-mcp --role-run <jobId>`): it outlives the call, this server and your session. Roles today: `ba`, `coder` and `probe` (a diagnostic that asks no model). Refused, never queued, past `COAI_ROLE_JOBS_MAX` (3; 2 on WSL). |
+| `start_role(role, repoPath, taskFile \| brief, model?, timeoutMinutes?, workItem?)` | Starts the job and answers at once with `{jobId, state, route[], launcher}`. The job is run by its own process (`coai-mcp --role-run <jobId>`): it outlives the call, this server and your session. Roles today: `ba`, `coder`, `scout`, `judge` and `probe` (a diagnostic that asks no model). The scout and the judge need `brief` and may add `taskFile` ([below](#the-scout-and-the-judge-v2-epoch-3)). Refused, never queued, past `COAI_ROLE_JOBS_MAX` (3; 2 on WSL). |
 | `role_status(jobId, maxSeconds?)` | `{state, generation, attempts[{n, model, vendor, stop, reason, evidenceRef}], stalled, result}`. `maxSeconds` (0–50) waits for the end. States: `queued`, `starting`, `running`, `succeeded`, `failed`, `cancelled`, `lost`. `lost` = the runner died without a result; `stalled` = alive but silent for two minutes (never taken over). |
 | `role_cancel(jobId)` | Asks the runner to stop, waits 10 s, then kills the recorded runner and CLI child by pid and start time. The generation is raised first, so a paused runner publishes nothing. |
 | `validate_work(repoPath, featureFolder)` and `coai-mcp --validate-work <dir>` | Checks a work-plan tree against `shared/work-plan.schema.json` and the rules of `shared/work-method.md`, with this device's limits. Writes nothing. |
@@ -117,6 +117,20 @@ the repository text now goes to.
 **The BA** (`start_role role: "ba"`, `taskFile:` an `epic.yaml` that has no stories) reads the plan and answers ONE JSON object (`shared/ba-output.schema.json`, no paths). coai checks it
 with `validate_work`'s rules over an overlay, sends the errors back to the same session (at most two repair turns), and only then writes `stories/**/story.yaml`, `task.yaml` and
 `ba-manifest.json` atomically (a staging folder, one rename). An invalid plan writes nothing (`failed: output-invalid`).
+
+## The scout and the judge (v2, epoch 3)
+
+`start_role role: "scout"` and `role: "judge"` answer a QUESTION about a repository, read-only, on the road the BA takes (`ReadOnlyRoleWork`): the consultant adapters' read-only launch (Read, Glob, Grep; never the coder's write case), the tree compared around every attempt (`tree-changed` never fails over), at most two repair turns in the SAME session, a declared refusal goes to the next model. There is no new tool. `brief` is required (at most 64 KiB); `taskFile` is optional and must be a regular file inside the repository (not a link, not under `.git`, not named like a credential file).
+
+| | scout | judge |
+|---|---|---|
+| model list | `scout` | `important` (a `model` the caller names outside it is refused before any folder, naming `COAI_ROLES_MODELS`) |
+| answer (`shared/…schema.json`) | `facts[{claim, evidence[1..5]}]`, `files[]`, `unknown[]` | `verdict`, `summary`, `findings[{id, severity, title, detail, evidence[0..5], fix}]`, `decision` only when asked |
+| reader | `core/Roles/ScoutOutput.cs` | `core/Roles/JudgeOutput.cs` (approve with a blocking finding, revise or reject with no finding and a repeated id are errors) |
+
+**Evidence is checked by coai** (`core/Roles/RoleEvidence.cs`, pure; `RoleEvidenceFiles` reads through `RealPath` only). An item `{file, line, text}` is `verified` when that line holds the text once white space is collapsed. A blank `text` (empty, white space, or only characters that draw as nothing) is an ERROR of the answer, decided before any line is read, so it can never be verified. A path that is absolute, has a drive or `..`, a `.git` segment, runs through a link or is named like a credential file is an error and the file is never opened. A file over 2 MiB or not UTF-8 gives `verified: false`. A shape error and an unverified item go back as a repair turn; after the last turn a shape error ends `failed: output-invalid`, while an unverified item stays in the envelope with `verified: false` (never shown as verified, never dropped).
+
+**The envelope** (`result.json`, built by coai from the answer and its checks, never copied from the model): the answer with `verified` and `why` on every evidence item, `exists` on every listed file, `counts`, `repairTurns` and the `commit` HEAD was at when the job began. Every text passes `Redaction.SafeText`.
 
 ## The coder (v2, epoch 3)
 
