@@ -951,7 +951,9 @@ specs' X tables that S4 must follow** (S1 X7, X8, X12, X13; S2 X3–X7, X11, X13
 | A4-T20 | a row that shows W12 saves on a press (the re-review, findings 0 and 3; S1 X21) | a host whose `HostMemory.admission` is `unwritten` draws W12 word for word (`HOSTS_SAID`); choosing that row calls the fake `sessions.saveWaiting` ONCE, and neither `changeHost` nor `askHost`; an answer of `written` asks for a round as *Refresh now* does, and any other answer leaves the row as it is; a scan of the `remoteAccounts*.ts` files with its companion: `saveWaiting(` has ONE call site, in the list's choice handler, and none in the round or the timer | open the change question from a W12 row → `a refusal that was not saved could not be saved from the list`; call `saveWaiting` from the round → `a lock was taken over with no press` |
 
 - **Host scenario A4-H1** (in `terminalAccountsScenario.ts`): `coai.terminalAccounts` is among `vscode.commands.getCommands`;
-  with the fake call answering a reply whose `email` holds `$(zap)`, one round, then the command executed → `lastItems()`
+  with the fake call answering a reply whose organization holds `$(zap)` (2026-11-25, the owner: a fix, not a change —
+  the first text put it in the `email`, which the S2 spec's email rule drops, so the label could never hold it), one
+  round, then the command executed → `lastItems()`
   holds a separator `Claude Code · …$ (zap)…`, a `── Hosts ──` separator and one row for each host; the QuickPick is hidden
   in the `finally`. **What it cannot see:** what VS Code DRAWS for `$(`; no API reads a drawn row. **U10 is measured
   here as far as a host scenario can, and the scenario records what was CHECKED** (§ 10, K3; G2): the label text it
