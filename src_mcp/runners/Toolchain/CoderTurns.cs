@@ -41,7 +41,7 @@ public sealed class CoderTurns(CoderBoundary boundary, FilesystemInvariant invar
             return new CoderTurnOutcome.Refused(wrong, new BoundaryRecord(BoundaryRecord.UnitBoundary, [], "host", CoderBoundary.NetworkReason, []));
         }
 
-        var admission = await boundary.AdmitAsync(job, request.Executable, ct);
+        var admission = await boundary.AdmitAsync(job, request.Executable, ct, CoderBoundary.CarriesKey(request));
         if (admission is BoundaryAdmission.Refused refused)
         {
             return new CoderTurnOutcome.Refused(refused.Sentence, refused.Record);

@@ -30,7 +30,7 @@ internal static class RoleJobAnswers
         json.WriteString("launcher", job.Launcher);
     });
 
-    /// <summary><c>role_status</c>: <c>{state, generation, attempts[{n, model, vendor, stop, reason, evidenceRef}], stalled, result}</c> and the facts a reader needs beside them.</summary>
+    /// <summary><c>role_status</c>: <c>{state, generation, attempts[{n, model, vendor, stop, reason, evidenceRef, keyId}], stalled, result}</c> and the facts a reader needs beside them.</summary>
     public static string Status(RoleJobObservation seen, string resultJson) => Write(json =>
     {
         var job = seen.Job;
@@ -52,6 +52,7 @@ internal static class RoleJobAnswers
             json.WriteString("stop", attempt.Stop);
             json.WriteString("reason", attempt.Reason);
             json.WriteString("evidenceRef", attempt.EvidenceRef);
+            json.WriteString("keyId", attempt.KeyId);
             json.WriteEndObject();
         }
 

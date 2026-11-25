@@ -44,9 +44,13 @@ internal static class BoundaryPreflight
 
     internal const string ProgramVisible = "program-visible";
 
+    internal const string SignInAbsent = "sign-in-not-in-unit";
+
+    internal const string KeysHidden = "keys-folder-hidden";
+
     /// <summary>Every item the coder's script must answer, in the order it asks: the check items that still hold for a launch that needs the network and a home, and three of its own.</summary>
     internal static readonly IReadOnlyList<string> CoderItems =
-        [WorktreeWrite, MainReadOnly, CoderRootReadOnly, GitReadOnly, NoUserManager, WindowsProgram, HomeIsTheJobs, SignInReadOnly, ProgramVisible, TempIsTheJobs, NetworkState, NoSocketsNoInterop, CleanEnvironment];
+        [WorktreeWrite, MainReadOnly, CoderRootReadOnly, GitReadOnly, NoUserManager, WindowsProgram, HomeIsTheJobs, SignInReadOnly, ProgramVisible, TempIsTheJobs, NetworkState, NoSocketsNoInterop, CleanEnvironment, SignInAbsent, KeysHidden];
 
     /// <summary>The name the marker files carry in the job's <c>/tmp</c> and <c>/var/tmp</c>; the script looks for them from inside.</summary>
     internal static string MarkerName(BoundaryJob job) => $".coai-job-{job.JobId}";
@@ -117,7 +121,7 @@ internal static class BoundaryPreflight
         """;
 
     private const string CoderHeader = """
-        root=$8; cred=$9; shift 9; prog=$1
+        root=$8; cred=$9; shift 9; prog=$1; mode=$2; keys=$3; inunit=$4
         """;
 
     private const string CoderRootRow = """
@@ -137,6 +141,18 @@ internal static class BoundaryPreflight
         if [ -x "$prog" ]; then row program-visible ok "the program of the launch is there and can be run"; else row program-visible bad "the program of the launch is not there, or cannot be run, inside the unit"; fi
         """;
 
+    private const string SignInAbsentRow = """
+        if [ "$mode" != keyed ]; then row sign-in-not-in-unit ok "this launch has no pool key (the device switch), so the sign-in file is bound on purpose"
+        elif [ -e "$inunit" ] || [ -e "$rh/.claude/.credentials.json" ]; then row sign-in-not-in-unit bad "the person's sign-in file is visible inside the unit of a launch that has a pool key"
+        else row sign-in-not-in-unit ok "the person's sign-in file is not in the unit"; fi
+        """;
+
+    private const string KeysHiddenRow = """
+        if [ "$mode" != keyed ] || [ -z "$keys" ]; then row keys-folder-hidden ok "this launch has no pool key to hide the key folder from"
+        elif [ -r "$keys" ] || ls -A "$keys" >/dev/null 2>&1; then row keys-folder-hidden bad "the claude key folder can be read from inside the unit"
+        else row keys-folder-hidden ok "the claude key folder cannot be read from inside the unit"; fi
+        """;
+
     private static string Join(params string[] rows) => string.Join('\n', rows);
 
     /// <summary>
@@ -145,9 +161,10 @@ internal static class BoundaryPreflight
     private static readonly string Script = Join(Header, WorktreeRow, MainRow, GitRow, ManagerRow, ExeRow, HomeRow, TempRow, NetworkRow, SocketsRow, EnvironmentRow);
 
     /// <summary>
-    /// The coder's script: the same rows over the same fragments, plus <c>$8</c> the coder root (a write beside the worktree must be refused), <c>$9</c> the sign-in file inside the unit (empty: none; read-only) and a tenth, the program of the launch (it must be there) — read after a <c>shift 9</c>, because systemd expands <c>${NAME}</c> in a command line, so no script of this family may spell one.
+    /// The coder's script: the same rows over the same fragments, plus <c>$8</c> the coder root (a write beside the worktree must be refused), <c>$9</c> the sign-in file inside the unit (empty: none; read-only) and a tenth, the program of the launch (it must be there) — read after a <c>shift 9</c>, because systemd expands <c>${NAME}</c> in a command line, so no script of this family may spell one. After the program come the launch's mode (<c>keyed</c> when it carries a pool key and so binds no sign-in file,
+    /// else <c>bound</c>), the key folder to hide and the path the sign-in file would have inside the unit (epoch 3 E2 s7): the two rows <see cref="SignInAbsent"/> and <see cref="KeysHidden"/> prove, for a keyed launch, that the person's file is not in the unit and the key folder cannot be read from it.
     /// </summary>
-    private static readonly string CoderScript = Join(Header, CoderHeader, WorktreeRow, MainRow, CoderRootRow, GitRow, ManagerRow, ExeRow, HomeRow, SignInRow, ProgramRow, TempRow, NetworkRow, SocketsRow, EnvironmentRow);
+    private static readonly string CoderScript = Join(Header, CoderHeader, WorktreeRow, MainRow, CoderRootRow, GitRow, ManagerRow, ExeRow, HomeRow, SignInRow, ProgramRow, TempRow, NetworkRow, SocketsRow, EnvironmentRow, SignInAbsentRow, KeysHiddenRow);
 
     /// <summary>The command of the preflight unit.</summary>
     internal static IReadOnlyList<string> Command(BoundaryJob job, BoundaryHost host, CheckNetwork network, string program) =>
@@ -158,7 +175,7 @@ internal static class BoundaryPreflight
     /// talks to its vendor — so the network row only says so.
     /// </summary>
     internal static IReadOnlyList<string> CoderCommand(BoundaryJob job, BoundaryHost host, CoderProgram program, string windowsCopy, string signInInUnit) =>
-        ["/bin/sh", "-c", CoderScript, "coai-preflight", job.Tree.Root, job.Tree.MainCheckout, host.RealHome, "host", job.JobId, windowsCopy, host.ResolverFile, job.CoderRoot, signInInUnit, program.Real];
+        ["/bin/sh", "-c", CoderScript, "coai-preflight", job.Tree.Root, job.Tree.MainCheckout, host.RealHome, "host", job.JobId, windowsCopy, host.ResolverFile, job.CoderRoot, signInInUnit, program.Real, host.BindSignIn ? "bound" : "keyed", host.BindSignIn ? string.Empty : job.KeysFolder, job.CoderSignInFile];
 
     /// <summary>
     /// The rows of a preflight unit that ran: the client's own answer, then the rows the script printed — or, for a unit that did not run to its end, the one row that says why. A unit that did not start, did not finish in time or could not be stopped has no rows worth reading.

@@ -82,7 +82,7 @@ internal sealed class CoderFixLoop(IRoleRun run, GitHistory git, CoderOsLayer la
     /// <param name="ct">The job's token.</param>
     public async Task<CoderLoopEnd> RunAsync(CoderReport? report, string message, CoderFixSession session, CancellationToken ct)
     {
-        var first = await CommitAsync(message, ct);
+        var first = await CommitAsync(message, session, ct);
         if (first.Halted is { } halted)
         {
             return halted;
@@ -122,7 +122,7 @@ internal sealed class CoderFixLoop(IRoleRun run, GitHistory git, CoderOsLayer la
             }
 
             report = turn.Report;
-            var committed = await CommitAsync(CoderCommits.FixMessage(run.Request.JobId, site.Id, _fixes), ct);
+            var committed = await CommitAsync(CoderCommits.FixMessage(run.Request.JobId, site.Id, _fixes), session, ct);
             if (committed.Halted is { } stopped)
             {
                 return stopped;
@@ -151,7 +151,7 @@ internal sealed class CoderFixLoop(IRoleRun run, GitHistory git, CoderOsLayer la
         var left = Left();
         var begun = run.Clock.GetUtcNow().UtcDateTime;
         var launched = await new RoleModelLauncher(run.Settings, run.Children) { Coder = session.Confinement, Layer = layer }
-            .LaunchAsync(session.Model, prompt, run.Request.RepoPath, folder, left < AttemptTimeout ? left : AttemptTimeout, ct, session.Handle);
+            .LaunchAsync(session.Model, prompt, run.Request.RepoPath, folder, left < AttemptTimeout ? left : AttemptTimeout, ct, session.Handle, RoleKeyRoad.For(run).Resume(session.Model, session.KeyId));
         var ended = run.Clock.GetUtcNow().UtcDateTime;
         Keep(folder, "prompt.txt", prompt, turn);
         var stop = ct.IsCancellationRequested
@@ -193,7 +193,7 @@ internal sealed class CoderFixLoop(IRoleRun run, GitHistory git, CoderOsLayer la
     private sealed record Committed(string Head, CoderLoopEnd? Halted);
 
     /// <summary>The ONE commit of a turn (turn 0 or a fix turn); the generation is compared first. No change means no commit and the head stays where it was.</summary>
-    private async Task<Committed> CommitAsync(string message, CancellationToken ct)
+    private async Task<Committed> CommitAsync(string message, CoderFixSession session, CancellationToken ct)
     {
         run.Phase("coder-commit", _fixes);
         Boundary?.Invoke("before-commit");
@@ -202,9 +202,16 @@ internal sealed class CoderFixLoop(IRoleRun run, GitHistory git, CoderOsLayer la
             return new Committed(string.Empty, new CoderLoopEnd.Halted(new RoleWorkOutcome.Stopped()));
         }
 
-        var made = await CoderCommits.CommitAsync(git, tree, message, ct);
+        var keys = RoleKeyRoad.For(run);
+        var made = await CoderCommits.CommitAsync(git, tree, message, ct, keys.SecretOf(session.KeyId));
         if (made.Failure is { } failure)
         {
+            if (failure.Stop == RoleStopWords.KeyInOutput)
+            {
+                // The text of the turn's key is in the files the coder wrote: nothing was committed, and the key is dead (exposed), with ONE notice.
+                keys.Exposed(session.KeyId);
+            }
+
             return new Committed(string.Empty, new CoderLoopEnd.Halted(ct.IsCancellationRequested ? new RoleWorkOutcome.Stopped() : failure));
         }
 
@@ -233,5 +240,5 @@ internal sealed class CoderFixLoop(IRoleRun run, GitHistory git, CoderOsLayer la
     }
 }
 
-/// <summary>The session of a model's turn 0, which every fix turn of that model resumes: the model that answered, the handle it reported, and the confinement that binds the handle to this job and worktree.</summary>
-internal sealed record CoderFixSession(ModelRef Model, string Handle, LaunchConfinement.Coder Confinement);
+/// <summary>The session of a model's turn 0, which every fix turn of that model resumes: the model that answered, the handle it reported, and the confinement that binds the handle to this job and worktree — and the key (<see cref="RoleKey.KeyId"/>) the session runs on: every fix turn resumes with the SAME key.</summary>
+internal sealed record CoderFixSession(ModelRef Model, string Handle, LaunchConfinement.Coder Confinement, string KeyId = "");

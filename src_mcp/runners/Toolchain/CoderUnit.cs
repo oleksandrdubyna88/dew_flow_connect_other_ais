@@ -36,6 +36,14 @@ internal static partial class CoderUnit
     /// <summary>Whether <paramref name="part"/> can be the last word of a unit's name: it is spelled into the name and into <c>systemctl</c> commands, so only the safe shape is.</summary>
     internal static bool IsPart(string part) => Part().IsMatch(part);
 
+    /// <summary>
+    /// The property that hides the claude key pool's folder from a launch that carries a key (epoch 3 E2 s7): <c>InaccessiblePaths=-&lt;keys&gt;</c> (the dash: a folder that is not there is no error). The folder is already out of sight when it lies under a hidden
+    /// path (<c>/home</c>); this makes it true where the data folder is somewhere else (<c>/var/lib/coai</c>, a temp folder), and the preflight row <see cref="BoundaryPreflight.KeysHidden"/> reads it from inside whichever way it holds. Not given to a launch that
+    /// binds the person's sign-in (the device switch) — that launch has no key to hide it from.
+    /// </summary>
+    internal static IReadOnlyList<string> KeysHidden(BoundaryHost host, BoundaryJob job) =>
+        !host.BindSignIn && job.KeysFolder.Length > 0 ? [$"InaccessiblePaths=-{job.KeysFolder}"] : [];
+
     /// <summary>The <c>-p</c> properties of the coder's unit, in the order they are given.</summary>
     internal static IReadOnlyList<string> Properties(BoundaryHost host, BoundaryJob job, CoderProgram program, TimeSpan runtimeMax)
     {
@@ -52,6 +60,7 @@ internal static partial class CoderUnit
             $"BindPaths={job.CoderTempFolder}:{BoundaryUnit.UnitTemp}",
             $"BindPaths={job.CoderVarTempFolder}:{BoundaryUnit.UnitVarTemp}",
             .. host.SignInFile.Length > 0 ? [$"BindReadOnlyPaths={host.SignInFile}:{job.CoderSignInFile}"] : Array.Empty<string>(),
+            .. KeysHidden(host, job),
             .. program.BindFolder.Length > 0 ? [$"BindReadOnlyPaths={program.BindFolder}"] : Array.Empty<string>(),
             .. host.ResolverFile.Length > 0 ? [$"BindReadOnlyPaths={host.ResolverFile}"] : Array.Empty<string>(),
             .. BoundaryUnit.Hardening,

@@ -226,15 +226,83 @@ public sealed class ClaudeConsultant(IReviewerRuntime inner, string vendor = "cl
             arguments,
             cwd)
         {
-            Environment = launch.Settings.ApiKey.Length > 0
-                ? new Dictionary<string, string?> { ["ANTHROPIC_API_KEY"] = launch.Settings.ApiKey }
-                : [],
+            Environment = CredentialEnvironment(launch, arguments),
             StdIn = launch.Prompt,
             Timeout = launch.Settings.Timeout,
         };
         ConsultantLaunches.MustCarryNoLineBreak(request.Arguments);
 
         return request;
+    }
+
+    /// <summary>The variable the claude CLI reads a <c>claude setup-token</c> token from (KEY_POOL_SPEC.md section 1, C2).</summary>
+    public const string KeyVariable = "CLAUDE_CODE_OAUTH_TOKEN";
+
+    /// <summary>The variables of another credential that a launch with a pool key must not inherit: the CLI would pick one of them over the key, or bill another account.</summary>
+    private static readonly string[] ForeignCredentials = ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"];
+
+    /// <summary>
+    /// The environment of a launch: the row's <c>ANTHROPIC_API_KEY</c>, or — for a role launch on a pool key — the key as <see cref="KeyVariable"/>, the one place this adapter sets a credential. A launch has ONE credential, and
+    /// <c>--bare</c> (OAuth is never read with it) is never in the argv of a pool launch: either is a contract violation. A read-only role's child also gets a home of its own.
+    /// </summary>
+    private static Dictionary<string, string?> CredentialEnvironment(ConsultantLaunch launch, string[] arguments)
+    {
+        Dictionary<string, string?> environment = [];
+        if (launch.Settings.ApiKey.Length > 0)
+        {
+            environment["ANTHROPIC_API_KEY"] = launch.Settings.ApiKey;
+        }
+
+        if (launch.Credential is not { } credential)
+        {
+            return environment;
+        }
+
+        if (launch.Settings.ApiKey.Length > 0)
+        {
+            throw new ArgumentException("a claude launch has ONE credential: a pool key and an ANTHROPIC_API_KEY together are a contract violation", nameof(launch));
+        }
+
+        if (arguments.Contains("--bare", StringComparer.Ordinal))
+        {
+            throw new ArgumentException("--bare is never in the argv of a pool launch: with it the CLI reads no OAuth token, so the key would be silently unused", nameof(launch));
+        }
+
+        credential.Into(environment, KeyVariable);
+        foreach (var foreign in ForeignCredentials)
+        {
+            environment[foreign] = null;
+        }
+
+        if (launch.OwnHome.Length > 0 && launch.Confinement is not LaunchConfinement.Coder)
+        {
+            foreach (var (name, value) in OwnHomeEnvironment(launch.OwnHome))
+            {
+                environment[name] = value;
+            }
+        }
+
+        return environment;
+    }
+
+    /// <summary>The names that point a CLI at a home of the launch's own (the Team server slot's shape): <c>HOME</c>, the four <c>XDG_*</c> folders and <c>CLAUDE_CONFIG_DIR</c> — and the profile folders on Windows.</summary>
+    public static IReadOnlyList<KeyValuePair<string, string>> OwnHomeEnvironment(string home)
+    {
+        List<KeyValuePair<string, string>> names =
+        [
+            new("HOME", home),
+            new("XDG_CONFIG_HOME", Path.Combine(home, ".config")),
+            new("XDG_DATA_HOME", Path.Combine(home, ".local", "share")),
+            new("XDG_CACHE_HOME", Path.Combine(home, ".cache")),
+            new("XDG_STATE_HOME", Path.Combine(home, ".local", "state")),
+            new("CLAUDE_CONFIG_DIR", Path.Combine(home, ".claude")),
+        ];
+        if (OperatingSystem.IsWindows())
+        {
+            names.AddRange([new("USERPROFILE", home), new("APPDATA", Path.Combine(home, "AppData", "Roaming")), new("LOCALAPPDATA", Path.Combine(home, "AppData", "Local"))]);
+        }
+
+        return names;
     }
 
     /// <summary>

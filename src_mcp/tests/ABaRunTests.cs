@@ -370,7 +370,7 @@ public sealed class ABaRunTests
     }
 
     private static RoleJobService ServiceFor(RoleJobWorld world) =>
-        new(world.DataDir, name => name == "COAI_ROLE_LAUNCHER" ? "setsid" : null, world.Log, notice => { world.Notices.Enqueue(notice); return true; })
+        new(world.DataDir, name => name switch { "COAI_ROLE_LAUNCHER" => "setsid", "COAI_ROLE_CLAUDE_PERSON_SIGN_IN" => "1", _ => null }, world.Log, notice => { world.Notices.Enqueue(notice); return true; })
         {
             Clock = world.Clock,
             Launcher = new DetachedLauncher(new NothingStarted(), NoRunnerStarted.Succeeds),
@@ -403,7 +403,7 @@ public sealed class ABaRunTests
         using var repo = TempDir.For("coai-ba-start-");
         BaScenario.Lay(repo);
         BaScenario.Write(repo, BaScenario.EpicFolder + "/stories/s1-already/story.yaml", "id: s1-already\n");
-        var service = new RoleJobService(world.DataDir, name => name == "COAI_ROLE_LAUNCHER" ? "setsid" : null, world.Log, _ => true)
+        var service = new RoleJobService(world.DataDir, name => name switch { "COAI_ROLE_LAUNCHER" => "setsid", "COAI_ROLE_CLAUDE_PERSON_SIGN_IN" => "1", _ => null }, world.Log, _ => true)
         {
             Clock = world.Clock,
             Launcher = new DetachedLauncher(new NothingStarted(), NoRunnerStarted.Succeeds),

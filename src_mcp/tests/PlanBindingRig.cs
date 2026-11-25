@@ -93,7 +93,7 @@ internal sealed class PlanBindingRig : IAsyncDisposable
     /// <summary>Starts a coder job through the real service (its runner is never launched); answers the job's id, or the refusal's text as <c>error:…</c>.</summary>
     internal async Task<string> StartJobAsync(string? baseSha = null, string taskFile = TaskFile)
     {
-        var service = new RoleJobService(Data, name => name == "COAI_ROLE_LAUNCHER" ? "setsid" : null, Serilog.Core.Logger.None, _ => true)
+        var service = new RoleJobService(Data, name => name switch { "COAI_ROLE_LAUNCHER" => "setsid", "COAI_ROLE_CLAUDE_PERSON_SIGN_IN" => "1", _ => null }, Serilog.Core.Logger.None, _ => true)
         {
             Launcher = new DetachedLauncher(new NothingStarted()),
         };

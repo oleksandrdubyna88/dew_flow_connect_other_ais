@@ -383,6 +383,8 @@ brief, repoPath, model?, timeoutMinutes?)` / `role_status(jobId, maxSeconds)` / 
 the model (roles table / complexity band), the permissions and the output schema; `start_coder` is the coder case (no
 separate tool). Placement in the epochs: decided with the Fable split review.
 
+Claude role jobs run on the **key pool** (epoch 3 E2 s7, `v2/epoch-3/e2-coder-one-task/KEY_POOL_SPEC.md`): a round robin of `claude setup-token` tokens per device, passed to the child only as `CLAUDE_CODE_OAUTH_TOKEN`; a limit switches the key (3 per job), no usable key means no wait; the consultants and the Team server slots are unchanged.
+
 ## 20. Important / responsible role and vendor failover (owner, 2026-11-22)
 
 - The **important** role always runs the strongest model, selectable per device (e.g. `fable`, codex `astra`). The router

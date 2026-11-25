@@ -70,9 +70,14 @@ internal static class CoderLaunches
             return "the coder's resume handle belongs to another job, and a conversation is never continued by a job that did not start it — resume a job only with its own handle";
         }
 
-        return SamePlace.Equals(handle.Worktree, Normalised(coder.Worktree))
+        if (!SamePlace.Equals(handle.Worktree, Normalised(coder.Worktree)))
+        {
+            return "the coder's resume handle belongs to another worktree, and a conversation is never continued in a folder it did not start in — resume a job only in its own worktree";
+        }
+
+        return string.Equals(handle.KeyId, coder.KeyId, StringComparison.Ordinal)
             ? string.Empty
-            : "the coder's resume handle belongs to another worktree, and a conversation is never continued in a folder it did not start in — resume a job only in its own worktree";
+            : "the coder's resume handle belongs to another claude key, and a session is resumed only with the key that started it — resume a job only with the key of its session";
     }
 
     /// <summary>A worktree path as a handle remembers it: full, with no trailing separator.</summary>

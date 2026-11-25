@@ -23,6 +23,26 @@ internal abstract record PickResult
     public sealed record Failed(string Sentence) : PickResult;
 }
 
+/// <summary>What the pool could do for a fresh session now, as <see cref="KeyPool.Check"/> reads it: a closed set.</summary>
+internal abstract record KeyAvailability
+{
+    private KeyAvailability()
+    {
+    }
+
+    /// <summary>At least one key can be picked now.</summary>
+    public sealed record Usable : KeyAvailability;
+
+    /// <summary>The pool holds no key at all.</summary>
+    public sealed record Empty : KeyAvailability;
+
+    /// <summary>Keys exist and none can be used now; <see cref="EarliestFreeUtc"/> is when the first cooling one is free, or null when none will be without a person.</summary>
+    public sealed record Unusable(DateTime? EarliestFreeUtc, KeyCounts Counts) : KeyAvailability;
+
+    /// <summary>The pool could not be read (busy past two seconds, or a disk fault).</summary>
+    public sealed record Failed(string Sentence) : KeyAvailability;
+}
+
 /// <summary>How a launch that carried a key ended, as far as the key is concerned.</summary>
 internal enum KeyLaunchEnd
 {
@@ -74,6 +94,40 @@ internal sealed class KeyPool(KeyStoreAccess access)
         var run = access.Run(create: false, session => KeyResult<PickResult>.Of(PickUnderLock(session)));
 
         return run.Value ?? new PickResult.Failed(run.Refusal);
+    }
+
+    /// <summary>
+    /// What the pool could do for a fresh session RIGHT NOW, without doing it (epoch 3 E2 s7): nothing is picked, no cursor moves and no launch is counted. <see cref="Check"/> is what <c>start_role</c> asks before it makes any folder.
+    /// </summary>
+    public KeyAvailability Check()
+    {
+        if (!access.Folder.Exists)
+        {
+            return new KeyAvailability.Empty();
+        }
+
+        var run = access.Run(create: false, session => KeyResult<KeyAvailability>.Of(CheckUnderLock(session)));
+
+        return run.Value ?? new KeyAvailability.Failed(run.Refusal);
+    }
+
+    private KeyAvailability CheckUnderLock(KeySession session)
+    {
+        var now = access.NowUtc;
+        var ring = session.Entries();
+        if (ring.Count == 0)
+        {
+            return new KeyAvailability.Empty();
+        }
+
+        if (ring.Any(entry => entry.Usable(now)))
+        {
+            return new KeyAvailability.Usable();
+        }
+
+        return NoneUsable(session, ring, session.Pool(), now) is PickResult.Unusable unusable
+            ? new KeyAvailability.Unusable(unusable.EarliestFreeUtc, unusable.Counts)
+            : new KeyAvailability.Failed("the key pool could not be read");
     }
 
     private PickResult PickUnderLock(KeySession session)

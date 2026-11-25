@@ -93,6 +93,16 @@ public static class ServerNoticeCodes
     /// <summary>Every claude key of the pool is disabled, dead or cooling: a pick found none. Subject is <c>pool</c>; at most one in 30 minutes.</summary>
     public const string ClaudeKeysExhausted = "claude-keys-exhausted";
 
+    /// <summary>
+    /// The claude key pool of this device holds no key at all, and a role job that needs one was refused or its claude models were skipped (epoch 3 E2 s7, KEY_POOL_SPEC.md section 6). Subject is the UTC date, so one per day coalesces on the page.
+    /// </summary>
+    public const string ClaudeKeysEmpty = "claude-keys-empty";
+
+    /// <summary>
+    /// A claude role job ran on the PERSON'S OWN sign-in because the device switch <c>COAI_ROLE_CLAUDE_PERSON_SIGN_IN</c> is set and the pool holds no key (epoch 3 E2 s7). Subject is the UTC date, so one per day coalesces on the page.
+    /// </summary>
+    public const string ClaudePersonSignInUsed = "claude-person-sign-in-used";
+
     /// <summary>Every code, for the test that asserts the redactor rewrites none of them.</summary>
     public static IReadOnlyList<string> All =>
     [
@@ -119,5 +129,7 @@ public static class ServerNoticeCodes
         ClaudeKeyDead,
         ClaudeKeyExposed,
         ClaudeKeysExhausted,
+        ClaudeKeysEmpty,
+        ClaudePersonSignInUsed,
     ];
 }

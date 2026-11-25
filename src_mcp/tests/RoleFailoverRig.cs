@@ -95,6 +95,8 @@ internal sealed class RoleFailoverRig : IAsyncDisposable
     {
         _settings["COAI_ROLE_CLAUDE_CLI"] = RoleJobWorld.FakeCli;
         _settings["COAI_ROLE_CODEX_CLI"] = RoleJobWorld.FakeCli;
+        // Role jobs do not use the person's own sign-in unless the device says so (epoch 3 E2 s7): these rigs run claude models with no pool, so the switch is set — the launch is the one they always made. A test of the pool puts keys in the rig's data folder, and then the switch does nothing.
+        _settings["COAI_ROLE_CLAUDE_PERSON_SIGN_IN"] = "1";
     }
 
     internal RoleJobWorld World => _world;

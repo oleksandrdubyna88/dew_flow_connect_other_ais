@@ -73,8 +73,8 @@ internal static class RoleAnswers
     }
 }
 
-/// <summary>The session an attempt's answer came from: the model, and the handle its first turn reported (empty when the vendor named none).</summary>
-internal sealed record RoleSession(ModelRef Model, string Handle);
+/// <summary>The session an attempt's answer came from: the model, the handle its first turn reported (empty when the vendor named none) and the key the session runs on (<see cref="RoleKey.KeyId"/>; empty for a launch with no key) — every later turn of the session uses the SAME key.</summary>
+internal sealed record RoleSession(ModelRef Model, string Handle, string KeyId = "");
 
 /// <summary>What a role made of an attempt AFTER the model's first valid answer (<see cref="RoleFailover.Follow"/>): the job's end, or a stop of the same model that goes on to the next one.</summary>
 internal abstract record RoleFollowed
@@ -152,10 +152,21 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
     /// <summary>The jitter's roll, 0 to 1 — a test fixes it.</summary>
     public Func<double> Roll { get; init; } = Random.Shared.NextDouble;
 
+    /// <summary>The most key switches one job makes: after a limit on a key, the SAME model runs again on the next key of the pool, in a new session — this many times at most (KEY_POOL_SPEC.md section 5).</summary>
+    public const int MaxKeySwitches = 3;
+
     private readonly HashSet<string> _skipped = new(StringComparer.Ordinal);
     private readonly List<string> _history = [];
+    private RoleKeyRoad? _keys;
     private int _attempts;
+    private int _keySwitches;
+    private string _lastKeyId = string.Empty;
+    private string _poolSentence = string.Empty;
+    private bool _poolExhausted;
     private bool _warnedNoSnapshot;
+
+    /// <summary>The road to the claude key pool of this job's data folder; made once, on the first claude launch.</summary>
+    private RoleKeyRoad Keys => _keys ??= RoleKeyRoad.For(run);
 
     public async Task<RoleWorkOutcome> RunAsync(string prompt, CancellationToken ct)
     {
@@ -188,6 +199,12 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
             }
         }
 
+        // A route of claude models only, and a pool with no key to give: the job fails as a limit does, with the earliest free time — no wait (KEY_POOL_SPEC.md section 5).
+        if (_poolExhausted && route.All(model => model.Vendor == "claude"))
+        {
+            return new RoleWorkOutcome.Failed(RoleStopWords.Limit, _poolSentence);
+        }
+
         return new RoleWorkOutcome.Failed("models-exhausted", $"every model of the route stopped: {string.Join("; ", _history)}");
     }
 
@@ -213,11 +230,27 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
                 return new Step.Finished(final.Outcome);
             }
 
+            if (end is Ended.NoKey noKey)
+            {
+                return NoKey(route, index, model, noKey);
+            }
+
             var stop = ((Ended.Stop)end).Why;
             _history.Add($"{RoleRoute.Format(model)}: {stop.Word} — {stop.Reason}");
             if (!stop.FailsOver)
             {
                 return new Step.Finished(new RoleWorkOutcome.Failed(stop.Word, stop.Reason));
+            }
+
+            if (IsKeySwitch(model, stop))
+            {
+                // A limit on a pool key is the KEY's, not the vendor's: the same model runs again on the next key, in a new session (a read-only role from turn 0, the coder from the last coai commit).
+                _keySwitches++;
+                run.Log.Information(
+                    "role job {JobId:l} ({Role:l}) switched key {KeySwitch} of {MostKeySwitches} after a limit on {Key:l}: {Model:l} runs again on the next key",
+                    run.Request.JobId, run.Request.Role, _keySwitches, MaxKeySwitches, _lastKeyId, RoleRoute.Format(model));
+
+                continue;
             }
 
             if (stop.SkipsVendor)
@@ -240,6 +273,28 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
             await WaitAsync(pause, ct);
         }
     }
+
+    /// <summary>
+    /// A model the pool has no key for: its vendor is skipped for the rest of the job (the next vendor of the route runs, with the usual switch line and notice), the sentence is remembered — and is the job's end when every model of the route is claude and
+    /// keys exist but all cool down or are dead (<see cref="_poolExhausted"/>). Nothing waits: a reset is hours away and a job's budget is 30 minutes.
+    /// </summary>
+    private Step NoKey(IReadOnlyList<ModelRef> route, int index, ModelRef model, Ended.NoKey noKey)
+    {
+        _skipped.Add(model.Vendor);
+        _poolSentence = noKey.Sentence;
+        _poolExhausted |= noKey.Exhausted;
+        _history.Add($"{RoleRoute.Format(model)}: skipped, {noKey.Sentence}");
+        if (route.Skip(index + 1).FirstOrDefault(later => !_skipped.Contains(later.Vendor)) is { } next)
+        {
+            Switched(model, next, new RoleStop(RoleStopWords.Limit, noKey.Sentence, "no-key", SkipsVendor: true, Transient: false));
+        }
+
+        return new Step.MoveOn();
+    }
+
+    /// <summary>Whether a stop of <paramref name="model"/> is a limit on a POOL key with a switch left (<see cref="MaxKeySwitches"/>): then the same model runs again on the next key instead of the vendor being given up.</summary>
+    private bool IsKeySwitch(ModelRef model, RoleStop stop) =>
+        model.Vendor == "claude" && stop is { Word: RoleStopWords.Limit, Transient: false } && Server.Keys.KeyIds.IsValid(_lastKeyId) && _keySwitches < MaxKeySwitches;
 
     private TimeSpan? LadderWait(int step, long started)
     {
@@ -279,6 +334,15 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
             return new Ended.Stopped();
         }
 
+        // A FRESH session of a claude model takes its key from the pool now, before anything is made for the attempt: a pool with no usable key skips the model at once (no wait, no attempt, no restore).
+        var key = Keys.Fresh(model);
+        if (key is RoleKey.Skip skip)
+        {
+            return new Ended.NoKey(skip.Sentence, skip.Exhausted);
+        }
+
+        _lastKeyId = key.KeyId;
+
         if (_attempts > 0 && Restore is not null && await Restore(ct) is { Length: > 0 } notRestored)
         {
             return ct.IsCancellationRequested ? new Ended.Stopped() : new Ended.Final(new RoleWorkOutcome.Failed("coder-worktree", notRestored));
@@ -292,7 +356,7 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
         }
 
         RepairTurnsUsed = 0;
-        var attempt = new AttemptRun(n, Path.Combine(run.Folder, "attempts", n.ToString(System.Globalization.CultureInfo.InvariantCulture)), run.Clock.GetUtcNow().UtcDateTime, await SnapshotAsync(ct));
+        var attempt = new AttemptRun(n, Path.Combine(run.Folder, "attempts", n.ToString(System.Globalization.CultureInfo.InvariantCulture)), run.Clock.GetUtcNow().UtcDateTime, await SnapshotAsync(ct)) { KeyId = key.KeyId };
         var sent = prompt;
         for (var turn = 0; ; turn++)
         {
@@ -302,7 +366,7 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
                 return Interrupted(model, attempt, null);
             }
 
-            var launched = await LaunchTurnAsync(model, sent, attempt, left, ct);
+            var launched = await LaunchTurnAsync(model, sent, attempt, turn == 0 ? key : Keys.Resume(model, attempt.KeyId), left, ct);
             if (turn == 0)
             {
                 attempt.FirstHandle = launched.Handle;
@@ -338,11 +402,11 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
     }
 
     /// <summary>One launch of the attempt: the first turn is a fresh session, a later one resumes the handle of the turn before.</summary>
-    private async Task<RoleLaunched> LaunchTurnAsync(ModelRef model, string prompt, AttemptRun attempt, TimeSpan left, CancellationToken ct)
+    private async Task<RoleLaunched> LaunchTurnAsync(ModelRef model, string prompt, AttemptRun attempt, RoleKey key, TimeSpan left, CancellationToken ct)
     {
         attempt.TurnBegun = run.Clock.GetUtcNow().UtcDateTime;
         var launched = await new RoleModelLauncher(run.Settings, run.Children) { Coder = Coder, Layer = OsLayer }
-            .LaunchAsync(model, prompt, run.Request.RepoPath, attempt.Folder, left < AttemptTimeout ? left : AttemptTimeout, ct, attempt.Handle);
+            .LaunchAsync(model, prompt, run.Request.RepoPath, attempt.Folder, left < AttemptTimeout ? left : AttemptTimeout, ct, attempt.Handle, key);
         attempt.TurnEnded = run.Clock.GetUtcNow().UtcDateTime;
         attempt.Add(launched);
 
@@ -369,7 +433,7 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
     /// </summary>
     private async Task<Ended> FollowedAsync(ModelRef model, AttemptRun attempt, CancellationToken ct)
     {
-        var session = new RoleSession(model, attempt.FirstHandle);
+        var session = new RoleSession(model, attempt.FirstHandle, attempt.KeyId);
         Session = session;
         RoleFollowed followed;
         try
@@ -409,7 +473,7 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
 
         if (stop is null)
         {
-            Session = new RoleSession(model, attempt.FirstHandle);
+            Session = new RoleSession(model, attempt.FirstHandle, attempt.KeyId);
         }
 
         return stop is null ? new Ended.Answer(result) : new Ended.Stop(stop);
@@ -471,6 +535,18 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
     /// </summary>
     internal static RoleStop? StopOfLaunch(ModelRef model, RoleLaunched launched)
     {
+        // The text of the launch's own key was in what it printed: the key is dead and the job ends — another model would be handed a tree and a transcript that may hold it.
+        if (launched.KeyExposed)
+        {
+            return new RoleStop(RoleStopWords.KeyInOutput, "the exact text of the launch's claude key was found in what the launch printed, so the key is dead (exposed) and the job stops; revoke the key at the vendor", "key-in-output", false, false);
+        }
+
+        // The key of a resumed session is gone: the turn stops as a limit does, and the loop goes on with the next key.
+        if (launched.KeyStop is { } keyStop)
+        {
+            return keyStop;
+        }
+
         if (launched.OsStop is { } osStop)
         {
             return new RoleStop(RoleStopWords.CoderBoundary, Redaction.SafeText(osStop.Sentence, Redaction.TitleLimit), osStop.Kind, false, false);
@@ -563,6 +639,7 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
             EndedUtc = attempt.TurnEnded,
             TokensIn = attempt.Total.TokensIn,
             TokensOut = attempt.Total.TokensOut,
+            KeyId = attempt.KeyId,
         });
 
     /// <summary>One ledger line for the launch of one turn — never for a preparation that refused before anything started. A cumulative vendor's report is cut to this turn's share. Never throws.</summary>
@@ -591,7 +668,13 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
         var ranWith = (launched.Invocation?.RanWith ?? LaunchOptions.None).VersionedBy(launch.CliVersion);
         new UsageLedger(run.DataDir).RecordJob(
             string.Empty, model.Vendor, model.Model, run.Request.Role, stop is null ? "ok" : stop.Kind.Length > 0 ? stop.Kind : stop.Word,
-            duration, share, UsageKinds.Role, "RoleJob", ranWith, resetsUtc: UsageLedger.StatedResetOf(launch.Terminal, DateTimeOffset.UtcNow));
+            duration, share, UsageKinds.Role, "RoleJob", ranWith, resetsUtc: UsageLedger.StatedResetOf(launch.Terminal, DateTimeOffset.UtcNow), keyId: launched.KeyId);
+
+        // The launch that carried a pool key has ONE ledger line, and the same place tells the pool how it ended: a limit puts the key in cooldown, a refused key is dead, a good launch clears the cooldown.
+        if (launched.KeyId.Length > 0)
+        {
+            RoleKeyRoad.For(run).Ended(launched, stop);
+        }
     }
 
     /// <summary>The mutable state of ONE attempt across its turns: where its evidence goes, the session to resume, and what its launches consumed.</summary>
@@ -606,6 +689,9 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
         public FilesystemSnapshot? Before => before;
 
         public string Handle { get; set; } = string.Empty;
+
+        /// <summary>The key this attempt's session runs on (<see cref="RoleKey.KeyId"/>): picked once for turn 0, kept for every later turn of the session.</summary>
+        public string KeyId { get; init; } = string.Empty;
 
         /// <summary>The handle turn 0 reported: what a coder's fix turns resume, whatever a later turn answered with.</summary>
         public string FirstHandle { get; set; } = string.Empty;
@@ -659,6 +745,9 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
         public sealed record Final(RoleWorkOutcome Outcome) : Ended;
 
         public sealed record Stopped : Ended;
+
+        /// <summary>The pool had no key to give the model — nothing was launched and no attempt was made: <see cref="Sentence"/> says why, <see cref="Exhausted"/> whether keys exist and all cool down.</summary>
+        public sealed record NoKey(string Sentence, bool Exhausted) : Ended;
     }
 
     private abstract record Step

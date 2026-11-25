@@ -156,6 +156,7 @@ Beside the review tools, `coai-mcp` can run a role on another model as a **detac
 - `start_role(role, repoPath, taskFile | brief)` starts it and answers at once with a `jobId`. Today: `ba` (plans an epic that has no stories into stories and tasks) and `probe` (a diagnostic).
 - `role_status(jobId, maxSeconds?)` shows the state, the attempts (which model, why one stopped) and the result; `role_cancel(jobId)` stops the job.
 - If a model hits a limit, refuses or crashes, the job moves to the next model of the role's list (`COAI_ROLES_MODELS`) at once, with one log line and one notice per switch.
+- A role job runs claude on a **pool of keys**, never on your own sign-in: add each token from `claude setup-token` with `coai-mcp --keys add --label <name>` (the token is ONE line on stdin, never an argument). Jobs take the keys in turn; after a limit the same model runs again on the next key; with no usable key a job does not wait (another vendor runs, or it fails `limit`). A device with no key yet can set `COAI_ROLE_CLAUDE_PERSON_SIGN_IN=1`. The consultants and the gate reviewers do not use the pool.
 - `validate_work(repoPath, featureFolder)` (or `coai-mcp --validate-work <dir>`) checks a work-plan tree; `coai-mcp --role-delta <jobId> --at <commit>` measures how much of a BA's task files the orchestrator changed (the plan passes below 20 %).
 
 The design is in [ARCHITECTURE.md](ARCHITECTURE.md#role-jobs-and-the-ba-v2-epoch-3).

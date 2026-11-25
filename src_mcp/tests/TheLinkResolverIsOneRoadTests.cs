@@ -30,6 +30,8 @@ public sealed class TheLinkResolverIsOneRoadTests
         ["src_mcp/runners/Files/HandleRead.cs"] = "reads the kernel's own name for an open handle (/proc/self/fd/N), which is already real",
         ["src_mcp/runners/Files/PrivateFolder.cs"] = "refuses a folder that is itself a link",
         ["src_mcp/src/Server/Keys/KeyFolder.cs"] = "refuses the key store's folder (or its parent) when it is itself a link and never follows it; the store lives in the product's own data folder, and a link there would hide where a key is written",
+        ["src_mcp/src/Server/Keys/KeySession.cs"] = "refuses a pool.lock that is itself a link and never opens through it: a link there could point the lock, and the mode set on it, at another file",
+        ["src_mcp/src/Server/Keys/KeySourceReader.cs"] = "refuses a keys file that is itself a link and never reads through it; the person names the real file",
         ["src_mcp/runners/Files/BoundedFile.cs"] = "refuses a file that is itself a link, on a path the product owns",
         ["src_mcp/runners/Context/ContextAssembler.cs"] = "names an untracked link git listed, and never follows it; git lists no path through a link",
     };

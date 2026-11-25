@@ -30,6 +30,8 @@ internal static class ModelMap
             entry = entry[Math.Min(Launched(path, model), entry.GetArrayLength() - 1)];
         }
 
+        entry = PoolKey.Choose(entry);
+
         if (entry.ValueKind != JsonValueKind.Object)
         {
             return null;

@@ -34,7 +34,12 @@ internal sealed record RoleAttempt(int N, string Model, string Vendor, string St
 
     public long TokensOut { get; init; }
 
-    public RoleAttempt Normalised() => this with { Model = Model ?? string.Empty, Vendor = Vendor ?? string.Empty, Stop = Stop ?? string.Empty, Reason = Reason ?? string.Empty, EvidenceRef = EvidenceRef ?? string.Empty };
+    /// <summary>
+    /// The claude key this attempt ran on (epoch 3 E2 s7): the pool key's id, <c>person-sign-in</c> when the device switch ran it on the person's own sign-in, empty when the attempt carried no key (another vendor, or a job from before the pool). Not a secret: a hash prefix.
+    /// </summary>
+    public string KeyId { get; init; } = string.Empty;
+
+    public RoleAttempt Normalised() => this with { Model = Model ?? string.Empty, Vendor = Vendor ?? string.Empty, Stop = Stop ?? string.Empty, Reason = Reason ?? string.Empty, EvidenceRef = EvidenceRef ?? string.Empty, KeyId = KeyId ?? string.Empty };
 }
 
 /// <summary>

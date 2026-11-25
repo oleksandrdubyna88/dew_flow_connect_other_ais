@@ -3,7 +3,7 @@ using CoaiMcp.Core.Notices;
 namespace CoaiMcp.Server.Keys;
 
 /// <summary>
-/// The three notices the pool writes (KEY_POOL_SPEC.md section 5). They name a key by its label and id and never by its text; the label of a stored key was checked against the redactor when it was added.
+/// The notices the pool and the role launch road write (KEY_POOL_SPEC.md sections 5 and 6): dead, exposed, exhausted, empty, person-sign-in-used. They name a key by its label and id and never by its text; the label of a stored key was checked against the redactor when it was added.
 /// </summary>
 internal static class KeyNotices
 {
@@ -37,6 +37,38 @@ internal static class KeyNotices
         Cure = $"Revoke the key at the vendor now, then remove it (coai-mcp --keys remove --id {key.Id}) and add a new one.",
         Provider = "claude",
     };
+
+    /// <summary>The pool holds no key at all. The subject is the UTC date: a repeat on the same day is the same notice on the page — one per day.</summary>
+    public static ServerNotice Empty(DateTime nowUtc, bool switchIsSet) => new()
+    {
+        Utc = ServerNotice.Iso(nowUtc),
+        Class = "failure",
+        Source = Source,
+        Code = ServerNoticeCodes.ClaudeKeysEmpty,
+        Subject = DayOf(nowUtc),
+        Title = "The claude key pool of this device is empty: role jobs do not run on claude here",
+        Detail = switchIsSet
+            ? "The pool holds no key. The switch COAI_ROLE_CLAUDE_PERSON_SIGN_IN is set, so a claude role job uses the person's own sign-in until a key is added."
+            : "The pool holds no key, and role jobs do not use the person's own sign-in. A route with only claude models is refused; a route with another vendor runs on that vendor.",
+        Cure = "Add a key: coai-mcp --keys add --label <name> (the token on stdin), or the Keys page. A device with no key yet can set COAI_ROLE_CLAUDE_PERSON_SIGN_IN=1 to run on the person's own sign-in until the first key is added.",
+        Provider = "claude",
+    };
+
+    /// <summary>A claude role job ran on the person's own sign-in by the device switch. One per day, by the subject.</summary>
+    public static ServerNotice PersonSignInUsed(DateTime nowUtc) => new()
+    {
+        Utc = ServerNotice.Iso(nowUtc),
+        Class = "outcome",
+        Source = Source,
+        Code = ServerNoticeCodes.ClaudePersonSignInUsed,
+        Subject = DayOf(nowUtc),
+        Title = "A claude role job ran on the person's own sign-in (the device switch is set and the pool is empty)",
+        Detail = "COAI_ROLE_CLAUDE_PERSON_SIGN_IN is set and the pool holds no key at all, so the role job used the sign-in file of the person, as role jobs did before the pool. With any key in the pool the switch does nothing.",
+        Cure = "Add a key (coai-mcp --keys add --label <name>) and unset the switch.",
+        Provider = "claude",
+    };
+
+    private static string DayOf(DateTime nowUtc) => nowUtc.ToUniversalTime().ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
 
     public static ServerNotice Exhausted(KeyCounts counts, DateTime? earliestFreeUtc, DateTime nowUtc) => new()
     {

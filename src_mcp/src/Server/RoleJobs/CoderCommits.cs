@@ -1,5 +1,6 @@
 using CoaiMcp.Runners.Collecting;
 using CoaiMcp.Runners.Worktrees;
+using CoaiMcp.Server.Keys;
 
 namespace CoaiMcp.Server.RoleJobs;
 
@@ -19,7 +20,8 @@ internal static class CoderCommits
     public static string AttemptMessage(string jobId, string taskId, int attempt) => $"coder {jobId}: {taskId} attempt {attempt}";
 
     /// <summary>Stages everything the coder wrote and makes ONE commit of it; no change means no commit and the head stays where it was.</summary>
-    public static async Task<(string Head, RoleWorkOutcome.Failed? Failure)> CommitAsync(GitHistory git, CoderTree tree, string message, CancellationToken ct)
+    /// <param name="secret">The key the turn ran on, when it ran on a pool key: the staged files are searched for its exact text BEFORE the commit, and a hit means no commit — the job fails <c>key-in-output</c> (epoch 3 E2 s7).</param>
+    public static async Task<(string Head, RoleWorkOutcome.Failed? Failure)> CommitAsync(GitHistory git, CoderTree tree, string message, CancellationToken ct, ClaudeKeySecret? secret = null)
     {
         var staged = await git.InCoderTreeAsync(tree, ["add", "-A"], ct);
         if (!staged.Ran || !staged.Ok)
@@ -33,6 +35,11 @@ internal static class CoderCommits
             return (string.Empty, Failed("git diff --cached in the worktree", pending));
         }
 
+        if (secret is not null && pending.Out.Length > 0 && HoldsTheKey(tree.Root, pending.Out, secret))
+        {
+            return (string.Empty, new RoleWorkOutcome.Failed(RoleStopWords.KeyInOutput, "the exact text of the turn's claude key is in a file the coder wrote, so nothing was committed, the key is dead (exposed) and the job stops; revoke the key at the vendor"));
+        }
+
         if (pending.Out.Length > 0)
         {
             var made = await git.InCoderTreeAsync(tree, ["commit", "--no-verify", "--no-gpg-sign", "-m", message], ct);
@@ -44,6 +51,16 @@ internal static class CoderCommits
 
         return await HeadAsync(git, tree, ct);
     }
+
+    /// <summary>
+    /// Whether the exact text of <paramref name="secret"/> is in any of the staged files (<paramref name="namesZ"/> is git's NUL-separated list, relative to <paramref name="root"/>). A link is not followed — what git would commit is the link, not what it points at —
+    /// and a file that was deleted is not there to search. The same chunked search <c>--keys scan</c> makes, so a text cut by a chunk edge is found.
+    /// </summary>
+    private static bool HoldsTheKey(string root, string namesZ, ClaudeKeySecret secret) =>
+        namesZ.Split('\0', StringSplitOptions.RemoveEmptyEntries)
+            .Select(name => Path.GetFullPath(Path.Combine(root, name)))
+            .Where(file => new FileInfo(file) is { Exists: true, LinkTarget: null })
+            .Any(file => KeyScanner.Walk(file, [secret], string.Empty).Hits.Count > 0);
 
     /// <summary>The commit the worktree is on.</summary>
     public static async Task<(string Head, RoleWorkOutcome.Failed? Failure)> HeadAsync(GitHistory git, CoderTree tree, CancellationToken ct)

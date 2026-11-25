@@ -195,7 +195,7 @@ if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor" || minimal is
     var steering = Steering.For(prompt.Text, read, CoaiMcp.FakeCli.ModelMap.For(args, read));
 
     // A coder's edits (model map `writeFiles`): files below the working folder, written before the answer and before any wait.
-    if (steering.Get("WRITE_FILES") is { Length: > 0 } writeFiles && CoaiMcp.FakeCli.CwdWrites.Apply(writeFiles, Directory.GetCurrentDirectory()) is { Length: > 0 } notWritten)
+    if (steering.Get("WRITE_FILES") is { Length: > 0 } writeFiles && CoaiMcp.FakeCli.CwdWrites.Apply(CoaiMcp.FakeCli.PoolKey.Fill(writeFiles), Directory.GetCurrentDirectory()) is { Length: > 0 } notWritten)
     {
         Console.Error.WriteLine($"fake-cli: {notWritten}");
 
@@ -219,7 +219,7 @@ if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor" || minimal is
     var stderrText = steering.Get("STDERR");
     if (stderrText is { Length: > 0 })
     {
-        Console.Error.WriteLine(stderrText);
+        Console.Error.WriteLine(CoaiMcp.FakeCli.PoolKey.Fill(stderrText));
     }
 
     // `-o` means two different things to two vendors. Codex takes `-o <absolute path>.json` — where
@@ -757,6 +757,7 @@ static class LaunchRecord
             HoldOpen(gate);
         }
 
+        CoaiMcp.FakeCli.PoolKey.Record(dir, name);
         File.Move(writing, Path.Combine(dir, name + ".argv"));
     }
 
@@ -790,7 +791,9 @@ sealed partial class FakeCliJsonContext : System.Text.Json.Serialization.JsonSer
 /// </summary>
 static class Placeholders
 {
-    public static string Fill(string text, string prompt) =>
+    public static string Fill(string text, string prompt) => CoaiMcp.FakeCli.PoolKey.Fill(FillPaths(text, prompt));
+
+    private static string FillPaths(string text, string prompt) =>
         System.Text.RegularExpressions.Regex.Replace(
             text,
             @"\{\{(cwd-file|adddir-file|prompt-path|path-in-prompt):([^}]+)\}\}",
