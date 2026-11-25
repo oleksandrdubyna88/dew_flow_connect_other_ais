@@ -40,6 +40,18 @@ internal static class FakeRoleAnswers
     internal static object CodexSays(string result) =>
         new { outfileText = result, stdout = """{"type":"thread.started","thread_id":"00000000-0000-0000-0000-000000000000"}""" + "\n", exit = 0 };
 
+    /// <summary>
+    /// Agy answers: the stream-json it prints with a <c>result</c> event whose <c>response</c> is the role's output, in a conversation it names — the shape of <c>tests/fixtures/antigravity/consult-advice.ndjson</c> without the steps.
+    /// </summary>
+    internal static object AgySays(string result)
+    {
+        const string conversation = "5e1f2a3b-4c5d-4e6f-8a9b-0c1d2e3f4a5b";
+        var init = new JsonObject { ["event"] = "init", ["conversation_id"] = conversation, ["init"] = new JsonObject { ["model"] = "gemini-3.8-flash-low", ["cwd"] = "/repo" } };
+        var end = new JsonObject { ["event"] = "result", ["result"] = new JsonObject { ["conversation_id"] = conversation, ["status"] = "SUCCESS", ["response"] = result } };
+
+        return new { stdout = init.ToJsonString() + "\n" + end.ToJsonString() + "\n", exit = 0 };
+    }
+
     /// <summary>Any CLI falling over: a line on stderr and exit 1.</summary>
     internal static object Crash(string stderr = "the CLI fell over: boom") => new { stderr, exit = 1 };
 
@@ -149,6 +161,12 @@ internal sealed class RoleFailoverRig : IAsyncDisposable
     internal RoleJobRecord NewJob(string role, IReadOnlyList<string> route, string taskFile, int timeoutMinutes = 5) =>
         _world.Store.Create(
             new RoleJobRequest { JobId = RoleJobIds.New(_world.Clock), Role = role, RepoPath = Repo, TaskFile = taskFile, TimeoutMinutes = timeoutMinutes },
+            new RoleJobPlan(route, 0, false));
+
+    /// <summary>A queued job of <paramref name="role"/> over <paramref name="route"/> that asks the question <paramref name="brief"/>, about <paramref name="taskFile"/> when one is given — the scout and the judge.</summary>
+    internal RoleJobRecord NewBriefJob(string role, IReadOnlyList<string> route, string brief, string taskFile = "", int timeoutMinutes = 5) =>
+        _world.Store.Create(
+            new RoleJobRequest { JobId = RoleJobIds.New(_world.Clock), Role = role, RepoPath = Repo, Brief = brief, TaskFile = taskFile, TimeoutMinutes = timeoutMinutes },
             new RoleJobPlan(route, 0, false));
 
     /// <summary>Runs the job to its end with the real runner and the given descriptors: its exit code and the record it left.</summary>

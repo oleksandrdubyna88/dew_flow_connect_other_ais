@@ -176,9 +176,10 @@ internal sealed class RoleJobService(string dataDir, Func<string, string?> setti
 
         var (file, fileRefusal) = RoleRequestChecks.RelativeFile(taskFile, "taskFile");
         var text = brief ?? string.Empty;
-        if (fileRefusal.Length > 0 || (file.Length == 0) == string.IsNullOrWhiteSpace(text) || text.Length > RoleRequestChecks.MaxBriefLength)
+        var inputRefusal = fileRefusal.Length > 0 ? fileRefusal : RoleRequestChecks.InputRefusal(RoleDescriptors.Find(Descriptors, role)!, file, text);
+        if (inputRefusal.Length > 0)
         {
-            return (none, fileRefusal.Length > 0 ? fileRefusal : $"send exactly one of taskFile (a path inside the repository) or brief (text of at most {RoleRequestChecks.MaxBriefLength} characters)");
+            return (none, inputRefusal);
         }
 
         var (request, bounded) = Bounded(none with { Role = role, RepoPath = Path.GetFullPath(repoPath), TaskFile = file, Brief = text }, model, timeoutMinutes, workItem);

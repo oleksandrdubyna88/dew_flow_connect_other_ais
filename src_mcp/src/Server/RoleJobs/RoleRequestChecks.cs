@@ -34,6 +34,25 @@ internal static class RoleRequestChecks
             : (string.Join('/', segments), string.Empty);
     }
 
+    /// <summary>
+    /// What a role needs of the pair <c>taskFile</c> and <c>brief</c>, as text: empty when it is fit, else the sentence that refuses it. The BA and the coder take exactly ONE of the two; a role that answers a question
+    /// (<see cref="RoleDescriptor.NeedsBrief"/>: the scout, the judge) needs the brief and may name the file it is about. The brief's cap is the same for both.
+    /// </summary>
+    public static string InputRefusal(RoleDescriptor descriptor, string taskFile, string brief)
+    {
+        var blank = string.IsNullOrWhiteSpace(brief);
+        if (descriptor.NeedsBrief)
+        {
+            return blank || brief.Length > MaxBriefLength
+                ? $"the {descriptor.Role} answers a question: send brief, the question (text of at most {MaxBriefLength} characters, not empty); taskFile is optional and names the file the question is about"
+                : string.Empty;
+        }
+
+        return (taskFile.Length == 0) == blank || brief.Length > MaxBriefLength
+            ? $"send exactly one of taskFile (a path inside the repository) or brief (text of at most {MaxBriefLength} characters)"
+            : string.Empty;
+    }
+
     /// <summary>The model the caller named: empty, or a short plain name. Whether the router accepts it is the router's (story s3).</summary>
     public static string ModelRefusal(string? model) =>
         model is null or "" || (model.Length <= MaxNameLength && !model.Any(char.IsControl) && !model.Any(char.IsWhiteSpace))
