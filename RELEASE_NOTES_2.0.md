@@ -25,7 +25,7 @@ half way. You can run the same thing by hand: `coai-mcp --install` on a clean ma
 to look first, `--remove` or `--restore` to undo. A client that cannot be set up is one notification, not a failure of the rest.
 It reads what your Claude Code can do before it writes: an older Claude Code (2.1.310 measured) cannot read `claude mcp add-json` from stdin (2.1.330 can), so
 for an entry that is only the program path (no environment values, no arguments) the JSON is passed as the argument; any other entry is refused, never put on a
-command line, with the sentence "claude <version> cannot read `mcp add-json` from stdin; update Claude Code (claude update)". Run
+command line, with the sentence "claude <version> cannot read `mcp add-json` from stdin; update Claude Code (claude update)".
 A `claude.cmd` or `claude.bat` shim is refused too (cmd.exe would re-parse the argument). Run `claude update`, then reload the window. Every client that is not set up now has its reason in the backup manifest and in the report.
 
 **Roles.** The new `roles` tool (and a SessionStart hook) tells an AI which main AI is set, which models serve each role in
