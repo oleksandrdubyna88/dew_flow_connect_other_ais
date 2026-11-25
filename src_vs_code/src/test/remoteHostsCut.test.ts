@@ -1,12 +1,18 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { autoCounts, consentOf } from '../remoteHosts';
+import { autoCounts, consentOf, refusedBy } from '../remoteHosts';
+import type { HostKeeper } from '../remoteKeeper';
 import { hostKeeper } from '../remoteKeeper';
+import { readsKey, remoteRoad } from '../remoteRead';
+import type { Purpose, RoadSeams } from '../remoteRead';
+import { runRound } from '../remoteAccountsRound';
+import type { RemoteRun } from '../remoteSsh';
 import type { KeeperSeams } from '../remoteKeeper';
 import { EMPTY_FILE, refusalsStore } from '../remoteRefusals';
 import type { RefusalsRead } from '../remoteRefusals';
 import { Backing, FakeDisk, KEY, instant, row, view } from './hostsFakes';
+import { callsOf, world } from './roundFakes';
 
 /**
  * The cut of the accounts plan's stop, on the side of the doors: an automatic "yes" counts as NO answer at every door, whatever the setting
@@ -61,4 +67,90 @@ test('CUT-H3: the setting has no effect in this build: the effective value is of
   assert.equal(autoCounts(true), false, 'the setting switched the automatic allow on');
   assert.equal(autoCounts(false), false);
   assert.equal(autoCounts(true, 'on'), true, 'the switch a later build turns is gone');
+});
+
+// ───────────────── one test for each door that asks the consent ─────────────────
+// The doors: the session road's two presses (take the question, add the question: `remoteRoad` with each Purpose), the round's door
+// (`keeper.admit`, which is `admitHost`, and the round over it), the terminal items' key (`readsKey`) and `refusedBy`. Each is built over a keeper
+// with NO `automatic` seam and the setting ON, as the window builds it, and over a persisted automatic row.
+
+const NAME = 'Creds: h / s1';
+type Answer = 'auto' | 'yes' | 'no';
+
+/** A keeper whose list holds one row for 'h': an automatic "yes", a person's "yes" or a person's "no". The setting is on. */
+async function withRow(answer: Answer): Promise<HostKeeper> {
+  const keeper = keeperOf(new Backing(), new FakeDisk(), true);
+  await keeper.commit(answer === 'auto' ? { kind: 'auto', host: 'h' } : { kind: 'person', host: 'h', answer });
+
+  return keeper;
+}
+
+/** The session road over a keeper: what it asked the person and how many runs it started. */
+async function press(keeper: HostKeeper, purpose: Purpose): Promise<{ readonly refusal: string | undefined; readonly asked: number; readonly runs: number }> {
+  const counted = { asked: 0, runs: 0 };
+  const refused: RemoteRun = { kind: 'refused', refusal: 'the fake run answers nothing' };
+  const seams: RoadSeams = {
+    store: { consent: (host) => keeper.consent(host), answer: (host, answer) => keeper.commit({ kind: 'person', host, answer }) },
+    ask: () => { counted.asked += 1; return Promise.resolve(undefined); },
+    liveName: () => NAME,
+    run: () => { counted.runs += 1; return Promise.resolve(refused); },
+    pick: () => Promise.resolve(undefined),
+    progress: (_host, work) => work(),
+    keep: () => undefined,
+  };
+  const answer = await remoteRoad(seams, NAME, purpose, undefined);
+
+  return { refusal: answer.kind === 'refused' ? answer.refusal : undefined, ...counted };
+}
+
+for (const purpose of ['question', 'prompts'] as const) {
+  test(`CUT-D1 (${purpose}): the session road on an automatic row, the setting on, asks and starts no run; a person's "yes" reads, a "no" refuses`, async () => {
+    const auto = await press(await withRow('auto'), purpose);
+    assert.equal(auto.runs, 0, 'the road read a host nobody said yes to');
+    assert.equal(auto.asked, 1, 'the road did not ask, as for a host with no answer yet');
+
+    const yes = await press(await withRow('yes'), purpose);
+    assert.equal(yes.asked, 0, 'a person\'s "yes" was asked again');
+    assert.ok(yes.runs > 0, 'a person\'s "yes" did not read');
+
+    const no = await press(await withRow('no'), purpose);
+    assert.deepEqual([no.runs, no.asked], [0, 0], 'a "no" read or asked');
+    assert.notEqual(no.refusal, undefined);
+  });
+}
+
+test('CUT-D2: the round\'s door (admitHost) on an automatic row, the setting on, reads nothing; a person\'s "yes" reads, a "no" refuses', async () => {
+  assert.equal((await (await withRow('auto')).admit('h')).kind, 'not-asked', 'the door admitted an automatic row');
+  assert.equal((await (await withRow('yes')).admit('h')).kind, 'read');
+  assert.equal((await (await withRow('no')).admit('h')).kind, 'refused');
+});
+
+test('CUT-D3: a round over the door, with the reading handed on, calls no runner on an automatic row; a person\'s "yes" is called, a "no" is not', async () => {
+  const calls = async (answer: Answer): Promise<readonly string[]> => {
+    const keeper = await withRow(answer);
+    const w = world({ hosts: ['h'] });
+    await runRound({ ...w.seams, admit: (host) => keeper.admit(host) }, new Map(), 0, 'timer', undefined, 'on');
+
+    return callsOf(w);
+  };
+
+  assert.deepEqual(await calls('auto'), [], 'a runner was called for a host nobody said yes to');
+  assert.deepEqual(await calls('yes'), ['h N']);
+  assert.deepEqual(await calls('no'), []);
+});
+
+test('CUT-D4: the terminal items\' key follows "answered no" only: an automatic row shows them, as no answer does; a "no" hides them', async () => {
+  const shown = async (answer: Answer): Promise<boolean> => readsKey(NAME, await (await withRow(answer)).standings());
+
+  assert.equal(await shown('auto'), true, 'an automatic row hid the items');
+  assert.equal(await shown('yes'), true);
+  assert.equal(await shown('no'), false, 'a "no" left the items shown');
+});
+
+test('CUT-D5: refusedBy says "refused" only for a "no", whatever the row beside it', () => {
+  const auto = [row('h', 'yes', '2026-11-01T00:00:00.000Z', 'auto')];
+
+  assert.equal(refusedBy(noFile, auto, 'h'), false);
+  assert.equal(refusedBy(noFile, [row('h', 'yes')], 'h'), false);
+  assert.equal(refusedBy(noFile, [row('h', 'no')], 'h'), true);
 });
