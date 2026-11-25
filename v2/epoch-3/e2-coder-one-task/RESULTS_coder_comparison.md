@@ -27,6 +27,10 @@ Facts only; no product code. The owner asked for the coders on claude, codex and
 | whole suite | green | 16,514 total, 0 failed, 346 skipped | 16,514 total, 0 failed, 346 skipped |
 | coder + checks, one pass | 584 s (the job) | 24.9 + 569.5 = 594 s | 66.6 + 558.9 = 626 s |
 | refused or odd | none | see "Odd things", the main one: the repository's own instructions made it refuse | the guard denied two reads under `.agents/`; the init line says `permission_mode request-review` |
+| gate: plan round on the task file (main AI) | proceed, 3 findings, **0 accepted** | proceed, 3 findings, **1 accepted** (d3 allows a trailing-slash-only test, and codex wrote only that) | proceed, 2 findings, **0 accepted** |
+| gate: code round (main AI) | proceed, 1 finding, **1 accepted** (the module doc rule) | proceed, 1 finding, **1 accepted** (the same) | proceed, 2 findings, **1 accepted** (the same; a casefolded-Linux test note rejected) |
+| accepted findings, all rounds (baseline 3) | **1** | **2** | **1** |
+| gate sessions (2.0 server) | e390ae84 | 75d2f612 | 8122ce5b |
 
 Read this with the limits at the end: one task, one run per vendor (codex: three runs because two were refusals), a different unit around claude than around the other two, and an adapted prompt for codex.
 
@@ -133,3 +137,9 @@ The real sign-in files were not changed (above). No coai gate was run; nothing w
 - The codex report's `null` members and agy's lack of a schema flag were not run through the repository's strict reader.
 - A fix turn, a resumed conversation or thread, and the guard's behaviour under a real red round were not exercised: nothing went red.
 - The sign-in copies were visible to the coder units by design (they are the vendor's home); the judgement's accepted risks A1 and A2 are unchanged by this run.
+
+## The gate rounds of the three branches (added by the main AI after the runs)
+
+The main AI ran the 2.0 server's gate on each branch of the clone: a plan round on the task file (one reviewer), then a code round over `ae72656c` (four reviewers), with the same decisions where the findings were the same. The plan findings that ask for a per-volume case probe, or for a Windows and macOS test of the unchanged comparison, were rejected on all three with the same reasons. One plan finding was accepted on codex only: the task's d3 allows "a symbolic link, or a trailing slash", and codex's second test checks only the trailing slash, so a resolver that ignored links would pass it; claude's and agy's tests make a link. On all three the code round raised the knowledge-base rule (a code change updates its module doc), which the task's "only the two files" wording caused; it was accepted on all three. The module doc paragraph is commit c8669198 on the clone's branch `t3-main-ai` (claude's branch); for codex and agy it was not written, since those branches are for the comparison and are not merged. The codex link-test fix was not made for the same reason.
+
+Gate tokens (in / out): plan 39,946 / 491, 39,920 / 540, 39,781 / 488; code 161,713 / 573, 160,709 / 489, 160,721 / 801 (claude, codex, agy).
