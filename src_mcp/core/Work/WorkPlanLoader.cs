@@ -21,7 +21,7 @@ internal sealed class WorkPlanLoader(IWorkFolder folder, IYamlReader reader, Lis
         var map = read.Map;
         var epochs = WorkNames.InOrder(folder.Folders(string.Empty).Where(WorkNames.IsEpoch)).Select(LoadEpoch).ToList();
 
-        return new WorkFeature(map is not null, Strings(map, "epochs"), MethodNumbers(map), epochs);
+        return new WorkFeature(map is not null, Strings(map, "epochs"), MethodNumbers(map), epochs) { Plan = Text(map, "plan"), Architecture = Strings(map, "architecture") };
     }
 
     // ---------- items ----------
@@ -32,7 +32,7 @@ internal sealed class WorkPlanLoader(IWorkFolder folder, IYamlReader reader, Lis
         var ok = read.Map is not null && IdMatches(read.Map, name, $"{name}/{WorkTables.Epoch.File}", name);
         var epics = WorkNames.InOrder(folder.Folders(name).Where(WorkNames.IsEpic)).Select(epic => LoadEpic(name, epic)).ToList();
 
-        return new WorkEpoch(name, name, $"{name}/{WorkTables.Epoch.File}", ok, Strings(read.Map, "dependsOn"), Strings(read.Map, "epics"), epics);
+        return new WorkEpoch(name, name, $"{name}/{WorkTables.Epoch.File}", ok, Strings(read.Map, "dependsOn"), Strings(read.Map, "epics"), epics, Text(read.Map, "title"));
     }
 
     private WorkEpic LoadEpic(string epoch, string name)
@@ -43,7 +43,7 @@ internal sealed class WorkPlanLoader(IWorkFolder folder, IYamlReader reader, Lis
         var ok = read.Map is not null && IdMatches(read.Map, name, $"{path}/{WorkTables.Epic.File}", node);
         var stories = WorkNames.InOrder(folder.Folders($"{path}/{StoriesFolder}").Where(WorkNames.IsStory)).Select(story => LoadStory(path, node, story)).ToList();
 
-        return new WorkEpic(name, node, $"{path}/{WorkTables.Epic.File}", ok, ok && Boolean(read.Map, "mvp"), Strings(read.Map, "dependsOn"), stories);
+        return new WorkEpic(name, node, $"{path}/{WorkTables.Epic.File}", ok, ok && Boolean(read.Map, "mvp"), Strings(read.Map, "dependsOn"), stories, Text(read.Map, "title"), Text(read.Map, "spec"));
     }
 
     private WorkStory LoadStory(string epicPath, string epicNode, string name)
@@ -54,7 +54,7 @@ internal sealed class WorkPlanLoader(IWorkFolder folder, IYamlReader reader, Lis
         var ok = read.Map is not null && IdMatches(read.Map, name, $"{path}/{WorkTables.Story.File}", node);
         var tasks = WorkNames.InOrder(folder.Folders($"{path}/{TasksFolder}").Where(WorkNames.IsTask)).Select(task => LoadTask(path, node, task)).ToList();
 
-        return new WorkStory(name, node, $"{path}/{WorkTables.Story.File}", ok, Strings(read.Map, "dependsOn"), tasks);
+        return new WorkStory(name, node, $"{path}/{WorkTables.Story.File}", ok, Strings(read.Map, "dependsOn"), tasks, Text(read.Map, "title"));
     }
 
     private WorkTask LoadTask(string storyPath, string storyNode, string name)
