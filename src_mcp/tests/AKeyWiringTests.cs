@@ -139,13 +139,40 @@ public sealed class AKeyWiringTests
     }
 
     [Fact]
-    public void ARefusedSignIn_MakesTheKeyDead_AndATextFoundInTheOutput_IsAnExposure_BeforeAnythingElse()
+    public void ANotLoggedInEnvelope_DoesNotKillTheKey_UntilARealRefusedKeyFixtureExists_AndATextFoundInTheOutput_IsAnExposure_BeforeAnythingElse()
     {
         var notLoggedIn = new ProcessResult(1, RoleStopFixtures.Load("claude-no-sign-in").StdOut, string.Empty, TimedOut: false);
 
-        Read(Finished(process: notLoggedIn), new RoleStop(RoleStopWords.Crash, "the sign-in is lost", "exit", true, false)).End.Should().Be(KeyLaunchEnd.AuthRefused);
+        // On a keyed launch that text more probably means the CLI did not get the key, so one good key would die per job; a revoked key probably answers 401, which is not read (second judgement, deviation 2).
+        Read(Finished(process: notLoggedIn), new RoleStop(RoleStopWords.Crash, "the sign-in is lost", "exit", true, false)).End.Should().Be(KeyLaunchEnd.Transient);
         Read(Finished(exposed: true), null).End.Should().Be(KeyLaunchEnd.Exposed);
         Read(Finished(process: notLoggedIn, exposed: true), null).End.Should().Be(KeyLaunchEnd.Exposed);
+    }
+
+    [Fact]
+    public void AResumeOfAClaudeModelWithNoKeyId_IsGone_NeverTheNoKeyOfAnotherVendor()
+    {
+        using var data = TempDir.For("coai-resume-");
+        var road = RoleKeyRoad.For(data.Path, TimeProvider.System, _ => true, _ => null);
+
+        road.Resume(new ModelRef("sonnet", "claude"), string.Empty).Should().BeOfType<RoleKey.Gone>("an empty id would otherwise read as no key at all, which is the person's sign-in");
+        road.Resume(new ModelRef("gpt-5.5", "codex"), string.Empty).Should().BeOfType<RoleKey.None>("another vendor has no key, and that is right");
+    }
+
+    [Fact]
+    public void TheRunnersUnit_AndEveryBoundaryUnit_NeverDumpCore_AUnitThatMayHoldAKeyLeavesNoCoreFile()
+    {
+        CoaiMcp.Runners.Detach.DetachedLauncher.SystemdRunArguments(new CoaiMcp.Runners.Detach.DetachSpec("coai-mcp", ["--role-run", "x"], TempDir.Root, "coai-role-x", 1000)).Should().Contain("LimitCORE=0");
+        CoaiMcp.Runners.Toolchain.BoundaryUnit.Hardening.Should().Contain("LimitCORE=0");
+    }
+
+    [Fact]
+    public void TheStagedBlobsOfARawDiff_AreTheNewOnesOnly_NotADeletionNorASubmodule()
+    {
+        var zero = new string('0', 40);
+        var raw = $":100644 100644 {new string('a', 40)} {new string('b', 40)} M\0src/a.txt\0:000000 100644 {zero} {new string('c', 40)} A\0src/new.txt\0:100644 000000 {new string('d', 40)} {zero} D\0src/gone.txt\0:160000 160000 {new string('e', 40)} {new string('f', 40)} M\0sub\0";
+
+        CoderCommits.BlobsOf(raw).Should().Equal(new string('b', 40), new string('c', 40));
     }
 
     // ---------- the structural scan of the launch road ----------

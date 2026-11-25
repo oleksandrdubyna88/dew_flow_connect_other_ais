@@ -72,11 +72,13 @@ public sealed class AKeyCoderLaunchTests
             arguments.Where(argument => argument.StartsWith("Bind", StringComparison.Ordinal)).Should().NotContain(argument => argument.Contains(".credentials.json", StringComparison.Ordinal), "with a key the person's sign-in file is not bound");
             arguments.Should().NotContain(argument => argument.Contains(KeyWorld.Sentinel, StringComparison.Ordinal), "no argument of the unit holds the key");
             arguments.Should().Contain($"InaccessiblePaths=-{Path.Combine(rig.World.DataDir, "keys")}", "the key folder is hidden from every unit that carries a key");
+            arguments.Should().Contain("LimitCORE=0", "a unit that holds a key never dumps core");
         }
 
         var coder = units.Single(arguments => arguments.Any(argument => argument.Contains($"coai-coder-{job.JobId}-c1", StringComparison.Ordinal)));
-        coder.Should().Contain($"--setenv={Variable}", "the value crosses by NAME, never in an argument");
-        coder.Where(argument => argument.Contains(Variable + "=", StringComparison.Ordinal)).Should().BeEmpty("the name is spelled in the unit's own script, but no argument assigns it a value");
+        coder.Should().NotContain($"--setenv={Variable}", "the key is not a property of the unit: it would sit in `systemctl show` and in a 0644 transient file for as long as the unit lives");
+        coder.Should().Contain(argument => argument.Contains($"read -r {Variable}", StringComparison.Ordinal), "the unit's shell reads the key from the first line of stdin and exports it itself, before the exec");
+        coder.Where(argument => argument.Contains(Variable + "=", StringComparison.Ordinal)).Should().BeEmpty("no argument assigns the name a value");
     }
 
     [Fact]
@@ -108,8 +110,13 @@ public sealed class AKeyCoderLaunchTests
         var job = rig.NewJob();
         var run = rig.RunAsync(job);
         var seen = new StringBuilder();
+        var unitText = new StringBuilder();
+        var properties = 0;
         for (var until = DateTime.UtcNow.AddSeconds(20); !run.IsCompleted && DateTime.UtcNow < until;)
         {
+            var shown = UnitProperties($"coai-coder-{job.JobId}-c1.service");
+            properties += shown.Contains("Environment=", StringComparison.Ordinal) ? 1 : 0;
+            unitText.AppendLine(shown).AppendLine(TransientFiles(job.JobId));
             foreach (var cmdline in Directory.EnumerateDirectories("/proc").Where(folder => long.TryParse(Path.GetFileName(folder), out _)).Select(folder => Path.Combine(folder, "cmdline")))
             {
                 try
@@ -129,6 +136,8 @@ public sealed class AKeyCoderLaunchTests
 
         ended.State.Should().Be(RoleJobStates.Succeeded, ended.Reason);
         seen.Length.Should().BeGreaterThan(1000, "the scan must have read real command lines while the coder ran");
+        properties.Should().BeGreaterThan(0, "the property of the live unit was read at least once, so the check can see a unit");
+        unitText.ToString().Should().NotContain(KeyWorld.Sentinel, "neither `systemctl --user show -p Environment` of the unit nor the 0644 transient unit file under /run/user ever held the key");
         seen.ToString().Should().NotContain(KeyWorld.Sentinel, "no process's command line — the client, the shell, env, the coder — held the key while the unit ran");
         var names = KeyRig.EnvNamesOf(Launches(rig, job)).Single();
         names.Should().Contain(Variable);
@@ -219,6 +228,155 @@ public sealed class AKeyCoderLaunchTests
         ended.Stop.Should().Be("key-in-output");
         KeyRig.Row(rig.World.DataDir, Keys(rig, job).Single()).DeadReason.Should().Be(KeyDeadReasons.Exposed);
         (await rig.GitAsync(rig.Repo, "rev-parse", $"refs/heads/coder/{job.JobId}")).Should().Be(rig.Base);
+    }
+
+    /// <summary>What <c>systemctl --user show -p Environment</c> says of the unit (empty when it is not there); read with the product's own program names, never through a shell.</summary>
+    private static string UnitProperties(string unit)
+    {
+        try
+        {
+            using var shown = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("systemctl") { ArgumentList = { "--user", "show", "-p", "Environment", unit }, RedirectStandardOutput = true, UseShellExecute = false })!;
+            var text = shown.StandardOutput.ReadToEnd();
+            shown.WaitForExit();
+
+            return text;
+        }
+        catch (Exception e) when (e is System.ComponentModel.Win32Exception or IOException)
+        {
+            return string.Empty;
+        }
+    }
+
+    /// <summary>The text of every transient unit file of this job under the user's runtime folder (the file systemd-run makes, mode 0644 in a 0700 folder).</summary>
+    private static string TransientFiles(string jobId)
+    {
+        var runtime = Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR") is { Length: > 0 } named ? named : "/run/user/" + Environment.GetEnvironmentVariable("UID");
+        var folder = Path.Combine(runtime, "systemd", "transient");
+        if (!Directory.Exists(folder))
+        {
+            return string.Empty;
+        }
+
+        var text = new StringBuilder();
+        foreach (var file in Directory.EnumerateFiles(folder, $"*{jobId}*"))
+        {
+            try
+            {
+                text.AppendLine(File.ReadAllText(file));
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                // The unit ended while it was read.
+            }
+        }
+
+        return text.ToString();
+    }
+
+    // ---------- the commit search never fails open, and reads what git commits (the second judgement) ----------
+
+    [Fact]
+    public async Task M3_AKeyThatIsRemovedBeforeTheCommit_DoesNotMakeTheSearchSilent_TheFileIsStillFound()
+    {
+        await using var rig = await CoderRig.CreateAsync();
+        var id = KeyRig.AddKey(rig.World.DataDir, "a");
+        rig.Says("sonnet", new CoderRig.Launch(new Dictionary<string, string> { ["src/leak.txt"] = "{{claude-key}}\n" }, CoderRig.Report()));
+        var job = rig.NewJob();
+
+        var (_, ended) = await rig.RunAsync(job, boundary: point =>
+        {
+            if (point == "before-commit")
+            {
+                new KeyAdmin(new KeyStoreAccess(rig.World.DataDir, TimeProvider.System, _ => { })).Remove(id).Ok.Should().BeTrue();
+            }
+        });
+
+        ended.Stop.Should().Be("key-in-output", "the session kept its key in memory: a removed key is no reason to commit unsearched");
+        (await rig.GitAsync(rig.Repo, "rev-parse", $"refs/heads/coder/{job.JobId}")).Should().Be(rig.Base, "nothing was committed");
+    }
+
+    [Fact]
+    public async Task M4_AKeyInAFileWhoseWorkingTreeEncodingIsNotWhatGitCommits_IsFoundInTheStagedBlob()
+    {
+        await using var rig = await CoderRig.CreateAsync(extra: new Dictionary<string, string> { [".gitattributes"] = "src/leak.txt working-tree-encoding=UTF-16LE\n" });
+        var id = KeyRig.AddKey(rig.World.DataDir, "a");
+        rig.Says("sonnet", new CoderRig.Launch(new Dictionary<string, string> { ["src/leak.txt#utf16le"] = "{{claude-key}}\n" }, CoderRig.Report()));
+        var job = rig.NewJob();
+
+        var (_, ended) = await rig.RunAsync(job);
+
+        var onDisk = Path.Combine(rig.WorktreeOf(job), "src", "leak.txt");
+        File.Exists(onDisk).Should().BeTrue();
+        KeyScanner.Walk(onDisk, [new ClaudeKeySecret(id, KeyWorld.Token("a"))], string.Empty).Hits.Should().BeEmpty("the companion: the bytes on disk are UTF-16, so a search of the working tree is blind to the key");
+        ended.Stop.Should().Be("key-in-output", "git commits the blob it converts to UTF-8, and that holds the exact text");
+        (await rig.GitAsync(rig.Repo, "rev-parse", $"refs/heads/coder/{job.JobId}")).Should().Be(rig.Base);
+    }
+
+    [Fact]
+    public async Task S_TheWorkingTreeIsSearchedBeforeGitAdd_SoTheBlobOfALeakIsNeverWritten()
+    {
+        await using var rig = await CoderRig.CreateAsync();
+        KeyRig.AddKey(rig.World.DataDir, "a");
+        rig.Says("sonnet", new CoderRig.Launch(new Dictionary<string, string> { ["src/leak.txt"] = "{{claude-key}}\n" }, CoderRig.Report()));
+        var job = rig.NewJob();
+
+        var (_, ended) = await rig.RunAsync(job);
+
+        ended.Stop.Should().Be("key-in-output");
+        (await rig.GitAsync(rig.WorktreeOf(job), "ls-files", "--stage")).Should().NotContain("src/leak.txt", "the file was never staged, so git never wrote a blob that holds the key");
+    }
+
+    // ---------- the CLI's own folders ----------
+
+    [Fact]
+    public async Task S_AKeyInTheCodersHome_AfterTheLaunch_IsFound_ThoughNothingWasPrintedAndNoWorktreeFileHoldsIt()
+    {
+        await using var rig = await CoderRig.CreateAsync();
+        var id = KeyRig.AddKey(rig.World.DataDir, "a");
+        rig.Says("sonnet", new CoderRig.Launch(CoderRig.Edits("src/thing.cs"), CoderRig.Report(), HomeFiles: new Dictionary<string, string> { [".claude/transcript.jsonl"] = "{\"token\":\"{{claude-key}}\"}\n" }));
+        var job = rig.NewJob();
+
+        var (_, ended) = await rig.RunAsync(job);
+
+        ended.Stop.Should().Be("key-in-output", "the transcript a CLI keeps in its home is searched after the launch");
+        KeyRig.Row(rig.World.DataDir, id).DeadReason.Should().Be(KeyDeadReasons.Exposed);
+    }
+
+    [Fact]
+    public async Task S_TheTextOfAnotherPoolKey_InTheOutput_IsScrubbed_ThatKeyIsExposed_AndTheJobStops()
+    {
+        await using var rig = await CoderRig.CreateAsync();
+        var ids = KeyRig.AddKeys(rig.World.DataDir, "a", "b");
+        rig.Says("sonnet", new CoderRig.Launch(CoderRig.Edits("src/thing.cs"), CoderRig.Report(notes: "I found this key: " + KeyWorld.Token("b"))));
+        var job = rig.NewJob();
+
+        var (_, ended) = await rig.RunAsync(job);
+
+        Keys(rig, job).Single().Should().Be(ids[0], "the first key ran the job; the other one is the one that was printed");
+        ended.Stop.Should().Be("key-in-output");
+        KeyRig.Row(rig.World.DataDir, ids[1]).DeadReason.Should().Be(KeyDeadReasons.Exposed);
+        AllStoredText(rig, job).Should().NotContain(KeyWorld.Sentinel);
+    }
+
+    [Fact]
+    public async Task S_AKeysFileOfThePerson_IsHiddenInTheCodersUnit_WhereverItLies()
+    {
+        await using var rig = await CoderRig.CreateAsync();
+        KeyRig.AddKeys(rig.World.DataDir, "a");
+        using var elsewhere = TempDir.For("coai-keysfile-");
+        var file = Path.Combine(elsewhere.Path, "keys.env");
+        File.WriteAllText(file, "x\n");
+        rig.Rig.Setting("COAI_CLAUDE_KEYS_FILE", file);
+        var seen = new List<IReadOnlyList<string>>();
+        rig.Degrade = Keep(seen);
+        rig.Says("sonnet", CoderRig.Edits("src/thing.cs"), CoderRig.Report());
+        var job = rig.NewJob();
+
+        var (_, ended) = await rig.RunAsync(job);
+
+        ended.State.Should().Be(RoleJobStates.Succeeded, ended.Reason);
+        seen.Where(arguments => arguments.Any(argument => argument.Contains($"coai-coder-{job.JobId}-c1", StringComparison.Ordinal))).Should().ContainSingle()
+            .Which.Should().Contain($"InaccessiblePaths=-{file}", "a keys file the person chose is hidden from the coder's unit as the key folder is");
     }
 
     private static string AllStoredText(CoderRig rig, RoleJobRecord job)

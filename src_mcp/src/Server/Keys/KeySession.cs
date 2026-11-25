@@ -60,8 +60,8 @@ internal sealed class KeySession : IDisposable
     /// <summary>How long a call waits for the lock.</summary>
     internal static readonly TimeSpan Wait = TimeSpan.FromSeconds(2);
 
-    /// <summary>How long a WRITING verb waits (an add, an import, a sync, a change): a crowd of processes that add at once each get their turn (the judgement of s7 part 1, finding 5, a flaky test).</summary>
-    internal static readonly TimeSpan AdminWait = TimeSpan.FromSeconds(10);
+    /// <summary>How long a WRITING verb waits (an add, an import, a sync, a change) — it blocks for the lock, a minute at most: a crowd of processes that add at once each get their turn, also on a machine under heavy load (the judgement of s7 part 1, finding 5, a flaky test).</summary>
+    internal static readonly TimeSpan AdminWait = TimeSpan.FromSeconds(60);
 
     private static readonly TimeSpan Retry = TimeSpan.FromMilliseconds(15);
 

@@ -203,7 +203,16 @@ internal sealed class CoderFixLoop(IRoleRun run, GitHistory git, CoderOsLayer la
         }
 
         var keys = RoleKeyRoad.For(run);
-        var made = await CoderCommits.CommitAsync(git, tree, message, ct, keys.SecretOf(session.KeyId));
+
+        // A turn that ran on a pool key is committed only after its files were searched for that key. The search NEVER fails open: the secret is the one the session kept in memory, else the pool's — and when neither can be had, there is no commit.
+        var keyed = Server.Keys.KeyIds.IsValid(session.KeyId);
+        var secret = session.Secret ?? (keyed ? keys.SecretOf(session.KeyId) : null);
+        if (keyed && secret is null)
+        {
+            return new Committed(string.Empty, new CoderLoopEnd.Halted(new RoleWorkOutcome.Failed("coder-commit", "the claude key of this session cannot be read, so the files the coder wrote could not be searched for it; nothing was committed")));
+        }
+
+        var made = await CoderCommits.CommitAsync(git, tree, message, ct, secret);
         if (made.Failure is { } failure)
         {
             if (failure.Stop == RoleStopWords.KeyInOutput)
@@ -241,4 +250,4 @@ internal sealed class CoderFixLoop(IRoleRun run, GitHistory git, CoderOsLayer la
 }
 
 /// <summary>The session of a model's turn 0, which every fix turn of that model resumes: the model that answered, the handle it reported, and the confinement that binds the handle to this job and worktree — and the key (<see cref="RoleKey.KeyId"/>) the session runs on: every fix turn resumes with the SAME key.</summary>
-internal sealed record CoderFixSession(ModelRef Model, string Handle, LaunchConfinement.Coder Confinement, string KeyId = "");
+internal sealed record CoderFixSession(ModelRef Model, string Handle, LaunchConfinement.Coder Confinement, string KeyId = "", Server.Keys.ClaudeKeySecret? Secret = null);

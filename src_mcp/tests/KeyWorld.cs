@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using CoaiMcp.Core.Notices;
 using CoaiMcp.Server.Keys;
+using Xunit;
 
 namespace CoaiMcp.Tests;
 
@@ -78,4 +79,12 @@ internal sealed class KeyClock(DateTimeOffset start) : TimeProvider
     internal DateTimeOffset Now => _now;
 
     internal void Advance(TimeSpan by) => _now += by;
+}
+
+/// <summary>
+/// The one xunit collection of the tests that read or change THIS process's own environment through <c>KeyStartup.Sync</c> (<c>COAI_CLAUDE_KEY_*</c>): a test that sets such a variable would otherwise make a parallel test see a source it did not configure. A serial collection: it runs alone, after the parallel classes, so no other class reads its variables.
+/// </summary>
+[CollectionDefinition("key-process-environment", DisableParallelization = true)]
+public sealed class KeyProcessEnvironment
+{
 }

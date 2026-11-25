@@ -90,7 +90,7 @@ internal sealed class CoderWork : IRoleWork
             Ladder = Ladder,
             Coder = confinement,
             OsLayer = layer,
-            Follow = (answered, token) => FollowAsync(run, git, prepared, site, loop, judge.Accepted, new CoderFixSession(answered.Model, answered.Handle, confinement, answered.KeyId), ++answers, layer, cap, note, token),
+            Follow = (answered, token) => FollowAsync(run, git, prepared, site, loop, judge.Accepted, new CoderFixSession(answered.Model, answered.Handle, confinement, answered.KeyId, answered.Secret), ++answers, layer, cap, note, token),
             Restore = token => CoderRestore.RestoreAsync(git, prepared.Tree, loop.LastCommit, token),
         };
 
@@ -108,10 +108,14 @@ internal sealed class CoderWork : IRoleWork
         var launcher = new ProcessLauncher(run.Children);
 
         // The key pool's folder is hidden from a launch that carries a key (InaccessiblePaths), and the preflight proves a read of it fails from inside.
-        var job = BoundaryJob.ForCoder(run.Request.JobId, prepared.Tree, folder) with { KeysFolder = Path.Combine(run.DataDir, "keys") };
+        var job = BoundaryJob.ForCoder(run.Request.JobId, prepared.Tree, folder) with { KeysFolder = Path.Combine(run.DataDir, "keys"), KeysFile = KeysFileOf(run) };
 
         return new CoderOsLayer(job, (Turns ?? CoderOsLayer.ShippedTurns)(launcher), launcher);
     }
+
+    /// <summary>The keys file the person named, as a full path (empty when none): hidden from a keyed coder's unit.</summary>
+    private static string KeysFileOf(IRoleRun run) =>
+        Server.Keys.KeySourceSync.KeysFilePath(run.Settings) is { Length: > 0 } named ? Path.GetFullPath(named) : string.Empty;
 
     /// <summary>The base commit, the worktree made at it and the tree opened for coai's own git — or the failure that ends the job.</summary>
     private async Task<(Prepared? Prepared, RoleWorkOutcome.Failed? Failure)> MakeWorktreeAsync(IRoleRun run, GitHistory git, CancellationToken ct)

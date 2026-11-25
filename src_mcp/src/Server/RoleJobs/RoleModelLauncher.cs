@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using CoaiMcp.Core.Notices;
 using CoaiMcp.Core.Roles;
 using CoaiMcp.Runners.Consultation;
@@ -17,7 +18,11 @@ namespace CoaiMcp.Server.RoleJobs;
 /// <param name="KeyId">The id of the claude key the launch ran on (<see cref="RoleKey.KeyId"/>): a pool key's id, <c>person-sign-in</c>, or empty. What the attempt, the ledger line and the resume handle carry.</param>
 /// <param name="KeyStop">Set when no launch was made because the key of a RESUMED session is gone (<see cref="RoleKey.Gone"/>): the stop the loop reads in place of a launch. Null otherwise.</param>
 /// <param name="KeyExposed">True when the exact text of the launch's pool key was found in what it printed (and was replaced there by the key's mark): the key is dead and the job ends <c>key-in-output</c>.</param>
-internal sealed record RoleLaunched(ReviewerLaunch? Launch, ConsultFailure? Refused, IConsultantRuntime Runtime, ReviewerInvocation? Invocation, string Handle, CoderOsStop? OsStop = null, string KeyId = "", RoleStop? KeyStop = null, bool KeyExposed = false);
+internal sealed record RoleLaunched(ReviewerLaunch? Launch, ConsultFailure? Refused, IConsultantRuntime Runtime, ReviewerInvocation? Invocation, string Handle, CoderOsStop? OsStop = null, string KeyId = "", RoleStop? KeyStop = null, bool KeyExposed = false)
+{
+    /// <summary>The ids of OTHER pool keys whose exact text was found in what the launch printed (the pattern of a setup-token, whoever's it is): each is exposed too, and the job ends <c>key-in-output</c>.</summary>
+    public IReadOnlyList<string> ExposedIds { get; init; } = [];
+}
 
 /// <summary>
 /// Launches ONE model of a role route through its vendor's own CLI (spec A, "Brief": through the consultant adapters, <c>IConsultantRuntime.Build</c> and <c>ReadHandle</c>) — read-only, in the repository, the prompt on
@@ -29,7 +34,7 @@ internal sealed record RoleLaunched(ReviewerLaunch? Launch, ConsultFailure? Refu
 /// <para><b>Where each CLI is.</b> <c>COAI_ROLE_CLAUDE_CLI</c>, <c>COAI_ROLE_CODEX_CLI</c> and <c>COAI_ROLE_AGY_CLI</c> in the layered settings name an executable path; unset, the CLI is found on the PATH by its own name.
 /// The three names carry the <c>COAI_ROLE_</c> prefix, so a start hands them to its runner through <c>env.json</c>.</para>
 /// </remarks>
-internal sealed class RoleModelLauncher(Func<string, string?> settings, IProcessTracker tracker)
+internal sealed partial class RoleModelLauncher(Func<string, string?> settings, IProcessTracker tracker)
 {
     /// <summary>
     /// Set for a coder (epoch 3 E2 s3 t3): the launch is the WRITE launch of this job in its worktree, not a read-only consult. A handle passed to <see cref="LaunchAsync"/> is then bound to this job and worktree
@@ -96,9 +101,10 @@ internal sealed class RoleModelLauncher(Func<string, string?> settings, IProcess
         if (Coder is null)
         {
             var finished = await new ReviewerExecutor(launcher).LaunchOnceAsync(invocation, ct);
-            var (shown, exposed) = pooled is null ? (finished, false) : Scrub(finished, pooled.Secret);
+            var scrubbed = pooled is null ? new Scrubbed(finished, false, []) : Scrub(finished, pooled.Secret);
+            var inHome = pooled is not null && HoldsTheKey(pooled.Secret, launch.OwnHome);
 
-            return new RoleLaunched(shown, null, runtime, WithoutCredential(invocation), shown.Process is { } process ? runtime.ReadHandle(process) : string.Empty, KeyId: keyId, KeyExposed: exposed);
+            return new RoleLaunched(scrubbed.Launch, null, runtime, WithoutCredential(invocation), scrubbed.Launch.Process is { } process ? runtime.ReadHandle(process) : string.Empty, KeyId: keyId, KeyExposed: scrubbed.OwnFound || inHome) { ExposedIds = scrubbed.OtherIds };
         }
 
         return await LaunchCoderAsync(runtime, invocation, pooled?.Secret, keyId, ct);
@@ -128,26 +134,53 @@ internal sealed class RoleModelLauncher(Func<string, string?> settings, IProcess
         var turn = new CoderTurnLauncher(Layer!);
         var finished = await new ReviewerExecutor(turn).LaunchOnceAsync(invocation, ct);
         var stop = turn.Outcome is { } outcome ? CoderOsLayer.StopOf(outcome) : null;
-        var (shown, exposed) = secret is null ? (finished, false) : Scrub(finished, secret);
-        var handle = shown.Process is { } process ? runtime.ReadHandle(process) : string.Empty;
+        var scrubbed = secret is null ? new Scrubbed(finished, false, []) : Scrub(finished, secret);
+        var handle = scrubbed.Launch.Process is { } process ? runtime.ReadHandle(process) : string.Empty;
+        var job = Layer!.Job;
+        var inHome = secret is not null && HoldsTheKey(secret, job.CoderHomeFolder, job.CoderTempFolder, job.CoderVarTempFolder);
 
-        return new RoleLaunched(stop is { Started: false } ? null : shown, null, runtime, WithoutCredential(invocation), handle, stop, KeyId: keyId, KeyExposed: exposed);
+        return new RoleLaunched(stop is { Started: false } ? null : scrubbed.Launch, null, runtime, WithoutCredential(invocation), handle, stop, KeyId: keyId, KeyExposed: scrubbed.OwnFound || inHome) { ExposedIds = scrubbed.OtherIds };
     }
+
+    /// <summary>
+    /// Whether the exact text of <paramref name="secret"/> is in any file of the folders a keyed launch had to itself — the CLI's own home (its transcripts and configuration) and its temp folders — searched AFTER the launch ended: a CLI that wrote its credential
+    /// somewhere it keeps files is exposed even though it printed nothing (second judgement). A folder that is not there holds nothing.
+    /// </summary>
+    private static bool HoldsTheKey(ClaudeKeySecret secret, params string[] folders) =>
+        folders.Any(folder => folder.Length > 0 && Directory.Exists(folder) && KeyScanner.Walk(folder, [secret], string.Empty).Hits.Count > 0);
+
+    /// <summary>What a scrub made of a launch: the launch, whether the launch's OWN key was found in it, and the ids of any OTHER pool key whose text was.</summary>
+    private sealed record Scrubbed(ReviewerLaunch Launch, bool OwnFound, IReadOnlyList<string> OtherIds);
+
+    /// <summary>The shape of every setup-token (<c>sk-ant-oat…</c>, the CLI's own test): the text of ANY pool key, not only this launch's, is removed from what a launch printed.</summary>
+    [GeneratedRegex("sk-ant-oat[A-Za-z0-9_-]{8,}", RegexOptions.CultureInvariant)]
+    private static partial Regex SetupTokenShape();
 
     /// <summary>
     /// What the launch printed, with the exact text of its own key replaced by the key's mark (<see cref="ClaudeKeySecret.Marker"/>) — in the answer, the evidence, both streams and the words of the outcome — before anything is stored or read. The second
     /// value says whether the text was found at all: a CLI that printed its credential is exposed, whatever the scrub then made of it.
     /// </summary>
-    private static (ReviewerLaunch Launch, bool Found) Scrub(ReviewerLaunch launch, ClaudeKeySecret secret)
+    private static Scrubbed Scrub(ReviewerLaunch launch, ClaudeKeySecret secret)
     {
-        var found = false;
+        var own = false;
+        var others = new List<string>();
 
         string Clean(string text)
         {
             var cleaned = secret.Scrub(text);
-            found |= !ReferenceEquals(cleaned, text) && !string.Equals(cleaned, text, StringComparison.Ordinal);
+            own |= !string.Equals(cleaned, text, StringComparison.Ordinal);
 
-            return cleaned;
+            // Any other setup-token shape: its text is gone from the output too, and the pool key it belongs to (if it is one) is exposed.
+            return SetupTokenShape().Replace(cleaned, match =>
+            {
+                var id = KeyIds.Of(match.Value);
+                if (!others.Contains(id, StringComparer.Ordinal))
+                {
+                    others.Add(id);
+                }
+
+                return "[claude key text removed]";
+            });
         }
 
         var process = launch.Process is { } raw ? raw with { StdOut = Clean(raw.StdOut), StdErr = Clean(raw.StdErr) } : null;
@@ -170,7 +203,7 @@ internal sealed class RoleModelLauncher(Func<string, string?> settings, IProcess
             Terminal = terminal,
         };
 
-        return (cleaned, found);
+        return new Scrubbed(cleaned, own, [.. others.Where(id => !string.Equals(id, secret.Id, StringComparison.Ordinal))]);
     }
 
     /// <summary>The consultant runtime of a vendor and the runtime name its install cure is read by.</summary>

@@ -239,7 +239,17 @@ public sealed class ClaudeConsultant(IReviewerRuntime inner, string vendor = "cl
     public const string KeyVariable = "CLAUDE_CODE_OAUTH_TOKEN";
 
     /// <summary>The variables of another credential that a launch with a pool key must not inherit: the CLI would pick one of them over the key, or bill another account.</summary>
-    private static readonly string[] ForeignCredentials = ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"];
+    private static readonly string[] ForeignCredentials =
+    [
+        // Another credential the CLI would pick over the key:
+        "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_FOUNDRY_API_KEY", "ANTHROPIC_FOUNDRY_AUTH_TOKEN", "ANTHROPIC_AWS_API_KEY", "ANTHROPIC_IDENTITY_TOKEN", "ANTHROPIC_IDENTITY_TOKEN_FILE", "AWS_BEARER_TOKEN_BEDROCK",
+        "CLAUDE_CODE_OAUTH_REFRESH_TOKEN", "CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR", "CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR",
+        // Another host, another cloud or another route for the same call — the CLI would send its token where these point:
+        "ANTHROPIC_BASE_URL", "ANTHROPIC_BEDROCK_BASE_URL", "ANTHROPIC_BEDROCK_MANTLE_BASE_URL", "ANTHROPIC_VERTEX_BASE_URL", "ANTHROPIC_VERTEX_PROJECT_ID", "ANTHROPIC_GOOGLE_CLOUD_BASE_URL", "ANTHROPIC_FOUNDRY_BASE_URL",
+        "ANTHROPIC_FOUNDRY_RESOURCE", "ANTHROPIC_AWS_BASE_URL", "ANTHROPIC_UNIX_SOCKET", "ANTHROPIC_CUSTOM_HEADERS", "CLAUDE_CODE_CUSTOM_OAUTH_URL",
+        // The switches that make the CLI use one of them (the names are the strings of the installed CLI, 2.1.332, read with grep — no CLI was run):
+        "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY", "CLAUDE_CODE_SKIP_BEDROCK_AUTH", "CLAUDE_CODE_SKIP_VERTEX_AUTH", "CLAUDE_CODE_SKIP_FOUNDRY_AUTH",
+    ];
 
     /// <summary>
     /// The environment of a launch: the row's <c>ANTHROPIC_API_KEY</c>, or — for a role launch on a pool key — the key as <see cref="KeyVariable"/>, the one place this adapter sets a credential. A launch has ONE credential, and

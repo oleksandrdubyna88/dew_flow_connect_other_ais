@@ -13,6 +13,7 @@ namespace CoaiMcp.Tests;
 /// store-level half of K13 of KEY_POOL_SPEC.md section 10; the launch half of K13, K14 and K16 need the wiring of t5). The structural scans each have a companion that proves the scan matches something.
 /// </summary>
 [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+[Collection("key-process-environment")]
 public sealed partial class AKeyNoLeakTests
 {
     // ---------- the canary through the real one-shot ----------

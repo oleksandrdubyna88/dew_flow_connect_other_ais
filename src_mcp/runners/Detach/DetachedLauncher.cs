@@ -41,6 +41,8 @@ public sealed class DetachedLauncher(IProcessLauncher processes, Func<DetachSpec
         .. UnitPrefix(spec.UnitName, spec.WorkingDirectory),
         .. MemoryProperties(spec.MemoryMegabytes).SelectMany(property => new[] { "-p", property }),
         "-p", "OOMPolicy=continue",
+        // A runner holds the environment of a keyed job: it never dumps core (the second judgement).
+        "-p", "LimitCORE=0",
         "--", spec.Executable, .. spec.Arguments,
     ];
 

@@ -52,3 +52,14 @@ Each attempt has its own folder; a unit cannot read the environment of a host pr
 - Core dumps: two properties now are cheap (should list).
 - Windows: before any release, not before E2. Until the CI leg exists, only the untested `K/KeyStartup.cs:40` keeps the env keys from the runner there.
 - New, before the first real key: one run with the real CLI and a throwaway key, then `--keys scan` over the job folder and both homes (FakeCli cannot show whether the CLI writes the token to its config folder). Needs the owner.
+
+## Status after the fixes (added by the s7 part 3 session, 2026-11-25)
+
+Must-change 1 to 5 and the should-change items below are fixed, each with a test that was red on f5957353 (the commit of this file) or, for the mutations, seen red and restored — see `research/module_server.md`, "The second security judgement". Not done and left here as follow-ups:
+
+- Keys file: owner check and a read-only FIFO (as in part 1); `--install --shared`.
+- Windows: no key test runs there; the only guard of the env keys on that runner is the real `KeyStartup` unset (now covered by a test on Linux).
+- The one run with the real CLI and a throwaway key, then `--keys scan` over the job folder and both homes — needs the owner (t3).
+- A refused key is still never marked dead by a launch: `KeyLaunchEnd.AuthRefused` has no producer until t3 records the real envelope.
+- The scrub is exact text and the `sk-ant-oat` shape only: a partial, base64 or line-split copy of a key still passes.
+- The per-blob fallback of the commit search (a staged diff too large for one read) is covered by a parser test of `git diff --raw`, not by a run on a repository with a file past the output ceiling.

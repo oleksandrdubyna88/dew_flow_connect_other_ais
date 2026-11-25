@@ -106,6 +106,11 @@ internal sealed class KeyAdmin(KeyStoreAccess access)
         }
 
         var id = KeyIds.Of(input.TokenText);
+        if (session.Pool().ExposedIds.Contains(id, StringComparer.Ordinal))
+        {
+            return new AddOutcome.Refused(ExposedIsFinal, KeyExit.Data);
+        }
+
         if (entries.FirstOrDefault(entry => entry.Record.Id == id) is { } same)
         {
             return new AddOutcome.AlreadyThere(same.Record.Label);
@@ -167,10 +172,15 @@ internal sealed class KeyAdmin(KeyStoreAccess access)
         Change(id, expectedRevision, (_, entry) =>
             KeyResult<KeyRecord>.Of(entry.Record.State == KeyStates.Dead ? entry.Record : entry.Record with { State = KeyStates.Disabled, SyncDisabled = false }));
 
-    /// <summary>Makes the key usable: also ends <c>dead</c> and a cooldown.</summary>
+    /// <summary>Makes the key usable: also ends <c>dead</c> and a cooldown — but never an EXPOSED key: its text was seen where it must never be, so only a new key can replace it.</summary>
     public KeyResult<KeyRow> Enable(string id, int? expectedRevision = null) =>
         Change(id, expectedRevision, (_, entry) =>
-            KeyResult<KeyRecord>.Of(entry.Record with { State = KeyStates.Enabled, DeadReason = string.Empty, SyncDisabled = false, CooldownUntilUtc = null, ConsecutiveCooldowns = 0 }));
+            entry.Record.DeadReason == KeyDeadReasons.Exposed
+                ? KeyResult<KeyRecord>.Refused(ExposedIsFinal)
+                : KeyResult<KeyRecord>.Of(entry.Record with { State = KeyStates.Enabled, DeadReason = string.Empty, SyncDisabled = false, CooldownUntilUtc = null, ConsecutiveCooldowns = 0 }));
+
+    /// <summary>What a person is told when an exposed key is enabled or added again: the text is burnt.</summary>
+    internal const string ExposedIsFinal = "this key's text was found where it must never be (its job's output or the coder's files): it is dead for good — revoke it at the vendor, remove it, and add a NEW key";
 
     private KeyResult<KeyRow> Change(string id, int? expectedRevision, Func<IReadOnlyList<KeyEntry>, KeyEntry, KeyResult<KeyRecord>> change)
     {

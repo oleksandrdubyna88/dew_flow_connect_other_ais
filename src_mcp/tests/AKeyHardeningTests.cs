@@ -13,6 +13,7 @@ namespace CoaiMcp.Tests;
 /// findings that have a test. Every token is made up at run time and carries the sentinel word, so a test that asserts the sentinel absent proves that no part of any key reached the place.
 /// </summary>
 [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+[Collection("key-process-environment")]
 public sealed partial class AKeyHardeningTests
 {
     private const UnixFileMode Private = UnixFileMode.UserRead | UnixFileMode.UserWrite;

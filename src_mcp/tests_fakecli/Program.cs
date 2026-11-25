@@ -202,6 +202,14 @@ if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor" || minimal is
         return 65;
     }
 
+    // A CLI that leaves something in its own HOME (model map `homeFiles`, relative paths below $HOME): the transcript a real CLI keeps there. The key pool searches that folder after a keyed launch (epoch 3 E2 s7).
+    if (steering.Get("HOME_FILES") is { Length: > 0 } homeFiles && Environment.GetEnvironmentVariable("HOME") is { Length: > 0 } fakeHome && CoaiMcp.FakeCli.CwdWrites.Apply(CoaiMcp.FakeCli.PoolKey.Fill(homeFiles), fakeHome) is { Length: > 0 } notWrittenHome)
+    {
+        Console.Error.WriteLine($"fake-cli: {notWrittenHome}");
+
+        return 65;
+    }
+
     // A coder that tries to write where it must not (model map `tryWriteFiles`): absolute paths, each attempted; a refusal is a line on stderr and the answer still follows.
     if (steering.Get("TRY_WRITE_FILES") is { Length: > 0 } tryWriteFiles)
     {

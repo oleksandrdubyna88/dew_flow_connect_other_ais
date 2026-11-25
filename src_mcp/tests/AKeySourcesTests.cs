@@ -11,6 +11,7 @@ namespace CoaiMcp.Tests;
 /// creds import; each synced into the pool (new → added, changed → replaced, missing → disabled; only the keys of that source). And <c>--keys scan</c> (d6).
 /// </summary>
 [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+[Collection("key-process-environment")]
 public sealed class AKeySourcesTests
 {
     private static string Creds(params (string Label, string Account, string Tag)[] keys) =>

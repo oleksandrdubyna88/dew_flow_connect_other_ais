@@ -74,7 +74,7 @@ internal static class RoleAnswers
 }
 
 /// <summary>The session an attempt's answer came from: the model, the handle its first turn reported (empty when the vendor named none) and the key the session runs on (<see cref="RoleKey.KeyId"/>; empty for a launch with no key) — every later turn of the session uses the SAME key.</summary>
-internal sealed record RoleSession(ModelRef Model, string Handle, string KeyId = "");
+internal sealed record RoleSession(ModelRef Model, string Handle, string KeyId = "", Server.Keys.ClaudeKeySecret? Secret = null);
 
 /// <summary>What a role made of an attempt AFTER the model's first valid answer (<see cref="RoleFailover.Follow"/>): the job's end, or a stop of the same model that goes on to the next one.</summary>
 internal abstract record RoleFollowed
@@ -356,7 +356,7 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
         }
 
         RepairTurnsUsed = 0;
-        var attempt = new AttemptRun(n, Path.Combine(run.Folder, "attempts", n.ToString(System.Globalization.CultureInfo.InvariantCulture)), run.Clock.GetUtcNow().UtcDateTime, await SnapshotAsync(ct)) { KeyId = key.KeyId };
+        var attempt = new AttemptRun(n, Path.Combine(run.Folder, "attempts", n.ToString(System.Globalization.CultureInfo.InvariantCulture)), run.Clock.GetUtcNow().UtcDateTime, await SnapshotAsync(ct)) { KeyId = key.KeyId, Secret = (key as RoleKey.Pool)?.Secret };
         var sent = prompt;
         for (var turn = 0; ; turn++)
         {
@@ -433,7 +433,7 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
     /// </summary>
     private async Task<Ended> FollowedAsync(ModelRef model, AttemptRun attempt, CancellationToken ct)
     {
-        var session = new RoleSession(model, attempt.FirstHandle, attempt.KeyId);
+        var session = new RoleSession(model, attempt.FirstHandle, attempt.KeyId, attempt.Secret);
         Session = session;
         RoleFollowed followed;
         try
@@ -473,7 +473,7 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
 
         if (stop is null)
         {
-            Session = new RoleSession(model, attempt.FirstHandle, attempt.KeyId);
+            Session = new RoleSession(model, attempt.FirstHandle, attempt.KeyId, attempt.Secret);
         }
 
         return stop is null ? new Ended.Answer(result) : new Ended.Stop(stop);
@@ -536,7 +536,7 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
     internal static RoleStop? StopOfLaunch(ModelRef model, RoleLaunched launched)
     {
         // The text of the launch's own key was in what it printed: the key is dead and the job ends — another model would be handed a tree and a transcript that may hold it.
-        if (launched.KeyExposed)
+        if (launched.KeyExposed || launched.ExposedIds.Count > 0)
         {
             return new RoleStop(RoleStopWords.KeyInOutput, "the exact text of the launch's claude key was found in what the launch printed, so the key is dead (exposed) and the job stops; revoke the key at the vendor", "key-in-output", false, false);
         }
@@ -692,6 +692,9 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
 
         /// <summary>The key this attempt's session runs on (<see cref="RoleKey.KeyId"/>): picked once for turn 0, kept for every later turn of the session.</summary>
         public string KeyId { get; init; } = string.Empty;
+
+        /// <summary>The secret of the key, kept in memory for the life of the attempt so the coder's commit search never depends on a pool that may be busy, or on a key that was removed while its session ran (second judgement).</summary>
+        public Server.Keys.ClaudeKeySecret? Secret { get; init; }
 
         /// <summary>The handle turn 0 reported: what a coder's fix turns resume, whatever a later turn answered with.</summary>
         public string FirstHandle { get; set; } = string.Empty;

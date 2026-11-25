@@ -20,9 +20,17 @@ internal static class CoderCommits
     public static string AttemptMessage(string jobId, string taskId, int attempt) => $"coder {jobId}: {taskId} attempt {attempt}";
 
     /// <summary>Stages everything the coder wrote and makes ONE commit of it; no change means no commit and the head stays where it was.</summary>
-    /// <param name="secret">The key the turn ran on, when it ran on a pool key: the staged files are searched for its exact text BEFORE the commit, and a hit means no commit — the job fails <c>key-in-output</c> (epoch 3 E2 s7).</param>
+    /// <param name="secret">
+    /// The key the turn ran on, when it ran on a pool key (epoch 3 E2 s7): the files are searched for its exact text BEFORE <c>git add</c> (so a leak's blob is never written) and the STAGED BLOBS — what git will commit, after any
+    /// <c>.gitattributes</c> conversion — and the file names are searched again before the commit. A hit means no commit and the job fails <c>key-in-output</c>. A search that cannot be made (git said no, the output was cut) is a failure too, never a pass.
+    /// </param>
     public static async Task<(string Head, RoleWorkOutcome.Failed? Failure)> CommitAsync(GitHistory git, CoderTree tree, string message, CancellationToken ct, ClaudeKeySecret? secret = null)
     {
+        if (secret is not null && await SearchWorkingTreeAsync(git, tree, secret, ct) is { } before)
+        {
+            return (string.Empty, before);
+        }
+
         var staged = await git.InCoderTreeAsync(tree, ["add", "-A"], ct);
         if (!staged.Ran || !staged.Ok)
         {
@@ -35,9 +43,9 @@ internal static class CoderCommits
             return (string.Empty, Failed("git diff --cached in the worktree", pending));
         }
 
-        if (secret is not null && pending.Out.Length > 0 && HoldsTheKey(tree.Root, pending.Out, secret))
+        if (secret is not null && pending.Out.Length > 0 && await SearchStagedAsync(git, tree, pending.Out, secret, ct) is { } after)
         {
-            return (string.Empty, new RoleWorkOutcome.Failed(RoleStopWords.KeyInOutput, "the exact text of the turn's claude key is in a file the coder wrote, so nothing was committed, the key is dead (exposed) and the job stops; revoke the key at the vendor"));
+            return (string.Empty, after);
         }
 
         if (pending.Out.Length > 0)
@@ -51,6 +59,79 @@ internal static class CoderCommits
 
         return await HeadAsync(git, tree, ct);
     }
+
+    private static RoleWorkOutcome.Failed Exposed() =>
+        new(RoleStopWords.KeyInOutput, "the exact text of the turn's claude key is in what the coder wrote, so nothing was committed, the key is dead (exposed) and the job stops; revoke the key at the vendor");
+
+    private static RoleWorkOutcome.Failed Unsearchable(string why) =>
+        new("coder-commit", $"the files the coder wrote could not be searched for the turn's claude key ({why}), so nothing was committed");
+
+    /// <summary>
+    /// The files git would add (modified and new, not ignored — git's own list) searched as they are on disk, BEFORE anything is staged. A link is not followed: what git commits is the link, not what it points at. Null when nothing was found.
+    /// </summary>
+    private static async Task<RoleWorkOutcome.Failed?> SearchWorkingTreeAsync(GitHistory git, CoderTree tree, ClaudeKeySecret secret, CancellationToken ct)
+    {
+        var listed = await git.InCoderTreeAsync(tree, ["ls-files", "-z", "--others", "--modified", "--exclude-standard"], ct);
+        if (!listed.Ran || !listed.Ok || listed.Truncated)
+        {
+            return Unsearchable("git could not list the changed files");
+        }
+
+        return HoldsTheKey(tree.Root, listed.Out, secret) ? Exposed() : null;
+    }
+
+    /// <summary>
+    /// What is STAGED, searched as git will commit it (the working-tree bytes can differ: <c>working-tree-encoding</c>, a clean filter): the whole staged diff as text in one command, and when its output was cut, each staged blob by its id. The names are searched too.
+    /// </summary>
+    private static async Task<RoleWorkOutcome.Failed?> SearchStagedAsync(GitHistory git, CoderTree tree, string namesZ, ClaudeKeySecret secret, CancellationToken ct)
+    {
+        if (secret.IsIn(System.Text.Encoding.UTF8.GetBytes(namesZ)))
+        {
+            return Exposed();
+        }
+
+        var diff = await git.InCoderTreeAsync(tree, ["diff", "--cached", "--text", "--no-textconv", "--no-ext-diff", "--no-renames"], ct);
+        if (!diff.Ran || !diff.Ok)
+        {
+            return Unsearchable("git could not show the staged changes");
+        }
+
+        if (!diff.Truncated)
+        {
+            return secret.IsIn(System.Text.Encoding.UTF8.GetBytes(diff.Out)) ? Exposed() : null;
+        }
+
+        // Too much to read in one piece: every staged blob on its own, by id.
+        var raw = await git.InCoderTreeAsync(tree, ["diff", "--cached", "--raw", "-z", "--no-renames", "--no-ext-diff"], ct);
+        if (!raw.Ran || !raw.Ok || raw.Truncated)
+        {
+            return Unsearchable("the staged changes are too many to list");
+        }
+
+        foreach (var id in BlobsOf(raw.Out))
+        {
+            var blob = await git.InCoderTreeAsync(tree, ["cat-file", "blob", id], ct);
+            if (!blob.Ran || !blob.Ok || blob.Truncated)
+            {
+                return Unsearchable("a staged file is too large to read");
+            }
+
+            if (secret.IsIn(System.Text.Encoding.UTF8.GetBytes(blob.Out)))
+            {
+                return Exposed();
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>The ids of the new blobs of <c>git diff --raw -z</c> (<c>:&lt;mode&gt; &lt;mode&gt; &lt;old&gt; &lt;new&gt; &lt;status&gt;</c>, NUL, the path, NUL): not a deletion, not a submodule.</summary>
+    internal static IEnumerable<string> BlobsOf(string rawZ) =>
+        rawZ.Split('\0', StringSplitOptions.RemoveEmptyEntries)
+            .Where(field => field.StartsWith(':'))
+            .Select(field => field.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+            .Where(part => part.Length >= 5 && part[1] != "160000" && part[3].Any(character => character != '0'))
+            .Select(part => part[3]);
 
     /// <summary>
     /// Whether the exact text of <paramref name="secret"/> is in any of the staged files (<paramref name="namesZ"/> is git's NUL-separated list, relative to <paramref name="root"/>). A link is not followed — what git would commit is the link, not what it points at —

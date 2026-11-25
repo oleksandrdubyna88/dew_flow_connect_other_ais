@@ -113,9 +113,15 @@ internal sealed class RoleKeyRoad(KeyPool pool, KeyStoreAccess access, Func<stri
     /// <summary>The key a RESUMED session of <paramref name="model"/> runs on: the same key while it exists and is not dead. <paramref name="keyId"/> empty (a session that started with no key) is no key.</summary>
     public RoleKey Resume(ModelRef model, string keyId)
     {
-        if (model.Vendor != "claude" || keyId.Length == 0)
+        if (model.Vendor != "claude")
         {
             return new RoleKey.None();
+        }
+
+        // A claude session with no key id cannot be resumed on one: None would be the person's own sign-in.
+        if (keyId.Length == 0)
+        {
+            return new RoleKey.Gone("the session has no claude key to resume with");
         }
 
         if (keyId == PersonSignInId)
@@ -184,14 +190,18 @@ internal sealed class RoleKeyRoad(KeyPool pool, KeyStoreAccess access, Func<stri
     /// </summary>
     public void Ended(RoleLaunched launched, RoleStop? stop)
     {
-        if (!KeyIds.IsValid(launched.KeyId) || launched.Launch is null)
-        {
-            return;
-        }
-
         try
         {
-            pool.Record(launched.KeyId, ReportOf(launched, stop, access.NowUtc));
+            // The text of ANOTHER pool key was in what the launch printed: that key is exposed too, whoever's launch it was.
+            foreach (var other in launched.ExposedIds)
+            {
+                Exposed(other);
+            }
+
+            if (KeyIds.IsValid(launched.KeyId) && launched.Launch is not null)
+            {
+                pool.Record(launched.KeyId, ReportOf(launched, stop, access.NowUtc));
+            }
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -207,12 +217,8 @@ internal sealed class RoleKeyRoad(KeyPool pool, KeyStoreAccess access, Func<stri
             return new KeyLaunchReport(KeyLaunchEnd.Exposed);
         }
 
-        var process = launched.Launch?.Process;
-        if (process is not null && RoleStops.SignInLost("claude", process))
-        {
-            return new KeyLaunchReport(KeyLaunchEnd.AuthRefused);
-        }
-
+        // "Not logged in" is NOT read as a refused key (second judgement, deviation 2): on a keyed launch that text more probably means the CLI did not get the key, so one good key would die per job; a revoked key probably answers 401, which is
+        // not read either. `KeyLaunchEnd.AuthRefused` waits for a recorded fixture of a real refused key (t3).
         if (stop is null)
         {
             return new KeyLaunchReport(KeyLaunchEnd.Succeeded);

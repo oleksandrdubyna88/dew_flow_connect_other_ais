@@ -117,7 +117,7 @@ internal sealed class KeyPool(KeyStoreAccess access)
         var ring = session.Entries();
         if (ring.Count == 0)
         {
-            return new KeyAvailability.Empty();
+            return session.Unreadable > 0 ? new KeyAvailability.Failed(Unreadable(session.Unreadable)) : new KeyAvailability.Empty();
         }
 
         if (ring.Any(entry => entry.Usable(now)))
@@ -130,13 +130,16 @@ internal sealed class KeyPool(KeyStoreAccess access)
             : new KeyAvailability.Failed("the key pool could not be read");
     }
 
+    private static string Unreadable(int count) => $"{count} key file(s) of the pool cannot be read, so the pool is not treated as empty — repair or remove them (coai-mcp --keys list)";
+
     private PickResult PickUnderLock(KeySession session)
     {
         var now = access.NowUtc;
         var ring = session.Entries();
         if (ring.Count == 0)
         {
-            return new PickResult.Empty();
+            // Files that exist and cannot be read are NOT an empty pool: an empty pool is where the device switch may let the person's own sign-in run, and this is not that.
+            return session.Unreadable > 0 ? new PickResult.Failed(Unreadable(session.Unreadable)) : new PickResult.Empty();
         }
 
         var pool = session.Pool();
@@ -223,6 +226,12 @@ internal sealed class KeyPool(KeyStoreAccess access)
 
         return access.Run(create: false, session =>
         {
+            if (report.End == KeyLaunchEnd.Exposed)
+            {
+                // Final, and kept even when the key is no longer in the pool (it was removed while its session ran): the id can never come back as a usable key.
+                RememberExposed(session, keyId);
+            }
+
             var entries = session.Entries();
             if (entries.FirstOrDefault(entry => entry.Record.Id == keyId) is not { } current)
             {
@@ -236,6 +245,15 @@ internal sealed class KeyPool(KeyStoreAccess access)
 
             return KeyResult<KeyRow>.Of(KeyStoreAccess.RowOf(current with { Record = updated }, now));
         });
+    }
+
+    private static void RememberExposed(KeySession session, string keyId)
+    {
+        var pool = session.Pool();
+        if (!pool.ExposedIds.Contains(keyId, StringComparer.Ordinal))
+        {
+            session.SavePool(pool with { ExposedIds = [.. pool.ExposedIds, keyId] });
+        }
     }
 
     private static KeyRecord Apply(KeyRecord key, KeyLaunchReport report, ClaudeKeySecret? secret, DateTime now) => report.End switch

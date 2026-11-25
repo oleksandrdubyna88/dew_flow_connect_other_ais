@@ -13,7 +13,7 @@ namespace CoaiMcp.Runners.Toolchain;
 /// among the source folders. Unlike a check it has the HOST network (the CLI talks to its vendor) and one file of the real home — the sign-in file, read-only, bound into a home of the coder's own. Measured with the real CLI on 2.1.330
 /// (<c>RESULTS_s2_check_boundary.md</c>, t5): with that home and the resolver file the CLI signed in and answered; everything it wrote was in its own home and <c>/tmp</c>, and the real <c>~/.claude</c>, <c>~/.claude.json</c> and <c>settings.json</c> were never needed
 /// — so none of them is bound, and a coder that wrote a hook into them would write it into a folder that is gone with the job.</para>
-/// <para><b>The environment is set INSIDE the unit</b> (every variable but the crossed names is unset, then the fixed list is set — see <see cref="Inner"/>; the checks use <c>env -i</c>). A value that must reach the CLI — the row's own key, a proxy — travels by NAME (<c>--setenv=NAME</c> copies it from the client), never in an argv.</para>
+/// <para><b>The environment is set INSIDE the unit</b> (every variable but the crossed names is unset, then the fixed list is set — see <see cref="Inner"/>; the checks use <c>env -i</c>). A value that must reach the CLI — the row's own key, a proxy — travels by NAME (<c>--setenv=NAME</c> copies it from the client), never in an argv. <b>A pool key does NOT travel that way</b>: <c>--setenv</c> puts the value in the unit's <c>Environment</c> property and in a 0644 transient unit file under <c>/run/user</c> for as long as the unit lives (measured, second judgement); the key is the first line of the unit's stdin, which its own shell reads and exports before the exec (<see cref="Inner"/>).</para>
 /// </remarks>
 internal static partial class CoderUnit
 {
@@ -42,7 +42,7 @@ internal static partial class CoderUnit
     /// binds the person's sign-in (the device switch) — that launch has no key to hide it from.
     /// </summary>
     internal static IReadOnlyList<string> KeysHidden(BoundaryHost host, BoundaryJob job) =>
-        !host.BindSignIn && job.KeysFolder.Length > 0 ? [$"InaccessiblePaths=-{job.KeysFolder}"] : [];
+        host.BindSignIn ? [] : [.. new[] { job.KeysFolder, job.KeysFile }.Where(path => path.Length > 0).Select(path => $"InaccessiblePaths=-{path}")];
 
     /// <summary>The <c>-p</c> properties of the coder's unit, in the order they are given.</summary>
     internal static IReadOnlyList<string> Properties(BoundaryHost host, BoundaryJob job, CoderProgram program, TimeSpan runtimeMax)
@@ -117,11 +117,12 @@ internal static partial class CoderUnit
     /// value, it showed in 228 of 300 tries (a shell that only exports the name: 0 of 300). Here the value stays in the environment all the way: it is never expanded, and <c>env</c> is given the fixed allow-list only (<c>PATH</c>, <c>HOME</c>… no secret). The unit's
     /// environment is still exactly the allow-list and the crossed names: the shell's own <c>PWD</c> is unset before the exec.
     /// </remarks>
-    internal static IReadOnlyList<string> Inner(BoundaryHost host, BoundaryJob job, CoderProgram program, IReadOnlyList<string> arguments, IReadOnlyList<string> byName) =>
+    internal static IReadOnlyList<string> Inner(BoundaryHost host, BoundaryJob job, CoderProgram program, IReadOnlyList<string> arguments, IReadOnlyList<string> byName, bool readsKey = false) =>
     [
         "/bin/sh", "-c",
         "for v in $(/usr/bin/env | /usr/bin/sed -n 's/^\\([A-Za-z_][A-Za-z0-9_]*\\)=.*/\\1/p'); do "
         + $"case \" {string.Join(' ', byName)} \" in *\" $v \"*) ;; *) unset \"$v\" 2>/dev/null ;; esac; done; "
+        + (readsKey ? $"IFS= read -r {ClaudeKeyVariable} || exit 70; export {ClaudeKeyVariable}; " : string.Empty)
         + "unset PWD OLDPWD; exec /usr/bin/env \"$@\"",
         "coai-coder",
         .. Environment(host, job).Select(pair => $"{pair.Key}={pair.Value}"),
@@ -132,6 +133,9 @@ internal static partial class CoderUnit
     /// <summary>The argv of <c>systemd-run</c> for one coder launch.</summary>
     /// <param name="degrade">For a test only: rewrites the finished argument list. Production passes nothing.</param>
     internal static IReadOnlyList<string> Arguments(BoundaryHost host, BoundaryJob job, CoderProgram program, string unit, TimeSpan runtimeMax, IReadOnlyList<string> arguments,
-        IReadOnlyList<string> byName, Func<IReadOnlyList<string>, IReadOnlyList<string>>? degrade = null) =>
-        BoundaryUnit.Wrap(unit, job.Tree.Root, [.. byName.Select(name => $"--setenv={name}")], Properties(host, job, program, runtimeMax), Inner(host, job, program, arguments, byName), degrade);
+        IReadOnlyList<string> byName, Func<IReadOnlyList<string>, IReadOnlyList<string>>? degrade = null, bool readsKey = false) =>
+        BoundaryUnit.Wrap(unit, job.Tree.Root, [.. byName.Select(name => $"--setenv={name}")], Properties(host, job, program, runtimeMax), Inner(host, job, program, arguments, byName, readsKey), degrade);
+
+    /// <summary>The variable the claude CLI reads a pool key from; the inner shell reads it from the first line of stdin and exports it itself (epoch 3 E2 s7, second judgement).</summary>
+    internal const string ClaudeKeyVariable = "CLAUDE_CODE_OAUTH_TOKEN";
 }

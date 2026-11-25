@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using CoaiMcp.Core.Notices;
+using CoaiMcp.Runners.Consultation;
 using CoaiMcp.Runners.Detach;
 using CoaiMcp.Runners.Processes;
 using CoaiMcp.Server.Keys;
@@ -197,6 +198,11 @@ public sealed class AKeyRoleLaunchTests
         var home = Environment.GetEnvironmentVariable("HOME");
         Environment.SetEnvironmentVariable("HOME", person.Path);
         Environment.SetEnvironmentVariable("ANTHROPIC_API_KEY", "an-api-key-of-the-person");
+        foreach (var name in OtherEndpoints)
+        {
+            Environment.SetEnvironmentVariable(name, "the-persons-other-route");
+        }
+
         try
         {
             var (_, job) = await RunAsync(rig, "claude/sonnet");
@@ -207,10 +213,15 @@ public sealed class AKeyRoleLaunchTests
         {
             Environment.SetEnvironmentVariable("HOME", home);
             Environment.SetEnvironmentVariable("ANTHROPIC_API_KEY", null);
+            foreach (var name in OtherEndpoints)
+            {
+                Environment.SetEnvironmentVariable(name, null);
+            }
         }
 
         var names = KeyRig.EnvNamesOf(rig.RecordFolder).Single();
         names.Should().Contain("CLAUDE_CODE_OAUTH_TOKEN").And.NotContain("ANTHROPIC_API_KEY");
+        names.Should().NotContain(OtherEndpoints, "no other route to a host, a cloud or a credential reaches a keyed launch: the CLI would send the key where the person's environment points");
         var homes = KeyRig.HomesOf(rig.RecordFolder).Single();
         homes["HOME"].Should().NotBeEmpty().And.NotBe(person.Path).And.StartWith(Path.Combine(rig.World.DataDir, "roles"), "the home is under the job's own folder");
         homes["CLAUDE_CONFIG_DIR"].Should().StartWith(homes["HOME"]);
@@ -218,6 +229,81 @@ public sealed class AKeyRoleLaunchTests
         rig.Launches().Single().Should().NotContain("--bare");
         File.ReadAllBytes(canary).Should().Equal(before, "the person's sign-in file is byte-equal");
         File.GetLastWriteTimeUtc(canary).Should().Be(changed, "and untouched");
+    }
+
+    /// <summary>The names, besides the two credentials, that would send a keyed claude to another host or another cloud (taken from the strings of the installed CLI, 2.1.332).</summary>
+    private static readonly string[] OtherEndpoints =
+    [
+        "ANTHROPIC_BASE_URL", "ANTHROPIC_BEDROCK_BASE_URL", "ANTHROPIC_VERTEX_BASE_URL", "ANTHROPIC_VERTEX_PROJECT_ID", "ANTHROPIC_FOUNDRY_BASE_URL", "ANTHROPIC_FOUNDRY_API_KEY", "ANTHROPIC_AWS_BASE_URL",
+        "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY", "AWS_BEARER_TOKEN_BEDROCK", "ANTHROPIC_CUSTOM_HEADERS", "ANTHROPIC_UNIX_SOCKET", "CLAUDE_CODE_OAUTH_REFRESH_TOKEN", "CLAUDE_CODE_CUSTOM_OAUTH_URL",
+    ];
+
+    // ---------- the second judgement: the output, the CLI's home, an unreadable pool ----------
+
+    private static object PrintsItsKey() =>
+        new Dictionary<string, object> { ["stdout"] = JsonSerializer.SerializeToElement(FakeRoleAnswers.ClaudeSays("{\"status\":\"ok\",\"note\":\"{{claude-key}}\"}")).GetProperty("stdout").GetString()!, ["exit"] = 0 };
+
+    [Fact]
+    public async Task S_AReadOnlyRoleThatPrintsItsKey_IsScrubbed_TheJobEndsKeyInOutput_AndTheKeyIsDead()
+    {
+        await using var rig = await RoleFailoverRig.CreateAsync();
+        var id = KeyRig.AddKey(rig.World.DataDir, "a");
+        rig.Says("sonnet", PrintsItsKey());
+
+        var (_, job) = await RunAsync(rig, "claude/sonnet");
+
+        job.Stop.Should().Be("key-in-output");
+        KeyRig.Row(rig.World.DataDir, id).DeadReason.Should().Be(KeyDeadReasons.Exposed);
+        var stored = string.Join('\n', Directory.GetFiles(Path.Combine(rig.World.DataDir, "roles"), "*", SearchOption.AllDirectories).Select(File.ReadAllText));
+        stored.Should().NotContain(KeyWorld.Sentinel, "the read-only road scrubs too").And.Contain($"[claude key {id}]");
+    }
+
+    [Fact]
+    public async Task S_TheInvocationAKeyedLaunchLeavesBehind_HoldsNoEnvironment()
+    {
+        await using var rig = await RoleFailoverRig.CreateAsync();
+        rig.Says("sonnet", FakeRoleAnswers.ClaudeSays(FakeRoleAnswers.Ok));
+        var token = KeyWorld.Token("a");
+        var launcher = new RoleModelLauncher(name => name == RoleModelLauncher.CliKey("claude") ? RoleJobWorld.FakeCli : null, NoProcessTracking.Instance);
+
+        var launched = await launcher.LaunchAsync(new CoaiMcp.Core.Roles.ModelRef("sonnet", "claude"), "go", rig.Repo, Path.Combine(rig.World.DataDir, "launch-out"), TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken, string.Empty, new RoleKey.Pool(new ClaudeKeySecret(KeyWorld.IdOf(token), token)));
+
+        launched.Launch.Should().NotBeNull(launched.Refused?.ToString());
+        launched.Invocation!.Request.Environment.Should().NotContainKey(ClaudeConsultant.KeyVariable, "what the ledger and the result keep says what ran, and never holds the text");
+        JsonSerializer.Serialize(launched.Invocation.Request.Environment).Should().NotContain(KeyWorld.Sentinel);
+    }
+
+    [Fact]
+    public async Task S_AKeyInTheHomeOfAReadOnlyRole_AfterTheLaunch_IsFound()
+    {
+        await using var rig = await RoleFailoverRig.CreateAsync();
+        var id = KeyRig.AddKey(rig.World.DataDir, "a");
+        var envelope = JsonSerializer.SerializeToElement(FakeRoleAnswers.ClaudeSays(FakeRoleAnswers.Ok)).GetProperty("stdout").GetString()!;
+        rig.Says("sonnet", new Dictionary<string, object> { ["stdout"] = envelope, ["exit"] = 0, ["homeFiles"] = new Dictionary<string, string> { [".claude/projects/x.jsonl"] = "{{claude-key}}\n" } });
+
+        var (_, job) = await RunAsync(rig, "claude/sonnet");
+
+        job.Stop.Should().Be("key-in-output", "the folder a keyed read-only launch ran in is searched after it ends");
+        KeyRig.Row(rig.World.DataDir, id).DeadReason.Should().Be(KeyDeadReasons.Exposed);
+    }
+
+    [Fact]
+    public async Task S_APoolWhoseFilesCannotBeRead_IsNotEmpty_ThePersonsSignInIsNeverUsedForIt()
+    {
+        await using var rig = await RoleFailoverRig.CreateAsync();
+        KeyRig.AddKey(rig.World.DataDir, "a");
+        foreach (var meta in Directory.GetFiles(Path.Combine(rig.World.DataDir, "keys", "claude"), "k-*.json"))
+        {
+            File.WriteAllText(meta, "{ this is not json");
+        }
+
+        rig.Says("sonnet", FakeRoleAnswers.ClaudeSays(FakeRoleAnswers.Ok));
+
+        var (_, job) = await RunAsync(rig, "claude/sonnet");
+
+        job.State.Should().Be(RoleJobStates.Failed);
+        rig.Launches().Should().BeEmpty("no launch, and above all none on the person's sign-in");
+        rig.NoticesOf(ServerNoticeCodes.ClaudePersonSignInUsed).Should().BeEmpty();
     }
 
     // ---------- helpers ----------

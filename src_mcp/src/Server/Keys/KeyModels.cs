@@ -97,7 +97,12 @@ internal sealed record PoolFile
     /// <summary>When the last <c>claude-keys-exhausted</c> notice was written: at most one in 30 minutes.</summary>
     public DateTime? ExhaustedNoticeUtc { get; init; }
 
-    public PoolFile Normalised() => this with { Cursor = Cursor ?? string.Empty };
+    /// <summary>
+    /// The ids (hash prefixes, never texts) of every key that was ever found exposed (second security judgement): EXPOSED IS FINAL. Kept when the key is removed, so a remove followed by an add, or a sync that lists the same text again, cannot make it a usable key.
+    /// </summary>
+    public IReadOnlyList<string> ExposedIds { get; init; } = [];
+
+    public PoolFile Normalised() => this with { Cursor = Cursor ?? string.Empty, ExposedIds = ExposedIds ?? [] };
 }
 
 /// <summary>One row of a list: the metadata, and whether the key can be picked now. Never a token.</summary>
