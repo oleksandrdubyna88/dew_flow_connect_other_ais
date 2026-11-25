@@ -22,7 +22,7 @@ internal sealed record KeyFolderSeams(Func<string, UnixFileMode> ModeOf)
 /// <para><b>A write is a temp file made 0600 and a rename.</b> <c>AtomicJson</c> and <c>AtomicFile</c> create their temp file with the process umask, so a token would sit world-readable for a moment; this writer creates the file
 /// private and only then fills it. Every writer holds <c>pool.lock</c>, so the turn <c>AtomicJson</c> takes would only repeat it.</para>
 /// </remarks>
-internal sealed class KeyFolder(string dataDir, KeyFolderSeams seams)
+internal sealed class KeyFolder(string dataDir, KeyFolderSeams seams, Action<string>? whenCreated = null, bool sharedSetting = false)
 {
     private const UnixFileMode OwnerFile = UnixFileMode.UserRead | UnixFileMode.UserWrite;
     private const UnixFileMode OwnerFolder = OwnerFile | UnixFileMode.UserExecute;
@@ -48,8 +48,29 @@ internal sealed class KeyFolder(string dataDir, KeyFolderSeams seams)
 
     public string MetaPathOf(string id) => Path.Combine(Root, id + ".json");
 
-    /// <summary>The shared VM instance: the data folder is group-owned with the setgid bit. Never on Windows.</summary>
-    public bool Shared => !OperatingSystem.IsWindows() && Safe(() => (seams.ModeOf(dataDir) & UnixFileMode.SetGroup) != 0);
+    /// <summary>The device setting that makes a data folder a SHARED instance (<c>1</c>): written by the shared VM's install, never inherited from a folder's bits. Layered like every setting, so the environment or the settings file of the data folder carries it.</summary>
+    public const string SharedSetting = "COAI_KEYS_SHARED";
+
+    /// <summary>
+    /// The shared VM instance: the device setting says so AND the data folder is group-owned with the setgid bit (security judgement of s7 part 1, finding 2). A setgid bit alone — inherited from a parent folder made by a plain <c>mkdir</c> — is NOT the owner's decision to let a
+    /// group read every key, so it leaves the store private (0700 / 0600). Never on Windows.
+    /// </summary>
+    public bool Shared => sharedSetting && HasSetgid;
+
+    private bool HasSetgid => !OperatingSystem.IsWindows() && Safe(() => (seams.ModeOf(dataDir) & UnixFileMode.SetGroup) != 0);
+
+    /// <summary>
+    /// What a person must be told about the group of this data folder, or empty: that every member of it reads every key (shared), or that the folder has the setgid bit but the device setting is not set, so the keys stay private to this user.
+    /// Said by an add, an import, a sync and a start — not only by the first add.
+    /// </summary>
+    public string SharedNote =>
+        Shared ? SharedWarning
+        : HasSetgid ? $"this data folder has the setgid bit, but the device setting {SharedSetting} is not 1, so the keys stay private to this user (folders 0700, files 0600)"
+        : string.Empty;
+
+    /// <summary>The sentence for a shared instance: every member of its group can read every key in it.</summary>
+    public const string SharedWarning =
+        "this data folder is a shared VM instance (group-owned, setgid, and the device setting says so): every member of its group can read every key in it, as they share the CLI logins there";
 
     private UnixFileMode WantedFile => Shared ? GroupFile : OwnerFile;
 
@@ -139,13 +160,36 @@ internal sealed class KeyFolder(string dataDir, KeyFolderSeams seams)
         $"{folder} does not keep file modes — a key file did not keep its private mode, so keys there would be readable by other users; "
         + "put the data folder on the Linux file system (COAI_DATA_DIR), not on a Windows drive under /mnt";
 
-    /// <summary>On a shared instance the lock file must be writable by the group too, or the second user's open is refused. A chmod only the owner can make; best effort.</summary>
-    public void ShareLock()
+    /// <summary>On a shared instance the lock file must be writable by the group too, or the second user's open is refused. The mode is set through the OPEN HANDLE — never through the path, which a link could point anywhere. A chmod only the owner can make; best effort.</summary>
+    public void ShareLock(FileStream held)
     {
-        if (!OperatingSystem.IsWindows() && Shared)
+        if (OperatingSystem.IsWindows() || !Shared)
         {
-            TrySetMode(LockPath, GroupFile);
+            return;
         }
+
+        try
+        {
+            File.SetUnixFileMode(held.SafeFileHandle, GroupFile);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // Not the owner: the second user is refused by the system, and says so.
+        }
+    }
+
+    /// <summary>The sentence that says <c>keys</c> or <c>claude</c> is a link — the store is never made, read or locked through one — or empty.</summary>
+    public string LinkProblem()
+    {
+        foreach (var folder in new[] { KeysFolder, Root })
+        {
+            if (new DirectoryInfo(folder).LinkTarget is not null)
+            {
+                return $"{folder} is a link, and the key store is never used through one — delete the link";
+            }
+        }
+
+        return string.Empty;
     }
 
     /// <summary>Whether the file has a wider mode than the store makes — empty when it does not (or on Windows, where the ACL is the folder's).</summary>
@@ -194,6 +238,7 @@ internal sealed class KeyFolder(string dataDir, KeyFolderSeams seams)
 
         using (var stream = new FileStream(temp, options))
         {
+            whenCreated?.Invoke(temp);
             stream.Write(Encoding.UTF8.GetBytes(text));
             stream.Flush(durable);
         }

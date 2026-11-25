@@ -60,7 +60,7 @@ internal static class KeysMode
             return KeyExit.Data;
         }
 
-        var access = new KeyStoreAccess(runtime.DataDir, runtime.Clock, runtime.Notice, runtime.Seams);
+        var access = new KeyStoreAccess(runtime.DataDir, runtime.Clock, runtime.Notice, runtime.Seams, Roles.RolesMode.Layered(runtime.Settings)(KeyFolder.SharedSetting) == "1");
         var run = new KeyVerbs(runtime, access, parsed);
 
         return parsed.Verb switch

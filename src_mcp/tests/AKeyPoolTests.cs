@@ -264,7 +264,7 @@ public sealed class AKeyPoolTests
     [Fact]
     public void D2_UnderASharedFolder_TheFilesStay0660_AndTheFolder2770_AfterPicks()
     {
-        using var world = new KeyWorld();
+        using var world = new KeyWorld(shared: true);
         File.SetUnixFileMode(world.DataDir, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute | UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute | UnixFileMode.SetGroup);
         Assert.SkipUnless((File.GetUnixFileMode(world.DataDir) & UnixFileMode.SetGroup) != 0, "this file system does not keep the setgid bit");
         world.AddKey("A", "a");

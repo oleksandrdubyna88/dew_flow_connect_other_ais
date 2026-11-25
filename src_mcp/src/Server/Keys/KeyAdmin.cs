@@ -16,12 +16,8 @@ internal sealed class KeyAdmin(KeyStoreAccess access)
 
     private const string NoSuchKey = "no key has that id";
 
-    /// <summary>The sentence the first add on a shared VM instance says: every member of the group can read every key there.</summary>
-    internal const string SharedWarning =
-        "this data folder is a shared VM instance (group-owned, setgid): every member of its group can read every key in it, as they share the CLI logins there";
-
-    /// <summary>The sentence to print on the first add on a shared instance, or empty.</summary>
-    public string SharedSentence => access.Folder.Shared ? SharedWarning : string.Empty;
+    /// <summary>The sentence an add, an import and a sync say on a shared VM instance, or when the setgid bit is there without the device setting: see <see cref="KeyFolder.SharedNote"/>. Empty on a private folder.</summary>
+    public string SharedSentence => access.Folder.SharedNote;
 
     // -------------------------------------------------------------------------------------------------------------
     // list
@@ -103,6 +99,12 @@ internal sealed class KeyAdmin(KeyStoreAccess access)
             return new AddOutcome.Refused(shape, KeyExit.Data);
         }
 
+        if (input.Account.Length > 0 && !KeySourceReader.IsAccount(input.Account))
+        {
+            // Never the account itself: the text may be a token that was typed in the wrong place.
+            return new AddOutcome.Refused("the account must be an email address (an @, no space) that is not a secret; nothing was stored — if a key was typed as an account, revoke it", KeyExit.Data);
+        }
+
         var id = KeyIds.Of(input.TokenText);
         if (entries.FirstOrDefault(entry => entry.Record.Id == id) is { } same)
         {
@@ -127,7 +129,7 @@ internal sealed class KeyAdmin(KeyStoreAccess access)
             var problem = session.SaveToken(id, input.TokenText);
             if (problem.Length == 0)
             {
-                problem = session.SaveRecord(record);
+                problem = session.SaveRecord(record, durable: true);
             }
 
             if (problem.Length > 0)

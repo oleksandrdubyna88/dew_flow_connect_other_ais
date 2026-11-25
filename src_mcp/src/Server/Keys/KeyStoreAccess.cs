@@ -5,9 +5,9 @@ namespace CoaiMcp.Server.Keys;
 /// <summary>
 /// How the pool's callers reach one device's key store: the folder, the clock, where notices go, and the one place an operation takes the lock and turns a disk fault into a refusal.
 /// </summary>
-internal sealed class KeyStoreAccess(string dataDir, TimeProvider clock, Action<ServerNotice> notice, KeyFolderSeams? seams = null)
+internal sealed class KeyStoreAccess(string dataDir, TimeProvider clock, Action<ServerNotice> notice, KeyFolderSeams? seams = null, bool sharedSetting = false)
 {
-    public KeyFolder Folder { get; } = new(dataDir, seams ?? KeyFolderSeams.Real);
+    public KeyFolder Folder { get; } = new(dataDir, seams ?? KeyFolderSeams.Real, sharedSetting: sharedSetting);
 
     public DateTime NowUtc => clock.GetUtcNow().UtcDateTime;
 

@@ -20,9 +20,10 @@ internal sealed class KeyWorld : IDisposable
 
     private readonly TempDir _data = TempDir.For("coai-keys-");
 
-    internal KeyWorld(KeyFolderSeams? seams = null)
+    internal KeyWorld(KeyFolderSeams? seams = null, bool shared = false)
     {
         Seams = seams;
+        Shared = shared;
         Clock = new KeyClock(new DateTimeOffset(2026, 11, 24, 8, 0, 0, TimeSpan.Zero));
         Admin = new KeyAdmin(Access());
     }
@@ -40,7 +41,10 @@ internal sealed class KeyWorld : IDisposable
     internal KeyAdmin Admin { get; }
 
 
-    internal KeyStoreAccess Access() => new(DataDir, Clock, Notices.Add, Seams);
+    /// <summary>Whether the device setting that makes the folder a shared instance is set (it still needs the setgid bit on the data folder).</summary>
+    internal bool Shared { get; }
+
+    internal KeyStoreAccess Access() => new(DataDir, Clock, Notices.Add, Seams, Shared);
 
     /// <summary>A made-up setup-token shaped like a real one: the prefix, the sentinel, the tag and a filler to 60 characters.</summary>
     internal static string Token(string tag) => string.Concat("sk-ant-", "oat01-", Sentinel, tag, new string('x', 60 - 13 - Sentinel.Length - tag.Length));

@@ -54,7 +54,7 @@ internal sealed partial class KeyVerbs(KeysRuntime runtime, KeyStoreAccess acces
 
         if (args.Has("--account") && !KeySourceReader.IsAccount(args.Get("--account")))
         {
-            runtime.Note("--keys add: the account must be an email-shaped text without spaces");
+            runtime.Note("--keys add: the account must be an email address (an @, no space) and no credential");
 
             return KeyExit.Data;
         }
@@ -103,6 +103,7 @@ internal sealed partial class KeyVerbs(KeysRuntime runtime, KeyStoreAccess acces
 
     public int Import()
     {
+        Say(_admin.SharedSentence);
         var format = args.Has("--format") ? args.Get("--format") : "lines";
         if (format is not ("lines" or "env" or "creds-json"))
         {
@@ -287,6 +288,7 @@ internal sealed partial class KeyVerbs(KeysRuntime runtime, KeyStoreAccess acces
 
     public int Sync()
     {
+        Say(_admin.SharedSentence);
         var answer = KeySourceSync.Run(access, Layered, runtime.Variables);
         runtime.Output.WriteLine(args.Json
             ? KeysMode.Line(answer, KeysAnswerJson.Default.KeySyncAnswer)
@@ -295,6 +297,15 @@ internal sealed partial class KeyVerbs(KeysRuntime runtime, KeyStoreAccess acces
                 : $"{source.Source}: refused — {source.Refusal}")));
 
         return 0;
+    }
+
+    /// <summary>A sentence about the data folder, when there is one: said on stderr by an import and a sync as an add says it.</summary>
+    private void Say(string sentence)
+    {
+        if (sentence.Length > 0)
+        {
+            runtime.Note(sentence);
+        }
     }
 
     private int Refused<T>(KeyResult<T> result)

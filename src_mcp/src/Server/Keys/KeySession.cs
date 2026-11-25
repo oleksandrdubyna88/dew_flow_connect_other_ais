@@ -31,6 +31,9 @@ internal sealed record KeyResult<T>
     public static KeyResult<T> Of(T value) => new(value, string.Empty, 0);
 
     public static KeyResult<T> Refused(string sentence, int code = KeyExit.Data) => new(default, sentence, code);
+
+    /// <summary>Never the value: a <c>KeyResult&lt;string&gt;</c> carries the text of a key from stdin to the pool, and a record prints its members (the judgement of s7 part 1).</summary>
+    public override string ToString() => $"KeyResult {{ Ok = {Ok}, Code = {Code} }}";
 }
 
 /// <summary>One key as the folder holds it: the metadata and what is true of its files.</summary>
@@ -57,6 +60,9 @@ internal sealed class KeySession : IDisposable
     /// <summary>How long a call waits for the lock.</summary>
     internal static readonly TimeSpan Wait = TimeSpan.FromSeconds(2);
 
+    /// <summary>How long a WRITING verb waits (an add, an import, a sync, a change): a crowd of processes that add at once each get their turn (the judgement of s7 part 1, finding 5, a flaky test).</summary>
+    internal static readonly TimeSpan AdminWait = TimeSpan.FromSeconds(10);
+
     private static readonly TimeSpan Retry = TimeSpan.FromMilliseconds(15);
 
     private readonly FileStream _held;
@@ -72,6 +78,11 @@ internal sealed class KeySession : IDisposable
     /// <summary>Takes the pool. <paramref name="create"/>: make the folder (a verb that writes); otherwise the folder must be there.</summary>
     public static KeyResult<KeySession> Open(KeyFolder folder, bool create)
     {
+        if (folder.LinkProblem() is { Length: > 0 } link)
+        {
+            return KeyResult<KeySession>.Refused(link, KeyExit.Io);
+        }
+
         if (create && folder.Prepare() is { Length: > 0 } unusable)
         {
             return KeyResult<KeySession>.Refused(unusable, KeyExit.Io);
@@ -82,10 +93,13 @@ internal sealed class KeySession : IDisposable
             return KeyResult<KeySession>.Refused("there is no key store on this device yet", KeyExit.Data);
         }
 
-        var held = TakeLock(folder);
+        // A writer (an add, an import, a sync) may wait longer than a launch's pick: a pick is on the way to a launch, a verb is a person or a boot script.
+        var (held, refusal) = TakeLock(folder, create ? AdminWait : Wait);
         if (held is null)
         {
-            return KeyResult<KeySession>.Refused("the key pool is busy — another call is changing it; try again in a moment", KeyExit.Busy);
+            return refusal.Length > 0
+                ? KeyResult<KeySession>.Refused(refusal, KeyExit.Io)
+                : KeyResult<KeySession>.Refused("the key pool is busy — another call is changing it; try again in a moment", KeyExit.Busy);
         }
 
         var session = new KeySession(folder, held);
@@ -94,8 +108,14 @@ internal sealed class KeySession : IDisposable
         return KeyResult<KeySession>.Of(session);
     }
 
-    private static FileStream? TakeLock(KeyFolder folder)
+    private static (FileStream? Held, string Refusal) TakeLock(KeyFolder folder, TimeSpan wait)
     {
+        var info = new FileInfo(folder.LockPath);
+        if (info.LinkTarget is not null || (info.Exists && (info.Attributes & (FileAttributes.Directory | FileAttributes.ReparsePoint | FileAttributes.Device)) != 0))
+        {
+            return (null, $"{folder.LockPath} is a link or not a regular file, and the pool is never locked through one — delete it");
+        }
+
         var options = new FileStreamOptions { Mode = FileMode.OpenOrCreate, Access = FileAccess.ReadWrite, Share = FileShare.None };
         if (!OperatingSystem.IsWindows())
         {
@@ -108,17 +128,25 @@ internal sealed class KeySession : IDisposable
             try
             {
                 var held = new FileStream(folder.LockPath, options);
-                folder.ShareLock();
+                if (!held.CanSeek)
+                {
+                    // A pipe or a device is not a regular file: only a regular file can be the lock.
+                    held.Dispose();
 
-                return held;
+                    return (null, $"{folder.LockPath} is not a regular file, and the pool is never locked through one — delete it");
+                }
+
+                folder.ShareLock(held);
+
+                return (held, string.Empty);
             }
-            catch (IOException) when (clock.Elapsed < Wait)
+            catch (IOException) when (clock.Elapsed < wait)
             {
                 Thread.Sleep(Retry);
             }
             catch (IOException)
             {
-                return null;
+                return (null, string.Empty);
             }
         }
     }
@@ -194,7 +222,7 @@ internal sealed class KeySession : IDisposable
     public string SavePool(PoolFile pool) => Folder.WritePrivate(Folder.PoolPath, JsonSerializer.Serialize(pool, KeysJson.Default.PoolFile));
 
     /// <summary>Writes the metadata of one key; the mode problem of the written file, or empty.</summary>
-    public string SaveRecord(KeyRecord record) => Folder.WritePrivate(Folder.MetaPathOf(record.Id), JsonSerializer.Serialize(record, KeysJson.Default.KeyRecord));
+    public string SaveRecord(KeyRecord record, bool durable = false) => Folder.WritePrivate(Folder.MetaPathOf(record.Id), JsonSerializer.Serialize(record, KeysJson.Default.KeyRecord), durable);
 
     /// <summary>Writes the text of one key: only the text, one line.</summary>
     public string SaveToken(string id, string text) => Folder.WritePrivate(Folder.KeyPathOf(id), text + "\n", durable: true);

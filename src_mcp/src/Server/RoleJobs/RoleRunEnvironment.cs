@@ -16,7 +16,7 @@ namespace CoaiMcp.Server.RoleJobs;
 /// </remarks>
 internal static class RoleRunEnvironment
 {
-    private static readonly string[] OwnPrefixes = ["COAI_DATA_", "COAI_ROLE_", "COAI_ROLES_", "COAI_LOG_", "COAI_CODER_"];
+    private static readonly string[] OwnPrefixes = ["COAI_DATA_", "COAI_ROLE_", "COAI_ROLES_", "COAI_LOG_", "COAI_CODER_", "COAI_KEYS_"];
 
     /// <summary>True for a name the runner may be handed.</summary>
     public static bool Allowed(string name) =>
