@@ -73,7 +73,8 @@ export interface World {
   readonly admits: string[];
   readonly dropped: string[];
   readonly parsed: { readonly mode: AccountsMode; readonly stdout: string }[];
-  readonly landed: { count: number };
+  /** `memories`: what each call of `landed` was handed. */
+  readonly landed: { count: number; readonly memories: (Memory | undefined)[] };
   readonly control: { generation: number; stopped: boolean; now: number; terminals: readonly LiveTerminal[]; active: number; maxActive: number };
 }
 
@@ -88,7 +89,7 @@ export function world(options: Options = {}): World {
   const admits: string[] = [];
   const dropped: string[] = [];
   const parsed: { mode: AccountsMode; stdout: string }[] = [];
-  const landed = { count: 0 };
+  const landed: { count: number; memories: (Memory | undefined)[] } = { count: 0, memories: [] };
   const asked = new Map<string, number>();
   const nths = new Map<string, number>();
   const reply = options.reply ?? ((): AccountsRead => claudeFound('x@example.test'));
@@ -127,7 +128,7 @@ export function world(options: Options = {}): World {
       return read === 'down' ? { kind: 'unreadable', why: 'exit' } : read;
     },
     now: () => control.now,
-    landed: () => { landed.count += 1; },
+    landed: (memory) => { landed.count += 1; landed.memories.push(memory); },
     generation: () => control.generation,
     dropped: (host) => { dropped.push(host); },
   };

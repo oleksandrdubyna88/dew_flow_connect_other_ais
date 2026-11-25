@@ -25,15 +25,19 @@ test('A3-T24 (host): nothing of a reading is stored by the host', () => {
 test('A4-T14 (F4): the list clears its "ran less than a minute ago" mark only after the items are set, so an overtaken draw keeps it', () => {
   const draw = bodyOf(host, '  private async draw(');
   const cleared = draw.indexOf('this.floor = false');
+  const items = draw.indexOf('this.pick.items =');
   assert.ok(cleared > 0, 'the scan does not find where the mark is cleared');
-  assert.ok(cleared > draw.indexOf('this.pick.items ='), 'the mark is cleared before the items are set');
+  assert.ok(items >= 0, 'the scan does not find where the items are set, so the order below would compare with -1');
+  assert.ok(cleared > items, 'the mark is cleared before the items are set');
 });
 
 test('A4-T14 (F5): the Stop fires the redraw only after the Stop is written', () => {
   const stop = bodyOf(host, '  async stop(');
   const written = stop.indexOf('await stopTheRound(');
   assert.ok(written > 0, 'the scan does not find the write of the Stop');
-  assert.ok(stop.indexOf('this.landed.fire()') > written, 'the redraw is fired before the Stop is written, so the list reads the old state');
+  const fired = stop.indexOf('this.landed.fire()');
+  assert.ok(fired >= 0, 'the scan does not find the redraw of the Stop');
+  assert.ok(fired > written, 'the redraw is fired before the Stop is written, so the list reads the old state');
 });
 
 test('A3-T26 (host): readAccounts( is called once, with three arguments, inside the parse seam', () => {
@@ -53,4 +57,44 @@ test('A3-T27 (host): the one setTimeout is applied only from timerFor, and runAc
   assert.match(host, /callFor\(this\.test,\s*real,\s*this\.replaced\)/u, 'the call is not built from callFor(test, real, replaced)');
   assert.equal(count(host, /\breal\b/gu), 3, '`real` is reached other than through callFor');
   assert.equal(count('const x = real; setTimeout(f, 1);', /this\.apply\(timerFor\(/gu), 0, 'companion: the scan tells a timer that is not applied from timerFor');
+});
+
+/** One method of the class, from its opening line to the closing brace at the method's own indent. */
+const methodOf = (text: string, opening: string): string => {
+  const at = text.indexOf(opening);
+  assert.ok(at >= 0, `there is no ${opening} to read`);
+  const end = text.indexOf('\n  }\n', at);
+
+  return end < 0 ? text.slice(at) : text.slice(at, end + 5);
+};
+
+test('A3-T22 (T34, host): a host\'s news is applied to the window\'s memory only while the generation is the round\'s, then the list is redrawn', () => {
+  assert.match(host, /landed:\s*\(memory\)\s*=>\s*\{\s*this\.landedFrom\(memory\);\s*\}/u, 'the landed seam does not pass the memory on');
+  const from = methodOf(host, '  private landedFrom(');
+  const applied = from.indexOf('this.memoryNow =');
+  const fired = from.indexOf('this.landed.fire()');
+  assert.ok(applied >= 0 && fired >= 0, 'the scan does not find the memory or the redraw in landedFrom');
+  assert.ok(applied < fired, 'the list is redrawn before the news is applied');
+  assert.match(from.slice(0, applied), /this\.generation === this\.roundGeneration/u, 'the news is applied with no check of the generation');
+  assert.match(methodOf(host, ' runNow(trigger: Trigger)'), /this\.roundGeneration = this\.generation/u, 'the round\'s generation is not recorded when it starts');
+  assert.equal(count('private landedFrom(memory) { this.memoryNow = memory; this.landed.fire(); }', /this\.generation === this\.roundGeneration/gu), 0, 'companion: the scan tells a landing that does not check the generation');
+});
+
+test('A3-T22 (T36, host): a Start given while a round runs is run when that round ends, not dropped', () => {
+  const start = methodOf(host, '  async start(');
+  assert.match(start, /if \(started && this\.running\) \{\s*this\.startPending = true;/u, 'a Start during a round does not leave a pending refresh');
+  assert.match(start, /void this\.runNow\('refresh'\)/u, 'a Start with no round running does not refresh');
+  const run = methodOf(host, ' runNow(trigger: Trigger)');
+  assert.match(run, /ran && this\.startPending/u, 'the end of a round does not look for a pending Start');
+  assert.match(run, /this\.startPending = false;\s*void this\.runNow\('refresh'\)/u, 'a pending Start is not cleared and run');
+  assert.match(methodOf(host, '  async stop('), /this\.startPending = false/u, 'a Stop leaves a pending Start behind');
+});
+
+test('A3-T37 (host): a window that is disposed starts no timer and no round, and its round publishes nothing', () => {
+  const dispose = methodOf(host, '  dispose(');
+  assert.match(dispose, /this\.disposed = true/u, 'dispose does not mark the window');
+  assert.match(dispose, /this\.generation \+= 1/u, 'dispose does not invalidate the round that is in flight');
+  assert.match(methodOf(host, '  private apply('), /if \(this\.disposed\) \{\s*return;/u, 'apply sets a timer after dispose');
+  assert.match(methodOf(host, ' runNow(trigger: Trigger)'), /this\.disposed/u, 'runNow starts a round after dispose');
+  assert.equal(count('dispose(): void { clearTimeout(this.timer); }', /this\.disposed = true/gu), 0, 'companion: the scan tells a dispose that does not mark the window');
 });

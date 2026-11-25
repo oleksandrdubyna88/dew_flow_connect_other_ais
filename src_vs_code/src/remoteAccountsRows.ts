@@ -313,12 +313,20 @@ const unasked = (view: AccountsView, standing: HostStanding | undefined): boolea
 
 type BlockKind = keyof typeof ADMISSION_SAID;
 
-/** What the door answered last, except a refusal: "turned off" comes from a "no" among the standings, so a Read given since shows at once. */
-const remembered = (memory: HostMemory): BlockKind | undefined => (memory.admission === 'refused' ? undefined : memory.admission);
+/** A "yes" that settles the question the door said it had not asked: a person's, or an automatic one the setting allows. */
+const answersTheQuestion = (view: AccountsView, standing: HostStanding | undefined): boolean =>
+  standing?.answer === 'yes' && (standing.how === 'person' || view.allowNew);
+
+/**
+ * What the door answered last, except a refusal and a question that a "yes" has since answered: "turned off" comes from a "no" among the
+ * standings, so a Read given since shows at once, and so does a Read given after "not asked".
+ */
+const remembered = (view: AccountsView, standing: HostStanding | undefined, memory: HostMemory): BlockKind | undefined =>
+  (memory.admission === 'refused' || (memory.admission === 'not-asked' && answersTheQuestion(view, standing)) ? undefined : memory.admission);
 
 /** Why a host is not read: a "no", what the door answered, or no question asked yet with the setting off. */
 const blockedKind = (view: AccountsView, standing: HostStanding | undefined, memory: HostMemory): BlockKind | undefined =>
-  (isNo(standing) ? 'refused' : (remembered(memory) ?? (unasked(view, standing) ? 'not-asked' : undefined)));
+  (isNo(standing) ? 'refused' : (remembered(view, standing, memory) ?? (unasked(view, standing) ? 'not-asked' : undefined)));
 
 function blocked(view: AccountsView, standing: HostStanding | undefined, memory: HostMemory): Said | undefined {
   const kind = blockedKind(view, standing, memory);

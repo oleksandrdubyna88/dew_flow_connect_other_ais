@@ -162,8 +162,8 @@ export interface RoundSeams {
   /** Reads the reply against the mode that was SENT; the host binds the clock. */
   readonly parse: (run: { readonly code: number; readonly stdout: string }, mode: AccountsMode) => AccountsRead;
   readonly now: () => number;
-  /** After each host whose memory changed, so the list redraws. */
-  readonly landed: () => void;
+  /** After each host whose memory changed, so the list redraws. `memory`: the round's memory with this host's news, for the list to draw. */
+  readonly landed: (memory: Memory) => void;
   /** Bumped on a Stop, on a refusal and on a Forget. */
   readonly generation: () => number;
   /** One fixed log line for a result that was dropped. */
@@ -280,7 +280,7 @@ type Gate = { readonly kind: 'ok' } | { readonly kind: 'abandon' } | { readonly 
  * forgotten in flight fails (a) first, so (c) never runs for it and cannot write an automatic row where a person just took one away.
  */
 async function checked(context: Context, host: string): Promise<Gate> {
-  if (moved(context) || (await context.seams.stopped())) {
+  if (moved(context) || (await context.seams.stopped()) || moved(context)) {
     return { kind: 'abandon' };
   }
 
@@ -316,14 +316,14 @@ async function settled(context: Context, state: RoundState, host: string, mode: 
   }
   const read = run.kind === 'answered' ? seams.parse(run, mode) : undefined;
   const next = publishedState(state, host, run, read, seams.now());
-  seams.landed();
+  seams.landed(next.memory);
 
   return { kind: 'published', state: next, read };
 }
 
 /** What ends a step before its door: a Stop or a moved generation ends the round; a host with no terminal is skipped. */
 async function beforeCall(context: Context, state: RoundState, host: string): Promise<Step | undefined> {
-  if (moved(context) || (await context.seams.stopped())) {
+  if (moved(context) || (await context.seams.stopped()) || moved(context)) {
     return { kind: 'abandoned', state };
   }
 
@@ -339,12 +339,16 @@ async function hostStep(context: Context, state: RoundState, host: string, call:
   }
   const door = await seams.admit(host);
   if (door.kind !== 'read') {
-    seams.landed();
+    const skipped = withAdmission(state, host, door.kind);
+    seams.landed(skipped.memory);
 
-    return { kind: 'skipped', state: withAdmission(state, host, door.kind) };
+    return { kind: 'skipped', state: skipped };
   }
-  if (moved(context)) {
+  if (moved(context) || (await seams.stopped()) || moved(context)) {
     return { kind: 'abandoned', state };
+  }
+  if (!hostLive(seams, host)) {
+    return { kind: 'skipped', state };
   }
   const mode = modeFor(call);
 

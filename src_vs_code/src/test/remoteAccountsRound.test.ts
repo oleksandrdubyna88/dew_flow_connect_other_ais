@@ -695,3 +695,72 @@ test('A3-T22 (F3): a round that fails is settled: logged once, and the timer is 
   assert.equal(fine, 7, 'the companion: a round that finished is returned');
   assert.deepEqual(seen, [7]);
 });
+
+// ───────────────── the review of PR #1047: T3, T38, T39 ─────────────────
+
+test('A3-T29 (T3): a Stop saved in another window while the door is awaited starts no call, though the generation did not move', async () => {
+  const w = world({ hosts: ['a', 'b'], door: (_host, asked, self) => { if (asked === 0 && self.admits.length === 1) { self.control.stopped = true; } return READ_OK; } });
+
+  const result = await roundOf(w, new Map(), 0, 'timer', OFF);
+
+  assert.deepEqual(w.calls, [], 'an ssh call started after the Stop was read again');
+  assert.equal(result.abandoned, true);
+});
+
+test('A3-T19 (T39): a host whose last terminal closed while the door was awaited is not called', async () => {
+  const w = world({
+    hosts: ['a', 'b'],
+    door: (host, asked, self) => {
+      if (host === 'a' && asked === 0) {
+        self.control.terminals = self.control.terminals.filter((one) => !one.name.includes(' a '));
+      }
+
+      return READ_OK;
+    },
+  });
+
+  await roundOf(w, new Map(), 0, 'timer', OFF);
+
+  assert.deepEqual(callsOf(w), ['b N'], 'a host with no terminal was called');
+});
+
+test('A3-T29 (T38): a generation that moved while the Stop was read is seen before the door is asked', async () => {
+  const before = world({ hosts: ['a'], stopped: (self) => { self.control.generation += 1; return Promise.resolve(false); } });
+  const first = await roundOf(before, new Map(), 0, 'timer', OFF);
+  assert.deepEqual(before.admits, [], 'the door was asked after a Forget that came while the Stop was read (before the call)');
+  assert.equal(first.abandoned, true);
+});
+
+test('A3-T29 (T38b): the same in the check after the call: the door would write an automatic row for a host a person just took away', async () => {
+  const after = world({ hosts: ['a'], stopped: (self) => { if (self.calls.length >= 1) { self.control.generation += 1; } return Promise.resolve(false); } });
+  const second = await roundOf(after, new Map(), 0, 'timer', OFF);
+  assert.deepEqual(after.admits, ['a'], 'the door was asked for the result after a Forget that came while the Stop was read (the check)');
+  assert.equal(second.memory.get('a')?.reading, undefined);
+  assert.deepEqual(after.dropped, ['a']);
+});
+
+test('A3-T22 (T34): the list is drawn from the news of each host as it lands, not from the last round\'s memory', async () => {
+  let atB: Memory | undefined;
+  const w = world({
+    hosts: ['a', 'b'],
+    hold: (host, _mode, self) => {
+      if (host === 'b') {
+        atB = self.landed.memories.at(-1);
+      }
+
+      return undefined;
+    },
+  });
+
+  await roundOf(w, new Map(), 0, 'timer', OFF);
+
+  assert.notEqual(atB?.get('a')?.reading, undefined, 'host a\'s reading was not handed to the list while host b was still being read');
+  assert.equal(atB?.has('b'), false, 'a host that was not read yet had a reading');
+  assert.ok(w.landed.memories.every((one) => one !== undefined), 'a landing came with no memory');
+  assert.notEqual(w.landed.memories.at(-1)?.get('b')?.reading, undefined);
+
+  // a host the door did not allow lands too, with its kind
+  const door = world({ hosts: ['a'], door: () => ({ kind: 'refused' }) });
+  await roundOf(door, new Map(), 0, 'timer', OFF);
+  assert.equal(door.landed.memories.at(-1)?.get('a')?.admission, 'refused');
+});

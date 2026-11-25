@@ -619,3 +619,14 @@ test('A4-T14: a press of Refresh now inside a minute adds one row that says so',
   assert.equal(rows[0]?.label, 'A round ran less than a minute ago.');
   assert.ok(rowsOf({ hosts: ['hA'] }).every((row) => row.label !== 'A round ran less than a minute ago.'));
 });
+
+test('A4-T8 (T40): a Read saved after a "not asked" shows at once, as the refusal case does; an automatic "yes" the setting does not allow still waits', () => {
+  const memory = memoryOf(['hX', { admission: 'not-asked' }]);
+  const rowOf = (standing: HostStanding, allowNew: boolean) => hostRow(rowsOf({ memory, hosts: ['hX'], standings: [standing], allowNew }), 'hX');
+
+  assert.equal(rowOf(person('hX'), false).press, 'change', 'a person\'s Read left the row with its "ask" press');
+  assert.equal(rowOf(person('hX'), false).description, 'never read yet');
+  assert.equal(rowOf(auto('hX'), true).press, 'change', 'an automatic "yes" the setting allows left the row with its "ask" press');
+  assert.equal(rowOf(auto('hX'), false).press, 'ask', 'an automatic "yes" with the setting off was taken for a Read');
+  assert.equal(hostRow(rowsOf({ memory, hosts: ['hX'], allowNew: false }), 'hX').press, 'ask', 'no standing: the question is still to be asked');
+});

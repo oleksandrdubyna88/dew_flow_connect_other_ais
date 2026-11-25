@@ -87,12 +87,18 @@ class AccountsWindow implements TerminalAccounts {
   private readonly seams: RoundSeams;
   private memoryNow: Memory = new Map();
   private round = 0;
+  /** The generation the running round started at: the news of a host is applied only while it is still this one. */
+  private roundGeneration = 0;
   private lastEndMs: number | undefined;
   /** When the round that runs, or ran last, started: the first-round notice names only the "yes" rows older than it. */
   private roundStartedMs = 0;
   private timer: ReturnType<typeof setTimeout> | undefined;
   private armed = false;
   private running = false;
+  /** A Start came while a round ran: its refresh runs when that round ends (the door refuses a second round, it does not queue). */
+  private startPending = false;
+  /** Set by `dispose`: nothing starts again, and the round in flight publishes nothing. */
+  private disposed = false;
   /** Bumped on a Stop, on a refusal and on a Forget: a result of a round that started before it is dropped. */
   private generation = 0;
   private replaced: AccountsCall | undefined;
@@ -111,6 +117,14 @@ class AccountsWindow implements TerminalAccounts {
       memoryHosts: () => [...this.memoryNow.keys()].sort(byCodeUnit),
       lastItems: () => this.shown,
     };
+  }
+
+  /** A host's news landed (step 8): the round's memory so far is the window's, unless a Stop, a refusal or a Forget came since the round started. */
+  private landedFrom(memory: Memory): void {
+    if (this.running && this.generation === this.roundGeneration) {
+      this.memoryNow = liveOnly(memory, accountsHosts(windowTerminals()));
+    }
+    this.landed.fire();
   }
 
   /** The Stop, the door, the ONE call and the ONE parse. */
@@ -133,7 +147,7 @@ class AccountsWindow implements TerminalAccounts {
       },
       parse: (run, mode) => readAccounts(run, mode, Date.now()),
       now: () => Date.now(),
-      landed: () => { this.landed.fire(); },
+      landed: (memory) => { this.landedFrom(memory); },
       generation: () => this.generation,
       dropped: (host) => { write(droppedLine(host)); },
     };
@@ -154,6 +168,9 @@ class AccountsWindow implements TerminalAccounts {
 
   /** The ONE place a timer is set: only what `timerFor` answers is applied. */
   private apply(action: TimerAction): void {
+    if (this.disposed) {
+      return;
+    }
     if (action.kind === 'none') {
       return;
     }
@@ -170,10 +187,16 @@ class AccountsWindow implements TerminalAccounts {
    * One round, if none runs. A round that fails is one fixed line and nothing else, and the timer is still set from now (`settleRound`):
    * rounds never stop silently.
    */
-  runNow(trigger: Trigger): Promise<RoundResult | undefined> {
-    return this.latch(async () => {
+  async runNow(trigger: Trigger): Promise<RoundResult | undefined> {
+    if (this.disposed) {
+      return undefined;
+    }
+    let ran = false;
+    const result = await this.latch(async () => {
+      ran = true;
       this.running = true;
       this.roundStartedMs = Date.now();
+      this.roundGeneration = this.generation;
       this.landed.fire();
       try {
         return await settleRound(
@@ -187,6 +210,12 @@ class AccountsWindow implements TerminalAccounts {
         this.landed.fire();
       }
     });
+    if (ran && this.startPending && !this.disposed) {
+      this.startPending = false;
+      void this.runNow('refresh');
+    }
+
+    return result;
   }
 
   /** After a round, or after one that failed (`done` is nothing): the memory it left, and the next timer, counted from its end or from now. */
@@ -242,6 +271,7 @@ class AccountsWindow implements TerminalAccounts {
 
   async stop(): Promise<void> {
     this.generation += 1;
+    this.startPending = false;
     clearTimeout(this.timer);
     this.timer = undefined;
     this.armed = false;
@@ -252,7 +282,9 @@ class AccountsWindow implements TerminalAccounts {
 
   async start(): Promise<boolean> {
     const started = await startTheRound(this.sessions);
-    if (started) {
+    if (started && this.running) {
+      this.startPending = true;
+    } else if (started) {
       void this.runNow('refresh');
     }
 
@@ -305,6 +337,9 @@ class AccountsWindow implements TerminalAccounts {
   }
 
   dispose(): void {
+    this.disposed = true;
+    this.generation += 1;
+    this.startPending = false;
     clearTimeout(this.timer);
     this.landed.dispose();
   }
