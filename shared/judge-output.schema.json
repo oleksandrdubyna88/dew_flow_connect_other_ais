@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coai.dev/schemas/judge-output.schema.json",
+  "$comment": "What the judge role (epoch 3 E3 s1; the model list is `important`) returns: ONE JSON object. The judge is read-only (Read, Glob, Grep) and writes NO file: a design decision is `decision`, a review is `findings`. Arm `ok` carries a verdict (approve, revise or reject), a summary, the findings and, only when the brief asks to choose, a decision; arm `refused` carries a reason. The severity words are the gate's own four (src_mcp/core/Findings/FindingSchema.cs). Three rules the shape cannot say are checked by the reader: `approve` with a `blocking` finding is an error; `revise` or `reject` with no finding is an error; a finding id is used once. An evidence item is {file, line, text} and coai checks it itself as for the scout (a blank text is an error, judged before any line is read; a path that may not be opened is an error). coai builds the envelope of result.json; a model's `verified` is never read (an unknown key is an error). The limits are the tables of src_mcp/core/Roles/JudgeOutput.cs; neither half of the product has a JSON Schema engine, so coai-mcp reads this shape with its own strict reader and AJudgeContractTests holds the file and the reader equal.",
+  "title": "coai judge output",
+  "type": "object",
+  "required": ["status"],
+  "additionalProperties": false,
+  "properties": {
+    "status": { "enum": ["ok", "refused"] },
+    "reason": { "type": "string", "minLength": 1 },
+    "verdict": { "enum": ["approve", "revise", "reject"] },
+    "summary": { "type": "string", "minLength": 1, "maxLength": 1500 },
+    "findings": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 30,
+      "items": { "$ref": "#/$defs/finding" }
+    },
+    "decision": { "$ref": "#/$defs/decision" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "ok" } } },
+      "then": {
+        "required": ["verdict", "summary", "findings"],
+        "properties": { "status": {}, "verdict": {}, "summary": {}, "findings": {}, "decision": {} },
+        "additionalProperties": false
+      }
+    },
+    {
+      "if": { "properties": { "status": { "const": "refused" } } },
+      "then": {
+        "required": ["reason"],
+        "properties": { "status": {}, "reason": {} },
+        "additionalProperties": false
+      }
+    }
+  ],
+  "$defs": {
+    "finding": {
+      "type": "object",
+      "required": ["id", "severity", "title", "detail"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^f[1-9][0-9]*$" },
+        "severity": { "enum": ["blocking", "major", "minor", "nit"] },
+        "title": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "detail": { "type": "string", "minLength": 1, "maxLength": 1500 },
+        "evidence": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 5,
+          "items": { "$ref": "#/$defs/evidence" }
+        },
+        "fix": { "type": "string", "maxLength": 600 }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "required": ["file", "line", "text"],
+      "additionalProperties": false,
+      "properties": {
+        "file": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "line": { "type": "integer", "minimum": 1 },
+        "text": { "type": "string", "minLength": 1, "maxLength": 300, "pattern": "\\S" }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "required": ["chosen", "why"],
+      "additionalProperties": false,
+      "properties": {
+        "chosen": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "why": { "type": "string", "minLength": 1, "maxLength": 1500 },
+        "rejected": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 8,
+          "items": {
+            "type": "object",
+            "required": ["option", "why"],
+            "additionalProperties": false,
+            "properties": {
+              "option": { "type": "string", "minLength": 1, "maxLength": 120 },
+              "why": { "type": "string", "minLength": 1, "maxLength": 1500 }
+            }
+          }
+        }
+      }
+    }
+  }
+}
