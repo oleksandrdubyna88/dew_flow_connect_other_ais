@@ -433,6 +433,23 @@ public sealed class ProcessLauncher : IProcessLauncher
         {
             environment[name] = value;
         }
+
+        WithoutPoolKeys(environment);
+    }
+
+    /// <summary>The prefix of every variable of the claude key pool's sources (<c>COAI_CLAUDE_KEY_*</c>, <c>COAI_CLAUDE_ACCOUNT_*</c>, <c>COAI_CLAUDE_KEYS_FILE</c>).</summary>
+    internal const string PoolKeyPrefix = "COAI_CLAUDE_";
+
+    /// <summary>
+    /// No variable of the key pool's sources reaches ANY child, whatever it inherits or is passed (epoch 3 E2 s7, the security judgement's finding 1): the keys of the environment source are for the pool and for the ONE chosen key a role launch hands its own claude
+    /// as <c>CLAUDE_CODE_OAUTH_TOKEN</c> — never for a gate reviewer, a consultation, git or the role runner. Applied last, so no later line of this method can put one back.
+    /// </summary>
+    private static void WithoutPoolKeys(IDictionary<string, string?> environment)
+    {
+        foreach (var name in environment.Keys.Where(name => name.StartsWith(PoolKeyPrefix, StringComparison.OrdinalIgnoreCase)).ToList())
+        {
+            environment.Remove(name);
+        }
     }
 
     /// <summary>Keeps only the names in the request's allowlist — <see cref="ProcessEnvironment.Passthrough"/> unless the request named another.</summary>
