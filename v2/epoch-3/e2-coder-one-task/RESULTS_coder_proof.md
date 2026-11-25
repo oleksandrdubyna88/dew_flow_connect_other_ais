@@ -87,3 +87,48 @@ Three runs came before it, and what they found is part of the result: (a) a code
 - A submodule that holds a symbolic link, is not initialised in the main checkout, or whose pinned commit is not in its object store is not provided; the job goes on and the log and the unit record say so (`note`). Then its tests are red as before.
 - A job started on a machine where the units cannot see node (no `~/.nvm` on the person's real `PATH`) still has the node-bound convention tests red; that is a property of the machine's toolchain, not of this change.
 - Checks before the push, on the final tree: `dotnet format whitespace --verify-no-changes` on the three projects touched (clean); the whole mcp suite outside a unit, low priority: 16,512 tests, 0 failed, 156 skipped, 11 m 59 s; `dotnet publish src_mcp/src/CoaiMcp.csproj -c Release -r linux-x64 -warnaserror` (native AOT) succeeded, 1 m 37 s; `testLeftovers.test.mjs` 8 of 8; `adapter-check` OK; `plan-lifecycle` clean.
+
+## t3 — the real coder job (claude/sonnet) on the baseline task (2026-11-25): GREEN, 0 fix turns, 0.0727 USD
+
+**Short answer.** One paid coder job, started after the recorded change above and the cooldown fix (26e5024f), went green on the first turn: 2 files, +30 −1, the whole solution build and the whole test executable green in the check unit. The main AI used **45,446 fresh tokens** (baseline 323,072), **815 s active** (baseline 894 s) and accepted **1 finding** (baseline 3; code rounds 1 against 2). All three numbers are below the baseline. One paid run of the two allowed was used.
+
+### What was run
+
+- Binary `/home/jinx/coai-t3/bin/coai-mcp` `2.1.0-keys.2` (AOT of 26e5024f). Data folder `/home/jinx/coai-t3/data`; person sign-in switch off; settings: coder list `claude/sonnet` only, `COAI_FIX_ROUNDS` 3. Coder root and coder jobs folder on the real disk (`/home/jinx/coai-t3/coder-root`, `/home/jinx/coai-t3/coder-jobs`). Launcher `systemd-run`. Driver: a stdio client with a small environment (PATH with the nvm node, HOME, the user bus, the coai folders) and a cost guard that cancels the job at 3.5 USD (owner cap 4 USD); it did not fire.
+- Repository: a clone of `feat/v2-ep3-e2-coder` at 26e5024f, `/home/jinx/git/coai-v2-t3-clone`, its submodule initialised offline, plus one clone-only commit ae72656c with the task file `stories/s6-proof-and-measure/tasks/t7-worktree-paths-same/task.yaml` (kind code, complexity 4, four dod items taken from BASELINE.md section 3). Nothing of the clone is committed here. The same base and task file are for the codex and agy runs of the comparison.
+- Job **r20261125200645-562c2de4**, 20:06:45–20:16:32 UTC (584 s wall). Route `claude/sonnet`, one attempt, key k-2b88f1669d85 (200usd; claude-2 is still in its own cooldown). Envelope: `schemaValid` true, `fixTurns` 0, `green` true, `checksState` green; build 34.8 s, test step 530.9 s. `mainCheckout.changed` false.
+
+### The coder's work
+
+- `WorktreePaths.Same` takes the comparison from one private property: `OrdinalIgnoreCase` on Windows and macOS, `Ordinal` otherwise, the same rule as `WorktreeManager`'s guard. Two new tests: two real folders `Repo` and `repo` are not Same (skips on Windows and macOS); one folder is Same with a symbolic link to it and with a trailing separator.
+- Checked by the main AI: the case test is RED against the base's `WorktreePaths.cs` (1 failed, 3 passed in its class) and green with the fix. The coder's own report says it ran no test; the check unit ran them.
+- The coder's usage (ledger line): 15.5 s, tokens in 50,181 (cached 37,755), out 1,921, **0.0727 USD**. Paid in total by this task: 0.0727 USD.
+
+### The gate (session e390ae84 of the 2.0 server, on the clone's coder branch)
+
+| Round | Verdict | Reviewers | Findings | Accepted / rejected | Gate tokens (in / out) |
+|---|---|---|---|---|---|
+| plan 1 (the task file) | proceed | 1 of 1 | 3 (2 major, 1 minor) | 0 / 3 | 39,946 / 491 |
+| code 1 | proceed | 4 of 4 | 1 (blocking: the module doc rule) | 1 / 0 | 161,713 / 573 |
+
+The plan findings were rejected with reasons: a per-volume case probe is out of scope and would make `Same` disagree with the guard; Windows and macOS keep the old comparison; the link case is already in the second test. The accepted code finding (the knowledge-base rule: a code change updates its module doc) was done by the main AI as commit c8669198 on branch `t3-main-ai` of the clone (one paragraph of `research/module_server.md`). The task file had said "only the two files", which was the cause of the finding.
+
+### The three numbers (BASELINE.md section 1, the same reader)
+
+| Number | t3 | Baseline |
+|---|---|---|
+| (a) fresh tokens | **45,446** = input 72 + cache creation 29,952 + output 15,422 (33 responses) | 323,072 |
+| (a) cache read | 5,389,757 | 12,619,098 |
+| (b) active time | **815 s** | 894 s |
+| (b) elapsed | 23.9 min (19:55:32 to 20:19:24 UTC) | 222.2 min |
+| (c) accepted findings | **1** (plan 0, code 1) | 3 (plan 1, code 2) |
+
+Window: from the main AI's write of the task file to the end of the code gate. The second window from the job's start only: 29,245 fresh tokens, 759 s active. The 584 s of the job's run are inside the active time: the main AI's events around it were less than 10 minutes apart.
+
+### Limits, said plainly
+
+- One task, one run; the noise between equal runs was 11–16 %. The token gap (7×) is far outside it; the active-time gap (9 %) is inside it.
+- The task was easier for the main AI than the baseline's: BASELINE.md section 3 had already found the cause and named the files, and the baseline's window includes finding a cause from a failed remote run. The end is the code gate, not a merge on main (the baseline's elapsed time ends at `mergedAt`).
+- The main AI here is the same model (`claude-opus-5-5`); its effort level was not set for this window.
+- The ledger line of the coder's turn has an empty `job` field (the key id is there); the job id is found by time and key. A todo for the ledger.
+- Not repeated here: the key scan after the job (`--keys scan`): data folder 30 files, job folder 10, coder worktree 7,275, coder jobs folder 411, the driver's folder 16 — every one "no hit". The coder's home holds no `.credentials.json`; the person's sign-in file was last changed at 18:21 UTC, before the job.
