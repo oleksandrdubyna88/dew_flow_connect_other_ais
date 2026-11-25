@@ -60,3 +60,10 @@ Also: unfair lock — accept after must 5; only `.key` synced — accept with th
 ## Mutations planted by the judge (all went red, 13 tests)
 
 Secret `ToString` gives the text; keys-file mode check off; `ModeProblem` off; label redaction off; `COAI_CLAUDE_` allowed for the runner; scanner follows links.
+
+## Follow-ups (written todos, not code; added by the s7 part 2 session, 2026-11-25)
+
+- Core dumps hold the env keys: set the process non-dumpable, or `LimitCORE=0` in the AMI unit rule. Not done.
+- Windows: no key test runs there and `ModeProblem` is always empty; one Windows CI leg before t5 ships. Not done.
+- The keys file has no owner check (the BCL offers none); a read-only FIFO named as the keys file is still opened for reading.
+- The shared-instance setting is `COAI_KEYS_SHARED=1`; the `--install --shared` that should write it does not exist in this tree.
