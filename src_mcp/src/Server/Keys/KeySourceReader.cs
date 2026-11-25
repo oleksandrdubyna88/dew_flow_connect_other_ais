@@ -25,7 +25,8 @@ internal static partial class KeySourceReader
     [GeneratedRegex("^[a-z0-9_-]{1,40}$", RegexOptions.CultureInvariant)]
     private static partial Regex SourceLabel();
 
-    internal static bool IsAccount(string account) => Account().IsMatch(account);
+    /// <summary>An account is an email address: text without a space that holds an <c>@</c> and that the redactor does not read as a secret (the judgement of s7 part 1, finding 4: a token typed as an account was stored and printed).</summary>
+    internal static bool IsAccount(string account) => Account().IsMatch(account) && account.Contains('@') && CoaiMcp.Core.Notices.Redaction.FirstSecretClass(account).Length == 0;
 
     /// <summary>An account: an email-shaped text without a space or control character, 254 characters at most.</summary>
     [GeneratedRegex(@"^[^\s\p{C}]{1,254}$", RegexOptions.CultureInvariant)]
@@ -60,7 +61,13 @@ internal static partial class KeySourceReader
     /// </summary>
     public static KeyResult<SourceRead> FromFile(string path, Func<string, UnixFileMode> modeOf)
     {
-        if (!File.Exists(path))
+        var info = new FileInfo(path);
+        if (info.LinkTarget is not null)
+        {
+            return KeyResult<SourceRead>.Refused("the keys file is a link, and a keys file is never read through one — name the real file");
+        }
+
+        if (!info.Exists)
         {
             return KeyResult<SourceRead>.Refused("the keys file is not there");
         }
@@ -73,12 +80,25 @@ internal static partial class KeySourceReader
         string text;
         try
         {
-            if (new FileInfo(path).Length > MaxFileBytes)
+            // ONE handle for everything that follows (the judgement of s7 part 1): the type, the mode, the size and the text are all asked of the file that is open, not of a path that could be another file a moment later.
+            using var stream = OpenForRead(path);
+            if (!stream.CanSeek)
+            {
+                return KeyResult<SourceRead>.Refused("the keys file is not a regular file (a pipe or a device) — nothing was read");
+            }
+
+            if (!OperatingSystem.IsWindows() && ModeOfOpenFile(path, stream) is { Length: > 0 } wrongNow)
+            {
+                return KeyResult<SourceRead>.Refused(wrongNow);
+            }
+
+            if (stream.Length > MaxFileBytes)
             {
                 return KeyResult<SourceRead>.Refused($"the keys file is larger than {MaxFileBytes} bytes");
             }
 
-            text = File.ReadAllText(path);
+            using var reader = new StreamReader(stream, System.Text.Encoding.UTF8);
+            text = reader.ReadToEnd();
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -87,6 +107,26 @@ internal static partial class KeySourceReader
 
         return Parse(text, KeySources.File(Path.GetFullPath(path)));
     }
+
+    /// <summary>
+    /// Opens the file for reading. Read AND write access is asked first, because opening a pipe that way does not wait for a writer (a plain read open would, for ever, and hold the start); a file the person made read-only is then opened for reading.
+    /// The owner is not asked: a file of another user with no group or other bit cannot be opened here at all.
+    /// </summary>
+    private static FileStream OpenForRead(string path)
+    {
+        try
+        {
+            return new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite | FileShare.Delete);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        }
+    }
+
+    /// <summary>The mode problem of the file that is OPEN, asked of its handle — the same words as the path check.</summary>
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    private static string ModeOfOpenFile(string path, FileStream stream) => WrongMode(path, _ => File.GetUnixFileMode(stream.SafeFileHandle));
 
     private static string WrongMode(string path, Func<string, UnixFileMode> modeOf)
     {
@@ -269,9 +309,9 @@ internal static partial class KeySourceReader
             {
                 Refuse(line, "the key has no value");
             }
-            else if (account.Length > 0 && !Account().IsMatch(account))
+            else if (account.Length > 0 && !IsAccount(account))
             {
-                Refuse(line, "the account is not an email-shaped text without spaces");
+                Refuse(line, "the account must be an email address (an @, no space) that is not a secret");
             }
             else
             {

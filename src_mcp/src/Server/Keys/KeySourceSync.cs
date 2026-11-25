@@ -21,10 +21,15 @@ internal static class KeySourceSync
     {
         var admin = new KeyAdmin(access);
         var sync = new KeySync(access, admin);
-        var results = new List<KeySourceResult>
+        var all = variables.ToList();
+        var results = new List<KeySourceResult>();
+
+        // The environment source is swept ONLY when at least one of its variables is there (the judgement of s7 part 1): a process started without them is not a rotation that removed every key, and a start must not disable the keys a person added through the environment.
+        if (all.Any(pair => pair.Key.StartsWith(KeySourceReader.KeyPrefix, StringComparison.Ordinal)))
         {
-            Apply(sync, KeySources.Environment, KeyResult<SourceRead>.Of(KeySourceReader.FromEnvironment(variables))),
-        };
+            results.Add(Apply(sync, KeySources.Environment, KeyResult<SourceRead>.Of(KeySourceReader.FromEnvironment(all))));
+        }
+
         if (KeysFilePath(settings) is { Length: > 0 } path)
         {
             var read = KeySourceReader.FromFile(path, access.Folder.ModeOfFile);
