@@ -33,13 +33,33 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
     /// </summary>
     public CheckBoundary ForChecks() => new(launcher, host) { Degrade = Degrade };
 
-    /// <summary>The properties a coder launch of this job runs with — the list the result records. Empty when the program cannot be given to a unit.</summary>
-    public IReadOnlyList<string> PropertiesFor(BoundaryJob job, string executable, TimeSpan runtimeMax)
+    /// <summary>The properties a coder launch of this job runs with — the list the result records. Empty when the program cannot be given to a unit. <paramref name="withKey"/>: the launch carries a pool key, so no sign-in file is bound and the key folder is hidden.</summary>
+    public IReadOnlyList<string> PropertiesFor(BoundaryJob job, string executable, TimeSpan runtimeMax, bool withKey = false)
     {
         var program = CoderProgram.Resolve(executable, host.Path, job);
 
-        return program.Problem.Length > 0 ? [] : CoderUnit.Properties(host, job, program, runtimeMax);
+        return program.Problem.Length > 0 ? [] : CoderUnit.Properties(HostFor(withKey), job, program, runtimeMax);
     }
+
+    /// <summary>
+    /// The request with every explicit variable taken out of its environment and put before the prompt, one line each at the head of stdin: what the unit's own shell reads (<see cref="CoderUnit.Inner"/>). The environment of the <c>systemd-run</c> client is
+    /// then empty of values: a process of the same user can read it.
+    /// </summary>
+    private static ProcessRequest WithSecretsOnStdin(ProcessRequest request, CoderUnit.Crossing crossing) =>
+        request with
+        {
+            Environment = new Dictionary<string, string?>(),
+            StdIn = crossing.StdinHead + request.StdIn,
+        };
+
+    /// <summary>
+    /// The host as ONE launch sees it: a launch that carries a pool key (epoch 3 E2 s7) binds no sign-in file of the person's — the key is its credential — so its unit, its preflight and its record are made over a host with <see cref="BoundaryHost.BindSignIn"/> false.
+    /// </summary>
+    private BoundaryHost HostFor(bool withKey) => withKey ? host with { BindSignIn = false } : host;
+
+    /// <summary>Whether <paramref name="request"/> carries a pool key: the variable the claude CLI reads it from is in its explicit environment with a value. The one reading, for the admission and for the launch, so the two cannot disagree.</summary>
+    public static bool CarriesKey(ProcessRequest request) =>
+        request.Environment.TryGetValue(CoaiMcp.Runners.Consultation.ClaudeConsultant.KeyVariable, out var value) && !string.IsNullOrEmpty(value);
 
     /// <summary>
     /// The preflight, before the launch: makes the coder's folders, then runs the exact property set once and asks the OS every item of <see cref="BoundaryPreflight.CoderItems"/>. A wrong answer anywhere refuses the launch with a sentence;
@@ -48,9 +68,10 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
     /// <param name="job">The job: its worktree, its main checkout, its folders.</param>
     /// <param name="executable">The program the launch will run — an absolute path, or a name on coai's PATH.</param>
     /// <param name="ct">The caller's cancel.</param>
-    public async Task<BoundaryAdmission> AdmitAsync(BoundaryJob job, string executable, CancellationToken ct = default)
+    public async Task<BoundaryAdmission> AdmitAsync(BoundaryJob job, string executable, CancellationToken ct = default, bool withKey = false)
     {
-        var early = host.PlatformRefusal() is { Length: > 0 } platform ? platform : job.CoderProblem();
+        var launchHost = HostFor(withKey);
+        var early = host.PlatformRefusal() is { Length: > 0 } platform ? platform : withKey && job.KeysFolderProblem() is { Length: > 0 } hidden ? hidden : job.CoderProblem() is { Length: > 0 } problem ? problem : job.MountsOnDiskProblem();
         if (early.Length > 0)
         {
             return Refuse(early, []);
@@ -70,7 +91,7 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
 
         try
         {
-            return await AskAsync(job, program, prepared.Copy, ct);
+            return await AskAsync(launchHost, job, program, prepared.Copy, ct);
         }
         finally
         {
@@ -78,10 +99,10 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
         }
     }
 
-    private async Task<BoundaryAdmission> AskAsync(BoundaryJob job, CoderProgram program, string windowsCopy, CancellationToken ct)
+    private async Task<BoundaryAdmission> AskAsync(BoundaryHost launchHost, BoundaryJob job, CoderProgram program, string windowsCopy, CancellationToken ct)
     {
-        var rows = await PreflightAsync(job, program, windowsCopy, ct);
-        var record = new BoundaryRecord(BoundaryRecord.UnitBoundary, CoderUnit.Properties(host, job, program, PreflightBudget + UnitControl.Backstop), "host", NetworkReason, rows);
+        var rows = await PreflightAsync(launchHost, job, program, windowsCopy, ct);
+        var record = new BoundaryRecord(BoundaryRecord.UnitBoundary, CoderUnit.Properties(launchHost, job, program, PreflightBudget + UnitControl.Backstop), "host", NetworkReason, rows);
         var bad = rows.FirstOrDefault(row => !row.Held);
 
         return bad is not null
@@ -92,13 +113,13 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
     private static BoundaryAdmission.Refused Refuse(string sentence, IReadOnlyList<PreflightRow> rows) =>
         new(sentence, new BoundaryRecord(BoundaryRecord.UnitBoundary, [], "host", NetworkReason, rows));
 
-    private async Task<IReadOnlyList<PreflightRow>> PreflightAsync(BoundaryJob job, CoderProgram program, string windowsCopy, CancellationToken ct)
+    private async Task<IReadOnlyList<PreflightRow>> PreflightAsync(BoundaryHost launchHost, BoundaryJob job, CoderProgram program, string windowsCopy, CancellationToken ct)
     {
         var unit = CoderUnit.UnitName(job, "pre");
-        var signIn = host.SignInFile.Length > 0 ? job.CoderSignInFile : string.Empty;
+        var signIn = launchHost.SignInFile.Length > 0 ? job.CoderSignInFile : string.Empty;
         IReadOnlyList<string> inner =
-            ["/usr/bin/env", "-i", .. CoderUnit.Environment(host, job).Select(pair => $"{pair.Key}={pair.Value}"), .. BoundaryPreflight.CoderCommand(job, host, program, windowsCopy, signIn)];
-        var arguments = BoundaryUnit.Wrap(unit, job.Tree.Root, [], CoderUnit.Properties(host, job, program, PreflightBudget + UnitControl.Backstop), inner, Degrade);
+            ["/usr/bin/env", "-i", .. CoderUnit.Environment(host, job).Select(pair => $"{pair.Key}={pair.Value}"), .. BoundaryPreflight.CoderCommand(job, launchHost, program, windowsCopy, signIn)];
+        var arguments = BoundaryUnit.Wrap(unit, job.Tree.Root, [], CoderUnit.Properties(launchHost, job, program, PreflightBudget + UnitControl.Backstop), inner, Degrade);
         var started = await _units.StartAsync(new ProcessRequest(host.SystemdRun, arguments, job.Tree.Root)
         {
             Timeout = PreflightBudget,
@@ -106,7 +127,7 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
             Passthrough = UnitControl.Client,
         }, ct);
 
-        return BoundaryPreflight.Rows(started, started.Problem.Length == 0 && await _units.EnsureGoneAsync(unit), BoundaryPreflight.CoderItems);
+        return BoundaryPreflight.Rows(started, started.Problem.Length == 0 && await _units.EnsureGoneAsync(unit), BoundaryPreflight.CoderItemsFor(job));
     }
 
     /// <summary>
@@ -138,19 +159,25 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
             throw new InvalidOperationException($"the coder's program cannot be run in the unit: {program.Problem}");
         }
 
-        var names = CoderUnit.ByName(request, System.Environment.GetEnvironmentVariable);
+        // A secret is NOT a property of the unit. A `--setenv=NAME` is copied into the unit's Environment property and into a transient unit file of mode 0644 under /run/user for as long as the unit lives (measured, second judgement; the third judgement found a row's own
+        // ANTHROPIC_API_KEY still going that way): so every explicit variable travels as a line at the head of the unit's stdin — the pool key first — which the unit's own shell reads and exports before the exec. Nothing but the pipe, and the child's own environment,
+        // ever holds it, and the client is started with none.
+        var keyed = CarriesKey(request);
+        var crossing = CoderUnit.Cross(request, System.Environment.GetEnvironmentVariable);
+        var sent = WithSecretsOnStdin(request, crossing);
         var unit = CoderUnit.UnitName(job, part);
-        var record = seen with { Properties = CoderUnit.Properties(host, job, program, request.Timeout + UnitControl.Backstop) };
+        var launchHost = HostFor(keyed);
+        var record = seen with { Properties = CoderUnit.Properties(launchHost, job, program, request.Timeout + UnitControl.Backstop) };
         try
         {
-            var arguments = CoderUnit.Arguments(host, job, program, unit, request.Timeout + UnitControl.Backstop, request.Arguments, names, Degrade);
-            var started = await _units.StartAsync(request with
+            var arguments = CoderUnit.Arguments(launchHost, job, program, unit, request.Timeout + UnitControl.Backstop, request.Arguments, crossing, Degrade);
+            var started = await _units.StartAsync(sent with
             {
                 Executable = host.SystemdRun,
                 Arguments = arguments,
                 WorkingDirectory = job.Tree.Root,
                 InheritsEnvironment = false,
-                Passthrough = CoderUnit.ClientNames(names),
+                Passthrough = CoderUnit.ClientNames(crossing.ByName),
             }, ct);
             var result = started.Problem.Length > 0 ? started.Result with { StdErr = started.Problem } : started.Result;
 

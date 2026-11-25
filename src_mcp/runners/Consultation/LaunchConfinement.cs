@@ -37,6 +37,9 @@ public abstract record LaunchConfinement
     {
         /// <summary>The handle of the turn this one continues; <see cref="CoderHandle.None"/> for the first turn of a job.</summary>
         public CoderHandle Resume { get; init; } = CoderHandle.None;
+
+        /// <summary>The id of the pool key this turn runs on (epoch 3 E2 s7); empty when the launch carries none. A resume handle made for another key is refused (<see cref="CoderLaunches.WhyNot"/>).</summary>
+        public string KeyId { get; init; } = string.Empty;
     }
 
     public static LaunchConfinement AsShipped { get; } = new Shipped();

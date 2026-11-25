@@ -67,8 +67,8 @@ internal sealed class CoderWork : IRoleWork
             return failure;
         }
 
-        var prepared = made.Prepared!;
-        var layer = LayerFor(run, prepared);
+        var layer = await LayerForAsync(run, made.Prepared!, ct);
+        var prepared = made.Prepared! with { Tree = layer.Job.Tree };
 
         // The fix cap is read ONCE, here: it is the job's, and a model that takes over does not bring turns of its own (epoch 3 E2 s4 t3).
         var (cap, note) = FixRounds.Read(run.Settings);
@@ -90,7 +90,7 @@ internal sealed class CoderWork : IRoleWork
             Ladder = Ladder,
             Coder = confinement,
             OsLayer = layer,
-            Follow = (answered, token) => FollowAsync(run, git, prepared, site, loop, judge.Accepted, new CoderFixSession(answered.Model, answered.Handle, confinement), ++answers, layer, cap, note, token),
+            Follow = (answered, token) => FollowAsync(run, git, prepared, site, loop, judge.Accepted, new CoderFixSession(answered.Model, answered.Handle, confinement, answered.KeyId, answered.Secret), ++answers, layer, cap, note, token),
             Restore = token => CoderRestore.RestoreAsync(git, prepared.Tree, loop.LastCommit, token),
         };
 
@@ -101,14 +101,30 @@ internal sealed class CoderWork : IRoleWork
     /// The OS layer of this job: the boundary job (the worktree writable, the main checkout and the coder root read-only, the job's own folders — the coder's home among them — under <see cref="CoderOsLayer.JobFolder"/>), and ONE launcher for
     /// every process of it, so the systemd-run client of a turn is recorded in <c>job.json</c> like any CLI child. The layer lives as long as the work: the repair turn and the fix turns of the checks run in it too, on the same home.
     /// </summary>
-    private CoderOsLayer LayerFor(IRoleRun run, Prepared prepared)
+    private async Task<CoderOsLayer> LayerForAsync(IRoleRun run, Prepared prepared, CancellationToken ct)
     {
         var folder = CoderOsLayer.JobFolder(run.Settings, said => run.Log.Warning("role job {JobId}: {Said}", run.Request.JobId, said), run.Request.JobId);
 
         var launcher = new ProcessLauncher(run.Children);
 
-        return new CoderOsLayer(BoundaryJob.ForCoder(run.Request.JobId, prepared.Tree, folder), (Turns ?? CoderOsLayer.ShippedTurns)(launcher), launcher);
+        // The key pool's folder is hidden from a launch that carries a key (InaccessiblePaths), and the preflight proves a read of it fails from inside.
+        var job = BoundaryJob.ForCoder(run.Request.JobId, prepared.Tree, folder) with { KeysFolder = Path.Combine(run.DataDir, "keys"), KeysFile = KeysFileOf(run) };
+
+        // The submodules of the base commit (epoch 3 E2 s6, the recorded change): provided read-only into every unit of the job, from the main checkout's own object store and with no network; the tree protects '.gitmodules' and their paths from the coder's diff.
+        var mounts = await new CoderSubmodules(launcher).ProvideAsync(prepared.Tree.MainCheckout, prepared.BaseSha, prepared.Tree.Root, job.MountsFolder, ct);
+        foreach (var declared in mounts.Declared.Where(mount => !mount.Provided))
+        {
+            run.Log.Warning("role job {JobId}: the submodule {Path} is {Note}", run.Request.JobId, declared.Path, declared.Note);
+        }
+
+        job = job with { Tree = prepared.Tree with { Protected = mounts.Protected }, Mounts = mounts.Binds(prepared.Tree.Root) };
+
+        return new CoderOsLayer(job, (Turns ?? CoderOsLayer.ShippedTurns)(launcher), launcher) { Mounts = mounts };
     }
+
+    /// <summary>The keys file the person named, as a full path (empty when none): hidden from a keyed coder's unit.</summary>
+    private static string KeysFileOf(IRoleRun run) =>
+        Server.Keys.KeySourceSync.KeysFilePath(run.Settings) is { Length: > 0 } named ? Path.GetFullPath(named) : string.Empty;
 
     /// <summary>The base commit, the worktree made at it and the tree opened for coai's own git — or the failure that ends the job.</summary>
     private async Task<(Prepared? Prepared, RoleWorkOutcome.Failed? Failure)> MakeWorktreeAsync(IRoleRun run, GitHistory git, CancellationToken ct)

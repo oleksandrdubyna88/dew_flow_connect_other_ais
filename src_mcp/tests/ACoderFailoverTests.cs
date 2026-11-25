@@ -50,7 +50,7 @@ public sealed class ACoderFailoverTests
     // ---------- d1: the restore, alone ----------
 
     /// <summary>The identity coai's own commit needs: the hardened door cannot carry a <c>-c user.name</c>, so it comes from the repository's configuration.</summary>
-    private static async Task IdentifyAsync(BoundaryBed bed)
+    internal static async Task IdentifyAsync(BoundaryBed bed)
     {
         foreach (var (key, value) in new[] { ("user.email", "t@t"), ("user.name", "t"), ("commit.gpgsign", "false") })
         {

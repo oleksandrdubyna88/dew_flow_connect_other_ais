@@ -574,6 +574,7 @@ public sealed class ThePairsThemselvesTests : IDisposable
             ALTER TABLE rounds DROP COLUMN work_item;
             ALTER TABLE consultations DROP COLUMN work_item;
             ALTER TABLE question_consults DROP COLUMN work_item;
+            ALTER TABLE role_attempts DROP COLUMN key_id;
             PRAGMA user_version = 12;
             """);
         SqliteConnection.ClearAllPools();

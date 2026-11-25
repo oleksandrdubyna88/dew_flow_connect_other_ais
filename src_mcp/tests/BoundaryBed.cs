@@ -42,7 +42,29 @@ internal sealed class BoundaryBed : IAsyncDisposable
 
     public BoundaryHost Host { get; }
 
-    public BoundaryJob Job { get; }
+    public BoundaryJob Job { get; private set; }
+
+    /// <summary>
+    /// Gives the job ONE read-only mount (epoch 3 E2 s6, the recorded change): a folder of coai's own with the given files, bound read-only at <paramref name="relative"/> in the worktree. The source is in the job's mounts folder, not inside the job folder (a unit
+    /// binds the job folder writable, and a mount's source must not be reachable through it); the target is made as the empty folder git leaves for a gitlink.
+    /// </summary>
+    public ReadOnlyMount Mount(string relative, params (string Name, string Text)[] files)
+    {
+        var source = Path.Combine(Job.MountsFolder, $"m{Job.Mounts.Count}");
+        Directory.CreateDirectory(source);
+        foreach (var (name, text) in files)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(Path.Combine(source, name))!);
+            File.WriteAllText(Path.Combine(source, name), text);
+        }
+
+        var target = Path.Combine(Worktree, relative);
+        Directory.CreateDirectory(target);
+        var mount = new ReadOnlyMount(source, target);
+        Job = Job with { Mounts = [.. Job.Mounts, mount] };
+
+        return mount;
+    }
 
     public WatchedLauncher Launcher => _bed.Launcher;
 

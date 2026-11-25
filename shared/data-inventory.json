@@ -71,6 +71,7 @@
 
     { "path": "worktrees/", "kind": "directory", "move": false, "mention": true, "why": "scratch checkouts, pruned on every open - copying them moves somebody's repository onto a NAS for no benefit" },
     { "path": "servers/", "kind": "directory", "move": false, "mention": true, "why": "Team-server sign-ins, which belong to the side that made them" },
+    { "path": "keys/", "kind": "directory", "move": false, "mention": true, "why": "the claude key pool of this device: setup-tokens, 0600 files under keys/claude; a moved data folder must not carry keys to another machine, and a backup of it is a copy of every key" },
 
     { "path": "roles/", "kind": "directory", "move": false, "mention": false, "why": "the external-role jobs (epoch 3 E1): one folder per job with its request, its job.json (the authority), its lease and heartbeat, its result and the evidence of each attempt, and cap.lock. A live job's lease and heartbeat mean nothing on another machine, and a copy would hand the destination a claim on a runner that is not there; a finished job is kept for 30 days and its row in coai.db (which moves) is the history" },
     { "path": "claims/", "kind": "directory", "move": false, "mention": false, "why": "one empty file per gate session, held open while a call changes that session - a handle the operating system releases, never content" },

@@ -53,6 +53,19 @@ public abstract record CoderTurnOutcome
     /// <summary>The launch was refused BEFORE any process of the coder started: no boundary here, a preflight row that said no, a launch for another worktree. <paramref name="Record"/> carries the rows.</summary>
     public sealed record Refused(string Sentence, BoundaryRecord Record) : CoderTurnOutcome;
 
+    /// <summary>What the launch was bounded by and what the preflight said: the record of the unit it ran in, or the one of the refusal. Null for none.</summary>
+    public BoundaryRecord? Boundary => this switch
+    {
+        Finished finished => finished.Run.Record,
+        Failed failed => failed.Run.Record,
+        WriteStopped stopped => stopped.Run.Record,
+        Refused refused => refused.Record,
+        _ => null,
+    };
+
+    /// <summary>Whether a unit of the coder was started: false for a launch the preflight or the job's checks refused first.</summary>
+    public bool UnitStarted => this is not Refused;
+
     /// <summary>True only when the coder ran to its end inside the boundary and was not stopped.</summary>
     public bool Green => this is Finished;
 

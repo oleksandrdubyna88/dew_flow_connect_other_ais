@@ -41,6 +41,7 @@ internal static class BoundaryUnit
             $"BindPaths={tree.Root}",
             $"BindReadOnlyPaths={tree.MainCheckout}",
             $"BindReadOnlyPaths={tree.GitEntry}",
+            .. Mounts(job),
             $"BindPaths={job.JobRoot}",
             $"BindPaths={job.TempFolder}:{UnitTemp}",
             $"BindPaths={job.VarTempFolder}:{UnitVarTemp}",
@@ -51,6 +52,12 @@ internal static class BoundaryUnit
             .. Limits(job, runtimeMax),
         ];
     }
+
+    /// <summary>
+    /// The submodule mounts of the job, one property each (epoch 3 E2 s6, the recorded change): a folder of coai's own bound READ-ONLY at its path in the worktree (<c>BindReadOnlyPaths=&lt;source&gt;:&lt;target&gt;</c>), after the worktree's own <c>.git</c> entry and
+    /// before anything that binds a folder of the job. Nothing else of the list changes: a job with no mount has exactly the list E2 recorded, and one with a mount has that list and these elements.
+    /// </summary>
+    internal static IReadOnlyList<string> Mounts(BoundaryJob job) => [.. job.Mounts.Select(mount => $"BindReadOnlyPaths={mount.Source}:{mount.Target}")];
 
     /// <summary>
     /// What hides the host from a unit, for a check and for a coder alike: <c>/home</c>, <c>/root</c> and <c>/run/user</c> are empty tmpfs (<c>ProtectHome=tmpfs</c>), <c>/mnt</c> and <c>/dev/shm</c> too, the rest of the file system is read-only, and the WSL
@@ -76,6 +83,8 @@ internal static class BoundaryUnit
         "ProtectKernelTunables=yes",
         "ProtectControlGroups=yes",
         "Nice=10",
+        // No core file of a unit that may hold a pool key in its memory or its environment (the second judgement).
+        "LimitCORE=0",
     ];
 
     /// <summary>The deadline backstop and the memory ceiling that kills: <c>RuntimeMaxSec</c>, <c>MemoryMax</c> and <c>MemorySwapMax=0</c>.</summary>

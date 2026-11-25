@@ -82,6 +82,19 @@ internal sealed class CoderBed : IAsyncDisposable
     /// <summary>A launch of one <c>sh -c</c> script, the way the unit tests of the checks probe their unit.</summary>
     public ProcessRequest Shell(string script) => Request("/bin/sh", "-c", script);
 
+    /// <summary>Admits the job and runs one launch, as the road of <see cref="CoderTurns"/> does, so a test can read the process itself and the units it started.</summary>
+    public async Task<BoundaryRun> RunLaunchAsync(ProcessRequest request, string part = "c1")
+    {
+        var boundary = Boundary();
+        var admission = await boundary.AdmitAsync(Job, request.Executable);
+        if (admission is not BoundaryAdmission.Admitted admitted)
+        {
+            throw new InvalidOperationException($"the preflight did not admit the launch: {admission}");
+        }
+
+        return await boundary.RunAsync(admitted, Job, request, part);
+    }
+
     /// <summary>
     /// What a person looking at the main checkout, its whole <c>.git</c> included, would call its bytes: every file under it by relative path, hashed. <c>git status</c> is run once first so the index's stat cache is already as git will leave it —
     /// the snapshot is of the checkout and not of one refresh.

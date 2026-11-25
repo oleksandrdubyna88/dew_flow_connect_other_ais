@@ -27,7 +27,7 @@ public sealed class ACoderToolTextTests
     private static string Error(JsonElement answer) => answer.GetProperty("error").GetString()!;
 
     private static RoleJobService ServiceFor(CoderRig rig) =>
-        new(rig.World.DataDir, name => name == "COAI_ROLE_LAUNCHER" ? "setsid" : null, rig.World.Log, _ => true)
+        new(rig.World.DataDir, name => name switch { "COAI_ROLE_LAUNCHER" => "setsid", "COAI_ROLE_CLAUDE_PERSON_SIGN_IN" => "1", _ => null }, rig.World.Log, _ => true)
         {
             Clock = rig.World.Clock,
             Launcher = new DetachedLauncher(new NothingStarted()),

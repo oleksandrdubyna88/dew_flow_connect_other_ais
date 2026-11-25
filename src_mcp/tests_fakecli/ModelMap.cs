@@ -30,13 +30,15 @@ internal static class ModelMap
             entry = entry[Math.Min(Launched(path, model), entry.GetArrayLength() - 1)];
         }
 
+        entry = PoolKey.Choose(entry);
+
         if (entry.ValueKind != JsonValueKind.Object)
         {
             return null;
         }
 
         var values = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var (steering, field) in new[] { ("STDOUT", "stdout"), ("STDERR", "stderr"), ("EXIT", "exit"), ("SLEEP_MS", "sleepMs"), ("OUTFILE_TEXT", "outfileText"), ("WRITE_FILES", "writeFiles"), ("TRY_WRITE_FILES", "tryWriteFiles") })
+        foreach (var (steering, field) in new[] { ("STDOUT", "stdout"), ("STDERR", "stderr"), ("EXIT", "exit"), ("SLEEP_MS", "sleepMs"), ("OUTFILE_TEXT", "outfileText"), ("WRITE_FILES", "writeFiles"), ("TRY_WRITE_FILES", "tryWriteFiles"), ("HOME_FILES", "homeFiles") })
         {
             if (entry.TryGetProperty(field, out var value))
             {

@@ -387,6 +387,8 @@ public sealed class AScoutRunTests
     {
         var values = settings ?? [];
         values.TryAdd("COAI_ROLE_LAUNCHER", "setsid");
+        // Role jobs do not use the person's own sign-in unless the device says so (epoch 3 E2 s7, the key pool): these starts name claude models with no pool, so the switch is set, as in RoleFailoverRig.
+        values.TryAdd("COAI_ROLE_CLAUDE_PERSON_SIGN_IN", "1");
 
         return new RoleJobService(world.DataDir, name => values.GetValueOrDefault(name), world.Log, notice => { world.Notices.Enqueue(notice); return true; })
         {

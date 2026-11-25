@@ -36,6 +36,9 @@ internal sealed class CoderOsLayer(BoundaryJob job, CoderTurns turns, IProcessLa
     private readonly List<CoderMainEvidence> _evidence = [];
     private int _parts;
 
+    /// <summary>The submodules of the job as coai made them (<see cref="CoderSubmodules"/>): written into the record of every launch. None for a job with no submodule.</summary>
+    public CoderMounts Mounts { get; init; } = CoderMounts.None;
+
     /// <summary>The job the layer binds: worktree, main checkout and the job's own folders.</summary>
     public BoundaryJob Job => job;
 
@@ -56,12 +59,16 @@ internal sealed class CoderOsLayer(BoundaryJob job, CoderTurns turns, IProcessLa
     public static CoderTurns ShippedTurns(IProcessLauncher launcher) =>
         new(new CoderBoundary(launcher, BoundaryHost.Current()), new FilesystemInvariant(launcher));
 
-    /// <summary>One launch of the coder inside the layer: the next unit part, the turn, and its evidence kept.</summary>
-    public async Task<CoderTurnOutcome> TurnAsync(ProcessRequest request, CancellationToken ct)
+    /// <summary>One launch of the coder inside the layer: the next unit part, the turn, its evidence kept, and — when <paramref name="recordTo"/> names a folder — the properties of its unit written there (<see cref="CoderUnitRecord"/>).</summary>
+    public async Task<CoderTurnOutcome> TurnAsync(ProcessRequest request, CancellationToken ct, string recordTo = "")
     {
         var part = "c" + Interlocked.Increment(ref _parts).ToString(CultureInfo.InvariantCulture);
         var outcome = await turns.RunAsync(job, request, part, ct);
         Keep(outcome);
+        if (recordTo.Length > 0 && outcome.Boundary is { } record)
+        {
+            CoderUnitRecord.Write(recordTo, part, CoderUnitRecord.UnitName(job, part), record, Mounts, outcome.UnitStarted);
+        }
 
         return outcome;
     }
@@ -122,7 +129,7 @@ internal sealed class CoderOsLayer(BoundaryJob job, CoderTurns turns, IProcessLa
 /// The launcher the executor of ONE coder launch runs through: <see cref="ReviewerExecutor"/> asks it for the process, and it answers by running the coder inside the layer. What the executor reads back is a plain <see cref="ProcessResult"/> — so the
 /// classification of a limit, a crash and a timeout is the failover's own — and what the layer said beyond that is on <see cref="Outcome"/>.
 /// </summary>
-internal sealed class CoderTurnLauncher(CoderOsLayer layer) : IProcessLauncher
+internal sealed class CoderTurnLauncher(CoderOsLayer layer, string recordTo = "") : IProcessLauncher
 {
     /// <summary>What the layer made of the launch; null until the launch has run.</summary>
     public CoderTurnOutcome? Outcome { get; private set; }
@@ -131,7 +138,7 @@ internal sealed class CoderTurnLauncher(CoderOsLayer layer) : IProcessLauncher
     {
         try
         {
-            Outcome = await layer.TurnAsync(request, ct);
+            Outcome = await layer.TurnAsync(request, ct, recordTo);
         }
         catch (OperationCanceledException)
         {

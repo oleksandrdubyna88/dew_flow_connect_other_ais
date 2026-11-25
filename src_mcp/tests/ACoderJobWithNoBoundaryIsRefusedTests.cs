@@ -86,7 +86,8 @@ public sealed class ACoderJobWithNoBoundaryIsRefusedTests
         (await bed.MainBytesAsync()).Should().BeEquivalentTo(main);
     }
 
-    public static TheoryData<string> Items => [.. BoundaryPreflight.CoderItems.Where(item => item != "network-state")];
+    /// <summary>Every item but the network row (it cannot say no) and the two that only a launch WITH a pool key asks for: those are proved able to say no in <see cref="AKeyCoderBoundaryTests"/>.</summary>
+    public static TheoryData<string> Items => [.. BoundaryPreflight.CoderItems.Where(item => item is not ("network-state" or BoundaryPreflight.SignInAbsent or BoundaryPreflight.KeysHidden))];
 
     [Theory]
     [MemberData(nameof(Items))]

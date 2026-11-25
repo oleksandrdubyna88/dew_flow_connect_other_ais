@@ -80,6 +80,12 @@ internal sealed class RoleJobService(string dataDir, Func<string, string?> setti
             return RoleJobAnswers.Refused(routeRefusal);
         }
 
+        // The claude key pool, before any folder is made and without waiting (KEY_POOL_SPEC.md sections 5 and 6): a route of claude models only is refused when the pool is empty (and the device switch not set) or no key can be used now; a route with another vendor starts.
+        if (RoleKeyRoad.For(dataDir, Clock, notice, settings).StartRefusal([.. plan.Route.Select(RoleRoute.Parse).OfType<CoaiMcp.Core.Roles.ModelRef>()]) is { Length: > 0 } noKey)
+        {
+            return RoleJobAnswers.Refused(noKey);
+        }
+
         var store = Store();
         var keeper = Keeper(store);
         await keeper.SweepAsync(ct);
