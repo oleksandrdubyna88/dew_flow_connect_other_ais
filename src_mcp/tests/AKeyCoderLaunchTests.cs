@@ -238,6 +238,59 @@ public sealed class AKeyCoderLaunchTests
         return text.ToString();
     }
 
+    // ---------- K13: the canary ----------
+
+    [Fact]
+    public async Task K13_ACanaryAddedThroughTheRealOneShot_RunsACoderToGreen_AndIsInNoArgvLogLedgerNoticeResultFileOrCommit()
+    {
+        await using var rig = await CoderRig.CreateAsync();
+        var canary = KeyWorld.Token("canary");
+        var id = KeyWorld.IdOf(canary);
+        KeysBinary.Run(rig.World.DataDir, canary + "\n", "--keys", "add", "--label", "canary key").Code.Should().Be(0);
+        var seen = new List<IReadOnlyList<string>>();
+        rig.Degrade = Keep(seen);
+        rig.Says("sonnet", CoderRig.Edits("src/thing.cs"), CoderRig.Report());
+        var job = rig.NewJob();
+
+        var (_, ended) = await rig.RunAsync(job);
+
+        ended.State.Should().Be(RoleJobStates.Succeeded, ended.Reason);
+        Keys(rig, job).Single().Should().Be(id, "the canary was the one key, so the coder ran on it");
+        var text = new StringBuilder();
+        text.AppendLine(string.Join('\n', seen.SelectMany(arguments => arguments)));
+        foreach (var argv in rig.Launches(job))
+        {
+            text.AppendLine(string.Join('\n', argv));
+        }
+
+        foreach (var line in rig.World.Said)
+        {
+            text.AppendLine(line.RenderMessage());
+        }
+
+        foreach (var notice in rig.World.Notices)
+        {
+            text.AppendLine(KeyRig.Line(notice));
+        }
+
+        var head = rig.Envelope(job).GetProperty("headSha").GetString()!;
+        text.AppendLine(await rig.GitAsync(rig.Repo, "log", "-p", "--all", "--format=fuller", head));
+        text.AppendLine(KeysBinary.Run(rig.World.DataDir, string.Empty, "--keys", "list", "--json").Out);
+        text.AppendLine(RoleJobAnswers.Status(new RoleJobObservation(ended, null, false, false, false), rig.World.Store.FolderOf(job.JobId)!.ReadResult()));
+        text.ToString().Should().NotContain(KeyWorld.Sentinel, "no argv, log line, notice, commit, page answer or status holds any part of the canary");
+
+        var secret = new ClaudeKeySecret(id, canary);
+        var keysFolder = Path.Combine(rig.World.DataDir, "keys");
+        var folders = new[] { rig.World.DataDir, rig.JobFolder(job), rig.Repo, rig.WorktreeOf(job) };
+        foreach (var folder in folders)
+        {
+            KeyScanner.Walk(folder, [secret], keysFolder).Hits.Should().BeEmpty($"no file under {Path.GetFileName(folder)} — job.json, request.json, attempts, result.json, usage.jsonl, the notices, coai.db — holds the canary");
+        }
+
+        // The companion: the same search, over the same data folder with the store NOT excluded, finds the canary in its own key file, and only there.
+        KeyScanner.Walk(rig.World.DataDir, [secret], string.Empty).Hits.Select(hit => Path.GetFileName(hit.Path)).Should().Equal([$"{id}.key"], "the search can see the canary where it is");
+    }
+
     // ---------- helpers ----------
 
     private static string[] PutBefore(IReadOnlyList<string> arguments, string property, string added)

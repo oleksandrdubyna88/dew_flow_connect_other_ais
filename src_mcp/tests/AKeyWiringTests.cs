@@ -148,6 +148,28 @@ public sealed class AKeyWiringTests
         Read(Finished(process: notLoggedIn, exposed: true), null).End.Should().Be(KeyLaunchEnd.Exposed);
     }
 
+    // ---------- the structural scan of the launch road ----------
+
+    private static readonly System.Text.RegularExpressions.Regex LoggedKey = new(
+        @"\b(log\w*|Log\w*|logger|Console\s*\.\s*\w+|Warning|Information|Error|Debug|Verbose|Fatal|Note)\b[^;]*?(\.Secret\b|\bReveal\s*\(|\bCredential\b|\bClaudeKeySecret\b)", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant, TimeSpan.FromSeconds(5));
+
+    [Fact]
+    public void Scan_NoLogOrConsoleCallOfTheLaunchRoad_TakesTheSecretOrTheCredential_AndTheScanSeesOneWhenThereIs()
+    {
+        var root = Path.Combine(RepoPaths.Root(), "src_mcp");
+        var files = Directory.GetFiles(Path.Combine(root, "src", "Server", "RoleJobs"), "*.cs").Append(Path.Combine(root, "runners", "Consultation", "ClaudeConsultant.cs")).Append(Path.Combine(root, "runners", "Consultation", "LaunchCredential.cs")).ToList();
+        files.Should().HaveCountGreaterThan(30, "the scan must see the whole launch road");
+
+        var offenders = files
+            .SelectMany(path => LoggedKey.Matches(System.Text.RegularExpressions.Regex.Replace(File.ReadAllText(path), @"///[^\n]*|//[^\n]*", string.Empty)).Select(match => $"{Path.GetFileName(path)}: {match.Value.Trim()[..Math.Min(80, match.Value.Trim().Length)]}"))
+            .ToList();
+
+        offenders.Should().BeEmpty("a log or console call that takes the secret or the credential prints a key");
+        LoggedKey.IsMatch("run.Log.Information(\"launch {Key}\", pooled.Secret);").Should().BeTrue("the scan matches a logged secret");
+        LoggedKey.IsMatch("Console.Error.WriteLine(launch.Credential);").Should().BeTrue("and a logged credential");
+        LoggedKey.IsMatch("run.Log.Information(\"role job {JobId} switched key {Key}\", run.Request.JobId, _lastKeyId);").Should().BeFalse("the real line names the key by its id");
+    }
+
     // ---------- a key that is gone ----------
 
     [Fact]
