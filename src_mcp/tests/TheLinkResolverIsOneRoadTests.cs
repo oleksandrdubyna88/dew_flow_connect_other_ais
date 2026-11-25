@@ -29,6 +29,9 @@ public sealed class TheLinkResolverIsOneRoadTests
         ["src_mcp/runners/Snapshots/SnapshotPlanner.cs"] = "asks whether the entry ITSELF is a link, to name it and never follow it",
         ["src_mcp/runners/Files/HandleRead.cs"] = "reads the kernel's own name for an open handle (/proc/self/fd/N), which is already real",
         ["src_mcp/runners/Files/PrivateFolder.cs"] = "refuses a folder that is itself a link",
+        ["src_mcp/src/Server/Keys/KeyFolder.cs"] = "refuses the key store's folder (or its parent) when it is itself a link and never follows it; the store lives in the product's own data folder, and a link there would hide where a key is written",
+        ["src_mcp/src/Server/Keys/KeySession.cs"] = "refuses a pool.lock that is itself a link and never opens through it: a link there could point the lock, and the mode set on it, at another file",
+        ["src_mcp/src/Server/Keys/KeySourceReader.cs"] = "refuses a keys file that is itself a link and never reads through it; the person names the real file",
         ["src_mcp/runners/Files/BoundedFile.cs"] = "refuses a file that is itself a link, on a path the product owns",
         ["src_mcp/runners/Context/ContextAssembler.cs"] = "names an untracked link git listed, and never follows it; git lists no path through a link",
     };
@@ -66,7 +69,11 @@ public sealed class TheLinkResolverIsOneRoadTests
         ["src_mcp/runners/Worktrees/SubmodulePopulator.cs"] = "the clone source IS the folded path it checked: NoLinksBetween lstat-s every directory from the checkout down to it, so no link can sit on the way",
         ["src_mcp/src/Acp/KimiClearMarkerMode.cs"] = "deletes one file whose DIRECT parent string equals the product's own lock root and whose name matches 16 hex digits plus .survivors.json; a link there is unlinked, never followed",
         ["src_mcp/src/PlanReportMode.cs"] = "--plan-report folds the folder argument only to NAME the items below it and reads no file through it: the walk skips every link (a reparse point) and descends only by directory name; the StartsWith is over the recorded workItem STRINGS, a text comparison that opens nothing",
+        ["src_mcp/src/Server/RoleJobs/CoderCommits.cs"] = "folds the names git itself printed for the coder's own worktree only to OPEN those files for the key search, skipping every link and every missing file; it decides no access and writes nothing, and the StartsWith is over a field of git's raw diff (a leading colon), a text, not a path",
         ["src_mcp/src/Server/QuestionConsult/QuestionConsultSettings.cs"] = "a deny-list of places: every root is compared as written AND at its RealPath, and a root that cannot be resolved is refused",
+        ["src_mcp/src/Server/Keys/KeySourceReader.cs"] = "folds the keys-file path only to NAME the source (`file:<path>`); every StartsWith in it is over a variable NAME (COAI_CLAUDE_KEY_) or a source label, never a path, and the file is judged by its own mode and size before it is read",
+        ["src_mcp/src/Server/Keys/KeySourceSync.cs"] = "folds the keys-file path only to NAME the source; the StartsWith is over an environment variable NAME (COAI_CLAUDE_KEY_), not a path",
+        ["src_mcp/src/Server/Keys/KeyScanner.cs"] = "--keys scan folds the path argument and compares it with the key store's own folder only to SKIP the store (so the keys are not reported as found in their own files); the walk skips every link and reads by name, and the answer is a path and a key id — it decides no access and reads nothing through a link",
         ["src_mcp/src/ValidateWorkMode.cs"] = "--validate-work folds the folder argument only to open it as the plan root; the StartsWith is over the argument TEXT (a flag is refused), and every read below the root goes through DiskWorkFolder, which skips every link (a reparse point) for folders and files alike; the tool twin refuses a link on the way (ValidateWorkTool.LinkOnTheWay)",
     };
 

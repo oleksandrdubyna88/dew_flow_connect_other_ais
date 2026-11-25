@@ -13,11 +13,12 @@ namespace CoaiMcp.Runners.Consultation;
 /// (<see cref="CoderLaunches.WhyNot"/>).</para>
 /// <para>The worktree is compared as a full path, spelled the way the launch spelled it: a second spelling of the same folder (a link) is refused,
 /// which is the safe side of "cannot tell".</para>
+/// <para><b>The key is part of the binding</b> (epoch 3 E2 s7): a role job on the claude key pool resumes a session with the key that started it, so the handle carries the key id (empty for a launch with no key) and a launch whose key is another is refused.</para>
 /// </remarks>
-public sealed record CoderHandle(string JobId, string Worktree, string SessionId)
+public sealed record CoderHandle(string JobId, string Worktree, string SessionId, string KeyId = "")
 {
     /// <summary>No session yet: the first turn of a job.</summary>
-    public static CoderHandle None { get; } = new(string.Empty, string.Empty, string.Empty);
+    public static CoderHandle None { get; } = new(string.Empty, string.Empty, string.Empty, string.Empty);
 
     public bool IsNone => SessionId.Length == 0;
 
@@ -27,6 +28,6 @@ public sealed record CoderHandle(string JobId, string Worktree, string SessionId
     /// </summary>
     public static CoderHandle Bind(LaunchConfinement.Coder coder, string sessionId) =>
         ConsultantHandle.IsWellFormed(sessionId) && CoderLaunches.WhyNotHere(coder).Length == 0
-            ? new CoderHandle(coder.JobId, CoderLaunches.Normalised(coder.Worktree), sessionId)
+            ? new CoderHandle(coder.JobId, CoderLaunches.Normalised(coder.Worktree), sessionId, coder.KeyId)
             : None;
 }

@@ -56,6 +56,18 @@ public sealed record ConsultantLaunch(
     /// (<see cref="IConsultantRuntime.NeedsASanitisedSnapshot"/>), whose launch is unchanged.
     /// </summary>
     public string Workdir { get; init; } = string.Empty;
+
+    /// <summary>
+    /// The pool key this launch runs on (epoch 3 E2 s7 t5): set by the role launch road for a claude launch of a role job, null for every other launch. The claude adapter puts it in the child's environment as
+    /// <c>CLAUDE_CODE_OAUTH_TOKEN</c>, in the one place it sets a credential, and never in an argv. A launch has ONE credential: a key and an <c>ANTHROPIC_API_KEY</c> together are a contract violation.
+    /// </summary>
+    public LaunchCredential? Credential { get; init; }
+
+    /// <summary>
+    /// A home of the launch's own (epoch 3 E2 s7 t5): with a <see cref="Credential"/> a READ-ONLY role's child gets <c>HOME</c>, the <c>XDG_*</c> names and <c>CLAUDE_CONFIG_DIR</c> under this folder, so the person's sign-in file is neither read
+    /// nor refreshed by a role job. Empty for every other launch. A coder's unit has a home of its own already and ignores it.
+    /// </summary>
+    public string OwnHome { get; init; } = string.Empty;
 }
 
 /// <summary>What <see cref="IConsultantRuntime.PrepareAsync"/> concluded: a launch ready to build, or a refusal.</summary>

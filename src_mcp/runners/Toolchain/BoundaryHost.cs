@@ -77,13 +77,19 @@ public sealed record BoundaryHost(
     };
 
     /// <summary>
-    /// The claude CLI's sign-in file under the real home, when it is there — the ONE file of the real home the coder's unit gets, bound read-only into the coder's own home (<see cref="BoundaryJob.CoderSignInFile"/>). Empty when there is none:
-    /// a launch with a key on its row needs no file, and one with neither cannot sign in, which the CLI says itself.
+    /// The claude CLI's sign-in file under the real home, when it is there — the ONE file of the real home the coder's unit gets, bound read-only into the coder's own home (<see cref="BoundaryJob.CoderSignInFile"/>). Empty when there is none, and
+    /// ALWAYS empty for a launch with a pool key (<see cref="BindSignIn"/> false): a launch with a key needs no file, and the person's own sign-in is not used by a role job that has one (epoch 3 E2 s7).
     /// </summary>
     public string SignInFile =>
-        RealHome.Length > 0 && System.IO.File.Exists(System.IO.Path.Combine(RealHome, ".claude", ".credentials.json"))
+        BindSignIn && RealHome.Length > 0 && System.IO.File.Exists(System.IO.Path.Combine(RealHome, ".claude", ".credentials.json"))
             ? System.IO.Path.Combine(RealHome, ".claude", ".credentials.json")
             : string.Empty;
+
+    /// <summary>
+    /// Whether the person's sign-in file is bound into the coder's unit. True as it always was; a launch that carries a pool key runs on a host with this false (<c>host with { BindSignIn = false }</c>), so no property of its unit names the file
+    /// and its preflight proves the file is not there.
+    /// </summary>
+    public bool BindSignIn { get; init; } = true;
 
     /// <summary>Where node is installed under the real home (<c>~/.nvm</c>).</summary>
     private string NvmRoot => System.IO.Path.Combine(RealHome, ".nvm");

@@ -63,7 +63,7 @@ public sealed class ACoderTaskCheckTests
         var values = settings ?? [];
         values.TryAdd("COAI_ROLE_LAUNCHER", "setsid");
 
-        return new RoleJobService(world.DataDir, name => values.GetValueOrDefault(name), world.Log, notice => { world.Notices.Enqueue(notice); return true; })
+        return new RoleJobService(world.DataDir, name => name == "COAI_ROLE_CLAUDE_PERSON_SIGN_IN" ? values.GetValueOrDefault(name) ?? "1" : values.GetValueOrDefault(name), world.Log, notice => { world.Notices.Enqueue(notice); return true; })
         {
             Clock = world.Clock,
             Launcher = new DetachedLauncher(new NothingStarted()),

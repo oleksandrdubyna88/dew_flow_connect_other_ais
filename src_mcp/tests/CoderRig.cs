@@ -92,7 +92,7 @@ internal sealed class CoderRig : IAsyncDisposable
     /// The rig. A coder launch needs a systemd user manager, so without one the test is SKIPPED, with the reason — unless <paramref name="needsLayer"/> is false, for a scenario in which no coder is ever launched.
     /// </summary>
     /// <param name="toolchain">The text of <c>.coai/toolchain.yaml</c> the BASE commit holds: null is <see cref="DefaultToolchain"/> (a build and a test that pass until a file says otherwise), empty is a repository with no toolchain file.</param>
-    internal static async Task<CoderRig> CreateAsync(bool needsLayer = true, string? toolchain = null)
+    internal static async Task<CoderRig> CreateAsync(bool needsLayer = true, string? toolchain = null, IReadOnlyDictionary<string, string>? extra = null)
     {
         if (needsLayer)
         {
@@ -100,7 +100,7 @@ internal sealed class CoderRig : IAsyncDisposable
         }
 
         var rig = new CoderRig(await RoleFailoverRig.CreateAsync());
-        rig.Base = await LayFixtureAsync(rig.Rig.Git, toolchain);
+        rig.Base = await LayFixtureAsync(rig.Rig.Git, toolchain, extra);
         Environment.SetEnvironmentVariable("FAKECLI_VERSION_STDOUT", "2.1.330 (Claude Code)\n");
         Environment.SetEnvironmentVariable("FAKECLI_HELP_STDOUT", File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "fixtures", "claude", "help-2.1.330-wsl.txt")));
 
@@ -140,7 +140,7 @@ internal sealed class CoderRig : IAsyncDisposable
     /// One launch of the fake coder: the files it writes below its working folder, what it says, how long it waits before it answers, and — a coder that goes where it must not — the ABSOLUTE paths it tries to write (what the OS refuses
     /// goes to its stderr).
     /// </summary>
-    internal sealed record Launch(IReadOnlyDictionary<string, string>? Edits, string Answer, int SleepMs = 0, IReadOnlyList<string>? TryWrites = null, string Session = "", int Exit = 0, string Stderr = "", string Stdout = "");
+    internal sealed record Launch(IReadOnlyDictionary<string, string>? Edits, string Answer, int SleepMs = 0, IReadOnlyList<string>? TryWrites = null, string Session = "", int Exit = 0, string Stderr = "", string Stdout = "", IReadOnlyDictionary<string, string>? HomeFiles = null);
 
     /// <summary>
     /// What FakeCli does for <paramref name="model"/>, launch by launch (the last repeats). The steering file — the coder's child reads only that — is written again with every call.
@@ -176,6 +176,11 @@ internal sealed class CoderRig : IAsyncDisposable
         if (launch.TryWrites is not null)
         {
             entry["tryWriteFiles"] = launch.TryWrites;
+        }
+
+        if (launch.HomeFiles is not null)
+        {
+            entry["homeFiles"] = launch.HomeFiles;
         }
 
         if (launch.Stderr.Length > 0)

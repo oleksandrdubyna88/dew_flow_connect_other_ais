@@ -30,7 +30,7 @@ public sealed class ARoleStartsWithItsRouteTests
         var values = settings ?? [];
         values.TryAdd("COAI_ROLE_LAUNCHER", "setsid");
 
-        return new RoleJobService(world.DataDir, name => values.GetValueOrDefault(name), world.Log, notice => { world.Notices.Enqueue(notice); return true; })
+        return new RoleJobService(world.DataDir, name => name == "COAI_ROLE_CLAUDE_PERSON_SIGN_IN" ? values.GetValueOrDefault(name) ?? "1" : values.GetValueOrDefault(name), world.Log, notice => { world.Notices.Enqueue(notice); return true; })
         {
             Clock = world.Clock,
             Launcher = new DetachedLauncher(new NothingStarted(), NoRunnerStarted.Succeeds),
@@ -167,7 +167,7 @@ public sealed class ARoleStartsWithItsRouteTests
         Assert.SkipWhen(OperatingSystem.IsWindows(), "the setsid road");
         using var world = new RoleJobWorld();
         var values = new Dictionary<string, string?> { ["COAI_ROLE_LAUNCHER"] = "setsid" };
-        var service = new RoleJobService(world.DataDir, name => values.GetValueOrDefault(name), world.Log, notice => { world.Notices.Enqueue(notice); return true; })
+        var service = new RoleJobService(world.DataDir, name => name == "COAI_ROLE_CLAUDE_PERSON_SIGN_IN" ? values.GetValueOrDefault(name) ?? "1" : values.GetValueOrDefault(name), world.Log, notice => { world.Notices.Enqueue(notice); return true; })
         {
             Clock = world.Clock,
             Runner = (ServerBinary.Path, []),

@@ -32,6 +32,11 @@ internal static class RoleStopWords
 
     /// <summary>The model answered, and the answer is not the role's output. Ends the job (a repair, where a role has one, happens before this).</summary>
     public const string OutputInvalid = "output-invalid";
+
+    /// <summary>
+    /// The exact text of the launch's claude pool key was found in what the launch printed, or in the files a coder changed (epoch 3 E2 s7): the key is dead (exposed), nothing is committed, and the job ends — another model would meet the same worktree and the same transcript.
+    /// </summary>
+    public const string KeyInOutput = "key-in-output";
 }
 
 /// <summary>

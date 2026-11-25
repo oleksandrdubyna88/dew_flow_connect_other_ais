@@ -23,7 +23,7 @@ internal static class RoleJobProjection
         job.Model, job.Attempts.Count, job.Stop, job.Reason, job.RepairTurns, job.Complexity, job.Security);
 
     internal static RoleAttemptRow AttemptRowOf(string jobId, RoleAttempt attempt) => new(
-        jobId, attempt.N, attempt.Model, attempt.Vendor, Stamp(attempt.StartedUtc), Stamp(attempt.EndedUtc), attempt.Stop, attempt.Reason, attempt.TokensIn, attempt.TokensOut);
+        jobId, attempt.N, attempt.Model, attempt.Vendor, Stamp(attempt.StartedUtc), Stamp(attempt.EndedUtc), attempt.Stop, attempt.Reason, attempt.TokensIn, attempt.TokensOut, attempt.KeyId);
 
     /// <summary>The instant as the notices and the rounds write it — millisecond precision, always <c>Z</c> — or empty for "not yet".</summary>
     private static string Stamp(DateTime? utc) =>

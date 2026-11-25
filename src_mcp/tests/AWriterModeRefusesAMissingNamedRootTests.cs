@@ -58,6 +58,8 @@ public sealed class AWriterModeRefusesAMissingNamedRootTests : IDisposable
         new[] { "--migrate-v2", "--apply" },
         // The detached runner of one role job (epoch 3 E1 s1): a server started it, so its data folder is there; named and missing, it is refused before it runs.
         new[] { "--role-run", "r20260101000000-00000000" },
+        // The claude key pool (epoch 3 E2 s7): even a list is refused when the named data folder is missing, and makes no folder.
+        new[] { "--keys", "list" },
     };
     // END WRITER MODES
 

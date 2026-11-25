@@ -76,6 +76,8 @@ internal static class BoundaryUnit
         "ProtectKernelTunables=yes",
         "ProtectControlGroups=yes",
         "Nice=10",
+        // No core file of a unit that may hold a pool key in its memory or its environment (the second judgement).
+        "LimitCORE=0",
     ];
 
     /// <summary>The deadline backstop and the memory ceiling that kills: <c>RuntimeMaxSec</c>, <c>MemoryMax</c> and <c>MemorySwapMax=0</c>.</summary>

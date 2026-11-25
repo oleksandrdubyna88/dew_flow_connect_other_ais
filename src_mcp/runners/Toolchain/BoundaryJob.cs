@@ -97,6 +97,21 @@ public sealed record BoundaryJob(
     /// <summary>Where the sign-in file is bound inside the coder's home.</summary>
     public string CoderSignInFile => Path.Combine(CoderHomeFolder, ".claude", ".credentials.json");
 
+    /// <summary>
+    /// The folder of the claude key pool of this device (<c>&lt;data&gt;/keys</c>), when the job runs on it (epoch 3 E2 s7): a coder launch with a pool key gets <c>InaccessiblePaths=</c> of it, and its preflight proves a read of it fails from inside the unit. Empty
+    /// when there is none to hide (a job started without a data folder, in a test of the boundary alone).
+    /// </summary>
+    public string KeysFolder { get; init; } = string.Empty;
+
+    /// <summary>The keys FILE the person named (<c>COAI_CLAUDE_KEYS_FILE</c> or the device setting <c>keysFile</c>), wherever it lies: hidden from a keyed coder's unit as the key folder is (second judgement) — a file outside <c>/home</c> would otherwise be readable there. Empty when none.</summary>
+    public string KeysFile { get; init; } = string.Empty;
+
+    /// <summary>The sentence that says the keys folder cannot be hidden from a unit — it is spelled into <c>InaccessiblePaths=</c>, whose value is split at a space, so a path with a space, a colon, a backslash or a control character is refused — or empty.</summary>
+    public string KeysFolderProblem() =>
+        new[] { KeysFolder, KeysFile }.FirstOrDefault(path => path.Length > 0 && !IsPlain(path)) is { } odd
+            ? $"The key path '{odd}' cannot be hidden from a unit: it must be absolute and hold no space, colon, backslash or control character."
+            : string.Empty;
+
     /// <summary>Every per-job folder the coder's unit needs, in the order they are made.</summary>
     public IReadOnlyList<string> CoderFolders => [CoderHomeFolder, Path.Combine(CoderHomeFolder, ".claude"), CoderTempFolder, CoderVarTempFolder];
 

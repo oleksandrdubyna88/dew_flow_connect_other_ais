@@ -195,9 +195,17 @@ if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor" || minimal is
     var steering = Steering.For(prompt.Text, read, CoaiMcp.FakeCli.ModelMap.For(args, read));
 
     // A coder's edits (model map `writeFiles`): files below the working folder, written before the answer and before any wait.
-    if (steering.Get("WRITE_FILES") is { Length: > 0 } writeFiles && CoaiMcp.FakeCli.CwdWrites.Apply(writeFiles, Directory.GetCurrentDirectory()) is { Length: > 0 } notWritten)
+    if (steering.Get("WRITE_FILES") is { Length: > 0 } writeFiles && CoaiMcp.FakeCli.CwdWrites.Apply(CoaiMcp.FakeCli.PoolKey.Fill(writeFiles), Directory.GetCurrentDirectory()) is { Length: > 0 } notWritten)
     {
         Console.Error.WriteLine($"fake-cli: {notWritten}");
+
+        return 65;
+    }
+
+    // A CLI that leaves something in its own HOME (model map `homeFiles`, relative paths below $HOME): the transcript a real CLI keeps there. The key pool searches that folder after a keyed launch (epoch 3 E2 s7).
+    if (steering.Get("HOME_FILES") is { Length: > 0 } homeFiles && Environment.GetEnvironmentVariable("HOME") is { Length: > 0 } fakeHome && CoaiMcp.FakeCli.CwdWrites.Apply(CoaiMcp.FakeCli.PoolKey.Fill(homeFiles), fakeHome) is { Length: > 0 } notWrittenHome)
+    {
+        Console.Error.WriteLine($"fake-cli: {notWrittenHome}");
 
         return 65;
     }
@@ -219,7 +227,7 @@ if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor" || minimal is
     var stderrText = steering.Get("STDERR");
     if (stderrText is { Length: > 0 })
     {
-        Console.Error.WriteLine(stderrText);
+        Console.Error.WriteLine(CoaiMcp.FakeCli.PoolKey.Fill(stderrText));
     }
 
     // `-o` means two different things to two vendors. Codex takes `-o <absolute path>.json` — where
@@ -409,6 +417,10 @@ switch (args0)
     // Epoch 3 E1 s1: a role job's lease, held by a child for the given time (the kernel frees it when the child dies or is killed). Writes <file>.held with its pid once it holds it; 75 when busy.
     case ["lease-hold", var leaseFile, var leaseMs]:
         return CoaiMcp.FakeCli.LeaseHoldVerb.Run(leaseFile, int.Parse(leaseMs));
+
+    // Epoch 3 E2 s7: the key pool's lock file held by a child for the given time (FileShare.None; the kernel frees it when the child dies or is killed). Prints `held` once it holds it; 75 when busy.
+    case ["pool-lock-hold", var poolLock, var poolLockMs]:
+        return CoaiMcp.FakeCli.PoolLockVerb.Run(poolLock, int.Parse(poolLockMs));
 
     // Epoch 3 E1 s1 (A14): a memory hog, and a small parent that starts it as its child and writes the child's exit code — the shape of a runner and the CLI it owns.
     case ["alloc", var allocMb, var allocLog]:
@@ -753,6 +765,7 @@ static class LaunchRecord
             HoldOpen(gate);
         }
 
+        CoaiMcp.FakeCli.PoolKey.Record(dir, name);
         File.Move(writing, Path.Combine(dir, name + ".argv"));
     }
 
@@ -786,7 +799,9 @@ sealed partial class FakeCliJsonContext : System.Text.Json.Serialization.JsonSer
 /// </summary>
 static class Placeholders
 {
-    public static string Fill(string text, string prompt) =>
+    public static string Fill(string text, string prompt) => CoaiMcp.FakeCli.PoolKey.Fill(FillPaths(text, prompt));
+
+    private static string FillPaths(string text, string prompt) =>
         System.Text.RegularExpressions.Regex.Replace(
             text,
             @"\{\{(cwd-file|adddir-file|prompt-path|path-in-prompt):([^}]+)\}\}",

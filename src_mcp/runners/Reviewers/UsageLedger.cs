@@ -304,7 +304,16 @@ public sealed record UsageEntry(
     /// before its launch (its record was never written — an invented id would merge unrelated turns), on every older line and on every
     /// other kind. Trailing and defaulted like the rest.
     /// </remarks>
-    string Consultation = "")
+    string Consultation = "",
+
+    /// <summary>
+    /// The claude key a role job's launch ran on (epoch 3 E2 s7, KEY_POOL_SPEC.md section 5): the pool key's id, <c>person-sign-in</c> when the device switch ran it on the person's own sign-in, or empty.
+    /// </summary>
+    /// <remarks>
+    /// Empty on a line that is not a pool launch: every kind but a role job's, a role job's launch on another vendor, and every line older than the field. The id is a prefix of a hash of the key (<c>k-</c> and 12 hex
+    /// characters) and is not a secret. Trailing and defaulted like the rest.
+    /// </remarks>
+    string KeyId = "")
 {
     /// <summary>This line with the fields of what its launch ran with — the ONE place a <see cref="LaunchOptions"/> becomes columns.</summary>
     public UsageEntry RanWith(LaunchOptions ranWith) => this with
@@ -538,8 +547,8 @@ public sealed class UsageLedger(string dataDir)
     /// </param>
     public void RecordJob(
         string email, string provider, string model, string role, string outcome, TimeSpan elapsed, Usage usage, string kind, string stage,
-        LaunchOptions ranWith, string consultation = "", string resetsUtc = "") =>
-        Append(JobEntry(email, provider, model, role, outcome, elapsed, usage, kind, stage, new JobPlace(ranWith)) with { ResetsUtc = resetsUtc, Consultation = consultation });
+        LaunchOptions ranWith, string consultation = "", string resetsUtc = "", string keyId = "") =>
+        Append(JobEntry(email, provider, model, role, outcome, elapsed, usage, kind, stage, new JobPlace(ranWith)) with { ResetsUtc = resetsUtc, Consultation = consultation, KeyId = keyId });
 
     /// <summary>One Team-server launch of a job: the overload above, with what the launch ran with and where.</summary>
     /// <remarks>
