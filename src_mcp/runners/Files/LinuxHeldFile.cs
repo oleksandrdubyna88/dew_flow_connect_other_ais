@@ -19,10 +19,12 @@ namespace CoaiMcp.Runners.Files;
 [SupportedOSPlatform("linux")]
 internal static partial class LinuxHeldFile
 {
-    // The libc names, so a reader checks them against <fcntl.h>, <sys/stat.h>, <sys/file.h> and <errno.h> and not against a comment. No O_CLOEXEC: the child must inherit the descriptor.
+    // The libc names, so a reader checks them against <fcntl.h>, <sys/stat.h>, <sys/file.h> and <errno.h> and not against a comment. O_CLOEXEC is set at the open and cleared only once the take has succeeded (see Held).
     private const int O_RDWR = 0x0002;
     private const int O_CREAT = 0x0040;
     private const int O_NOCTTY = 0x0100;
+    private const int O_CLOEXEC = 0x80000;
+    private const int F_SETFD = 2;
     private const int S_IRUSR = 0x0100;
     private const int S_IWUSR = 0x0080;
     private const int LOCK_EX = 2;
@@ -39,7 +41,7 @@ internal static partial class LinuxHeldFile
     /// <summary>The same, with the stream over the descriptor behind a seam — a test makes its construction fail.</summary>
     internal static Hold TakeInheritable(string path, Func<SafeFileHandle, FileStream> stream)
     {
-        var descriptor = Open(path, O_RDWR | O_CREAT | O_NOCTTY, S_IRUSR | S_IWUSR);
+        var descriptor = Open(path, O_RDWR | O_CREAT | O_NOCTTY | O_CLOEXEC, S_IRUSR | S_IWUSR);
         if (descriptor < 0)
         {
             return new Hold.Unusable(Failure(path, Marshal.GetLastPInvokeError()));
@@ -48,13 +50,28 @@ internal static partial class LinuxHeldFile
         return Flock(descriptor, LOCK_EX | LOCK_NB) == 0 ? Held(descriptor, stream) : Refused(descriptor, path, Marshal.GetLastPInvokeError());
     }
 
-    /// <summary>The stream over the descriptor; when the stream cannot be made, the handle that owns the descriptor is disposed — the descriptor is closed exactly once, and the flock goes with it and the failure is the take's.</summary>
+    /// <summary>
+    /// The stream over the descriptor; when the stream cannot be made, the handle that owns the descriptor is disposed — the descriptor is closed exactly once, and the flock goes with it and the failure is the take's.
+    /// </summary>
+    /// <remarks>
+    /// <b>The descriptor is inheritable only from the moment the take has succeeded.</b> It is opened close-on-exec, and the flag is cleared after the stream is made: a process started by another thread in the window between the <c>open</c> and a failed take would otherwise
+    /// inherit the descriptor, and the open file description — and its <c>flock</c> — would outlive the close (the flake of <c>ATakeWhoseStreamCannotBeMade_ClosesItsDescriptor_AndLeavesTheFileFree</c>, which saw the lock still held after a failed take).
+    /// </remarks>
     private static Hold Held(int descriptor, Func<SafeFileHandle, FileStream> stream)
     {
         var handle = new SafeFileHandle(descriptor, ownsHandle: true);
         try
         {
-            return new Hold.Taken(stream(handle));
+            var made = stream(handle);
+            if (Fcntl(descriptor, F_SETFD, 0) != 0)
+            {
+                var errno = Marshal.GetLastPInvokeError();
+                made.Dispose();
+
+                return new Hold.Unusable(new IOException($"the lock file's descriptor could not be made inheritable: errno {errno}"));
+            }
+
+            return new Hold.Taken(made);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException)
         {
@@ -85,6 +102,9 @@ internal static partial class LinuxHeldFile
 
     [LibraryImport("libc", EntryPoint = "flock", SetLastError = true)]
     private static partial int Flock(int descriptor, int operation);
+
+    [LibraryImport("libc", EntryPoint = "fcntl", SetLastError = true)]
+    private static partial int Fcntl(int descriptor, int command, int argument);
 
     [LibraryImport("libc", EntryPoint = "close", SetLastError = true)]
     private static partial int Close(int descriptor);
