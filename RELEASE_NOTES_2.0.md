@@ -1,6 +1,6 @@
-# coai 2.0 — release notes (DRAFT)
+# coai 2.0 — release notes
 
-> Draft. Do not publish until the owner approves the merge. It covers `coai-mcp` 2.0.0 and the VS Code extension 2.0.0.
+> Released on 2026-11-24 as `coai-mcp` 2.0.0 and VS Code extension 2.0.0 (tags `mcp-v2.0.0` and `extension-v2.0.0`).
 > Numbers come from the CI of the integration pull request #1036 (research/RESULTS_v2_start.md, section 5).
 
 ## What changes for you
@@ -25,7 +25,7 @@ half way. You can run the same thing by hand: `coai-mcp --install` on a clean ma
 to look first, `--remove` or `--restore` to undo. A client that cannot be set up is one notification, not a failure of the rest.
 It reads what your Claude Code can do before it writes: an older Claude Code (2.1.310 measured) cannot read `claude mcp add-json` from stdin (2.1.330 can), so
 for an entry that is only the program path (no environment values, no arguments) the JSON is passed as the argument; any other entry is refused, never put on a
-command line, with the sentence "claude <version> cannot read `mcp add-json` from stdin; update Claude Code (claude update)". Run
+command line, with the sentence "claude <version> cannot read `mcp add-json` from stdin; update Claude Code (claude update)".
 A `claude.cmd` or `claude.bat` shim is refused too (cmd.exe would re-parse the argument). Run `claude update`, then reload the window. Every client that is not set up now has its reason in the backup manifest and in the report.
 
 **Roles.** The new `roles` tool (and a SessionStart hook) tells an AI which main AI is set, which models serve each role in
@@ -63,7 +63,13 @@ them read.
 3. **Removed settings are moved, not deleted.** Every setting 2.0 does not read leaves `settings.json` and is kept in
    `settings.v1-removed.json` in the same data folder. Copy a value back by hand if you ever need it.
 4. **Update the server and the extension together.** Old extension with the new `coai-mcp`, and new extension with an old Team server,
-   are checked before the release is published (epic E5, "done when"); update everywhere in the same hour anyway.
+   were checked before the release was published (epic E5, "done when"):
+   - The old extension 0.89.2 against `coai-mcp` 2.0: no break. Only the removed features answer "not here".
+   - The 2.0 client against the deployed Team server 0.16.3, by route and source comparison: the client code is byte-identical,
+     and the contract suite passes 72 of 72 on a local server. A live contract run with an authenticated session needs a
+     session token and was not done.
+
+   Update everywhere in the same hour anyway.
 
 ## Known limits
 
@@ -74,7 +80,7 @@ them read.
 - **A settings edit made outside coai may reach the server late.** The extension copies its settings to the server file only
   after the old code has loaded (when you open a coai surface). A `coai.*` value you edit in VS Code's own settings, in a window
   where you have not opened coai, reaches the server the next time any window opens one. See `research/RESULTS_v2_start.md`, "Joint smoke" under section 5.
-- **A real round shown in a real VS Code by hand** is checked by CI's real-editor job, not by a person, before this draft.
+- **A round started by hand from the sidebar** was not checked. CI's real-editor job runs its named host scenarios and the cold-start measurements; a real plan → code round passed on the 2.0 RC through the MCP server from Claude Code (2026-11-24, the owner's machine, coai sessions 762657e2).
 - **YamlDotNet is not used.** The work-plan files the new work method will read are an epoch 3 task. 2.0 reads none of them.
 - **Not in 2.0:** the hub, the shared VM instance, the one-click update everywhere, the AskUserQuestion hook, coder
   delegation, the Claude mod. They are in epochs 2 to 5 of `v2/PLAN.md`.
