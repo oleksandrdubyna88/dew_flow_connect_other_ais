@@ -1,10 +1,9 @@
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
-id: t4-selected-then-full
-title: "Selection, level two: testFor on the changed test files first; when it is green the full test command runs on the same commit and is the verdict"
+id: t3-selected-then-full
+title: "Selection, level two: the file's testFor on the changed test files first; when it is green the full test command runs on the same commit and is the verdict"
 kind: code
 complexity: 6
-dependsOn:
-  - t3-affected-projects
+dependsOn: []
 parallel: false
 files:
   - src_mcp/runners/Toolchain/CheckRunner.cs
@@ -13,7 +12,7 @@ files:
   - src_mcp/tests/ASelectedThenFullTests.cs
 dod:
   - id: d1
-    item: "a selected run exists only where the FILE names testFor: the selected files are what the job added or changed (base to head) under a testFiles prefix; {file} and {stem} are replaced in place, one item per file; S6: a stem that is not letters, digits and underscores, an unsafe file name or more than 50 files means no selected run"
+    item: "a selected run exists only where the FILE names testFor: the selected files are what the job added or changed (base to head) under a testFiles prefix; {file} and {stem} are replaced in place, one item per file; S6: a stem that is not letters, digits and underscores, an unsafe file name or more than 50 files means no selected run; a detected project never has a selected run"
   - id: d2
     item: "S3 and S4: a red selected run ends the round red with its digest and the full command does not run; a green selected run is followed by the full test command on the SAME commit; green is only ever the word of a full run (selected green and full red is red, with the digest of the full run)"
   - id: d3

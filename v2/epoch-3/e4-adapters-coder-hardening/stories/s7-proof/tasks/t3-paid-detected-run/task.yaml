@@ -11,7 +11,7 @@ files:
   - v2/epoch-3/e4-adapters-coder-hardening/RESULTS_e4_proof.md
 dod:
   - id: d1
-    item: "the job runs on a scratch clone with a scratch data folder, on a claude key of the pool named through COAI_CLAUDE_KEYS_FILE and never on the person's sign-in file; with no usable key the task does not start and says so"
+    item: "the job runs on a scratch clone with a scratch data folder, on a claude key of the pool named through COAI_CLAUDE_KEYS_FILE and never on the person's sign-in file; with no usable key the task does not start and says so; it starts only after the owner's answer to question 4 of SPEC section N"
   - id: d2
     item: "the results file holds the job id, the route, the detected toolchain, the rounds with their scope, the format state, fixTurns (at most 2), green true, the wall time and the cost the CLI reported; it quotes no prompt, no answer and no key"
   - id: d3

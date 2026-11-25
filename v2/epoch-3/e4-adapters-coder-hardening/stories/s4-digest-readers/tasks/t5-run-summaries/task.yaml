@@ -1,0 +1,24 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t5-run-summaries
+title: "The run summary of a test step, apart from the bounded digest: the tool's counts, the name of every failure, the passed names, and whether the list is complete"
+kind: code
+complexity: 5
+dependsOn:
+  - t1-dotnet-test-readers
+  - t3-node-test-readers
+parallel: false
+files:
+  - src_mcp/core/Toolchain/RunSummary.cs
+  - src_mcp/core/Toolchain/DotnetTestFailures.cs
+  - src_mcp/core/Toolchain/TestExecutableFailures.cs
+  - src_mcp/core/Toolchain/JestFailures.cs
+  - src_mcp/core/Toolchain/VitestFailures.cs
+  - src_mcp/core/Toolchain/NodeTestFailures.cs
+  - src_mcp/tests/ARunSummaryIsCompleteOrSaysSoTests.cs
+dod:
+  - id: d1
+    item: "R6: for each test recording of s1 the reader gives {total, failed, passed, failures: the name of EVERY failure, passedNames when the tool prints them}; the list of failures is not cut at the 40 items of the digest, and above a hard cap of 2 000 names the summary says it is not complete"
+  - id: d2
+    item: "R7: `complete` is true only when the summary line of the tool was found, its failed count equals the number of named failures and the log of the step was not cut; a recording with two named failures beside a third the reader cannot name, a recording with no summary line and a log cut at its limit each give complete false"
+  - id: d3
+    item: "R8: an output with 45 failures gives a digest of 40 items that says it was cut, and a summary of 45 names with complete true; the summary is pure, bounded as the readers of t1, and never throws"

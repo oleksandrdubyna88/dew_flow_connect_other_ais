@@ -1,5 +1,5 @@
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: s4-digest-readers
-title: "Failure digests from recorded real output: dotnet test, restore errors, tsc, npm, jest, vitest and node:test; a fingerprint on every item"
+title: "Failure digests from recorded real output: dotnet test, restore errors, tsc, npm, jest, vitest and node:test; a fingerprint on every item; a run summary that says whether it is complete"
 dependsOn:
   - s1-measure-first

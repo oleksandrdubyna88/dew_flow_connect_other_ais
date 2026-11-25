@@ -1,0 +1,24 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t6-affected-projects
+title: "Selection, level one: a project is left out only when coai can show that the diff does not reach it; a node project always runs; impact unknown runs everything"
+kind: code
+complexity: 6
+dependsOn:
+  - t3-checks-at-base-resolve
+parallel: false
+files:
+  - src_mcp/core/Toolchain/AffectedProjects.cs
+  - src_mcp/core/Toolchain/ProjectGraph.cs
+  - src_mcp/runners/Toolchain/ChecksAtBase.cs
+  - src_mcp/tests/AAffectedProjectsTests.cs
+dod:
+  - id: d1
+    item: "S1: pure, from `git diff --name-status <base> <head>` with both sides of a rename and from the resolved toolchain; a project of the file is ALWAYS affected; a node project ALWAYS runs, because a workspace, a `file:` or `link:` dependency, a relative import or a script can join it to anything in the tree and no manifest shows that a diff does not reach it"
+  - id: d2
+    item: "S9: on a fixture with a shared package and an app that depends on it (once through `file:../shared`, once as a workspace member), a change in the shared package alone runs the tests of the app, and they go red"
+  - id: d3
+    item: "S10: a dotnet unit is left out only when no changed path is in its folder, no project of it references, directly or through other projects, a project of a unit that has a changed path (ProjectReference is followed from one unit to another), every ProjectReference resolves to a project file of the resolved toolchain, and no project, .props or .targets file of the unit holds a path that leaves the unit's folder (`..`) other than a resolved ProjectReference; a change in a project of one unit runs the test projects of another unit that reference it"
+  - id: d4
+    item: "inside an affected dotnet unit the test step names only the test projects that reach a changed project through the reverse ProjectReference graph of the head, with a project the head removed counted as changed; a changed solution file, global.json, nuget.config, or any .props or .targets file makes every test project of the unit affected"
+  - id: d5
+    item: "S2 and S11: impact unknown runs EVERY project in full: a changed path outside every project folder (a root configuration, a shared folder, documents), a reference that cannot be resolved, a project file that cannot be read; a selection never selects nothing, and the round records each unit that was left out and the reason"

@@ -15,6 +15,6 @@ dod:
   - id: d2
     item: "M2: for `dotnet test` in three cases (a VSTest project; an MTP project with the runner named in global.json; an MTP project without it) the file has the argv that works or the error, the exit code of a failed test and of a run with zero tests, and the console lines that name a failed test, its message and its file and line; the recorded outputs are in fixtures/toolchain with the checkout path and the user name replaced"
   - id: d3
-    item: "M3: for this repository's test executable the file has the argv that runs only the tests of two named test files, how long it takes, and the exit code when the filter matches no test"
+    item: "M3 and M10: for this repository's test executable the file has the argv that runs only the tests of two named test files, how long it takes, the exit code when the filter matches no test, the summary line of a run, and whether and how a run names a test that passed; the summary line and the passed names are recorded for the three cases of `dotnet test` too"
   - id: d4
     item: "a command that needs a property the E2 unit does not have is written down as a finding and the task stops there: the unit is not changed in this task (SPEC rule J1); the runs are recorded tests that are skipped unless their variable names a folder, and they never use the real home"

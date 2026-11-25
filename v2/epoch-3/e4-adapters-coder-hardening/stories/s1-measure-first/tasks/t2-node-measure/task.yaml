@@ -15,6 +15,6 @@ dod:
   - id: d2
     item: "M5: every path `npm ci` made in the worktree is listed with the answer of `git status` for it (ignored or not); nothing is written outside the worktree and the job folder, and the stand-in of the real home has the same bytes and times after the run"
   - id: d3
-    item: "M6: for jest, vitest and node:test, each a scratch project with one passing and two failing tests: the console output recorded with NO_COLOR and CI set, and the exit code and the text of a run that is given a file with no test; a tsc output with two errors and a failed `npm ci` are recorded too"
+    item: "M6: for jest, vitest and node:test, each a scratch project with one passing and two failing tests: the console output recorded with NO_COLOR and CI set, and the exit code and the text of a run that is given a file with no test; a tsc output with two errors and a failed `npm ci` are recorded too; M10: for each runner the summary line of a run, and whether and how a run names a test that passed"
   - id: d4
     item: "M9: the size of the step logs of one round and of the npm cache of one job are in the file; a command that needs a property the E2 unit does not have is a finding and the task stops there (SPEC rule J1)"

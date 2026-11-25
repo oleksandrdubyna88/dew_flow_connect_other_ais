@@ -1,6 +1,6 @@
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: t3-one-clock-and-caps
-title: "One wall clock: the job's timeoutMinutes, 45 by default for a coder; a fix turn that could not be checked in the time left is not begun"
+title: "One wall clock: the job's timeoutMinutes, with one default for each role in one table; a fix turn that could not be checked in the time left is not begun"
 kind: code
 complexity: 4
 dependsOn:
@@ -14,7 +14,7 @@ files:
   - src_mcp/tests/ACoderJobHasOneClockTests.cs
 dod:
   - id: d1
-    item: "start_role with the role coder and no timeoutMinutes gets 45; every other role keeps 30; a given value is used as given; the tool text and the refusal sentence name the two defaults; there is no second timer and no constant of 45 minutes anywhere else (a scan with a companion)"
+    item: "the default of timeoutMinutes is one number for each role in ONE table; the coder's number is the owner's answer to question 1 of SPEC section N (45 or 30) and is 30 until there is an answer; every other role keeps 30; a given value is used as given; the tool text and the refusal sentence read the table; there is no second timer and no other constant of a default (a scan with a companion)"
   - id: d2
     item: "before a fix turn the loop compares the time left with the duration of the last round of checks: with less left the job ends `timeout` at once, no model is started, and the sentence says both numbers"
   - id: d3

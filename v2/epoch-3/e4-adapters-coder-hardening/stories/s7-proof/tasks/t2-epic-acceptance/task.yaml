@@ -11,8 +11,10 @@ files:
   - src_mcp/tests_fakecli/HardeningVerbs.cs
 dod:
   - id: d1
-    item: "one test on a real coai-mcp with the detached runner: start_role(coder) on a node fixture repository with NO .coai/toolchain.yaml: red in the selected run, one fix turn in the session of turn 0, a format commit, the selected run green, the full run green; the envelope says the source `detected`"
+    item: "one test on a real coai-mcp with the detached runner: start_role(coder) on a node fixture repository with NO .coai/toolchain.yaml; every test run there is a FULL run, because a detected project has no selected run: red in the full run, one fix turn in the session of turn 0, a format commit, the full run green; the envelope says the source `detected` and no step has the scope `selected`"
   - id: d2
-    item: "the same binary on a dotnet fixture repository with a file runs the file's steps and detection decides nothing; a repository with a Cargo.toml and no file ends failed with the stop toolchain-refused and zero steps; a repository with no manifest ends with not-configured"
+    item: "a scenario of its own for the selected run: a dotnet fixture repository whose file AT THE BASE names testFiles and testFor: red in the selected run and no full run, one fix turn, the selected run green, then the full run green; the steps are the file's and detection decides nothing"
   - id: d3
+    item: "D12 end to end: a turn that replaces the test script of the node fixture with `echo passed` ends failed with the stop toolchain-refused, zero steps and no green; a repository with a Cargo.toml and no file ends the same way; a repository with no manifest ends with not-configured"
+  - id: d4
     item: "the MCP client is killed while the full run is going: a new client reads the same job to its end, green, with the generation unchanged and no lost notice; review_code on coder/<jobId> is accepted through the plan the branch inherits (E2 s5); nothing outside the worktree changed, and every step record names the unit boundary"

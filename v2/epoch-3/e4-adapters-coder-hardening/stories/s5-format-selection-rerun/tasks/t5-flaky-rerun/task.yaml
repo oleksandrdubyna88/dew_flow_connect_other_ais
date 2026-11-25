@@ -1,23 +1,23 @@
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: t5-flaky-rerun
-title: "One re-run of a test that failed once in a full run: passing makes it `flaky`, listed and never sent to the coder; the kinds of failure that are never excused"
+title: "The re-run itself: one more run of the failed tests in a new unit, the `flaky` list with its proof, one notice, the setting"
 kind: code
 complexity: 6
 dependsOn:
-  - t4-selected-then-full
+  - t4-flaky-rule
 parallel: false
 files:
   - src_mcp/runners/Toolchain/FlakyRerun.cs
-  - src_mcp/core/Toolchain/FlakyRule.cs
   - src_mcp/src/Server/RoleJobs/CoderChecks.cs
+  - src_mcp/src/Server/RoleJobs/CoderChecksReport.cs
   - src_mcp/core/Notices/ServerNoticeCodes.cs
   - src_mcp/tests/AFlakyRerunTests.cs
 dod:
   - id: d1
-    item: "only a failed FULL test step whose every failure the digest names is run again, once, in a new unit with only a loopback device: with the file's testFor on the files or classes of the failed tests when there is one and at most 5 failed, else the whole step when its first run took at most 300 seconds (K7), else not at all"
+    item: "K7: when the rule allows it the failed tests run once more in a new unit with only a loopback device: with the file's testFor on their files or classes when the file has one, else the whole step when its first run took at most 300 seconds, else not at all"
   - id: d2
-    item: "K3 to K6: never run again: a restore, build or typecheck step; a step that ran over its time, could not start or left a unit; a failure with no name (the raw tail); a test whose own file, or the file its failure names, is one the job added or changed; a test that was already excused once in this job; a third excuse in one job"
+    item: "K1 and K2: a test the rule excuses is listed under `flaky` {project, test, file, firstLog, rerun: narrowed | whole, proof: named | totals}, leaves the digest, and ONE coder-test-flaky notice is raised for the job; when nothing is left the step counts as passed and the round goes on; tests that fail again stay red with the digest of the re-run"
   - id: d3
-    item: "K1 and K2: a test that passes in the re-run is listed under `flaky` {project, test, file, firstLog, rerun: narrowed | whole}, leaves the digest, and ONE coder-test-flaky notice is raised for the job; when nothing is left the step counts as passed and the round goes on; tests that fail again stay red with the digest of the re-run"
+    item: "K11: on a real fixture a testFor whose filter matches no test gives a re-run in which no test ran: nothing is excused, the round is red and the coder gets the digest of the first run"
   - id: d4
-    item: "K8: COAI_FLAKY_RERUNS is 0 or 1 (1 by default; another value is 1 with a note) and with 0 no re-run starts; the count of excuses is a file in the job folder, so it holds across models"
+    item: "K8: COAI_FLAKY_RERUNS is 0 or 1 (1 by default; another value is 1 with a note) and with 0 no re-run starts; the count of excused tests is a file in the job folder (a temporary file and a rename), so it holds across models"

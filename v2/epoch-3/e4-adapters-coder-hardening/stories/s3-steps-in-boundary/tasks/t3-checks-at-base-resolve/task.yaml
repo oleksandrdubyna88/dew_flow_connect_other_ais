@@ -5,6 +5,7 @@ kind: security
 complexity: 5
 dependsOn:
   - t2-step-plan-in-boundary
+  - t5-check-definitions-frozen
 parallel: false
 security: true
 files:

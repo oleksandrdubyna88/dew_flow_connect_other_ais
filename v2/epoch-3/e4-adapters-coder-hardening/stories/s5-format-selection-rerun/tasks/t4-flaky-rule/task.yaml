@@ -1,0 +1,20 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t4-flaky-rule
+title: "The rule of the re-run, pure: only from a complete list of failures, never for the job's own tests, and an excuse only with proof that the test ran again and passed"
+kind: code
+complexity: 5
+dependsOn:
+  - t3-selected-then-full
+parallel: false
+files:
+  - src_mcp/core/Toolchain/FlakyRule.cs
+  - src_mcp/tests/AFlakyRuleTests.cs
+dod:
+  - id: d1
+    item: "K9 and K10: a re-run is allowed only for a failed FULL test step whose run summary (s4 t5) is complete and names at most 5 failed tests; the bounded digest is never the source: two named failures beside one the reader cannot name, no summary line, a cut log, 41 failures with a digest of 40 items and 6 failures each give no re-run"
+  - id: d2
+    item: "K3 to K6: never: a restore, build or typecheck step; a step that ran over its time, could not start or left a unit; a failure with no name (the raw tail); a test whose own file, or the file its failure names, is one the job added or changed; a test that was already excused once in this job; a third excused test in one job"
+  - id: d3
+    item: "K11 and K12: after the re-run a test is excused only when the re-run shows that it ran and passed: its name is exactly once among the passed tests the re-run names, or, for a re-run of the whole step with a tool that names no passed test, the summary is complete, has the same total as the first run and zero failed; a re-run in which no test ran (the `no test ran` code, a total of 0, a filter that matched nothing), a name that matches twice or a total that differs excuses nothing"
+  - id: d4
+    item: "the rule is a pure function of the step record, the two run summaries, the files the job changed and the counts of the job; every line of this task is one row of a table-driven test"

@@ -20,4 +20,4 @@ dod:
   - id: d3
     item: "a manifest of a stack that is known and not built (php, rust, python, java), at the base or at the head, is toolchain_refused and names the stack, the path and the cure; no manifest of any known stack is not_configured; one refused project refuses the repository; neither state is ever green and no step is planned"
   - id: d4
-    item: "COAI_TOOLCHAIN_DETECT=off gives the answer of E2 (no file is not_configured); a value other than on and off is on, with a note; the answer carries the source, the facts of each project and what differs between the base and the head, a changed text of `scripts.build`, `scripts.test` or `scripts.typecheck` included"
+    item: "COAI_TOOLCHAIN_DETECT=off gives the answer of E2 (no file is not_configured); a value other than on and off is on, with a note; the answer carries the source, the facts of each project and what differs between the base and the head (the compare of the check definitions is s3 t5)"

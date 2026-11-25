@@ -4,7 +4,7 @@ title: ".coai/toolchain.yaml of this repository gets testFiles and testFor; a re
 kind: config
 complexity: 3
 dependsOn:
-  - t4-selected-then-full
+  - t3-selected-then-full
 parallel: false
 files:
   - .coai/toolchain.yaml
@@ -12,6 +12,6 @@ files:
   - src_mcp/tests/AThisRepositoryToolchainFileTests.cs
 dod:
   - id: d1
-    item: "the committed file names testFiles src_mcp/tests and the testFor argv that s1 t1 measured (M3); the test that reads the committed file gets both, and its build and test argv are unchanged"
+    item: "the task starts only after the owner's answer to question 3 of SPEC section N; the committed file names testFiles src_mcp/tests and the testFor argv that s1 t1 measured (M3); the test that reads the committed file gets both, and its build and test argv are unchanged"
   - id: d2
     item: "S8: a recorded run on a clean clone under the boundary (skipped unless its variable names a folder): a commit that adds one failing test class gives a red selected run with that test in the digest; the fix gives a green selected run and then the full suite green; the results file holds the argv, the times and the exit codes of every step"

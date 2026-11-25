@@ -1,17 +1,17 @@
 # coai v2 — epoch 3, epic E4 (adapters dotnet + node, coder hardening) — epic plan for the gate (generated)
 
-Parent plan: v2/PLAN.md; architecture: v2/architecture/server.md (§10, §11, §12, §15, §16 row 9, §23); built on epoch-3 E2 (the coder, the toolchain file, the check boundary, the fix loop, the claude key pool) and, for story s6, on E3 (the vendor seam; the codex and agy coder). The full spec is SPEC.md in the same folder; its digest is below, before the YAML files. The plan gate has not run yet.
+Parent plan: v2/PLAN.md; architecture: v2/architecture/server.md (§10, §11, §12, §15, §16 row 9, §23); built on epoch-3 E2 (the coder, the toolchain file, the check boundary, the fix loop, the claude key pool) and, for story s6, on E3 (the vendor seam; the codex and agy coder). The full spec is SPEC.md in the same folder; its digest is below, before the YAML files. This is the plan AFTER the plan gate of 2026-11-25 (proceed, 5 findings accepted: SPEC section P).
 
 | Story | Tasks | Complexity sum | Depends on |
 |---|---|---|---|
 | s1-measure-first | 3 | 14 | — |
 | s2-detection | 6 | 31 | s1-measure-first |
-| s3-steps-in-boundary | 4 | 20 | s2-detection |
-| s4-digest-readers | 4 | 20 | s1-measure-first |
+| s3-steps-in-boundary | 6 | 32 | s2-detection |
+| s4-digest-readers | 5 | 25 | s1-measure-first |
 | s5-format-selection-rerun | 6 | 30 | s3-steps-in-boundary, s4-digest-readers |
 | s6-fix-loop-hardening | 4 | 21 | s5-format-selection-rerun, e3-roles-complete/s8-proof |
 | s7-proof | 4 | 17 | s6-fix-loop-hardening |
-| **Total** | 31 | 153 | |
+| **Total** | 34 | 170 | |
 
 ## Spec digest (the full spec is SPEC.md beside this file; its section letters are used here and in the task files)
 
@@ -25,14 +25,16 @@ network, the test with only a loopback device. The digest reads MSBuild lines an
 slot says `not_configured`. Every round runs the whole build and the whole suite (34 s and 8 m 14 s here). The only clock is
 `timeoutMinutes`, 30 by default.
 
-**Decisions that change server.md.** (1) One wall clock: the job's `timeoutMinutes`; 45 by default for a coder, 30 for the other
-roles. (2) Detection never guesses and never checks a part: what it cannot turn into commands refuses the repository. (3) Digest
-readers read the console output, not TRX or JUnit files; the exit code is the verdict. (4) Selection has two levels, only the
-full test command can say green, and the finer level comes only from the file's `testFor`. (5) The re-run of a failed test is narrow, bounded and never excuses the job's own tests. (6)
-`no-progress` is defined: the same failure fingerprints after two fix turns in a row. (7) A `review_code` started by coai is E5's,
-not E4's (§23 said E4; there is no scheduler before E5). (8) Five step names run: restore, format, build, typecheck, test; lint,
-audit and coverage stay names of `skip`. (9) npm only; pnpm, yarn and bun are refused by name. (10) The toolchain file gets
-`restore`, `format`, `testFor` and `testFiles`; `version` stays 1.
+**Decisions that change server.md.** (1) One wall clock: the job's `timeoutMinutes`, with one default for each role in one table;
+the VALUE of the coder's default (45 or 30) is the owner's. (2) Detection never guesses and never checks a part: what it cannot
+turn into commands refuses the repository. (3) Digest readers read the console output, not TRX or JUnit files; the exit code is
+the verdict. (4) Selection has two levels, only the full test command can say green, and the finer level comes only from the
+file's `testFor`. (5) The re-run of a failed test is narrow and bounded, needs a complete list of the failures and proof that each
+excused test ran again and passed, and never excuses the job's own tests. (6) `no-progress` is defined: the same failure
+fingerprints after two fix turns in a row. (7) A `review_code` started by coai is E5's, not E4's (§23 said E4; there is no
+scheduler before E5). (8) Five step names run: restore, format, build, typecheck, test; lint, audit and coverage stay names of
+`skip`. (9) npm only; pnpm, yarn and bun are refused by name (open question 2). (10) The toolchain file gets `restore`, `format`,
+`testFor` and `testFiles`; `version` stays 1. (11) A detected check cannot be changed by the job it checks.
 
 **A. Where the checks come from.** One pure function, `ToolchainResolve`. A file at the base wins, and a project that states a
 command runs exactly what it states (this repository's file reads as today). A file project that states no command gets the
@@ -48,9 +50,16 @@ build`, `npm run typecheck` or `npx --no-install tsc --noEmit`, `npm test`. A sc
 names the path and the cure "name the commands in `.coai/toolchain.yaml`"): a manifest of php, rust, python or java; two solution
 files in one folder; test projects of two runners; a `package.json` with no lock file, two, or a pnpm, yarn or bun one; a manifest
 that cannot be parsed; a limit passed. No manifest at all is `not_configured`. One refused project refuses the repository.
-**Both trees:** a project only the head has is added; a step the base had and the head has not is refused (`the worktree removed
-<step> of <project>`), so a coder cannot delete a test script and be green; a changed script text is named in the result. `COAI_TOOLCHAIN_DETECT=off` gives E2's answer.
-Scenarios D1 to D11.
+
+**A4. Both trees, and the frozen check definition** (gate finding 1). A project only the head has is added and marked
+`definedByHead`. A step the base had and the head has not is refused. **The check definition of a project the base has must be
+the same at the head**: for node the whole `scripts` member of `package.json` and the name of the lock file; for .NET the test
+projects the solution names, the facts that choose the runner, the `test` member of `global.json`, and the names of every
+`Target`, `Import` and `UsingTask` element in the unit's project, `.props` and `.targets` files. A difference is
+`toolchain_refused` before any step (`the worktree changed scripts.test of <project>`); the cure is a commit of its own, or the
+file. A head that replaces `scripts.test` with `echo passed` is refused, never green. Not a definition, so allowed: a new or
+changed source or test file, a new package or project reference, a new dependency with its lock file. Stated limit: a project of
+the file states its own command; what that command reads in the tree is the head's, as in E2. Scenarios D1 to D14.
 
 **B. The steps and the boundary.** Order of a round: restore, format, build, typecheck, test. Every step of a coder job, the
 selected run and the re-run included, starts through `CheckBoundary.RunAsync` after E2's preflight. **The boundary is not
@@ -61,12 +70,14 @@ resolver, inside the worktree, else refused). The host network is only for resto
 unchanged); every `host` entry of the data names the RESULTS heading that measured why. The E2 rule that the worktree and HEAD are
 unchanged after the checks stays. No credential reaches a step, so a private registry is not supported. Scenarios T1 to T6.
 
-**C. Digests.** New pure readers, each tested on output recorded from the real tool by s1: `dotnet test` (VSTest and MTP form),
-restore errors, tsc, the `npm ci` error block, jest, vitest, node:test. The reader is chosen by adapter, step and runner fact; for
-a step of the file the adapter's readers are tried in a fixed order, each needs its own marker line, and a test runs every fixture
-through every reader. No item gives the raw tail of E2: a digest is never empty. E2's limits hold (40 items, 16 KB, Redaction
-first). Every item gets a fingerprint without the line number. A scan keeps home paths and user names out of the recordings.
-Scenarios R1 to R5.
+**C. Digests and the run summary.** New pure readers, each tested on output recorded from the real tool by s1: `dotnet test`
+(VSTest and MTP form), restore errors, tsc, the `npm ci` error block, jest, vitest, node:test. The reader is chosen by adapter,
+step and runner fact; for a step of the file the adapter's readers are tried in a fixed order, each needs its own marker line, and
+a test runs every fixture through every reader. No item gives the raw tail of E2: a digest is never empty. E2's limits hold (40
+items, 16 KB, Redaction first). Every item gets a fingerprint without the line number. **The run summary** (gate finding 3) is
+apart from the digest: the tool's own counts, the name of EVERY failure (not cut at 40), the passed names when the tool prints
+them, and `complete` only when the tool's summary line was found, its failed count equals the named failures and the log was not
+cut. A scan keeps home paths and user names out of the recordings. Scenarios R1 to R8.
 
 **D. The formatter turn.** After a turn's commit the formatter runs on the files that commit added or changed (the adapter's
 extensions, no manifest, no lock file, 200 at most), each written `./<path>` so a file name is never an option, inside the
@@ -76,52 +87,66 @@ one commit road (generation first, the pool-key search of E2 s7). A format state
 The default formatter runs only with evidence that the repository uses one (prettier with a configuration; for .NET the form s1
 measures, or none). Scenarios F1 to F6.
 
-**E. Selection.** Level one, which projects run: from the diff of base to head; a detected project is affected by a changed path
-in its folder, and in a dotnet unit only the test projects that reach a changed project through the reverse ProjectReference
-graph; a project of the file is always affected; nothing affected means everything runs. Level two, which tests run first: only
-where the FILE names a `testFor` (there is no default: a selected run the repository did not name could fail where its own test
-command passes); a red selected run ends the round red; a green one is followed by the FULL test command on the same commit; **green is only ever the word of a full run**; "no test ran" is neither
-green nor red and goes to the full command; after one failed full run the later rounds are full only. This repository's file gets
-`testFiles` and `testFor` (s5 t6). Scenarios S1 to S8.
+**E. Selection** (gate finding 2). Level one, which projects run: a project is left out only when coai can show that the diff
+does not reach it. **A node project always runs**: a workspace, a `file:` dependency, a relative import or a script can join it to
+anything, and no manifest shows otherwise; so a change in a shared package always runs the app that depends on it. A .NET unit is
+left out only when no changed path is in its folder, no `ProjectReference` path (followed across units) leads to a changed unit,
+every reference resolves, and no project, `.props` or `.targets` file of it holds a path that leaves its folder. Impact unknown
+(a changed path outside every project folder, a reference that cannot be resolved) runs everything. A project of the file always
+runs. Level two, which tests run first: only where the FILE names a `testFor` (there is no default); a red selected run ends the
+round red; a green one is followed by the FULL test command on the same commit; **green is only ever the word of a full run**;
+"no test ran" is neither green nor red and goes to the full command; after one failed full run the later rounds are full only.
+Scenarios S1 to S11.
 
-**F. The re-run.** Only a failed FULL test step whose every failure the digest names: narrowed with the file's `testFor` when
-there is one and at most 5 tests failed, else the whole step when its first run took at most 300 s, else none. Never: another step kind; a timeout; a failure
-with no name; **a test whose own file, or the file its failure names, the job itself changed**; a test excused once already; a third excuse in a job. A test that
-passes is listed under `flaky`, leaves the digest and raises one notice. Stated limit: a narrowed re-run can excuse an
-order-dependent failure; it is listed, never hidden. `COAI_FLAKY_RERUNS` 0 or 1. Scenarios K1 to K8.
+**F. The re-run** (gate findings 3 and 5). Only a failed FULL test step, once, decided from the run summary and never from the
+digest: no re-run when the summary is not complete (a failure the reader cannot name beside named ones, no summary line, a cut
+log) or when more than 5 tests failed. Narrowed with the file's `testFor` when the file has one, else the whole step when its
+first run took at most 300 s, else none. Never: another step kind; a timeout; **a test whose own file, or the file its failure
+names, the job itself changed**; a test excused once already; a third excused test in a job. **A test is excused only when the
+re-run shows that it ran and passed**: its name exactly once among the passed tests the re-run names, or, for a whole re-run of a
+tool that names no passed test, a complete summary with the same total and zero failed. No test ran, a filter that matched
+nothing, a name that matches twice, a total that differs: nothing is excused, and the first digest goes to the coder. An excused
+test is listed under `flaky` with its proof and raises one notice. Stated limit: a narrowed re-run can excuse an order-dependent
+failure; it is listed, never hidden. `COAI_FLAKY_RERUNS` 0 or 1. Scenarios K1 to K12.
 
 **G. No progress.** A red round whose fingerprint set equals the one before it is a repeat; a fix turn that changes no file is a
 repeat and its checks are not run again; two repeats in a row end the job with `no-progress`, which never fails over. Scenarios
 L1 to L5.
 
-**H. Caps.** Fix turns 3 (`COAI_FIX_ROUNDS`, E2); the wall clock; 2 repeats; 1 re-run a step and 2 excuses a job; step timeouts
-from the file; 200 and 50 files; the detection limits. A fix turn is not begun when the time left is less than the last round of
-checks took. Money is not a cap in E4.
+**H. Caps.** Fix turns 3 (`COAI_FIX_ROUNDS`, E2); the wall clock; 2 repeats; 1 re-run a step, 5 failed tests at most, 2 excused
+tests a job; step timeouts from the file; 200 and 50 files; the detection limits. A fix turn is not begun when the time left is
+less than the last round of checks took. Money is not a cap in E4.
 
 **J. Security.** The boundary of E2, not widened; a property the unit lacks stops the measure task and needs a security judgement.
 What decides the commands is the file at the base or shipped templates filled with facts of manifests from git objects; no argv
-item is copied from a manifest. Manifests are untrusted: XML with DTD prohibited, JSON depth limit, size limits, no link. No
-secret in an argv or a log. Tests never touch the real home. An effect is observed in a real unit, not asserted from an argv.
+item is copied from a manifest, and a check definition cannot differ between base and head. Manifests are untrusted: XML with DTD
+prohibited, JSON depth limit, size limits, no link. No secret in an argv or a log. Tests never touch the real home. An effect is
+observed in a real unit, not asserted from an argv.
 
 **Collisions with E3.** E3 still changes `CoderFixLoop.cs`, `CoderWork.cs`, `RoleModelLauncher.cs`, `RoleFailover.cs`, `Tools.cs`,
 the fake's verbs and both `Program.cs`. E4 edits those only in s6 and s7; s6 depends on `e3-roles-complete/s8-proof`. E4 never
 edits `CoderVendors`, `CoderUnit`, `CoderBoundary` or `BoundaryPreflight`. s1 to s5 touch none of them and can be built beside E3.
 
-**Order.** s1 (measure) → s2 (detection) → s3 (steps in the boundary); s4 (readers) after s1; s5 after s3 and s4; s6 after s5 and
-E3; s7 last.
+**Order.** s1 (measure) → s2 (detection) → s3 (steps in the boundary, the frozen definition, the affected projects); s4 (readers,
+the run summary) after s1; s5 after s3 and s4; s6 after s5 and E3; s7 last.
 
 **Measure first (s1, no paid call).** M1 a build without restore and without network; M2 `dotnet test` for each runner; M3 the
 filter of this repository's test executable; M4 the npm commands inside the unit as it is; M5 what `npm ci` writes; M6 the
-consoles of jest, vitest, node:test; M7 `dotnet format` on named files offline; M8 prettier; M9 sizes.
+consoles of jest, vitest, node:test; M7 `dotnet format` on named files offline; M8 prettier; M9 sizes; M10 each runner's summary
+line and whether it names a passed test.
+
+**Acceptance** (gate finding 4). The scenario of a detected project (no toolchain file) uses FULL runs only. The selected run has
+a scenario of its own, on a repository whose file at the base names `testFor`. A turn that replaces the test script with `echo
+passed` ends `toolchain-refused`.
 
 **Not in E4.** A `review_code` started by coai, parallel work (E5); php, rust, python, java (epoch 5 E3); lint, audit, coverage,
 PR and CI (epoch 5 E4); a spend cap; a private registry; pnpm, yarn, bun; native Windows and macOS; a run of the checks on the
-base commit before turn 0 (a red base ends at `no-progress` after two paid turns: risk 8).
+base commit before turn 0.
 
-**For the owner.** (1) 45 minutes as the default of a coder job. (2) npm only in E4. (3) This repository's file gets `testFiles`
-and `testFor`; `src_vs_code` is not added as a project. (4) The paid proof: claude haiku, 2 runs and 0.30 USD at most, on a pool
-key. (5) `epic.yaml` here has the E3 plan's wording of the resume line and `spec: SPEC.md` (also in `v2/_gen/v2-spec.json`);
-`dependsOn` is unchanged. (6) Should a later epic check the base commit before the first paid turn?
+**Open questions for the owner (section N; the plan decides none of them).** (1) The coder's default `timeoutMinutes`: 45 or 30
+(30 until answered). (2) npm only. (3) `testFiles` and `testFor` for this repository, with `src_vs_code` not a node project (s5 t6
+waits for the answer). (4) The paid proof s7 t3: claude haiku, 2 runs and 0.30 USD at most, on a pool key (waits for the answer).
+(5) A red base commit is not checked before turn 0: proposed as a follow-up for E5.
 
 ## v2/epoch-3/e4-adapters-coder-hardening/epic.yaml
 ```yaml
@@ -169,7 +194,7 @@ dod:
   - id: d2
     item: "M2: for `dotnet test` in three cases (a VSTest project; an MTP project with the runner named in global.json; an MTP project without it) the file has the argv that works or the error, the exit code of a failed test and of a run with zero tests, and the console lines that name a failed test, its message and its file and line; the recorded outputs are in fixtures/toolchain with the checkout path and the user name replaced"
   - id: d3
-    item: "M3: for this repository's test executable the file has the argv that runs only the tests of two named test files, how long it takes, and the exit code when the filter matches no test"
+    item: "M3 and M10: for this repository's test executable the file has the argv that runs only the tests of two named test files, how long it takes, the exit code when the filter matches no test, the summary line of a run, and whether and how a run names a test that passed; the summary line and the passed names are recorded for the three cases of `dotnet test` too"
   - id: d4
     item: "a command that needs a property the E2 unit does not have is written down as a finding and the task stops there: the unit is not changed in this task (SPEC rule J1); the runs are recorded tests that are skipped unless their variable names a folder, and they never use the real home"
 ```
@@ -193,7 +218,7 @@ dod:
   - id: d2
     item: "M5: every path `npm ci` made in the worktree is listed with the answer of `git status` for it (ignored or not); nothing is written outside the worktree and the job folder, and the stand-in of the real home has the same bytes and times after the run"
   - id: d3
-    item: "M6: for jest, vitest and node:test, each a scratch project with one passing and two failing tests: the console output recorded with NO_COLOR and CI set, and the exit code and the text of a run that is given a file with no test; a tsc output with two errors and a failed `npm ci` are recorded too"
+    item: "M6: for jest, vitest and node:test, each a scratch project with one passing and two failing tests: the console output recorded with NO_COLOR and CI set, and the exit code and the text of a run that is given a file with no test; a tsc output with two errors and a failed `npm ci` are recorded too; M10: for each runner the summary line of a run, and whether and how a run names a test that passed"
   - id: d4
     item: "M9: the size of the step logs of one round and of the npm cache of one job are in the file; a command that needs a property the E2 unit does not have is a finding and the task stops there (SPEC rule J1)"
 ```
@@ -350,7 +375,7 @@ dod:
   - id: d3
     item: "a manifest of a stack that is known and not built (php, rust, python, java), at the base or at the head, is toolchain_refused and names the stack, the path and the cure; no manifest of any known stack is not_configured; one refused project refuses the repository; neither state is ever green and no step is planned"
   - id: d4
-    item: "COAI_TOOLCHAIN_DETECT=off gives the answer of E2 (no file is not_configured); a value other than on and off is on, with a note; the answer carries the source, the facts of each project and what differs between the base and the head, a changed text of `scripts.build`, `scripts.test` or `scripts.typecheck` included"
+    item: "COAI_TOOLCHAIN_DETECT=off gives the answer of E2 (no file is not_configured); a value other than on and off is on, with a note; the answer carries the source, the facts of each project and what differs between the base and the head (the compare of the check definitions is s3 t5)"
 ```
 
 ## v2/epoch-3/e4-adapters-coder-hardening/stories/s2-detection/tasks/t6-golden-fixtures/task.yaml
@@ -379,7 +404,7 @@ dod:
 ```yaml
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: s3-steps-in-boundary
-title: "The steps of a resolved toolchain run inside the E2 check boundary: restore, build, typecheck and test, each with its network state; the toolchain file gets four names"
+title: "The steps of a resolved toolchain run inside the E2 check boundary: restore, build, typecheck and test, each with its network state; the toolchain file gets four names; a detected check cannot be changed by the job it checks; which projects a diff reaches"
 dependsOn:
   - s2-detection
 ```
@@ -448,6 +473,7 @@ kind: security
 complexity: 5
 dependsOn:
   - t2-step-plan-in-boundary
+  - t5-check-definitions-frozen
 parallel: false
 security: true
 files:
@@ -485,11 +511,69 @@ dod:
     item: "every field of E2 keeps its name and its meaning (a test reads a result of this task with the field list of E2 and finds the same values); role_status returns the same JSON that result.json holds"
 ```
 
+## v2/epoch-3/e4-adapters-coder-hardening/stories/s3-steps-in-boundary/tasks/t5-check-definitions-frozen/task.yaml
+```yaml
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t5-check-definitions-frozen
+title: "A coder cannot change what a detected check runs: the check definition of a project is compared between the base and the head, and a difference refuses the job"
+kind: security
+complexity: 6
+dependsOn: []
+parallel: false
+security: true
+files:
+  - src_mcp/core/Toolchain/CheckDefinition.cs
+  - src_mcp/core/Toolchain/NodeDetector.cs
+  - src_mcp/core/Toolchain/DotnetDetector.cs
+  - src_mcp/core/Toolchain/ToolchainResolve.cs
+  - shared/toolchains.json
+  - src_mcp/tests/ACoderCannotChangeADetectedCheckTests.cs
+dod:
+  - id: d1
+    item: "the check definition of a detected or defaulted node project is the whole `scripts` member of its package.json (every script a step runs, its pre and post scripts and the scripts it calls by name are in it) and the name of its lock file; of a dotnet unit it is the test projects its solution file names, the facts that make each a test project and choose its runner, the `test` member of global.json, and the names of every Target, Import and UsingTask element in the unit's project files and in the .props and .targets files that apply to it"
+  - id: d2
+    item: "D12: for a project the base has, a definition that differs at the head is toolchain_refused before any step; the sentence names the project and the member (`the worktree changed scripts.test of <project>`) and the cure (land the change in a commit of its own, or name the commands in .coai/toolchain.yaml); a head that replaces `scripts.test` with `echo passed` gives that refusal, zero planned steps and never green"
+  - id: d3
+    item: "D13: the same for a dotnet unit: a head that adds a Target named VSTest, Test or Build to a test project or to Directory.Build.targets, takes a test project out of the solution file, or changes the runner in global.json is refused"
+  - id: d4
+    item: "D14: what is not a definition is not refused: a new or changed source or test file, a new PackageReference, ProjectReference or PackageVersion, a new dependency in package.json with its lock file; a project only the head has runs with its own definition and the answer marks it `definedByHead`"
+  - id: d5
+    item: "the .props, .targets and global.json files are manifest names of toolchains.json and are read by the listing of s2 t2 with its limits and its XML rule; the compare is pure, and what differs is in the answer (`changedBetweenBaseAndHead`)"
+```
+
+## v2/epoch-3/e4-adapters-coder-hardening/stories/s3-steps-in-boundary/tasks/t6-affected-projects/task.yaml
+```yaml
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t6-affected-projects
+title: "Selection, level one: a project is left out only when coai can show that the diff does not reach it; a node project always runs; impact unknown runs everything"
+kind: code
+complexity: 6
+dependsOn:
+  - t3-checks-at-base-resolve
+parallel: false
+files:
+  - src_mcp/core/Toolchain/AffectedProjects.cs
+  - src_mcp/core/Toolchain/ProjectGraph.cs
+  - src_mcp/runners/Toolchain/ChecksAtBase.cs
+  - src_mcp/tests/AAffectedProjectsTests.cs
+dod:
+  - id: d1
+    item: "S1: pure, from `git diff --name-status <base> <head>` with both sides of a rename and from the resolved toolchain; a project of the file is ALWAYS affected; a node project ALWAYS runs, because a workspace, a `file:` or `link:` dependency, a relative import or a script can join it to anything in the tree and no manifest shows that a diff does not reach it"
+  - id: d2
+    item: "S9: on a fixture with a shared package and an app that depends on it (once through `file:../shared`, once as a workspace member), a change in the shared package alone runs the tests of the app, and they go red"
+  - id: d3
+    item: "S10: a dotnet unit is left out only when no changed path is in its folder, no project of it references, directly or through other projects, a project of a unit that has a changed path (ProjectReference is followed from one unit to another), every ProjectReference resolves to a project file of the resolved toolchain, and no project, .props or .targets file of the unit holds a path that leaves the unit's folder (`..`) other than a resolved ProjectReference; a change in a project of one unit runs the test projects of another unit that reference it"
+  - id: d4
+    item: "inside an affected dotnet unit the test step names only the test projects that reach a changed project through the reverse ProjectReference graph of the head, with a project the head removed counted as changed; a changed solution file, global.json, nuget.config, or any .props or .targets file makes every test project of the unit affected"
+  - id: d5
+    item: "S2 and S11: impact unknown runs EVERY project in full: a changed path outside every project folder (a root configuration, a shared folder, documents), a reference that cannot be resolved, a project file that cannot be read; a selection never selects nothing, and the round records each unit that was left out and the reason"
+```
+
 ## v2/epoch-3/e4-adapters-coder-hardening/stories/s4-digest-readers/story.yaml
 ```yaml
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: s4-digest-readers
-title: "Failure digests from recorded real output: dotnet test, restore errors, tsc, npm, jest, vitest and node:test; a fingerprint on every item"
+title: "Failure digests from recorded real output: dotnet test, restore errors, tsc, npm, jest, vitest and node:test; a fingerprint on every item; a run summary that says whether it is complete"
 dependsOn:
   - s1-measure-first
 ```
@@ -585,6 +669,34 @@ dod:
     item: "R5: a scan test over fixtures/toolchain fails when a recording holds a home folder path, the user name of the box that recorded it, or a line the Redaction pass would change; a companion proves that the scan finds a planted line of each kind"
 ```
 
+## v2/epoch-3/e4-adapters-coder-hardening/stories/s4-digest-readers/tasks/t5-run-summaries/task.yaml
+```yaml
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t5-run-summaries
+title: "The run summary of a test step, apart from the bounded digest: the tool's counts, the name of every failure, the passed names, and whether the list is complete"
+kind: code
+complexity: 5
+dependsOn:
+  - t1-dotnet-test-readers
+  - t3-node-test-readers
+parallel: false
+files:
+  - src_mcp/core/Toolchain/RunSummary.cs
+  - src_mcp/core/Toolchain/DotnetTestFailures.cs
+  - src_mcp/core/Toolchain/TestExecutableFailures.cs
+  - src_mcp/core/Toolchain/JestFailures.cs
+  - src_mcp/core/Toolchain/VitestFailures.cs
+  - src_mcp/core/Toolchain/NodeTestFailures.cs
+  - src_mcp/tests/ARunSummaryIsCompleteOrSaysSoTests.cs
+dod:
+  - id: d1
+    item: "R6: for each test recording of s1 the reader gives {total, failed, passed, failures: the name of EVERY failure, passedNames when the tool prints them}; the list of failures is not cut at the 40 items of the digest, and above a hard cap of 2 000 names the summary says it is not complete"
+  - id: d2
+    item: "R7: `complete` is true only when the summary line of the tool was found, its failed count equals the number of named failures and the log of the step was not cut; a recording with two named failures beside a third the reader cannot name, a recording with no summary line and a log cut at its limit each give complete false"
+  - id: d3
+    item: "R8: an output with 45 failures gives a digest of 40 items that says it was cut, and a summary of 45 names with complete true; the summary is pure, bounded as the readers of t1, and never throws"
+```
+
 ## v2/epoch-3/e4-adapters-coder-hardening/stories/s5-format-selection-rerun/story.yaml
 ```yaml
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
@@ -643,37 +755,14 @@ dod:
     item: "the commit holds only files that were given to the formatter (a test reads `git show --name-only`); a second format run on that commit changes nothing; the function returns the new head, or the turn's head when there was no commit, and nothing else moves HEAD"
 ```
 
-## v2/epoch-3/e4-adapters-coder-hardening/stories/s5-format-selection-rerun/tasks/t3-affected-projects/task.yaml
+## v2/epoch-3/e4-adapters-coder-hardening/stories/s5-format-selection-rerun/tasks/t3-selected-then-full/task.yaml
 ```yaml
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
-id: t3-affected-projects
-title: "Selection, level one: only the projects the diff of base to head touches run; a project of the file always runs; nothing touched means everything runs"
-kind: code
-complexity: 5
-dependsOn: []
-parallel: false
-files:
-  - src_mcp/core/Toolchain/AffectedProjects.cs
-  - src_mcp/runners/Toolchain/ChecksAtBase.cs
-  - src_mcp/tests/AAffectedProjectsTests.cs
-dod:
-  - id: d1
-    item: "S1: pure, from `git diff --name-status <base> <head>` with both sides of a rename and from the resolved toolchain: a detected node project is affected when a changed path is in its folder, a detected dotnet unit when one is in its folder; a project of the file is ALWAYS affected"
-  - id: d2
-    item: "inside an affected dotnet unit the test step names only the test projects that reach a changed project through the reverse ProjectReference graph of the head, with a project the head removed counted as changed; a changed solution file, global.json, nuget.config, or any .props or .targets file makes every test project affected"
-  - id: d3
-    item: "S2: no affected project (a diff of documents only) runs every project in full: a selection never selects nothing; the round records which projects were left out and why"
-```
-
-## v2/epoch-3/e4-adapters-coder-hardening/stories/s5-format-selection-rerun/tasks/t4-selected-then-full/task.yaml
-```yaml
-# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
-id: t4-selected-then-full
-title: "Selection, level two: testFor on the changed test files first; when it is green the full test command runs on the same commit and is the verdict"
+id: t3-selected-then-full
+title: "Selection, level two: the file's testFor on the changed test files first; when it is green the full test command runs on the same commit and is the verdict"
 kind: code
 complexity: 6
-dependsOn:
-  - t3-affected-projects
+dependsOn: []
 parallel: false
 files:
   - src_mcp/runners/Toolchain/CheckRunner.cs
@@ -682,7 +771,7 @@ files:
   - src_mcp/tests/ASelectedThenFullTests.cs
 dod:
   - id: d1
-    item: "a selected run exists only where the FILE names testFor: the selected files are what the job added or changed (base to head) under a testFiles prefix; {file} and {stem} are replaced in place, one item per file; S6: a stem that is not letters, digits and underscores, an unsafe file name or more than 50 files means no selected run"
+    item: "a selected run exists only where the FILE names testFor: the selected files are what the job added or changed (base to head) under a testFiles prefix; {file} and {stem} are replaced in place, one item per file; S6: a stem that is not letters, digits and underscores, an unsafe file name or more than 50 files means no selected run; a detected project never has a selected run"
   - id: d2
     item: "S3 and S4: a red selected run ends the round red with its digest and the full command does not run; a green selected run is followed by the full test command on the SAME commit; green is only ever the word of a full run (selected green and full red is red, with the digest of the full run)"
   - id: d3
@@ -691,31 +780,55 @@ dod:
     item: "S7: after a full run has failed once in a job the later rounds run the full command only; that fact is a file in the job folder (written with a temporary file and a rename), so it holds across models; every step record says the scope `selected` or `full` and the number of files"
 ```
 
+## v2/epoch-3/e4-adapters-coder-hardening/stories/s5-format-selection-rerun/tasks/t4-flaky-rule/task.yaml
+```yaml
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t4-flaky-rule
+title: "The rule of the re-run, pure: only from a complete list of failures, never for the job's own tests, and an excuse only with proof that the test ran again and passed"
+kind: code
+complexity: 5
+dependsOn:
+  - t3-selected-then-full
+parallel: false
+files:
+  - src_mcp/core/Toolchain/FlakyRule.cs
+  - src_mcp/tests/AFlakyRuleTests.cs
+dod:
+  - id: d1
+    item: "K9 and K10: a re-run is allowed only for a failed FULL test step whose run summary (s4 t5) is complete and names at most 5 failed tests; the bounded digest is never the source: two named failures beside one the reader cannot name, no summary line, a cut log, 41 failures with a digest of 40 items and 6 failures each give no re-run"
+  - id: d2
+    item: "K3 to K6: never: a restore, build or typecheck step; a step that ran over its time, could not start or left a unit; a failure with no name (the raw tail); a test whose own file, or the file its failure names, is one the job added or changed; a test that was already excused once in this job; a third excused test in one job"
+  - id: d3
+    item: "K11 and K12: after the re-run a test is excused only when the re-run shows that it ran and passed: its name is exactly once among the passed tests the re-run names, or, for a re-run of the whole step with a tool that names no passed test, the summary is complete, has the same total as the first run and zero failed; a re-run in which no test ran (the `no test ran` code, a total of 0, a filter that matched nothing), a name that matches twice or a total that differs excuses nothing"
+  - id: d4
+    item: "the rule is a pure function of the step record, the two run summaries, the files the job changed and the counts of the job; every line of this task is one row of a table-driven test"
+```
+
 ## v2/epoch-3/e4-adapters-coder-hardening/stories/s5-format-selection-rerun/tasks/t5-flaky-rerun/task.yaml
 ```yaml
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: t5-flaky-rerun
-title: "One re-run of a test that failed once in a full run: passing makes it `flaky`, listed and never sent to the coder; the kinds of failure that are never excused"
+title: "The re-run itself: one more run of the failed tests in a new unit, the `flaky` list with its proof, one notice, the setting"
 kind: code
 complexity: 6
 dependsOn:
-  - t4-selected-then-full
+  - t4-flaky-rule
 parallel: false
 files:
   - src_mcp/runners/Toolchain/FlakyRerun.cs
-  - src_mcp/core/Toolchain/FlakyRule.cs
   - src_mcp/src/Server/RoleJobs/CoderChecks.cs
+  - src_mcp/src/Server/RoleJobs/CoderChecksReport.cs
   - src_mcp/core/Notices/ServerNoticeCodes.cs
   - src_mcp/tests/AFlakyRerunTests.cs
 dod:
   - id: d1
-    item: "only a failed FULL test step whose every failure the digest names is run again, once, in a new unit with only a loopback device: with the file's testFor on the files or classes of the failed tests when there is one and at most 5 failed, else the whole step when its first run took at most 300 seconds (K7), else not at all"
+    item: "K7: when the rule allows it the failed tests run once more in a new unit with only a loopback device: with the file's testFor on their files or classes when the file has one, else the whole step when its first run took at most 300 seconds, else not at all"
   - id: d2
-    item: "K3 to K6: never run again: a restore, build or typecheck step; a step that ran over its time, could not start or left a unit; a failure with no name (the raw tail); a test whose own file, or the file its failure names, is one the job added or changed; a test that was already excused once in this job; a third excuse in one job"
+    item: "K1 and K2: a test the rule excuses is listed under `flaky` {project, test, file, firstLog, rerun: narrowed | whole, proof: named | totals}, leaves the digest, and ONE coder-test-flaky notice is raised for the job; when nothing is left the step counts as passed and the round goes on; tests that fail again stay red with the digest of the re-run"
   - id: d3
-    item: "K1 and K2: a test that passes in the re-run is listed under `flaky` {project, test, file, firstLog, rerun: narrowed | whole}, leaves the digest, and ONE coder-test-flaky notice is raised for the job; when nothing is left the step counts as passed and the round goes on; tests that fail again stay red with the digest of the re-run"
+    item: "K11: on a real fixture a testFor whose filter matches no test gives a re-run in which no test ran: nothing is excused, the round is red and the coder gets the digest of the first run"
   - id: d4
-    item: "K8: COAI_FLAKY_RERUNS is 0 or 1 (1 by default; another value is 1 with a note) and with 0 no re-run starts; the count of excuses is a file in the job folder, so it holds across models"
+    item: "K8: COAI_FLAKY_RERUNS is 0 or 1 (1 by default; another value is 1 with a note) and with 0 no re-run starts; the count of excused tests is a file in the job folder (a temporary file and a rename), so it holds across models"
 ```
 
 ## v2/epoch-3/e4-adapters-coder-hardening/stories/s5-format-selection-rerun/tasks/t6-this-repository-selects/task.yaml
@@ -726,7 +839,7 @@ title: ".coai/toolchain.yaml of this repository gets testFiles and testFor; a re
 kind: config
 complexity: 3
 dependsOn:
-  - t4-selected-then-full
+  - t3-selected-then-full
 parallel: false
 files:
   - .coai/toolchain.yaml
@@ -734,7 +847,7 @@ files:
   - src_mcp/tests/AThisRepositoryToolchainFileTests.cs
 dod:
   - id: d1
-    item: "the committed file names testFiles src_mcp/tests and the testFor argv that s1 t1 measured (M3); the test that reads the committed file gets both, and its build and test argv are unchanged"
+    item: "the task starts only after the owner's answer to question 3 of SPEC section N; the committed file names testFiles src_mcp/tests and the testFor argv that s1 t1 measured (M3); the test that reads the committed file gets both, and its build and test argv are unchanged"
   - id: d2
     item: "S8: a recorded run on a clean clone under the boundary (skipped unless its variable names a folder): a commit that adds one failing test class gives a red selected run with that test in the digest; the fix gives a green selected run and then the full suite green; the results file holds the argv, the times and the exit codes of every step"
 ```
@@ -801,7 +914,7 @@ dod:
 ```yaml
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: t3-one-clock-and-caps
-title: "One wall clock: the job's timeoutMinutes, 45 by default for a coder; a fix turn that could not be checked in the time left is not begun"
+title: "One wall clock: the job's timeoutMinutes, with one default for each role in one table; a fix turn that could not be checked in the time left is not begun"
 kind: code
 complexity: 4
 dependsOn:
@@ -815,7 +928,7 @@ files:
   - src_mcp/tests/ACoderJobHasOneClockTests.cs
 dod:
   - id: d1
-    item: "start_role with the role coder and no timeoutMinutes gets 45; every other role keeps 30; a given value is used as given; the tool text and the refusal sentence name the two defaults; there is no second timer and no constant of 45 minutes anywhere else (a scan with a companion)"
+    item: "the default of timeoutMinutes is one number for each role in ONE table; the coder's number is the owner's answer to question 1 of SPEC section N (45 or 30) and is 30 until there is an answer; every other role keeps 30; a given value is used as given; the tool text and the refusal sentence read the table; there is no second timer and no other constant of a default (a scan with a companion)"
   - id: d2
     item: "before a fix turn the loop compares the time left with the duration of the last round of checks: with less left the job ends `timeout` at once, no model is started, and the sentence says both numbers"
   - id: d3
@@ -890,10 +1003,12 @@ files:
   - src_mcp/tests_fakecli/HardeningVerbs.cs
 dod:
   - id: d1
-    item: "one test on a real coai-mcp with the detached runner: start_role(coder) on a node fixture repository with NO .coai/toolchain.yaml: red in the selected run, one fix turn in the session of turn 0, a format commit, the selected run green, the full run green; the envelope says the source `detected`"
+    item: "one test on a real coai-mcp with the detached runner: start_role(coder) on a node fixture repository with NO .coai/toolchain.yaml; every test run there is a FULL run, because a detected project has no selected run: red in the full run, one fix turn in the session of turn 0, a format commit, the full run green; the envelope says the source `detected` and no step has the scope `selected`"
   - id: d2
-    item: "the same binary on a dotnet fixture repository with a file runs the file's steps and detection decides nothing; a repository with a Cargo.toml and no file ends failed with the stop toolchain-refused and zero steps; a repository with no manifest ends with not-configured"
+    item: "a scenario of its own for the selected run: a dotnet fixture repository whose file AT THE BASE names testFiles and testFor: red in the selected run and no full run, one fix turn, the selected run green, then the full run green; the steps are the file's and detection decides nothing"
   - id: d3
+    item: "D12 end to end: a turn that replaces the test script of the node fixture with `echo passed` ends failed with the stop toolchain-refused, zero steps and no green; a repository with a Cargo.toml and no file ends the same way; a repository with no manifest ends with not-configured"
+  - id: d4
     item: "the MCP client is killed while the full run is going: a new client reads the same job to its end, green, with the generation unchanged and no lost notice; review_code on coder/<jobId> is accepted through the plan the branch inherits (E2 s5); nothing outside the worktree changed, and every step record names the unit boundary"
 ```
 
@@ -912,7 +1027,7 @@ files:
   - v2/epoch-3/e4-adapters-coder-hardening/RESULTS_e4_proof.md
 dod:
   - id: d1
-    item: "the job runs on a scratch clone with a scratch data folder, on a claude key of the pool named through COAI_CLAUDE_KEYS_FILE and never on the person's sign-in file; with no usable key the task does not start and says so"
+    item: "the job runs on a scratch clone with a scratch data folder, on a claude key of the pool named through COAI_CLAUDE_KEYS_FILE and never on the person's sign-in file; with no usable key the task does not start and says so; it starts only after the owner's answer to question 4 of SPEC section N"
   - id: d2
     item: "the results file holds the job id, the route, the detected toolchain, the rounds with their scope, the format state, fixTurns (at most 2), green true, the wall time and the cost the CLI reported; it quotes no prompt, no answer and no key"
   - id: d3
