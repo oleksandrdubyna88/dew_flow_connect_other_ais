@@ -106,14 +106,22 @@ internal static class RoleRouting
 
         var decided = RoleRouter.Route(new RouteRequest(descriptor.RouteAs, request.Model, kind, complexity, security), new RouteTable(roles.Roles, roles.ComplexityBands));
 
-        // The coder's launch is claude only: its route keeps the claude entries, and a route with none is refused here, before any folder.
-        return (descriptor.RouteAs == RoleRouter.CoderRole ? CoderRoute.Narrow(decided, request.Model) : decided) switch
+        // The coder's launch is claude only: its route keeps the claude entries, and a route with none is refused here, before any folder. The judge's named model must be on the important list.
+        return Narrowed(descriptor, decided, request, roles.Roles) switch
         {
             RouteResult.Routed routed => (new RoleJobPlan(RoleRoute.Format(routed.Models), complexity, security), string.Empty),
             RouteResult.Refused refused => (null, refused.Reason),
             _ => (null, "the router gave no answer"),
         };
     }
+
+    /// <summary>The router's answer after the rule of the role: the coder keeps claude entries only (<see cref="CoderRoute"/>), the judge refuses a named model outside the important list (<see cref="JudgeRoute"/>).</summary>
+    private static RouteResult Narrowed(RoleDescriptor descriptor, RouteResult decided, RoleJobRequest request, IReadOnlyList<(string Role, IReadOnlyList<ModelRef> Models)> lists) => descriptor.RouteAs switch
+    {
+        RoleRouter.CoderRole => CoderRoute.Narrow(decided, request.Model),
+        RoleRouter.ImportantRole => JudgeRoute.Narrow(decided, request.Model, lists.FirstOrDefault(list => list.Role == RoleRouter.ImportantRole).Models ?? []),
+        _ => decided,
+    };
 }
 
 /// <summary>What the router left for the job: its route (<c>vendor/model</c>, in order), and the task facts the route was made from.</summary>
