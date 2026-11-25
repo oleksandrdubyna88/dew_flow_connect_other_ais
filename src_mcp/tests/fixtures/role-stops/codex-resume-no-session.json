@@ -1,0 +1,26 @@
+{
+  "cli": "codex",
+  "cliVersion": "codex-cli 0.171.0",
+  "recordedUtc": "2026-11-25T14:28:20.588Z",
+  "recordedBy": "epoch 3 E3 s4 (t2, measure), run live on 2026-11-25 on a scratch copy of the owner subscription sign-in; not a fixture of the E1 s3 story",
+  "how": "codex-resume-no-session",
+  "argv": [
+    "exec",
+    "resume",
+    "--json",
+    "-m",
+    "gpt-6-luna",
+    "<flags of the coder set>",
+    "01a2131a-59b9-7740-8319-a43cee43be5c",
+    "-"
+  ],
+  "envOverrides": [
+    "CODEX_HOME=<a scratch folder that holds the sign-in and no session>"
+  ],
+  "stdin": "This is turn 2 of the measurement. Do not run any command and do not edit any file.\nAnswer with the coder report: status \"ok\", dod with exactly one entry: id \"d1\", met true, evidence = the planted number from your first turn, written as digits, in a sentence.\n",
+  "exitCode": 1,
+  "signal": null,
+  "seconds": 1,
+  "stdout": "",
+  "stderr": "warning: Untrusted project-local configuration is disabled. Run `codex exec --trust` to allow project configuration and MCP servers for this and future chats in the project, including MCP commands outside the sandbox. Explicitly untrusted projects must have their trust setting updated first.\nError: thread/resume: thread/resume failed: no rollout found for thread id 01a2131a-59b9-7740-8319-a43cee43be5c (code -32600)\n"
+}

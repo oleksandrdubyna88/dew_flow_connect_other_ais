@@ -1,0 +1,31 @@
+{
+  "cli": "agy",
+  "cliVersion": "1.5.17",
+  "recordedUtc": "2026-11-25T14:37:03.661Z",
+  "recordedBy": "epoch 3 E3 s4 (t4, measure), run live on 2026-11-25 on a scratch copy of the owner subscription sign-in; not a fixture of the E1 s3 story",
+  "how": "agy-conversation-not-found",
+  "argv": [
+    "--print=",
+    "--input-format",
+    "stream-json",
+    "--output-format",
+    "stream-json",
+    "--model",
+    "gemini-3.8-flash-low",
+    "--add-dir",
+    "<worktree>",
+    "--mode",
+    "plan",
+    "--conversation",
+    "90c9c4f0-dd8b-47a2-9f68-a5e86e3062d4"
+  ],
+  "envOverrides": [
+    "HOME=<a scratch folder that holds the sign-in and no conversation>"
+  ],
+  "stdin": "This is turn 2 of the measurement. Do not use any tool. What was the planted number from turn 1? Reply with exactly: NUMBER followed by the digits.\n",
+  "exitCode": 0,
+  "signal": null,
+  "seconds": 6,
+  "stdout": "{\"event\":\"init\",\"conversation_id\":\"16dd421d-b0e1-4b54-9b36-ff2d28d16775\",\"init\":{\"model\":\"gemini-3.8-flash-low\",\"cwd\":\"<scratch folder>/agyhome\",\"tools\":[\"ask_custom_permission\",\"ask_permission\",\"ask_question\",\"browser_click_element\",\"browser_drag_pixel_to_pixel\",\"browser_get_dom\",\"browser_get_network_request\",\"browser_input\",\"browser_list_network_requests\",\"browser_mouse_down\",\"browser_mouse_up\",\"browser_move_mouse\",\"browser_press_key\",\"browser_refresh_page\",\"browser_resize_window\",\"browser_scroll\",\"browser_scroll_dom\",\"browser_select_option\",\"browser_subagent\",\"call_mcp_tool\",\"capture_browser_console_logs\",\"capture_browser_screenshot\",\"click_browser_pixel\",\"command_status\",\"define_subagent\",\"delete_knowledge\",\"execute_browser_javascript\",\"find_by_name\",\"finish\",\"generate_image\",\"grep_search\",\"invoke_subagent\",\"list_browser_pages\",\"list_dir\",\"list_permissions\",\"list_plugin_accounts\",\"list_resources\",\"manage_inbox\",\"manage_subagents\",\"manage_task\",\"multi_replace_file_content\",\"notebook_edit\",\"notebook_execution\",\"open_browser_url\",\"read_browser_page\",\"read_resource\",\"read_url_content\",\"replace_file_content\",\"run_command\",\"run_workflow\",\"schedule\",\"search_marketplace\",\"search_web\",\"sed_file\",\"send_command_input\",\"send_message\",\"view_file\",\"wait\",\"wait_5_seconds\",\"write_to_file\"],\"permission_mode\":\"request-review\"}}\n{\"event\":\"step_update\",\"step_update\":{\"conversation_id\":\"16dd421d-b0e1-4b54-9b36-ff2d28d16775\",\"step_index\":0,\"state\":\"DONE\",\"step_type\":\"user_input\"}}\n{\"event\":\"step_update\",\"step_update\":{\"conversation_id\":\"16dd421d-b0e1-4b54-9b36-ff2d28d16775\",\"step_index\":1,\"state\":\"ACTIVE\",\"step_type\":\"agent_response\",\"text_delta\":\"There\"}}\n{\"event\":\"step_update\",\"step_update\":{\"conversation_id\":\"16dd421d-b0e1-4b54-9b36-ff2d28d16775\",\"step_index\":1,\"state\":\"ACTIVE\",\"step_type\":\"agent_response\",\"text_delta\":\" is no turn \"}}\n{\"event\":\"step_update\",\"step_update\":{\"conversation_id\":\"16dd421d-b0e1-4b54-9b36-ff2d28d16775\",\"step_index\":1,\"state\":\"ACTIVE\",\"step_type\":\"agent_response\",\"text_delta\":\"1 in our conversation hi\"}}\n{\"event\":\"step_update\",\"step_update\":{\"conversation_id\":\"16dd421d-b0e1-4b54-9b36-ff2d28d16775\",\"step_index\":1,\"state\":\"ACTIVE\",\"step_type\":\"agent_response\",\"text_delta\":\"story, so no\"}}\n{\"event\":\"step_update\",\"step_update\":{\"conversation_id\":\"16dd421d-b0e1-4b54-9b36-ff2d28d16775\",\"step_index\":1,\"state\":\"ACTIVE\",\"step_type\":\"agent_response\",\"text_delta\":\" number was planted.\"}}\n{\"event\":\"step_update\",\"step_update\":{\"conversation_id\":\"16dd421d-b0e1-4b54-9b36-ff2d28d16775\",\"step_index\":1,\"state\":\"ACTIVE\",\"step_type\":\"agent_response\",\"text_delta\":\" If you share the number\"}}\n{\"event\":\"step_update\",\"step_update\":{\"conversation_id\":\"16dd421d-b0e1-4b54-9b36-ff2d28d16775\",\"step_index\":1,\"state\":\"DONE\",\"step_type\":\"agent_response\",\"text_delta\":\" from your previous session or prompt, I can help you with whatever task you have planned!\\n\",\"duration_seconds\":2.790835286,\"usage\":{\"input_tokens\":10477,\"output_tokens\":40,\"thinking_tokens\":0,\"cache_read_tokens\":0,\"total_tokens\":10517}}}\n{\"event\":\"result\",\"result\":{\"conversation_id\":\"16dd421d-b0e1-4b54-9b36-ff2d28d16775\",\"status\":\"SUCCESS\",\"response\":\"There is no turn 1 in our conversation history, so no number was planted. If you share the number from your previous session or prompt, I can help you with whatever task you have planned!\\n\",\"duration_seconds\":2.8207569340000003,\"num_turns\":1,\"usage\":{\"input_tokens\":10477,\"output_tokens\":40,\"thinking_tokens\":0,\"cache_read_tokens\":0,\"total_tokens\":10517}}}\n",
+  "stderr": "warning: conversation \"90c9c4f0-dd8b-47a2-9f68-a5e86e3062d4\" not found\n"
+}
