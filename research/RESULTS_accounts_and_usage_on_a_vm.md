@@ -418,4 +418,5 @@ They are kept as written; this section says what replaced them.
 - **§ 2 — a host without `jq`.** § 2 decided that the script says when `jq` is missing. The owner wants it installed:
   from the host's own package manager, where the ssh user is root or has `sudo` without a password; where the user
   has no rights, the list shows the command to run. **Nothing of that was measured here**: this host has `jq`, and no
-  package manager was run in any of the five calls.
+  package manager was run in any of the five calls. **What was built (E1):** E1 and E2 install nothing; the list shows the
+  command to run there, and the installer comes after E2 (parent decision 17).
