@@ -13,10 +13,13 @@ namespace CoaiMcp.Server.RoleJobs;
 internal static class RoleJobRetention
 {
     /// <summary>Removes what the rules say, and answers the ids it removed.</summary>
-    public static IReadOnlyList<string> Apply(RoleJobStore store, Serilog.ILogger log) =>
-        Apply(store, store.Clock.GetUtcNow().UtcDateTime, RoleJobLimits.RetainFor, RoleJobLimits.RetainAtMost, log);
+    /// <param name="store">The jobs' store.</param>
+    /// <param name="log">The log.</param>
+    /// <param name="settings">When given, a removed CODER job's own folder and mounts folder go with it (<see cref="CoderJobFolders"/>) — they are found by the job's id under the coder-jobs folder these settings name, and nowhere else.</param>
+    public static IReadOnlyList<string> Apply(RoleJobStore store, Serilog.ILogger log, Func<string, string?>? settings = null) =>
+        Apply(store, store.Clock.GetUtcNow().UtcDateTime, RoleJobLimits.RetainFor, RoleJobLimits.RetainAtMost, log, settings);
 
-    internal static IReadOnlyList<string> Apply(RoleJobStore store, DateTime nowUtc, TimeSpan keepFor, int atMost, Serilog.ILogger log)
+    internal static IReadOnlyList<string> Apply(RoleJobStore store, DateTime nowUtc, TimeSpan keepFor, int atMost, Serilog.ILogger log, Func<string, string?>? settings = null)
     {
         var over = store.JobIds()
             .Select(id => store.Read(id))
@@ -32,6 +35,10 @@ internal static class RoleJobRetention
             if (Remove(store, job.JobId, log))
             {
                 removed.Add(job.JobId);
+                if (settings is not null && job.Role == RoleDescriptors.Coder)
+                {
+                    CoderJobFolders.RemoveOf(settings, job.JobId, e => log.Warning(e, "the folders of coder job {JobId} could not be removed; they stay", job.JobId));
+                }
             }
         }
 

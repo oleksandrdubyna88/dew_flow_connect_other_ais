@@ -318,6 +318,39 @@ public sealed class ARoleJobLeaseTests
     }
 
     [Fact]
+    public void A16_ACoderJobsOwnFoldersGoWithItsRecord_AndOnlyAfterThirtyDays()
+    {
+        var clock = new ManualClock(T0);
+        using var world = new RoleJobWorld(clock);
+        using var jobs = TempDir.For("coai-coder-jobs-");
+        var old = world.NewJob(role: RoleDescriptors.Coder);
+        var young = world.NewJob(role: RoleDescriptors.Coder);
+        var probe = world.NewJob();
+        foreach (var (job, ended) in new[] { (old, T0.UtcDateTime), (young, T0.UtcDateTime.AddDays(20)), (probe, T0.UtcDateTime) })
+        {
+            using var lease = world.Store.TryTake(job.JobId)!;
+            lease.Write(current => Terminal(current, RoleJobStates.Succeeded, ended)).Should().BeOfType<RoleJobWrite.Written>();
+            foreach (var name in new[] { job.JobId, job.JobId + ".mounts" })
+            {
+                Directory.CreateDirectory(Path.Combine(jobs.Path, name));
+                File.WriteAllText(Path.Combine(jobs.Path, name, "x.txt"), "x\n");
+            }
+        }
+
+        clock.Advance(TimeSpan.FromDays(40));
+        string? Settings(string name) => name == CoderOsLayer.JobsVariable ? jobs.Path : null;
+
+        var removed = RoleJobRetention.Apply(world.Store, Serilog.Core.Logger.None, Settings);
+
+        removed.Should().BeEquivalentTo([old.JobId, probe.JobId]);
+        Directory.Exists(Path.Combine(jobs.Path, old.JobId)).Should().BeFalse("the coder job's record went, and its own folder with it");
+        Directory.Exists(Path.Combine(jobs.Path, old.JobId + ".mounts")).Should().BeFalse();
+        Directory.Exists(Path.Combine(jobs.Path, young.JobId)).Should().BeTrue("20 days old is inside the 30");
+        Directory.Exists(Path.Combine(jobs.Path, young.JobId + ".mounts")).Should().BeTrue();
+        Directory.Exists(Path.Combine(jobs.Path, probe.JobId)).Should().BeTrue("a job that is not a coder's has no folder of this kind: nothing is looked for by its id");
+    }
+
+    [Fact]
     public void A16_TheRowsStay_WhenTheFolderGoes()
     {
         var clock = new ManualClock(T0);
