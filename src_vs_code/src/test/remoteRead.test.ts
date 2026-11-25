@@ -594,8 +594,14 @@ test('S3-T12: a double press starts one child and one question', async () => {
 
   const first = road(terminal);
   const second = road(terminal);
-  // The consent is asked of the keeper's queue now, so the question arrives a few steps later than it did.
+  // The consent is asked of the keeper's queue now, so the question arrives a few steps later than it did. The wait is bounded, and it stops
+  // when the first read settled without asking: a regression then fails here and does not hang the worker.
+  let settled = false;
+  void first.then(() => { settled = true; }, () => { settled = true; });
+  const deadline = Date.now() + 5000;
   while (one.w.releases.length === 0) {
+    assert.ok(!settled, 'the first read ended before the question was asked');
+    assert.ok(Date.now() < deadline, 'the question was not asked within 5 s');
     await new Promise<void>((resolve) => { setImmediate(resolve); });
   }
   one.w.releases.forEach((release) => { release(); });

@@ -218,6 +218,10 @@ function run(shell: Shell, t: Tree, operands: readonly string[], script: string 
       child.kill('SIGKILL');
       reject(new Error(`the script did not end within ${limit / 1000} s: ${stdout.slice(-300)}`));
     }, limit);
+    child.on('error', (error) => {
+      clearTimeout(timer);
+      reject(new Error(`the shell could not be started: ${error.message}`));
+    });
     child.on('close', (code) => {
       clearTimeout(timer);
       resolve({ code: code ?? -1, stdout, stderr });
@@ -617,8 +621,11 @@ test('A2-T8: the six hang runs, started together in ONE test', { timeout: 40_000
 // ───────────────── A2-T9 and A2-T10: no secret, no activity leaves — SEEN ─────────────────
 
 /** Everything one run left that could hold a leak: stdout, stderr, the arguments, every environment, the typed result. */
-function everything(t: Tree, outcome: Outcome): string {
-  const typed = JSON.stringify(readAccounts(outcome, 'claude-usage', NOW));
+function everything(t: Tree, outcome: Outcome, mode: AccountsMode): string {
+  // the value parsed with the mode that RAN, and a reply that is read: a value that is not would hold no marker whatever leaked
+  const parsed = readAccounts(outcome, mode, NOW);
+  assert.equal(parsed.kind, 'read', `${mode}: the reply is not read, so the scan of its typed value sees nothing: ${JSON.stringify(parsed)}`);
+  const typed = JSON.stringify(parsed);
 
   return [outcome.stdout, outcome.stderr, existsSync(join(t.fx, 'log')) ? readFileSync(join(t.fx, 'log'), 'utf8') : '', ...envFiles(t), typed].join('\n');
 }
@@ -637,13 +644,13 @@ jqTest('A2-T9: no secret leaves — the five false credential files hold a marke
     let outcome: Outcome;
     try {
       outcome = await run(shell, t, [mode]);
-      readAccounts(outcome, mode, NOW);
+      assert.equal(readAccounts(outcome, mode, NOW).kind, 'read', `${mode}: the reply is not read`);
     } finally {
       console.error = original;
     }
     assert.equal(outcome.stderr, '', 'stderr is not empty');
     assert.equal(calls0.n, 0, 'the parser wrote to the console');
-    const all = everything(t, outcome);
+    const all = everything(t, outcome, mode);
     assert.ok(!all.includes('SECRET-MARK'), `${mode}: SECRET-MARK is in an output, an argument, an environment or the typed result`);
     assert.ok(!outcome.stdout.includes('ORG-ID-MARK'), `${mode}: the organization id left the VM`);
   }
@@ -908,13 +915,20 @@ shellTest('A2-T30: the end line comes with stdin still open; then closing it end
     stdout += text;
   });
   const ended = new Promise<number>((resolve) => child.on('close', (code) => resolve(code ?? -1)));
-  child.stdin?.write(ACCOUNTS_SCRIPT);
-  const began = Date.now();
-  while (!stdout.endsWith('COAI-ACCOUNTS-END\n') && Date.now() - began < 5000) {
-    await new Promise((resolve) => setTimeout(resolve, 50));
+  // a bounded cleanup: a shell that is still there after the test failed is killed, whatever the failure was
+  const killer = setTimeout(() => { child.kill('SIGKILL'); }, 15_000);
+  void ended.then(() => { clearTimeout(killer); });
+  try {
+    child.stdin?.write(ACCOUNTS_SCRIPT);
+    const began = Date.now();
+    while (!stdout.endsWith('COAI-ACCOUNTS-END\n') && Date.now() - began < 5000) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    // before EOF, so a script that waits for it is still seen
+    assert.ok(stdout.endsWith('COAI-ACCOUNTS-END\n'), `no end line within 5 s with stdin open: ${stdout.slice(-200)}`);
+  } finally {
+    child.stdin?.end();
   }
-  assert.ok(stdout.endsWith('COAI-ACCOUNTS-END\n'), `no end line within 5 s with stdin open: ${stdout.slice(-200)}`);
-  child.stdin?.end();
   assert.equal(await ended, 0);
 });
 
@@ -923,16 +937,19 @@ shellTest('A2-T30: a reader that goes away stops the script — also with SIGPIP
     const t = tree({ jq: true });
     claudeFixtures(t);
     put(t, 'slow-auth', '');
+    // The shell path and its arguments are positional parameters of the wrapper, so a path with a space is not split.
     const child = ignore
-      ? spawn('/bin/sh', ['-c', `trap '' PIPE; exec ${shell.path} ${shell.args.join(' ')} -s -- claude-usage`], { cwd: t.root, env: { HOME: t.home, PATH: t.bin }, stdio: ['pipe', 'pipe', 'ignore'] })
+      ? spawn('/bin/sh', ['-c', 'trap "" PIPE; exec "$@"', 'sh', shell.path, ...shell.args, ...SHELL_ARGS, 'claude-usage'], { cwd: t.root, env: { HOME: t.home, PATH: t.bin }, stdio: ['pipe', 'pipe', 'ignore'] })
       : started(shell, t, ['claude-usage']);
     const ended = new Promise<void>((resolve) => child.on('close', () => resolve()));
-    child.stdout?.once('data', () => child.stdout?.destroy());
+    let heard = false;
+    child.stdout?.once('data', () => { heard = true; child.stdout?.destroy(); });
     child.stdin?.on('error', () => undefined);
     child.stdin?.end(ACCOUNTS_SCRIPT);
     const began = Date.now();
     await Promise.race([ended, new Promise((resolve) => setTimeout(resolve, 5000))]);
     assert.ok(Date.now() - began < 5000, `the shell did not end within 5 s after its reader was gone (SIGPIPE ignored: ${ignore})`);
+    assert.equal(heard, true, `the shell ended without ever writing: no reader was disconnected, so nothing was tested (SIGPIPE ignored: ${ignore})`);
     if (JQ !== undefined) {
       // With jq the account command (made slow on purpose) is running when the reader leaves, so the next step must not start.
       assert.equal(calls(t, 'claude').filter((line) => argsOf(line).startsWith('[-p]')).length, 0, `the usage command started after the reader was gone (SIGPIPE ignored: ${ignore})`);

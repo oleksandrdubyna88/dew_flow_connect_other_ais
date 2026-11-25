@@ -2,7 +2,7 @@ import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { EMPTY_FILE, textOf } from '../remoteRefusals';
-import { Backing, FakeDisk, KEY, instant, row, windowOver } from './hostsFakes';
+import { Backing, FakeDisk, KEY, instant, row, view, windowOver } from './hostsFakes';
 
 /**
  * The Opus review of E1.S1 (findings 1 to 5): the keeper does what § S1.3, § S1.4 and § S1.5 already say. Pure: a fake `globalState` and
@@ -175,6 +175,17 @@ test('R11: a "Save now" that is not whole names the host of the item that failed
   assert.equal(result.kind, 'full');
   assert.equal((result as { failedHost?: string }).failedHost, 'h2', 'the press did not name the host that did not fit');
   assert.ok(disk.refusedHosts().includes('h1'));
+  // h2 is still pending: held, and marked
+  assert.equal(await a.keeper.held(), 1, 'a refusal the file had no room for was dropped from what the window holds');
+  assert.equal(disk.markers().length, 1, 'the marker of the refusal that did not fit was removed');
+  // a slot is freed: the next press lands h2 and leaves no marker
+  // (another window forgot one host, so the file is newer than what this window remembers)
+  disk.files.set('refused.json', textOf({ ...EMPTY_FILE, gen: 50, by: 'someone-else', refused: [...Array.from({ length: 98 }, (_, n) => `r${n}`), 'h1'].map((host) => ({ host, utc: NOW })) }));
+  const again = await a.keeper.saveWaiting();
+  assert.ok(['written', 'kept'].includes(again.kind), `the second press did not land h2: ${again.kind}`);
+  assert.ok(disk.refusedHosts().includes('h2'), 'h2 is not in the file after the second press');
+  assert.equal(disk.markers().length, 0, 'a marker is left after h2 landed');
+  assert.equal(await a.keeper.held(), 0);
 });
 
 test('R12 (T2): a window that remembers a full file with h and reads an older full file without h admits nothing for h', async () => {
@@ -249,4 +260,28 @@ test('R16 (T12): the markers are listed BEFORE the file is read, so a hand-over 
   };
   const c = windowOver(new Backing(), disk);
   assert.equal(await c.keeper.consent('h'), 'no', 'a refusal that landed between the file read and the marker list was seen in neither');
+});
+
+test('R17 (T19): the exclusive-create fake keeps a marker that is already there, so a test can seed one and see both decisions survive', async () => {
+  const disk = new FakeDisk();
+  disk.files.set('unsure-1.json', '{"v":1,"kind":"stop","utc":"t"}');
+  const made = await disk.mark('{"v":1,"kind":"refuse","host":"h","utc":"t"}');
+  assert.notEqual(made, 'unsure-1.json', 'the fake wrote over a marker that was there');
+  assert.equal(disk.files.get('unsure-1.json'), '{"v":1,"kind":"stop","utc":"t"}');
+  assert.equal(disk.markers().length, 2);
+});
+
+test('R18 (T18): an update of one key is not in the step of the read of ANOTHER key', async () => {
+  const backing = new Backing();
+  const v = view(backing);
+  v.get('some.other.key');
+  await v.update('coai.terminalHosts', []);
+  assert.equal(v.updates.at(-1)?.inStep, false, 'a read of an unrelated key opened the step of the host list');
+  v.get('coai.terminalHosts');
+  await v.update('coai.terminalHosts', []);
+  assert.equal(v.updates.at(-1)?.inStep, true);
+  v.get('coai.terminalHosts');
+  await Promise.resolve();
+  await v.update('coai.terminalHosts', []);
+  assert.equal(v.updates.at(-1)?.inStep, false, 'a read before an await still counted');
 });

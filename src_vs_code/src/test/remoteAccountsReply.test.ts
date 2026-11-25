@@ -538,8 +538,9 @@ test('A2-T28: every alternative of the redactor\'s vendor key shapes is a creden
   for (const alt of alts) {
     const sample = `${alt.replace('[baprs]', 'b')}${'A1b2'.repeat(4)}`;
     assert.equal(credentialShaped(sample), true, `the net does not know ${alt}`);
+    // Twice in a row, BEFORE anything else touches the pattern: a shared `g` regex would start the second call at the end of the sample.
+    assert.equal(credentialShaped(sample), true, `the same call twice in a row gives another answer for ${alt} (the g flag)`);
     assert.notEqual(safeText(sample, 400), sample, `the redactor does not change ${alt}, so the sample is no key to it`);
-    assert.equal(credentialShaped(sample), true, 'the same call twice gives the same answer (the g flag)');
   }
 });
 

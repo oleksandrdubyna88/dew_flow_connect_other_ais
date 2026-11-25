@@ -211,6 +211,9 @@ test('A3-T24: nothing of a reading is stored', async () => {
     memory = new Map((await runRound(seams, memory, round, 'timer', { kind: 'every-round' })).memory);
   }
   assert.ok(memory.size === 2, 'the rounds did not run, so the store assertions below see nothing');
+  // The window DOES hold the marks (in memory only): a reading that carried none would make the store checks below pass over nothing.
+  const retained = JSON.stringify([...memory.values()]);
+  assert.ok(retained.includes('secret-mark@example.test') && retained.includes('secret-org-mark'), 'the retained readings hold no secret mark, so "nothing was stored" proves nothing');
 
   const keys = [...backing.values.keys()].sort();
   assert.ok(keys.every((key) => key === KEY || key === STATE_KEY), `an unexpected key in globalState: ${keys.join(', ')}`);

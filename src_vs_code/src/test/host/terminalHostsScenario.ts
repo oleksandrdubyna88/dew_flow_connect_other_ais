@@ -135,16 +135,16 @@ export async function theSettingReachesTheDoorThroughTheRealConfiguration(): Pro
   const before = await door.stored();
   const config = (): vscode.WorkspaceConfiguration => vscode.workspace.getConfiguration('coai');
   try {
-    await config().update('terminalAccountsAllowNewHosts', false, GLOBAL).then(undefined, (reason: unknown) => {
-      throw new Error(`the editor refused to write the user-level key, so A1-H2 cannot judge the setting: ${String(reason)}`);
-    });
-    console.info(`A1-H2: inspect() answers ${JSON.stringify(config().inspect('terminalAccountsAllowNewHosts'))}`);
-    assert.equal((await door.admit('h2')).kind, 'not-asked', 'the setting off did not stop an automatic allow');
-    assert.equal(((await door.stored()).list as { host: string }[] | undefined)?.some((row) => row.host === 'h2') ?? false, false, 'a row was stored with the setting off');
-  } finally {
-    await config().update('terminalAccountsAllowNewHosts', undefined, GLOBAL);
-  }
-  try {
+    try {
+      await config().update('terminalAccountsAllowNewHosts', false, GLOBAL).then(undefined, (reason: unknown) => {
+        throw new Error(`the editor refused to write the user-level key, so A1-H2 cannot judge the setting: ${String(reason)}`);
+      });
+      console.info(`A1-H2: inspect() answers ${JSON.stringify(config().inspect('terminalAccountsAllowNewHosts'))}`);
+      assert.equal((await door.admit('h2')).kind, 'not-asked', 'the setting off did not stop an automatic allow');
+      assert.equal(((await door.stored()).list as { host: string }[] | undefined)?.some((row) => row.host === 'h2') ?? false, false, 'a row was stored with the setting off');
+    } finally {
+      await config().update('terminalAccountsAllowNewHosts', undefined, GLOBAL);
+    }
     assert.equal((await door.admit('h2')).kind, 'read', 'the setting back to its default did not allow the host');
   } finally {
     await door.restore(before);

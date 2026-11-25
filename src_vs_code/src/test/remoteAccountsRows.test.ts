@@ -115,18 +115,29 @@ function numbers(seed: number): () => number {
 
 test('A4-T5: a number that is not there is a dash and never a 0% — 200 generated readings', () => {
   const next = numbers(7);
-  const pick = (): number | null => (next() < 0.5 ? null : [12, 37, 55.5, 88][Math.floor(next() * 4)] as number);
+  const pick = (): number | null => (next() < 0.5 ? null : [12, 37, 56, 88][Math.floor(next() * 4)] as number);
+  /** What a generated window must say: a dash for a number that is not there, `<100 - n>% left` for one that is. */
+  const said = (label: string, used: number | null): string => (used === null ? `${label} —` : `${label} ${100 - used}% left`);
+  let dashes = 0;
+  let given = 0;
   for (let one = 0; one < 200; one += 1) {
+    const [five, week, fable, codexFive, codexWeek] = [pick(), pick(), pick(), pick(), pick()];
     const claudeUsage: ClaudeUsage = { state: 'read', unmatched: 0, windows: [
-      { name: '5h', usedPercent: pick(), resetsAtMs: next() < 0.5 ? null : NOW + min(30) }, { name: 'week', usedPercent: pick(), resetsAtMs: null }, { name: { model: 'Fable' }, usedPercent: pick(), resetsAtMs: null },
+      { name: '5h', usedPercent: five, resetsAtMs: next() < 0.5 ? null : NOW + min(30) }, { name: 'week', usedPercent: week, resetsAtMs: null }, { name: { model: 'Fable' }, usedPercent: fable, resetsAtMs: null },
     ] };
-    const codexUsage: CodexUsage = { state: 'read', statMissing: false, asOf: null, windows: [{ minutes: 300, usedPercent: pick(), resetsAtMs: null }, { minutes: 10_080, usedPercent: pick(), resetsAtMs: NOW + hour(30) }] };
+    const codexUsage: CodexUsage = { state: 'read', statMissing: false, asOf: null, windows: [{ minutes: 300, usedPercent: codexFive, resetsAtMs: null }, { minutes: 10_080, usedPercent: codexWeek, resetsAtMs: NOW + hour(30) }] };
     const memory = memoryOf(['hA', seen(reading({ claude: claude({ usage: claudeUsage }), codex: { state: 'found', signInFile: true, plan: null, usage: codexUsage } }), 3)]);
     const text = allText(rowsOf({ memory, hosts: ['hA'] }));
 
     assert.ok(!/(?<![0-9])0% left/u.test(text), `a 0% that was not a 0 used was drawn: ${text}`);
     assert.ok(!/—\s*(?:\d+)?% left/u.test(text), `a dash carries "% left": ${text}`);
+    for (const [label, used] of [['5h', five], ['week', week], ['Fable', fable], ['5h', codexFive], ['week', codexWeek]] as const) {
+      assert.ok(text.includes(said(label, used)), `the window ${label} (used ${String(used)}) is not said as "${said(label, used)}": ${text}`);
+      dashes += used === null ? 1 : 0;
+      given += used === null ? 0 : 1;
+    }
   }
+  assert.ok(dashes > 100 && given > 100, `the generator made ${dashes} dashes and ${given} numbers: a case is not exercised`);
 });
 
 test('A4-T5: a real 100% used is a real 0% left', () => {

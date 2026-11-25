@@ -28,6 +28,8 @@ export interface View extends KeyValueStore {
 export function view(backing: Backing, mode: 'one-key' | 'whole-state' = 'one-key'): View {
   let copy = new Map(backing.values);
   let stepOpen = false;
+  /** The key read in the open step: an update is "in the step of its read" only for that key. */
+  let stepKey: string | undefined;
   const updates: { key: string; inStep: boolean }[] = [];
   const sync = (): void => { copy = new Map(backing.values); };
 
@@ -36,12 +38,13 @@ export function view(backing: Backing, mode: 'one-key' | 'whole-state' = 'one-ke
     updates,
     get: <T>(key: string): T | undefined => {
       stepOpen = true;
-      void Promise.resolve().then(() => { stepOpen = false; });
+      stepKey = key;
+      void Promise.resolve().then(() => { stepOpen = false; stepKey = undefined; });
 
       return copy.get(key) as T | undefined;
     },
     update: async (key, value) => {
-      updates.push({ key, inStep: stepOpen });
+      updates.push({ key, inStep: stepOpen && stepKey === key });
       if (value === undefined) {
         copy.delete(key);
       } else {
@@ -120,8 +123,11 @@ export class FakeDisk implements RefusalsDisk {
     if (this.failMark || markers.length >= 32) {
       return undefined;
     }
-    this.sequence += 1;
-    const name = `unsure-${this.sequence}.json`;
+    let name = '';
+    do {
+      this.sequence += 1;
+      name = `unsure-${this.sequence}.json`;
+    } while (this.files.has(name));
     this.files.set(name, text);
 
     return name;

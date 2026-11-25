@@ -39,9 +39,9 @@ function argumentsFrom(text: string, open: number): string {
   return text.slice(open + 1);
 }
 
-/** Every `console.<name>(`, `notify(`, `logged(` and `seams.log(` call (the last two are the remote reader's own log road) of a text whose arguments hold a banned word — each reported as the call's own text. Across lines. */
+/** Every `console.<name>(`, `notify(`, `logged(`, `seams.log(`, `defaultRemoteSeams().log(` and a bare `write(` call (the alias of the log seam in `remoteAccountsHost.ts`) of a text whose arguments hold a banned word — each reported as the call's own text. Across lines. */
 function logLeaks(text: string): readonly string[] {
-  const calls = [...text.matchAll(/\b(?:console\.[A-Za-z]+|notify|logged|seams\.log)\(/gu)];
+  const calls = [...text.matchAll(/(?:\b(?:console\.[A-Za-z]+|notify|logged|seams\.log|defaultRemoteSeams\(\)\.log)|(?<![.\w])write)\(/gu)];
 
   return calls
     .map((call) => ({ call: call[0], args: argumentsFrom(text, (call.index ?? 0) + call[0].length - 1) }))
@@ -60,6 +60,9 @@ test('S2-T10: the scanner finds what it must, on samples', () => {
   assert.equal(logLeaks('logged(seams, got.output);').length, 1, 'stdout through the remote reader\'s log road');
   assert.equal(logLeaks('seams.log(`${operands}`);').length, 1, 'an operand through the log seam');
   assert.equal(logLeaks('console.error("a (b) c", folder);').length, 1, 'a banned word after a string that holds parentheses');
+  assert.equal(logLeaks('defaultRemoteSeams().log(`failed: ${reason}`);').length, 1, 'a caught error through the default log seam');
+  assert.equal(logLeaks('const write = defaultRemoteSeams().log; write(run.stdout);').length, 1, 'stdout through the alias of the log seam');
+  assert.deepEqual(logLeaks('defaultRemoteSeams().log(ROUND_FAILED_LINE); write(droppedLine(host)); child.stdin.write(script);'), [], 'a fixed line through either, and a write of a member');
 
   assert.deepEqual(logLeaks('seams.log(logLine(host, session, end, stderrTail));'), [], 'the one log call of the remote reader');
   assert.deepEqual(logLeaks('logged(seams, BAD_OPERAND_LOG);'), [], 'a fixed line through the log road');
@@ -158,7 +161,7 @@ const FORBIDDEN: ReadonlyArray<readonly [string, RegExp]> = [
   ['a console call', /\bconsole\./u],
   ['a notify call', /\bnotify\(/u],
   ['an error whose message is a template literal', /throw new Error\(`/u],
-  ['an import or require of vscode, node:child_process or node:fs', /(?:from|require\()\s*'(?:vscode|node:child_process|child_process|node:fs|fs|node:fs\/promises)'/u],
+  ['an import or require of vscode, node:child_process or node:fs', /(?:\bfrom|\brequire\(|\bimport)\s*'(?:vscode|node:child_process|child_process|node:fs|fs|node:fs\/promises)'/u],
   ['eval', /\beval\(/u],
   ['new Function', /\bnew Function\b/u],
 ];
@@ -180,6 +183,9 @@ test('A2-T21: the scan finds each forbidden thing in a sample, so a scan that ma
   }
   assert.deepEqual(forbiddenIn("import { framed } from './remoteFraming';"), [], 'an ordinary import is not forbidden');
   assert.deepEqual(forbiddenIn("const fs = require('node:fs');").length, 1, 'a require of node:fs is forbidden');
+  assert.deepEqual(forbiddenIn("import 'vscode';"), ['an import or require of vscode, node:child_process or node:fs'], 'a side-effect import of vscode is forbidden');
+  assert.deepEqual(forbiddenIn("import 'node:fs';").length, 1, 'a side-effect import of node:fs is forbidden');
+  assert.deepEqual(forbiddenIn("import './remoteFraming';"), [], 'the allowed module is not forbidden, as a side-effect import either');
 });
 
 test('A2-T21: the name pattern finds the four accounts modules, and they hold no log, notice, editor, process, file or run-time code', () => {
