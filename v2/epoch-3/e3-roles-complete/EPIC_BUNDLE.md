@@ -1,28 +1,28 @@
 # coai v2 — epoch 3, epic E3 (roles complete: scout, judge, codex + agy coder, review_plan over a feature folder) — epic plan for the gate (generated)
 
-Parent plan: v2/PLAN.md; architecture: v2/architecture/server.md (§2, §8, §10, §19, §20, §23); built on epoch-3 E1 (role jobs, router, failover, work-plan schema) and E2 (the coder, its boundaries, the fix loop, the claude key pool), which is merged into this branch. The full spec is SPEC.md in the same folder; its digest is below, before the YAML files. This is the plan AFTER the plan gate of 2026-11-25 (proceed, 5 findings accepted: SPEC section J) and after four later changes (SPEC section K): the security judgement of s4 t6, the owner's decision 39, the coder comparison of E2 and the owner's decision 40. It is here for a NEW plan round.
+Parent plan: v2/PLAN.md; architecture: v2/architecture/server.md (§2, §8, §10, §19, §20, §23); built on epoch-3 E1 (role jobs, router, failover, work-plan schema) and E2 (the coder, its boundaries, the fix loop, the claude key pool), which is merged into this branch. The full spec is SPEC.md in the same folder; its digest is below, before the YAML files. This is the plan AFTER the plan gate of 2026-11-25 (proceed, 5 findings accepted: SPEC section J) and after four later changes (SPEC section K): the security judgement of s4 t6, the owner's decision 39, the coder comparison of E2 and the owner's decision 40. A second plan round read it on 2026-11-26 (proceed, 2 findings, both accepted: SPEC section L); they are folded in here and no new round follows.
 
-Plan commit: `0236dc62` on `feat/v2-ep3-e3-roles`. Approval id of the scope `v2/epoch-3/e3-roles-complete` at that commit: `082bcfb00dc652560fff716d76d6d5ccb69b1d2460b76538b1d38f7f4f3e6026` (56 files, 150350 bytes in the pack). It was computed with the product's own code (`WorkPack.Build` over `GitWorkFolder`, from the binaries built at this branch), not by a server round: it is the id that `review_plan(featureFolder: "v2", workItem: "v2/epoch-3/e3-roles-complete")` records when no packed file has changed since. This bundle is not in the pack: a free `.md` file beside the nodes is on the line Not sent. `SPEC.md` is in the pack (the `spec` file of `epic.yaml`).
+Plan commit: `99fb13fd` on `feat/v2-ep3-e3-roles`. Approval id of the scope `v2/epoch-3/e3-roles-complete` at that commit: `9d6dda7866eec41ed3a479d73ddf0e35ad3f23f3c4da6bd657e6ae9b5ab23c2b` (57 files, 166321 bytes in the pack). It was computed with the product's own code (`WorkPack.Build` over `GitWorkFolder`, from the binaries built at this branch), not by a server round: it is the id that `review_plan(featureFolder: "v2", workItem: "v2/epoch-3/e3-roles-complete")` records when no packed file has changed since. This bundle is not in the pack: a free `.md` file beside the nodes is on the line Not sent. `SPEC.md` is in the pack (the `spec` file of `epic.yaml`).
 
 | Story | Tasks | Complexity sum | Depends on |
 |---|---|---|---|
 | s1-scout-judge-contracts | 4 | 18 | — |
 | s2-scout-judge-roles | 4 | 20 | s1-scout-judge-contracts |
-| s3-plan-round-feature-folder (cornerstone) | 5 | 27 | — |
+| s3-plan-round-feature-folder (cornerstone) | 6 | 30 | — |
 | s4-codex-agy-measure (cornerstone) | 6 | 29 | — |
 | s5-codex-coder | 6 | 33 | s4-codex-agy-measure, s7-vendor-seam-rows |
 | s6-agy-coder | 6 | 36 | s4-codex-agy-measure, s7-vendor-seam-rows |
-| s7-vendor-seam-rows | 6 | 30 | s4-codex-agy-measure |
+| s7-vendor-seam-rows | 6 | 33 | s4-codex-agy-measure |
 | s8-proof | 6 | 29 | s2-scout-judge-roles, s3-plan-round-feature-folder, s5-codex-coder, s6-agy-coder, s7-vendor-seam-rows |
-| **Total** | 43 | 222 | |
+| **Total** | 44 | 228 | |
 
 ## Spec digest (the full spec is SPEC.md beside this file; its section letters are used here and in the task files)
 
 **Goal.** Scout and judge give strict JSON. A codex and an agy coder session is resumed for its fix turns. `review_plan(featureFolder)`
 validates first and packs in topological order.
 
-**Where the epic stands.** Built: s1 and s2 (scout, judge), s3 (the plan round over a folder). Measured and judged: s4 (the codex
-and agy write boundary). Plan only: s5 to s8 — these are what this round is asked to read. The coder is claude only until s5 to s7
+**Where the epic stands.** Built: s1 and s2 (scout, judge), s3 (the plan round over a folder; its new task t6 is open). Measured and
+judged: s4 (the codex and agy write boundary). Plan only: s5 to s8. The coder is claude only until s5 to s7
 are built; the codex and agy adapters refuse a coder launch.
 
 **What changed since the gate of 2026-11-25** (SPEC section K). (1) The security judgement of s4 t6: codex `ship`, agy `ship` with
@@ -31,6 +31,12 @@ decision 39: agy is allowed as a coder. (3) The coder comparison of E2 (claude, 
 shipped coder prompt twice; agy's init line named another mode than its argv; codex wrote null members into its report. (4) The
 owner's decision 40 (2026-11-25, «да, (а)»): a coder prompt for each vendor, the claude text unchanged. Causes 3 and 4 added no
 task: every story of s5 to s8 holds 6 tasks, the device limit, so the new work is dod items of existing tasks.
+
+**The second plan round (2026-11-26, `proceed`, coai session `26308fe5`, read at `6ec9a211`): 2 findings, both accepted and
+folded in (SPEC section L). No new round follows.** (1) The prompt told a coder that coai runs required commands and nothing
+made coai run them: now the instruction step, C9 below. (2) A changed context file outside the scope could pass the working
+tree guard in silence, by the plan's words: now B item 6 names every packed file, and the new task s3 t6 tests the context.
+Tasks: 44. In s7 the rows of `role-defaults.json` moved from t3 into t4, and t3 is now the instruction step.
 
 **Decisions that change server.md.** (1) The role name is `judge`; `important` stays the name of its model list and of the router
 rule. (2) Evidence is an object `{file, line, text}` that coai checks, not a string `file:line`. (3) A folder round has a scope: the
@@ -52,8 +58,9 @@ blob proved, links and submodules not followed). The WHOLE feature is validated 
 with no reviewer launch, no round row and no stage change. The pack (`WorkPack`, pure): `feature.yaml`, the plan file, the ancestors
 of the scope, then stories and tasks after what they depend on, ties by the number in the id; one line for each dependency outside
 the scope. Each file is in a fence longer than any run of backticks in it. Limits: YAML file 64 KiB, folder 2 000 entries, pack 256
-KiB; over a limit is a refusal, nothing is cut. A plan file that is edited, staged or untracked under the scope is a refusal when
-HEAD is the round's commit. What is approved is everything the reviewers read: `PlanSource` origin `folder` with an **approval id**,
+KiB; over a limit is a refusal, nothing is cut. When HEAD is the round's commit, EVERY file of the pack is compared with the working
+tree — the scope files and the context outside the scope — and an edited, staged or deleted one is a refusal that names it, as is
+an untracked `.yaml` under the scope (the guard takes its list from the pack; s3 t6 tests the context). What is approved is everything the reviewers read: `PlanSource` origin `folder` with an **approval id**,
 SHA-256 over blob id and path of EVERY packed file (the scope files and the context outside the scope: `feature.yaml`, the plan
 file, the ancestors) and over every outside-dependency line (node and title). A RESULTS file written later is not in the pack and
 does not change it. A coder job is bound when its task is inside the scope and the approval id at its base equals the approved one;
@@ -116,7 +123,7 @@ profile in the job's `config.toml`, written and read back before every turn; a f
 agy turn 0 runs the coder agent behind the write guard with `--mode accept-edits` and `--agent coai-coder` on every argv; a fix
 turn adds `--conversation <id of turn 0>`. The handle carries the vendor (the seam is story s7). A lost session is a crash: the next
 model starts from the last coai commit. Never in an argv: codex `--dangerously-bypass-approvals-and-sandbox`,
-`-s danger-full-access`, `--trust`, `--ephemeral`; agy `--dangerously-skip-permissions`. Scenarios V1 to V19.
+`-s danger-full-access`, `--trust`, `--ephemeral`; agy `--dangerously-skip-permissions`. Scenarios V1 to V22.
 
 **C7. The coder prompt of each vendor (new; the owner's decision 40).** The evidence: on one task and base codex `gpt-6.1-terra`
 answered `refused` twice on the shipped prompt — first because `coder.md` names claude's tools and says "You have no shell", then
@@ -127,8 +134,9 @@ line that commands which the repository's instruction files order first are not 
 claude text stays exactly as it is. The shape: `coder.md` (claude, unchanged: a test holds its sha256), `coder.codex.md`,
 `coder.agy.md`; the seam names the prompt and a vendor with no prompt of its own cannot be launched; a vendor's file differs from
 `coder.md` in exactly the tools bullet and ONE added bullet, and a test holds every other line byte-equal; the tools bullet names
-only tools of the vendor's measured list; the added bullet is narrow — it lifts no rule about the code, the paths or secrets and
-gives the model no command; the fix and repair prompts go the same road (`CoderPrompt.Fix` says "you have no shell" today, which is
+only tools of the vendor's measured list; the added bullet says only what is true (the model does not run such a command, that is
+no reason to refuse, and what coai ran before the turn is at the end of the prompt) and is narrow — it lifts no rule about the
+code, the paths or secrets and gives the model no command; the fix and repair prompts go the same road (`CoderPrompt.Fix` says "you have no shell" today, which is
 false for codex); an override a person wrote is per vendor; the envelope names the prompt id and the sha256 of the rendered prompt.
 The line is not a boundary: the unit, the vendor sandbox and the guard hold. Tasks: s7 t1 d1, s7 t2 d5, s5 t4 d4, s6 t3 d6, s8 t2
 d2, s8 t4 d4.
@@ -145,6 +153,19 @@ value for `accept-edits` differs from the default mode's and the fall-back's it 
 compares the init line of EVERY turn (id AG-M3; another value or no init line ends the job `coder-boundary`); when the line does
 not tell the modes apart, the mode is a property of class `release` (AG-M4), row B9 rests for a job on the agent file and the guard
 alone, and that is accepted risk A9 for the owner. No launch is passed on the flag alone.
+
+**C9. The instruction step (new; second plan round).** A coder of coai runs no command of its own, so a command that a
+repository's instruction file orders before an edit is run by coai or by nobody, and the coder is told which. `.coai/toolchain.yaml`
+gets ONE optional top-level key, `instructions` (`argv`; `perFile`, appended once for each file of the task; `timeoutSeconds`),
+read at the base commit. coai never finds a command by reading prose. coai runs the step once for a job, before any model, in a
+check unit of E2 (no network, no credential, the tree compared before and after); the output is standard output, UTF-8, at most 64
+KiB, exit code 0. A declared step that cannot run (non-zero exit, timeout, over the cap, not UTF-8, a changed tree, no unit) ends
+the job `instructions-failed` with zero model launches; nothing is cut. The output is appended to the turn-0 prompt of EVERY vendor,
+claude too, as one block that coai writes after the rendered prompt — not a slot of a prompt file, so `coder.md` and its sha test
+do not change; what a claude coder is sent changes only on a repository that declares a step. With no step a codex and an agy
+coder get a block that says nothing was run, and the envelope says `declared: false`. This repository's own file declares the
+rule resolver only when its measured output is at most 64 KiB (s7 t3 d5). Scenarios V20 to V22. Tasks: s7 t3, s7 t2 d5 and d6, s5
+t4 d4, s6 t3 d6, s8 t2 d2, s8 t4 d4 (the paid proof now needs a commit that follows a rule only the step's output holds).
 
 **D. Failover.** The E1 rule is unchanged. The lists the owner accepted (decision 35): scout sonnet → haiku → codex `terra`;
 important fable → codex `astra` (no change); ba fable → opus (no change); coder the band model, then sonnet → opus → codex `terra` →
@@ -168,7 +189,7 @@ forwarder (E4, `doneWhen` line 8); parallel work (E5); a pool of codex or agy cr
 `review_feature(featureFolder)`; a document written by the judge; the extension showing a `folder` source.
 
 **For the owner.** Answered: the credential (decisions 35, 37), agy as a coder (39), the scout and coder lists (35), the prompt of
-each vendor (40). Open: the accepted risks of agy before its release enters the table (A1 to A9; s6 t7 d8); the paid caps of s5 t6
+each vendor (40; its line was reworded after the second round, SPEC section L). Open: the accepted risks of agy before its release enters the table (A1 to A9; s6 t7 d8); the paid caps of s5 t6
 (8 calls), s6 t7 (12 turns), s8 t3 (0.10 USD) and s8 t4 (0.50 USD); the main-AI rows of codex and agy.
 
 ## v2/epoch-3/e3-roles-complete/epic.yaml
@@ -517,6 +538,29 @@ dod:
     item: "P4: with HEAD at the commit of the round an edited, a staged or an untracked plan file under the scope is refused and the files are named; with HEAD at another commit the note says that the working tree was not compared"
 ```
 
+## v2/epoch-3/e3-roles-complete/stories/s3-plan-round-feature-folder/tasks/t6-working-tree-guard-context/task.yaml
+```yaml
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t6-working-tree-guard-context
+title: "The working tree guard of a folder round compares every packed file: the scope and the context outside it, each named in the refusal"
+kind: test
+complexity: 3
+dependsOn:
+  - t5-tool-and-round-scenarios
+parallel: false
+files:
+  - src_mcp/src/Server/Stages/FeatureFolderPlan.cs
+  - src_mcp/tests/APlanRoundOverAFeatureFolderTests.cs
+  - research/module_server.md
+dod:
+  - id: d1
+    item: "P4, second plan round finding 2: with HEAD at the commit of the round and a scope that is ONE story, an edit of feature.yaml, of the plan file, of epoch.yaml, of the YAML of the epic and of its spec file EACH refuses the round before any reviewer is launched, and the sentence names the file (one test for each of the five); the same for a staged change and for a deleted file of the context (one test each)"
+  - id: d2
+    item: "the guard takes its list from the pack: a test builds the pack of a fixture and fails when a packed path is not in the compared set, so a file that enters the pack later is compared without a change of the guard; a file the reviewers do not read (a RESULTS file, a free .md, a node outside the scope that no scope node depends on) is still no reason to refuse"
+  - id: d3
+    item: "the refusal says file(s) the reviewers read, not file(s) of the scope, and names at most ten; the task result says for each test of d1 whether it was red before a change of the code (the code of t5 compares the packed paths already); research/module_server.md says what is compared"
+```
+
 ## v2/epoch-3/e3-roles-complete/stories/s4-codex-agy-measure/story.yaml
 ```yaml
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
@@ -786,7 +830,7 @@ dod:
   - id: d3
     item: "ids CX-S1 and CX-T4 of the judgement, after EVERY turn, through the turn check of the seam (s7 t2): a thread id that is not the handle's ends the attempt as a crash; an item of the stream that is a tool outside the measured list (an MCP call, a web search, and an agent call when the addendum of t6 says the stream shows it) ends the job coder-boundary, never green, and nothing of that turn is committed; FakeCli plays each case"
   - id: d4
-    item: "V17, the owner's decision 40 (SPEC section C7; the coder comparison of E2: codex refused the claude prompt twice and was green with two bullets changed): src_mcp/src/Roles/prompts/coder.codex.md is the prompt of the codex coder; it differs from coder.md in the tools bullet (read with read-only shell commands, change with apply_patch; no build, no test and no git command) and in ONE added bullet (a command that an instruction file of the repository orders before work is not run in this job and is no reason to refuse, because coai runs the checks; every other rule of those files still applies), and a test holds every other line byte-equal; every tool it names is in the measured list of id CX-T1; the codex fix prompt does not say that the model has no shell; FakeCli as codex records this prompt on turn 0 and the codex fix prompt on a fix turn"
+    item: "V17, the owner's decision 40 (SPEC section C7; the coder comparison of E2: codex refused the claude prompt twice and was green with two bullets changed): src_mcp/src/Roles/prompts/coder.codex.md is the prompt of the codex coder; it differs from coder.md in the tools bullet (read with read-only shell commands, change with apply_patch; no build, no test and no git command) and in ONE added bullet, which says only what is true (SPEC section C7 item 4, second plan round): the model does not run a command that an instruction file of the repository orders before work, that is no reason to refuse, what coai ran before the turn is at the end of the prompt under the heading Run by coai before your turn, and when that section says nothing was run the model names the command in notes; every other rule of those files still applies; the bullet does not say that coai runs a command or a check that the block does not show; a test holds every other line byte-equal; every tool it names is in the measured list of id CX-T1; the codex fix prompt does not say that the model has no shell; FakeCli as codex records this prompt on turn 0 and the codex fix prompt on a fix turn"
 ```
 
 ## v2/epoch-3/e3-roles-complete/stories/s5-codex-coder/tasks/t5-codex-boundary-scenarios/task.yaml
@@ -935,7 +979,7 @@ dod:
   - id: d5
     item: "every existing agy consultant, question and reviewer launch builds the same argv as before, byte for byte"
   - id: d6
-    item: "V17, the owner's decision 40 (SPEC section C7): src_mcp/src/Roles/prompts/coder.agy.md is the prompt of the agy coder; it differs from coder.md in the tools bullet (the tool names of the measured agent file of t2; no command tool) and in the ONE added bullet of SPEC section C7 (a command that an instruction file of the repository orders before work is not run in this job and is no reason to refuse, because coai runs the checks), and a test holds every other line byte-equal and every tool name equal to a tool of the agent file; FakeCli as agy records this prompt on turn 0; nothing here needs the codex file"
+    item: "V17, the owner's decision 40 (SPEC section C7): src_mcp/src/Roles/prompts/coder.agy.md is the prompt of the agy coder; it differs from coder.md in the tools bullet (the tool names of the measured agent file of t2; no command tool) and in the ONE added bullet of SPEC section C7 item 4, which says only what is true (the model does not run a command that an instruction file of the repository orders before work, that is no reason to refuse, and what coai ran before the turn is at the end of the prompt under the heading Run by coai before your turn; the same sentence as in the codex file when that file exists), and a test holds every other line byte-equal and every tool name equal to a tool of the agent file; FakeCli as agy records this prompt on turn 0; nothing here needs the codex file"
 ```
 
 ## v2/epoch-3/e3-roles-complete/stories/s6-agy-coder/tasks/t4-agy-preflight-rows/task.yaml
@@ -1082,6 +1126,7 @@ kind: code
 complexity: 6
 dependsOn:
   - t1-coder-vendor-seam
+  - t3-instruction-step
 parallel: false
 security: true
 files:
@@ -1101,42 +1146,57 @@ dod:
   - id: d4
     item: "no line of this task names codex or agy: s5 and s6 each add their vendor without a change here"
   - id: d5
-    item: "V17, the owner's decision 40 (SPEC section C7): the turn-0 prompt, the fix prompt and the repair prompt are rendered from the prompt the seam names, and an override a person wrote is read by that id, so an override of the claude prompt is never sent to another vendor; the three claude prompts are byte for byte what they were: a test holds the sha256 of src_mcp/src/Roles/prompts/coder.md (ee31db20b05e779b817131fdb615be1225271dfad715e3b647cfa38d7d92d7bf) and compares the claude prompts of a fixture task with texts recorded from the code before this change; the prompt of the test vendor is what FakeCli records on turn 0 and on a fix turn; the envelope names the prompt id and the sha256 of the rendered turn-0 prompt, never its text"
+    item: "V17, the owner's decision 40 (SPEC section C7): the turn-0 prompt, the fix prompt and the repair prompt are rendered from the prompt the seam names, and an override a person wrote is read by that id, so an override of the claude prompt is never sent to another vendor; the three claude prompts are byte for byte what they were: a test holds the sha256 of src_mcp/src/Roles/prompts/coder.md (ee31db20b05e779b817131fdb615be1225271dfad715e3b647cfa38d7d92d7bf) and, for a repository that declares no instruction step, compares the claude prompts of a fixture task with texts recorded from the code before this change (equal, byte for byte); the prompt of the test vendor is what FakeCli records on turn 0 and on a fix turn; the envelope names the prompt id and the sha256 of the rendered turn-0 prompt, never its text"
+  - id: d6
+    item: "V20 and V22, SPEC section C9 items 6 and 7: the output of the instruction step of t3 is appended to the turn-0 prompt of EVERY vendor, claude too, as ONE block that coai writes after the rendered prompt (the heading Run by coai before your turn, the argv, the base commit, the output in a fence longer than any run of backticks in it) — not a slot of a prompt file, so coder.md and its sha test do not change; with a step the claude prompt is the recorded text followed by the block, and FakeCli as claude and as the test vendor each record the canary line of the fixture step on turn 0; with no step claude is sent no block, and a vendor whose prompt points at the block is sent the block that says nothing was run; a fix turn and a repair turn do not repeat the block; a new session after a failover carries it again"
 ```
 
-## v2/epoch-3/e3-roles-complete/stories/s7-vendor-seam-rows/tasks/t3-role-defaults-rows/task.yaml
+## v2/epoch-3/e3-roles-complete/stories/s7-vendor-seam-rows/tasks/t3-instruction-step/task.yaml
 ```yaml
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
-id: t3-role-defaults-rows
-title: "shared/role-defaults.json: the codex and agy main-AI rows from the measured lists, and the failover entries of scout and coder"
-kind: config
-complexity: 4
+id: t3-instruction-step
+title: "The instruction step: a command the repository declares in .coai/toolchain.yaml is run by coai before turn 0 in a check unit at the base commit, its output is kept for the prompt, and a declared step that cannot run refuses the job"
+kind: security
+complexity: 5
 dependsOn: []
 parallel: false
+security: true
 files:
-  - shared/role-defaults.json
-  - shared/role-model-names.json
-  - shared/role-route-vectors.json
-  - src_mcp/tests/ARolesAnswerTests.cs
+  - shared/toolchain.schema.json
+  - src_mcp/core/Toolchain/ToolchainModel.cs
+  - src_mcp/core/Toolchain/ToolchainParse.cs
+  - src_mcp/src/Server/RoleJobs/CoderInstructions.cs
+  - src_mcp/src/Server/RoleJobs/CoderEnvelope.cs
+  - .coai/toolchain.yaml
+  - src_mcp/tests/ACoderInstructionStepTests.cs
 dod:
   - id: d1
-    item: "the codex and agy main-AI rows hold roles and bands made of names from RESULTS_model_lists.md only, as the owner confirmed them (SPEC section D and section H, question 3); no name is added that the CLI did not print; the vendor-routing rule holds for every entry"
+    item: "SPEC section C9 items 1 and 2: the file gets ONE optional top-level key, instructions, with argv (a block list, no shell, the refusal rule of the reader for argv text), perFile (optional: appended once for EACH entry of the files of the task; an item may hold {file}) and timeoutSeconds (1 to 300; 60 when absent); version stays 1; it is read at the BASE commit; an unknown member, an empty argv, {file} outside perFile and a number out of range are each toolchain-refused with the line; the schema file and the reader are held equal by a test; coai never reads an instruction file to find a command"
   - id: d2
-    item: "the scout and coder lists of the claude main-AI row get the failover entries of SPEC section D behind whenVendorRow; a coder entry of another vendor is added only for a vendor whose verdict is ship; the route vectors cover each new list; the roles tool answers them"
+    item: "V20, C9 items 3 and 4: for a job whose base declares the step coai runs it ONCE, before any model is launched, through CheckBoundary with the property list of a test step (no network, the own home of the job, no credential), in the worktree at the base commit; the tree and HEAD are compared before and after; standard output is kept in the job folder and used again by a later attempt of the same job; on a real unit a step cannot read a stand-in sign-in file of the home and cannot reach a listener on the host loopback, and a control shows that the same step sees both outside the unit"
+  - id: d3
+    item: "V21, C9 item 5, the failure path: a step that exits non-zero, runs past its time, prints more than 64 KiB, prints bytes that are not UTF-8 or changes the tree, and a unit that cannot start, EACH end the job with the stop instructions-failed before any model is launched: FakeCli records ZERO launches, there is no failover and no green, nothing is cut, and the envelope names the argv, the exit code, the size and the last lines of standard error (one test for each cause)"
+  - id: d4
+    item: "V22, C9 item 8: the envelope has instructions {declared, argv, exitCode, bytes, sha256, ms}; a job whose base declares no step runs nothing, and its envelope says declared false; no text of the output is in a log line or in the envelope"
+  - id: d5
+    item: "C9 item 9, this repository, measure first: the output size of the rule resolver's read for the files of three past tasks of this repository is in the task result; when each is at most 64 KiB, .coai/toolchain.yaml of this repository declares that argv with one --file pair for each file of the task, and a test reads the committed file; when one is larger the step is NOT declared with a cut text, the result says so and the lead decides"
 ```
 
 ## v2/epoch-3/e3-roles-complete/stories/s7-vendor-seam-rows/tasks/t4-coder-route-by-vendor/task.yaml
 ```yaml
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: t4-coder-route-by-vendor
-title: "The route of a coder keeps the vendors the table ships; the words claude only leave the product"
+title: "shared/role-defaults.json gets the codex and agy main-AI rows from the measured lists and the failover entries of scout and coder; the route of a coder keeps the vendors the table ships; the words claude only leave the product"
 kind: code
-complexity: 4
+complexity: 6
 dependsOn:
   - t1-coder-vendor-seam
-  - t3-role-defaults-rows
 parallel: false
 files:
+  - shared/role-defaults.json
+  - shared/role-model-names.json
+  - shared/role-route-vectors.json
+  - src_mcp/tests/ARolesAnswerTests.cs
   - src_mcp/src/Server/RoleJobs/CoderRoute.cs
   - src_mcp/src/Tools.cs
   - src_mcp/tests/ACoderRouteByVendorTests.cs
@@ -1147,6 +1207,10 @@ dod:
     item: "tested with an injected table for each of the four combinations of ship and refuse for codex and agy: the route holds exactly the shipped vendors, and a refused vendor is in no route"
   - id: d3
     item: "a Claude model on codex or agy is still refused by the vendor-routing rule; the tool description and the refusals name the shipped vendors and no longer say claude only"
+  - id: d4
+    item: "(moved here from the rows task, unchanged) the codex and agy main-AI rows hold roles and bands made of names from RESULTS_model_lists.md only, as the owner confirmed them (SPEC section D and section H, question 3); no name is added that the CLI did not print; the vendor-routing rule holds for every entry"
+  - id: d5
+    item: "(moved here from the rows task, unchanged) the scout and coder lists of the claude main-AI row get the failover entries of SPEC section D behind whenVendorRow; a coder entry of another vendor is added only for a vendor whose verdict is ship; the route vectors cover each new list; the roles tool answers them"
 ```
 
 ## v2/epoch-3/e3-roles-complete/stories/s7-vendor-seam-rows/tasks/t5-check-units-hide-the-coder-folder/task.yaml
@@ -1264,7 +1328,7 @@ dod:
   - id: d1
     item: "on a real coai-mcp over stdio with the real detached runner and FakeCli as every CLI: a scout job and a judge job end succeeded with their strict JSON envelopes"
   - id: d2
-    item: "the test reads the table of this repository, so it passes in each of the four combinations: for each vendor the table ships, a coder job routed to it goes red, then green after one fix turn, the recorded argv shows the session of turn 0 resumed (exec resume, --conversation), and the prompt the fake recorded on turn 0 is that vendor's own (V17); for each vendor the table refuses, start_role with a model of that vendor is refused and the fake records no launch of it"
+    item: "the test reads the table of this repository, so it passes in each of the four combinations: for each vendor the table ships, a coder job routed to it goes red, then green after one fix turn, the recorded argv shows the session of turn 0 resumed (exec resume, --conversation), and the prompt the fake recorded on turn 0 is that vendor's own (V17) and ends with the block of the instruction step that the fixture repository declares (V20); in the same run a fixture whose declared step exits non-zero ends instructions-failed with no launch (V21); for each vendor the table refuses, start_role with a model of that vendor is refused and the fake records no launch of it"
   - id: d3
     item: "in the same run: review_plan with featureFolder on an invalid fixture is refused with zero reviewer launches; on a valid one the prompt that FakeCli recorded holds the sections in topological order; the pack of the v2 folder of this repository for this epic is under 256 KiB"
   - id: d4
@@ -1311,7 +1375,7 @@ dod:
   - id: d3
     item: "a vendor the table refuses, or ships with no measured release, is written as not run, with the reason, and is not a missing proof; with both so the task is done when the file says so"
   - id: d4
-    item: "SPEC section C8, what the coder comparison of E2 could not show (a harness ran codex and agy in the unit shape of the s4 measure; the product ran neither): the job is started by start_role and runs in the unit, with the preflight rows, the turn check and, for agy, the handler of the product; the fixture repository carries an AGENTS.md that orders a command before any edit, and turn 0 of each vendor is not refused; the file holds the prompt id and the sha256 of the rendered turn-0 prompt, how the strict reader took the report (for codex: its null members), and for agy the permission_mode of the init line of each turn beside the value of the table"
+    item: "SPEC section C8, what the coder comparison of E2 could not show (a harness ran codex and agy in the unit shape of the s4 measure; the product ran neither): the job is started by start_role and runs in the unit, with the preflight rows, the turn check and, for agy, the handler of the product; the fixture repository carries an AGENTS.md that orders a command before any edit AND declares that command as its instruction step; the output of the step holds one rule that no file of the worktree holds (a name the new test must carry); turn 0 of each vendor is not refused, and the commit of the job follows that rule (read from the diff) — the effect of the step, not only the absence of a refusal; the file holds the instructions member of the envelope; the file holds the prompt id and the sha256 of the rendered turn-0 prompt, how the strict reader took the report (for codex: its null members), and for agy the permission_mode of the init line of each turn beside the value of the table"
 ```
 
 ## v2/epoch-3/e3-roles-complete/stories/s8-proof/tasks/t5-docs/task.yaml
