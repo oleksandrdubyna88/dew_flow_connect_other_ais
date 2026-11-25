@@ -97,7 +97,7 @@ sequenceDiagram
 | `ICitedPaths`, `CitedAsWritten`, `ReviewerInvocation.Citations` | `Reviewers/LaunchTurn.cs`, `ReviewerRuntime.cs` | how a reviewer's cited file becomes the repository's: `ReviewSnapshot` maps an absolute path under its root back through its manifest; `ReviewerExecutor.Cited` applies it to every finding after the parse; set by the roster, never by an adapter |
 | `VibeRuntime`, `VibeLaunch`, `VibeModels`, `VibeHome`, `VibePluginStarters`, `VibeHomeManifest`, `VibeHomeTurns`, `VibeExport`, `VibeStdout` | `Vibe/*.cs` | Mistral Vibe as a reviewer (S2, 2026-10-13) — the section *The Vibe reviewer* below |
 
-**The agy hook's own folder, local-only reads and dot rule (2026-11-18, `todo/PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text.md`; the `AntigravityReadOnly` row above is the state of 2026-11-16).**
+**The agy hook's own folder, local-only reads and dot rule (2026-11-18, `research/PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text.md`; the `AntigravityReadOnly` row above is the state of 2026-11-16).**
 - `Reviewers/HookSite.cs`: `HookSite(CoaiFolder, Read, IsLocal, FoldsDotsAsText)` is what one hook process knows by itself and never takes from
   the payload. `OfThisProcess()` never throws: its coai folder is `CoaiFolderOf(Directory.GetCurrentDirectory())`, the parent of a working
   folder named `.agents` (text only), else null; `Read` is `RealPath.Lstat`; `IsLocal` is `Junctions.IsLocal` with this OS's drive table;
