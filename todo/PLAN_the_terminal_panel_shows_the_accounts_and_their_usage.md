@@ -9,7 +9,7 @@
 > epics and the build order, written again against what is known today. It is the baseline of epoch 3 and adds no
 > ledger entry. **No code of any epic of this plan is written, and no pull request that carries its work is merged,
 > until the owner approves epoch 3** — but for the cut that step 6 of the stop orders (*Build order*, step 1). Four
-> questions for the owner are open (*Owner decisions*, Q1–Q4). Scope: `src_vs_code` only — the icon in the terminal
+> questions for the owner were answered on 2026-11-25 (*Owner decisions*, Q1–Q3; Q4 stands). Scope: `src_vs_code` only — the icon in the terminal
 > panel's title bar; ONE permission to read, asked once; a tab with a table, by host, of the Claude Code, Codex and
 > Antigravity accounts and their limits; a round every 10 minutes over the hosts of the open
 > `Creds: <host> / <session>` terminals, over ssh, and over the Linux users of the WSL distros of this PC. The
@@ -180,7 +180,7 @@ says how it stands after the stop.
 17. **N5:** where `jq` is missing it is installed, when the user may; else the view shows the exact command.
     **Stands; it is E6.** Until E6 the view shows the command.
 18. **Q1:** a new host is allowed by itself, with a daily notice. **Replaced by 22.**
-19. **Q2:** the install needs no press. **Stands for E6, with Q3 open.**
+19. **Q2:** the install needs no press. **Replaced by Q3 (2026-11-25): one more one-time "yes" for installs.**
 20. Two settings, on by default. **The first, `coai.terminalAccountsAllowNewHosts`, is retired by 22.** The second,
     `coai.terminalAccountsInstallMissingTools`, arrives with E6.
 21. **2026-11-25, entry 2.2.** A `Creds: wsl / …` terminal is a local WSL terminal. WSL is read on this PC: every
@@ -190,7 +190,12 @@ says how it stands after the stop.
 23. **2026-11-25, the same check.** The view is redone so that it can be read: which host, which AIs, which
     accounts, the limits, when they reset.
 
-**Open questions for the owner.** The facts of the stop do not settle them. The text takes the stated line for each;
+**The owner's answers, 2026-11-25 evening:** Q1 **yes** (one "yes" for everything read from a host, the chat's
+session read included); Q2 **not started** (a stopped distro is never started for a read); Q3 **one more one-time
+"yes"** for "install `jq` where it is missing", asked once for all hosts; without rights the command is shown. Q4 was
+not asked and stands as written. The owner also gave the go for the cut of *Build order* step 1, over the PR cap.
+
+**The questions as they were asked.** The text takes the stated line for each, and Q3 is now settled as above;
 an answer the other way changes the named section before epoch 3 is approved, and is no ledger entry.
 
 | # | The question | The line this text takes |
