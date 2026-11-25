@@ -71,9 +71,9 @@ public sealed class ACoderToolTextTests
         {
             await StdioServer.InitializeAsync(server);
 
-            var answer = await StdioServer.Call(server, 2, "start_role", $$"""{"role":"scout","repoPath":{{JsonSerializer.Serialize(data.Path)}},"brief":"x"}""");
+            var answer = await StdioServer.Call(server, 2, "start_role", $$"""{"role":"planner","repoPath":{{JsonSerializer.Serialize(data.Path)}},"brief":"x"}""");
 
-            Error(answer).Should().Contain("no descriptor").And.Contain("probe, ba, coder", "the refusal names every role that can be started, the coder among them");
+            Error(answer).Should().Contain("no descriptor").And.Contain("probe, ba, coder, scout, judge", "the refusal names every role that can be started, the coder among them");
         }
         finally
         {
