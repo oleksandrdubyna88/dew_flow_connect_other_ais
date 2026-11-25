@@ -158,7 +158,7 @@ Order: S1, S2, S3. Each story is red tests, then code, then the red-again table 
 - **Another name for the coai folder.** An 8.3 short name, a trailing dot, or an NTFS stream name is a different string. Under a
   granted root that contains the coai folder, such a spelling of its files is not seen as inside it. The folder holds no secret.
 - **A dot segment in a link's own text.** Not judged. The kernel applies a relative link's `..` to the path it has already
-  resolved, which is the walk's rule. An absolute target with `..` is not what `mklink /J` writes. Not measured on Windows.
+  resolved, which is the walk's rule. An absolute target with `..` is not what `mklink /J` writes. Not measured on Windows. *(Superseded 2026-11-18 by the Opus review of E1: on Windows NT reads a relative link's text with `..` folded, so this is a probable escape, not measured. Follow-up: [PLAN_the_agy_hook_on_windows_judges_a_links_dot_text.md](../todo/PLAN_the_agy_hook_on_windows_judges_a_links_dot_text.md); see `SECURITY.md` and `RESULTS_agy_read_file.md` §7.)*
 - **A volume mount point** (a folder that mounts a volume with no drive letter) is resolved as before. Not changed here.
 - **No packet capture yet.** That Windows sends no NTLM handshake is shown by the recording reader, not by the wire, until S3's run.
 

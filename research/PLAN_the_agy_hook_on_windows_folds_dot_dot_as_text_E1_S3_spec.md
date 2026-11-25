@@ -41,7 +41,7 @@ Where `site.FoldsDotsAsText` is true, a `Path` with a segment that is exactly `.
   so, and one rule is easier to state. The model sent neither in 11 measured runs.
 - **`Path` only.** Roots, the payload's `cwd` and the coai folder are text from coai and agy, never from the model. Row T5 pins it.
 - **Not a link's own text.** The kernel applies a relative link's `..` to the path it has already resolved, which is what the
-  walk does. `RealPath`'s `..` rule does not change (the plan: other sites rely on it).
+  walk does. `RealPath`'s `..` rule does not change (the plan: other sites rely on it). *(Superseded 2026-11-18 by the Opus review of E1: on Windows NT reads a relative link's text with `..` folded, so this is a probable escape, not measured. Follow-up: [PLAN_the_agy_hook_on_windows_judges_a_links_dot_text.md](../todo/PLAN_the_agy_hook_on_windows_judges_a_links_dot_text.md); see `SECURITY.md` and `RESULTS_agy_read_file.md` §7.)*
 - **`HookSite.OfThisProcess()`** passes `OperatingSystem.IsWindows()`.
 - **Off Windows nothing changes.** There the kernel is the walk.
 
