@@ -64,7 +64,7 @@ public sealed record BoundaryJob(
     public IReadOnlyList<ReadOnlyMount> Mounts { get; init; } = [];
 
     /// <summary>
-    /// The folder the mounts' sources are made in: a SIBLING of the job folder, never inside it — a unit binds the job folder writable, and a source reachable through it could be changed from inside, read-only bind or not. No unit binds it; it is only a source.
+    /// The folder the mounts' sources are made in: a SIBLING of the job folder, never inside it — a unit may bind a folder of the job writable, and a source reachable through it could be changed from inside, read-only bind or not. No unit binds it; it is only a source.
     /// </summary>
     public string MountsFolder => JobRoot.TrimEnd(System.IO.Path.DirectorySeparatorChar) + ".mounts";
 
@@ -85,6 +85,36 @@ public sealed record BoundaryJob(
 
     /// <summary>The folder of <c>DOTNET_CLI_HOME</c>.</summary>
     public string DotnetFolder => Path.Combine(JobRoot, "dotnet-home");
+
+    /// <summary>
+    /// The folder a unit covers with an empty read-only tmpfs before it binds what it needs of the job (S2 of the security verify of the E2 follow-ups): the folder that HOLDS the job folders — the coder-jobs folder — so another job's folders (their coder homes) are not
+    /// readable from this job's unit wherever that folder lies; or the job folder itself when the holding folder cannot be covered. It cannot when it is the root of the file system, or holds (or is) the worktree, the main checkout or the coder root — a tmpfs there
+    /// would hide what the unit is given at those paths — or is a folder the units bind their own temp folders at.
+    /// </summary>
+    public string JobCover
+    {
+        get
+        {
+            var parent = System.IO.Path.GetDirectoryName(JobRoot.TrimEnd(System.IO.Path.DirectorySeparatorChar)) ?? string.Empty;
+            var unsafeToCover = parent.Length == 0 || parent == System.IO.Path.GetPathRoot(parent)
+                || new[] { Tree.Root, Tree.MainCheckout, CoderRoot, "/tmp", "/var/tmp" }.Any(held => Inside(parent, held));
+
+            return unsafeToCover ? JobRoot : parent;
+        }
+    }
+
+    /// <summary>
+    /// The sentence that says the job folder is not its own real path, or empty — asked once the folders are made. A job folder spelled through a link (the data folder, the home or <c>COAI_CODER_JOBS</c> behind one) would be covered and bound at its SPELLING, which inside a unit
+    /// whose <c>/home</c> is an empty tmpfs is a path the link is not at: the real folder would be left under no cover, read-only, with the coder's home in it.
+    /// </summary>
+    public string JobRootOnDiskProblem()
+    {
+        var real = Files.RealPath.Resolve(JobRoot);
+
+        return real.Ok && string.Equals(System.IO.Path.TrimEndingDirectorySeparator(real.Path), System.IO.Path.TrimEndingDirectorySeparator(JobRoot), StringComparison.Ordinal)
+            ? string.Empty
+            : $"The job folder '{JobRoot}' is not its own real path ({(real.Ok ? real.Path : real.Why)}): a link in its path would put the unit's cover and binds at a path the folder is not at, so the job was refused.";
+    }
 
     /// <summary>The per-job folders a check unit binds at their own path (its <c>HOME</c>, the package and cache folders): every folder of <see cref="Folders"/> but the two temp folders, which are bound at <c>/tmp</c> and <c>/var/tmp</c>. The coder's folder is not one of them.</summary>
     public IReadOnlyList<string> CheckFolders => [HomeFolder, NuGetFolder, NpmFolder, DotnetFolder];

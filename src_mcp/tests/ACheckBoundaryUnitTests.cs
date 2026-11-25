@@ -199,6 +199,40 @@ public sealed class ACheckBoundaryUnitTests
     }
 
     [Fact]
+    public async Task TheUnit_CannotSeeAnotherJobsFolder_WhenTheJobFoldersLieInAFolderOfTheirOwn()
+    {
+        NeedAUserManager();
+        await using var bed = await BoundaryBed.CreateAsync();
+        var others = bed.UseJobsFolderWithAnotherJob();
+        bed.Job.JobCover.Should().Be(Path.GetDirectoryName(bed.Job.JobRoot), "the folder that holds the job folders is covered");
+        var script = $$"""
+            if [ -e {{others}} ]; then echo "sees other-job"; else echo "hidden other-job"; fi
+            if [ -e {{Path.GetDirectoryName(Path.GetDirectoryName(others))}} ]; then echo "sees other-job-folder"; else echo "hidden other-job-folder"; fi
+            if { true > "$HOME/from-unit.txt"; } 2>/dev/null; then echo "wrote home"; else echo "refused home"; fi
+            if { true > {{Path.GetDirectoryName(bed.Job.JobRoot)}}/from-unit.txt; } 2>/dev/null; then echo "wrote jobs-folder"; else echo "refused jobs-folder"; fi
+            """;
+
+        var run = await bed.ShellAsync(script);
+
+        run.Result.ExitCode.Should().Be(0, run.Result.StdErr);
+        run.Result.StdOut.Split('\n', StringSplitOptions.RemoveEmptyEntries).Should().Contain(["hidden other-job", "hidden other-job-folder", "wrote home", "refused jobs-folder"]);
+        File.Exists(others).Should().BeTrue("a positive control: the file is there on the host");
+    }
+
+    [Fact]
+    public async Task TheUnit_SeesItsOwnProcessesOnly_AndCannotSignalTheHosts()
+    {
+        NeedAUserManager();
+        await using var bed = await BoundaryBed.CreateAsync();
+
+        var run = await bed.ShellAsync("ls /proc | grep -c '^[0-9][0-9]*$'");
+
+        run.Result.ExitCode.Should().Be(0, run.Result.StdErr);
+        int.Parse(run.Result.StdOut.Trim(), System.Globalization.CultureInfo.InvariantCulture).Should().BeLessThan(12, "a unit with PrivatePIDs sees its own few processes, not the host's");
+        Directory.GetDirectories("/proc").Count(folder => int.TryParse(Path.GetFileName(folder), out _)).Should().BeGreaterThan(20, "a positive control: the host has many more");
+    }
+
+    [Fact]
     public async Task TheUnit_SeesTheJobsHome_NeverTheRealOne_AndASafePath()
     {
         NeedAUserManager();

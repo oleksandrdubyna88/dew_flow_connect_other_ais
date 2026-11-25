@@ -65,6 +65,13 @@ public sealed class CheckBoundary(IProcessLauncher launcher, BoundaryHost host)
             return Refuse(program.Sentence, []);
         }
 
+        if (job.JobRootOnDiskProblem() is { Length: > 0 } linked)
+        {
+            BoundaryFolders.Tidy(job, program.Copy, job.TempFolder, job.VarTempFolder);
+
+            return Refuse(linked, []);
+        }
+
         try
         {
             return await AskEveryNetworkAsync(job, networks, program.Copy, ct);
@@ -75,7 +82,11 @@ public sealed class CheckBoundary(IProcessLauncher launcher, BoundaryHost host)
         }
     }
 
-    private string EarlyRefusal(BoundaryJob job) => host.PlatformRefusal() is { Length: > 0 } platform ? platform : job.Problem() is { Length: > 0 } problem ? problem : job.MountsOnDiskProblem();
+    private string EarlyRefusal(BoundaryJob job) =>
+        host.PlatformRefusal() is { Length: > 0 } platform ? platform
+        : job.Problem() is { Length: > 0 } problem ? problem
+        : job.KeysFolderProblem() is { Length: > 0 } hidden ? hidden
+        : job.MountsOnDiskProblem();
 
     private async Task<BoundaryAdmission> AskEveryNetworkAsync(BoundaryJob job, IReadOnlyCollection<CheckNetwork> networks, string program, CancellationToken ct)
     {

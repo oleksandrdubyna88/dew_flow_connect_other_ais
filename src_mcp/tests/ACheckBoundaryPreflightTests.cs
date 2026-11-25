@@ -33,7 +33,7 @@ public sealed class ACheckBoundaryPreflightTests
         var admitted = admission.Should().BeOfType<BoundaryAdmission.Admitted>(admission.ToString()).Subject;
         var record = admitted.Records.Should().ContainSingle().Which.Value;
         record.Boundary.Should().Be(BoundaryRecord.UnitBoundary);
-        record.Preflight.Select(row => row.Item).Should().Equal(["user-manager", "worktree-write", "main-readonly", "git-readonly", "no-user-manager-inside", "windows-exe", "home-is-the-jobs", "tmp-is-the-jobs", "coder-folder-hidden", "network-state", "no-sockets-no-interop", "clean-environment"]);
+        record.Preflight.Select(row => row.Item).Should().Equal(["user-manager", "worktree-write", "main-readonly", "git-readonly", "no-user-manager-inside", "windows-exe", "home-is-the-jobs", "tmp-is-the-jobs", "coder-folder-hidden", "keys-folder-hidden", "sign-in-not-in-unit", "network-state", "no-sockets-no-interop", "clean-environment"]);
         record.Preflight.Should().OnlyContain(row => row.Held, string.Join("; ", record.Preflight.Where(row => !row.Held).Select(row => $"{row.Item}: {row.Detail}")));
         record.Preflight.Should().OnlyContain(row => row.Detail.Length > 0);
         File.Exists(Path.Combine(bed.Worktree, ".coai-preflight.exe")).Should().BeFalse("the Windows program's copy is removed when the preflight ends");
@@ -112,6 +112,105 @@ public sealed class ACheckBoundaryPreflightTests
         at.Should().BeGreaterThan(-1, $"the degrade must find '{what}' in the real argument list, or it proves nothing");
 
         return [.. arguments.Take(at), with, .. arguments.Skip(at + 1)];
+    }
+
+    /// <summary>A key folder the unit WOULD see: inside the main checkout, which is bound into every unit read-only. A folder under the temp folders is out of sight anyway, so it would prove nothing.</summary>
+    private static string KeysInTheMainCheckout(BoundaryBed bed)
+    {
+        var folder = Path.Combine(bed.Main, "keys-under-test");
+        Directory.CreateDirectory(Path.Combine(folder, "claude"));
+        File.WriteAllText(Path.Combine(folder, "claude", "k-000000000000.key"), "made-up\n");
+
+        return folder;
+    }
+
+    [Fact]
+    public async Task TheKeyFolder_IsHiddenFromACheckUnit_AndTheRowGoesRedWhenTheHidingIsTakenAway()
+    {
+        NeedAUserManager();
+        await using var bed = await BoundaryBed.CreateAsync();
+        var keys = KeysInTheMainCheckout(bed);
+        var job = bed.Job with { KeysFolder = keys };
+        var hide = $"InaccessiblePaths=-{keys}";
+
+        var healthy = await bed.Boundary().AdmitAsync(job, [CheckNetwork.Private]);
+        var admitted = healthy.Should().BeOfType<BoundaryAdmission.Admitted>(healthy.ToString()).Subject;
+        admitted.Records[CheckNetwork.Private].Properties.Should().Contain(hide);
+        admitted.Records[CheckNetwork.Private].Preflight.Single(row => row.Item == "keys-folder-hidden").Held.Should().BeTrue();
+
+        var broken = await bed.Boundary(arguments => Drop(arguments, hide)).AdmitAsync(job, [CheckNetwork.Private]);
+        var refused = broken.Should().BeOfType<BoundaryAdmission.Refused>(broken.ToString()).Subject;
+        refused.Sentence.Should().Contain("keys-folder-hidden");
+        refused.Record.Preflight.Single(row => row.Item == "keys-folder-hidden").Held.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task TheKeysFile_IsHiddenFromACheckUnit_WhereverItLies()
+    {
+        NeedAUserManager();
+        await using var bed = await BoundaryBed.CreateAsync();
+        var file = Path.Combine(bed.Main, "keys-file-under-test.txt");
+        File.WriteAllText(file, "made-up\n");
+        var job = bed.Job with { KeysFile = file };
+        var hide = $"InaccessiblePaths=-{file}";
+
+        (await bed.Boundary().AdmitAsync(job, [CheckNetwork.Private])).Should().BeOfType<BoundaryAdmission.Admitted>();
+
+        var broken = await bed.Boundary(arguments => Drop(arguments, hide)).AdmitAsync(job, [CheckNetwork.Private]);
+        broken.Should().BeOfType<BoundaryAdmission.Refused>(broken.ToString()).Which.Sentence.Should().Contain("keys-folder-hidden");
+    }
+
+    [Fact]
+    public async Task AKeyPathThatCannotBeHidden_RefusesTheJobBeforeAnyUnit()
+    {
+        NeedAUserManager();
+        await using var bed = await BoundaryBed.CreateAsync();
+        var launches = bed.Launcher.Requests.Count;
+
+        var admission = await bed.Boundary().AdmitAsync(bed.Job with { KeysFolder = "/a folder/with a space" }, [CheckNetwork.Private]);
+
+        admission.Should().BeOfType<BoundaryAdmission.Refused>().Which.Sentence.Should().Contain("cannot be hidden");
+        bed.Launcher.Requests.Count.Should().Be(launches, "no unit was started");
+    }
+
+    [Fact]
+    public async Task ThePersonsSignInFile_IsHiddenFromACheckUnit_AndTheRowGoesRedWhenTheHidingIsTakenAway()
+    {
+        NeedAUserManager();
+        await using var bed = await BoundaryBed.CreateAsync();
+        var home = Path.Combine(bed.Main, "stand-in-home");
+        Directory.CreateDirectory(Path.Combine(home, ".claude"));
+        var file = Path.Combine(home, ".claude", ".credentials.json");
+        File.WriteAllText(file, "made-up-sign-in-line-not-a-credential\n");
+        var host = bed.Host with { RealHome = home };
+        var hide = $"InaccessiblePaths=-{file}";
+
+        var healthy = await bed.Boundary(host: host).AdmitAsync(bed.Job, [CheckNetwork.Private]);
+        healthy.Should().BeOfType<BoundaryAdmission.Admitted>(healthy.ToString()).Which.Records[CheckNetwork.Private].Properties.Should().Contain(hide);
+
+        var broken = await bed.Boundary(arguments => Drop(arguments, hide), host).AdmitAsync(bed.Job, [CheckNetwork.Private]);
+        broken.Should().BeOfType<BoundaryAdmission.Refused>(broken.ToString()).Which.Sentence.Should().Contain("sign-in-not-in-unit");
+    }
+
+    [Fact]
+    public async Task AJobFolderThatLiesBehindALink_IsRefusedBeforeAnyUnit_ForTheChecksAndForTheCoder()
+    {
+        NeedAUserManager();
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "a symbolic link needs a privilege on Windows");
+        await using var bed = await BoundaryBed.CreateAsync();
+        var real = Path.Combine(bed.Parent(), "real-jobs");
+        Directory.CreateDirectory(real);
+        var link = Path.Combine(bed.Parent(), "linked-jobs");
+        Directory.CreateSymbolicLink(link, real);
+        bed.UseJobRoot(Path.Combine(link, "job"));
+        var launches = bed.Launcher.Requests.Count;
+
+        var checks = await bed.Boundary().AdmitAsync(bed.Job, [CheckNetwork.Private]);
+        var coder = await new CoderBoundary(bed.Launcher, bed.Host).AdmitAsync(bed.Job, "/bin/true");
+
+        checks.Should().BeOfType<BoundaryAdmission.Refused>(checks.ToString()).Which.Sentence.Should().Contain("not its own real path");
+        coder.Should().BeOfType<BoundaryAdmission.Refused>(coder.ToString()).Which.Sentence.Should().Contain("not its own real path");
+        bed.Launcher.Requests.Skip(launches).Should().BeEmpty("no unit was started for a folder that is spelled through a link");
     }
 
     [Fact]

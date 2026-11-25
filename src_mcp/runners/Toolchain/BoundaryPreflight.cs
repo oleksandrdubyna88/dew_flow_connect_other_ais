@@ -8,7 +8,7 @@ namespace CoaiMcp.Runners.Toolchain;
 /// <remarks>
 /// <para><b>It asks the OS, it does not read the property list.</b> A sandbox option can be accepted and do nothing (R7 of <c>RESULTS_coder_write_boundary.md</c>: the CLI's own sandbox failed OPEN with a stderr warning). Each row
 /// is a real attempt — a write that must fail, a program that must not start, a bus that must not answer — and a row that is missing counts as an answer of "no": a script that stopped half way cannot pass.</para>
-/// <para>The rows are the six items of the task's <c>d3</c> and four more the same unit lets it prove cheaply: the job's <c>/tmp</c> and <c>/var/tmp</c> are the bound folders, the network has the state the step asked for, no socket or interop folder is
+/// <para>The rows are the six items of the task's <c>d3</c> and more that the same unit lets it prove cheaply: the job's <c>/tmp</c> and <c>/var/tmp</c> are the bound folders, the network has the state the step asked for, no socket or interop folder is
 /// reachable, and the environment holds none of the names a check must never see.</para>
 /// <para>Rows are tab-separated <c>item</c>, <c>ok|bad</c>, one sentence. A sentence never carries the output of a program the preflight ran, so a hostile program cannot write into a row.</para>
 /// </remarks>
@@ -41,7 +41,7 @@ internal static class BoundaryPreflight
 
     /// <summary>Every item the script must answer, in the order it asks.</summary>
     internal static readonly IReadOnlyList<string> Items =
-        [WorktreeWrite, MainReadOnly, GitReadOnly, NoUserManager, WindowsProgram, HomeIsTheJobs, TempIsTheJobs, CoderFolderHidden, NetworkState, NoSocketsNoInterop, CleanEnvironment];
+        [WorktreeWrite, MainReadOnly, GitReadOnly, NoUserManager, WindowsProgram, HomeIsTheJobs, TempIsTheJobs, CoderFolderHidden, KeysHidden, SignInAbsent, NetworkState, NoSocketsNoInterop, CleanEnvironment];
 
     /// <summary>The items of a check preflight for <paramref name="job"/>: <see cref="Items"/>, and the submodule row when the job has a mount — a job with none is asked exactly what E2 asked.</summary>
     internal static IReadOnlyList<string> ItemsFor(BoundaryJob job) => job.Mounts.Count == 0 ? Items : [.. Items, SubmodulesReadOnly];
@@ -131,16 +131,33 @@ internal static class BoundaryPreflight
         if env | grep -Eq '^(SSH_AUTH_SOCK|DBUS_SESSION_BUS_ADDRESS|GPG_AGENT_INFO|XDG_RUNTIME_DIR|COAI_[A-Za-z0-9_]*|[A-Za-z0-9_]*(API_KEY|TOKEN|SECRET))='; then row clean-environment bad "a name a check must never see is in the environment"; else row clean-environment ok "no vendor key, COAI_ name, agent or bus socket is in the environment"; fi
         """;
 
-    /// <summary>The check script reads the coder's folder as its eighth argument, after the seven of <see cref="Header"/>.</summary>
+    /// <summary>The check script reads the coder's folder as its eighth argument, after the seven of <see cref="Header"/>, and the key folder and keys file (one string, space between, empty when none is named) as its ninth.</summary>
     private const string CheckHeader = """
-        coderdir=$8
+        coderdir=$8; keylist=$9
+        """;
+
+    /// <summary>A check unit holds no key material: the key folder and the keys file (the pool's, wherever they lie) cannot be read from it. Not named: nothing to hide.</summary>
+    private const string CheckKeysRow = """
+        if [ -z "$keylist" ]; then row keys-folder-hidden ok "no key folder or keys file is named for this job, so there is none to hide"
+        else
+          seen=
+          for k in $keylist; do if [ -r "$k" ] && { ls -A "$k" >/dev/null 2>&1 || head -c 1 "$k" >/dev/null 2>&1; }; then seen="$seen $k;"; fi; done
+          if [ -z "$seen" ]; then row keys-folder-hidden ok "the claude key folder and the keys file cannot be read from inside the check's unit"; else row keys-folder-hidden bad "key material can be read from inside the check's unit:$seen"; fi
+        fi
+        """;
+
+    /// <summary>The person's sign-in file, at its real path, is not readable from a check unit.</summary>
+    private const string CheckSignInRow = """
+        if [ -r "$rh/.claude/.credentials.json" ]; then row sign-in-not-in-unit bad "the person's sign-in file is visible inside the check's unit"
+        else row sign-in-not-in-unit ok "the person's sign-in file is not in the check's unit"; fi
         """;
 
     /// <summary>
     /// The coder's folder holds the coder CLI's home, its config and its transcripts; a check runs code the coder wrote, so it must see neither the folder nor anything in it. The folder is made on the host before the unit starts, so "not there" is an observation and not an absent folder.
     /// </summary>
     private const string CoderFolderRow = """
-        if [ -e "$coderdir" ] || ls -A "$coderdir" >/dev/null 2>&1; then row coder-folder-hidden bad "the coder's own folder (its home and config) is visible inside the check's unit"
+        if [ -z "$coderdir" ]; then row coder-folder-hidden bad "no coder folder was named to look for, so nothing was observed"
+        elif [ -e "$coderdir" ] || ls -A "$coderdir" >/dev/null 2>&1; then row coder-folder-hidden bad "the coder's own folder (its home and config) is visible inside the check's unit"
         else row coder-folder-hidden ok "the coder's own folder is not visible inside the check's unit"; fi
         """;
 
@@ -197,9 +214,9 @@ internal static class BoundaryPreflight
     private static string Join(params string[] rows) => string.Join('\n', rows);
 
     /// <summary>
-    /// <c>$1</c> worktree, <c>$2</c> main checkout, <c>$3</c> real home, <c>$4</c> network (<c>none</c>|<c>host</c>), <c>$5</c> job id, <c>$6</c> the Windows program to try (empty: none), <c>$7</c> the resolver file bound back under <c>/mnt</c> for a host-network step (empty: none), <c>$8</c> the coder's folder, which must not be visible.
+    /// <c>$1</c> worktree, <c>$2</c> main checkout, <c>$3</c> real home, <c>$4</c> network (<c>none</c>|<c>host</c>), <c>$5</c> job id, <c>$6</c> the Windows program to try (empty: none), <c>$7</c> the resolver file bound back under <c>/mnt</c> for a host-network step (empty: none), <c>$8</c> the coder's folder, which must not be visible, <c>$9</c> the key folder and keys file, which must not be readable.
     /// </summary>
-    private static readonly string Script = Join(Header, CheckHeader, WorktreeRow, MainRow, GitRow, ManagerRow, ExeRow, HomeRow, TempRow, CoderFolderRow, NetworkRow, SocketsRow, EnvironmentRow);
+    private static readonly string Script = Join(Header, CheckHeader, WorktreeRow, MainRow, GitRow, ManagerRow, ExeRow, HomeRow, TempRow, CoderFolderRow, CheckKeysRow, CheckSignInRow, NetworkRow, SocketsRow, EnvironmentRow);
 
     /// <summary>
     /// The coder's script: the same rows over the same fragments, plus <c>$8</c> the coder root (a write beside the worktree must be refused), <c>$9</c> the sign-in file inside the unit (empty: none; read-only) and a tenth, the program of the launch (it must be there) — read after a <c>shift 9</c>, because systemd expands <c>${NAME}</c> in a command line, so no script of this family may spell one. After the program come the launch's mode (<c>keyed</c> when it carries a pool key and so binds no sign-in file,
@@ -207,7 +224,7 @@ internal static class BoundaryPreflight
     /// </summary>
     private static readonly string CoderScript = Join(Header, CoderHeader, WorktreeRow, MainRow, CoderRootRow, GitRow, ManagerRow, ExeRow, HomeRow, SignInRow, ProgramRow, TempRow, NetworkRow, SocketsRow, EnvironmentRow, SignInAbsentRow, KeysHiddenRow);
 
-    private static string ScriptFor(BoundaryJob job) => job.Mounts.Count == 0 ? Script : Join(Script, SubmodulesRow(8));
+    private static string ScriptFor(BoundaryJob job) => job.Mounts.Count == 0 ? Script : Join(Script, SubmodulesRow(9));
 
     private static string CoderScriptFor(BoundaryJob job) => job.Mounts.Count == 0 ? CoderScript : Join(CoderScript, SubmodulesRow(4));
 
@@ -215,7 +232,7 @@ internal static class BoundaryPreflight
 
     /// <summary>The command of the preflight unit.</summary>
     internal static IReadOnlyList<string> Command(BoundaryJob job, BoundaryHost host, CheckNetwork network, string program) =>
-        ["/bin/sh", "-c", ScriptFor(job), "coai-preflight", job.Tree.Root, job.Tree.MainCheckout, host.RealHome, network == CheckNetwork.Private ? "none" : "host", job.JobId, program, network == CheckNetwork.Host ? host.ResolverFile : string.Empty, job.CoderFolder, .. MountArguments(job)];
+        ["/bin/sh", "-c", ScriptFor(job), "coai-preflight", job.Tree.Root, job.Tree.MainCheckout, host.RealHome, network == CheckNetwork.Private ? "none" : "host", job.JobId, program, network == CheckNetwork.Host ? host.ResolverFile : string.Empty, job.CoderFolder, string.Join(' ', new[] { job.KeysFolder, job.KeysFile }.Where(path => path.Length > 0)), .. MountArguments(job)];
 
     /// <summary>
     /// The command of the coder's preflight unit: the program of the launch, the copy of the Windows program to try, the sign-in file as the unit sees it (empty when the launch binds none) and the resolver file, as the launch itself gets them. The network is the host's — the CLI
