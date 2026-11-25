@@ -38,6 +38,23 @@ internal static class KeyNotices
         Provider = "claude",
     };
 
+    /// <summary>
+    /// The exact text of a key was seen where it must never be, and the mark that makes the key dead could NOT be written (the pool was busy for a minute, or its folder refused): the key is STILL ENABLED and the pool may pick it again. The same code as
+    /// <see cref="Exposed"/>, so it reaches the person the same way; the detail says what failed (a system sentence that names a path and never holds a key text) and the cure says what to do by hand.
+    /// </summary>
+    public static ServerNotice ExposedNotMarked(string keyId, string why, DateTime nowUtc) => new()
+    {
+        Utc = ServerNotice.Iso(nowUtc),
+        Class = "failure",
+        Source = Source,
+        Code = ServerNoticeCodes.ClaudeKeyExposed,
+        Subject = keyId,
+        Title = $"Claude key {keyId} was found in a launch's output or in the coder's files, and could NOT be marked dead: it is still enabled",
+        Detail = $"The exact text of the key was seen where it must never be, but the pool could not be written, so the key is still enabled and may be picked again. {Redaction.SafeText(why, 300)}",
+        Cure = $"Revoke the key at the vendor now. Then disable it (coai-mcp --keys disable --id {keyId}) or remove it (coai-mcp --keys remove --id {keyId}) and add a new one.",
+        Provider = "claude",
+    };
+
     /// <summary>The pool holds no key at all. The subject is the UTC date: a repeat on the same day is the same notice on the page — one per day.</summary>
     public static ServerNotice Empty(DateTime nowUtc, bool switchIsSet) => new()
     {

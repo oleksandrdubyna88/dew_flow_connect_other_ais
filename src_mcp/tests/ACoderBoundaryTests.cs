@@ -125,7 +125,7 @@ public sealed class ACoderBoundaryTests
     }
 
     [Fact]
-    public async Task TheCodersEnvironment_IsTheAllowListAlone_AndTheRowsKeyTravelsByName_NeverInAnArgv()
+    public async Task TheCodersEnvironment_IsTheAllowListAlone_AndTheRowsKeyTravelsOnStdin_NeverInAnArgvOrAUnitProperty()
     {
         NeedAUserManager();
         await using var bed = await CoderBed.CreateAsync();
@@ -144,7 +144,8 @@ public sealed class ACoderBoundaryTests
         lines.Should().Contain($"ANTHROPIC_API_KEY={key}", "the CLI gets its key");
         var started = bed.Launcher.Requests.Single(item => item.Arguments.Contains($"coai-coder-{bed.JobId}-c1"));
         started.Arguments.Should().NotContain(argument => argument.Contains(key, StringComparison.Ordinal), "no secret ever reaches an argv");
-        started.Arguments.Should().Contain("--setenv=ANTHROPIC_API_KEY", "it crosses by NAME");
+        started.Arguments.Should().NotContain(argument => argument.StartsWith("--setenv=ANTHROPIC_API_KEY", StringComparison.Ordinal), "a --setenv puts the value in the unit's Environment property and in a 0644 transient unit file: the row's key crosses on stdin, like a pool key");
+        started.Environment.Values.Should().NotContain(value => value != null && value.Contains(key, StringComparison.Ordinal), "and it is not left in the environment of the systemd-run client either");
     }
 
     [Fact]
@@ -285,13 +286,5 @@ public sealed class ACoderBoundaryTests
         }
     }
 
-    /// <summary>Admits the job and runs one launch, as the road of <see cref="CoderTurns"/> does, so a test can read the process itself.</summary>
-    private static async Task<BoundaryRun> RunAsync(CoderBed bed, ProcessRequest request)
-    {
-        var boundary = bed.Boundary();
-        var admission = await boundary.AdmitAsync(bed.Job, request.Executable);
-        var admitted = admission.Should().BeOfType<BoundaryAdmission.Admitted>(admission.ToString()).Subject;
-
-        return await boundary.RunAsync(admitted, bed.Job, request, "c1");
-    }
+    private static Task<BoundaryRun> RunAsync(CoderBed bed, ProcessRequest request) => bed.RunLaunchAsync(request);
 }

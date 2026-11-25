@@ -239,7 +239,7 @@ public sealed class ClaudeConsultant(IReviewerRuntime inner, string vendor = "cl
     public const string KeyVariable = "CLAUDE_CODE_OAUTH_TOKEN";
 
     /// <summary>The variables of another credential that a launch with a pool key must not inherit: the CLI would pick one of them over the key, or bill another account.</summary>
-    private static readonly string[] ForeignCredentials =
+    internal static readonly string[] ForeignCredentials =
     [
         // Another credential the CLI would pick over the key:
         "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_FOUNDRY_API_KEY", "ANTHROPIC_FOUNDRY_AUTH_TOKEN", "ANTHROPIC_AWS_API_KEY", "ANTHROPIC_IDENTITY_TOKEN", "ANTHROPIC_IDENTITY_TOKEN_FILE", "AWS_BEARER_TOKEN_BEDROCK",

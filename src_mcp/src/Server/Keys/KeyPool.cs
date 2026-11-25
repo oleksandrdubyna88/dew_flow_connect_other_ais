@@ -216,7 +216,10 @@ internal sealed class KeyPool(KeyStoreAccess access)
 
     private const string Gone = "gone: the key of this session was removed, is dead, or its file is missing";
 
-    /// <summary>Records how a launch that carried <paramref name="keyId"/> ended, and applies it: a cooldown, a count, or the dead state with its notice.</summary>
+    /// <summary>
+    /// Records how a launch that carried <paramref name="keyId"/> ended, and applies it: a cooldown, a count, or the dead state with its notice. The mark that a key was EXPOSED waits for the lock as long as a writing verb does
+    /// (<see cref="KeySession.AdminWait"/>): it is the one record that must not be lost to a busy pool — a key that stays enabled after its text was seen is picked again — while every other record gives up at a pick's window, since the next pick reads the pool as it is.
+    /// </summary>
     public KeyResult<KeyRow> Record(string keyId, KeyLaunchReport report)
     {
         if (!KeyIds.IsValid(keyId) || !access.Folder.Exists)
@@ -244,7 +247,7 @@ internal sealed class KeyPool(KeyStoreAccess access)
             AfterRecording(session, entries, current.Record, updated, report, now);
 
             return KeyResult<KeyRow>.Of(KeyStoreAccess.RowOf(current with { Record = updated }, now));
-        });
+        }, report.End == KeyLaunchEnd.Exposed ? KeySession.AdminWait : null);
     }
 
     private static void RememberExposed(KeySession session, string keyId)

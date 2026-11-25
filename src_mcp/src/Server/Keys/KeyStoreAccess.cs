@@ -17,11 +17,11 @@ internal sealed class KeyStoreAccess(string dataDir, TimeProvider clock, Action<
     /// Runs <paramref name="work"/> with the pool held. A disk fault (the folder refuses, a file is held, a name is not allowed) is a refusal with exit code 74 and the system's own sentence —
     /// which names a path and never holds a key text; any other exception is a defect and flies on.
     /// </summary>
-    public KeyResult<T> Run<T>(bool create, Func<KeySession, KeyResult<T>> work)
+    public KeyResult<T> Run<T>(bool create, Func<KeySession, KeyResult<T>> work, TimeSpan? wait = null)
     {
         try
         {
-            var opened = KeySession.Open(Folder, create);
+            var opened = KeySession.Open(Folder, create, wait);
             if (opened.Value is not { } session)
             {
                 return KeyResult<T>.Refused(opened.Refusal, opened.Code);

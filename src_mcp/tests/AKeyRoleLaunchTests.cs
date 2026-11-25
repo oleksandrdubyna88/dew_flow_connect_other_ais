@@ -197,8 +197,7 @@ public sealed class AKeyRoleLaunchTests
         var changed = File.GetLastWriteTimeUtc(canary);
         var home = Environment.GetEnvironmentVariable("HOME");
         Environment.SetEnvironmentVariable("HOME", person.Path);
-        Environment.SetEnvironmentVariable("ANTHROPIC_API_KEY", "an-api-key-of-the-person");
-        foreach (var name in OtherEndpoints)
+        foreach (var name in ClaudeConsultant.ForeignCredentials)
         {
             Environment.SetEnvironmentVariable(name, "the-persons-other-route");
         }
@@ -212,16 +211,16 @@ public sealed class AKeyRoleLaunchTests
         finally
         {
             Environment.SetEnvironmentVariable("HOME", home);
-            Environment.SetEnvironmentVariable("ANTHROPIC_API_KEY", null);
-            foreach (var name in OtherEndpoints)
+            foreach (var name in ClaudeConsultant.ForeignCredentials)
             {
                 Environment.SetEnvironmentVariable(name, null);
             }
         }
 
         var names = KeyRig.EnvNamesOf(rig.RecordFolder).Single();
-        names.Should().Contain("CLAUDE_CODE_OAUTH_TOKEN").And.NotContain("ANTHROPIC_API_KEY");
-        names.Should().NotContain(OtherEndpoints, "no other route to a host, a cloud or a credential reaches a keyed launch: the CLI would send the key where the person's environment points");
+        names.Should().Contain("CLAUDE_CODE_OAUTH_TOKEN");
+        ClaudeConsultant.ForeignCredentials.Should().HaveCountGreaterThan(20, "the list is the one the product removes: the test must not be asserting over an empty one");
+        names.Should().NotContain(ClaudeConsultant.ForeignCredentials, "no other credential, route to a host, a cloud or switch of either reaches a keyed launch — ALL of the product's list, the person's environment having every one of them: the CLI would send the key where the person's environment points");
         var homes = KeyRig.HomesOf(rig.RecordFolder).Single();
         homes["HOME"].Should().NotBeEmpty().And.NotBe(person.Path).And.StartWith(Path.Combine(rig.World.DataDir, "roles"), "the home is under the job's own folder");
         homes["CLAUDE_CONFIG_DIR"].Should().StartWith(homes["HOME"]);
@@ -230,13 +229,6 @@ public sealed class AKeyRoleLaunchTests
         File.ReadAllBytes(canary).Should().Equal(before, "the person's sign-in file is byte-equal");
         File.GetLastWriteTimeUtc(canary).Should().Be(changed, "and untouched");
     }
-
-    /// <summary>The names, besides the two credentials, that would send a keyed claude to another host or another cloud (taken from the strings of the installed CLI, 2.1.332).</summary>
-    private static readonly string[] OtherEndpoints =
-    [
-        "ANTHROPIC_BASE_URL", "ANTHROPIC_BEDROCK_BASE_URL", "ANTHROPIC_VERTEX_BASE_URL", "ANTHROPIC_VERTEX_PROJECT_ID", "ANTHROPIC_FOUNDRY_BASE_URL", "ANTHROPIC_FOUNDRY_API_KEY", "ANTHROPIC_AWS_BASE_URL",
-        "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY", "AWS_BEARER_TOKEN_BEDROCK", "ANTHROPIC_CUSTOM_HEADERS", "ANTHROPIC_UNIX_SOCKET", "CLAUDE_CODE_OAUTH_REFRESH_TOKEN", "CLAUDE_CODE_CUSTOM_OAUTH_URL",
-    ];
 
     // ---------- the second judgement: the output, the CLI's home, an unreadable pool ----------
 

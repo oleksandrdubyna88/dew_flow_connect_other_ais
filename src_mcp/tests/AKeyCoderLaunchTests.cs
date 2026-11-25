@@ -111,23 +111,18 @@ public sealed class AKeyCoderLaunchTests
         var run = rig.RunAsync(job);
         var seen = new StringBuilder();
         var unitText = new StringBuilder();
+        var clientEnvironment = new StringBuilder();
         var properties = 0;
+        var clients = 0;
+        var unit = $"coai-coder-{job.JobId}-c1";
         for (var until = DateTime.UtcNow.AddSeconds(20); !run.IsCompleted && DateTime.UtcNow < until;)
         {
-            var shown = UnitProperties($"coai-coder-{job.JobId}-c1.service");
+            var shown = UnitLeakWatch.UnitProperties($"{unit}.service");
             properties += shown.Contains("Environment=", StringComparison.Ordinal) ? 1 : 0;
-            unitText.AppendLine(shown).AppendLine(TransientFiles(job.JobId));
-            foreach (var cmdline in Directory.EnumerateDirectories("/proc").Where(folder => long.TryParse(Path.GetFileName(folder), out _)).Select(folder => Path.Combine(folder, "cmdline")))
-            {
-                try
-                {
-                    seen.Append(File.ReadAllText(cmdline).Replace('\0', ' '));
-                }
-                catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-                {
-                    // A process that ended while it was read.
-                }
-            }
+            unitText.AppendLine(shown).AppendLine(UnitLeakWatch.TransientFiles(job.JobId));
+            seen.Append(UnitLeakWatch.Cmdlines());
+            clientEnvironment.Append(UnitLeakWatch.ClientEnvironments(unit));
+            clients += UnitLeakWatch.Clients(unit);
 
             await Task.Delay(200, TestContext.Current.CancellationToken);
         }
@@ -137,8 +132,11 @@ public sealed class AKeyCoderLaunchTests
         ended.State.Should().Be(RoleJobStates.Succeeded, ended.Reason);
         seen.Length.Should().BeGreaterThan(1000, "the scan must have read real command lines while the coder ran");
         properties.Should().BeGreaterThan(0, "the property of the live unit was read at least once, so the check can see a unit");
+        clients.Should().BeGreaterThan(0, "the systemd-run client of the unit was found while the coder ran, so its environment was read");
+        clientEnvironment.Length.Should().BeGreaterThan(0, "and its environment was readable");
         unitText.ToString().Should().NotContain(KeyWorld.Sentinel, "neither `systemctl --user show -p Environment` of the unit nor the 0644 transient unit file under /run/user ever held the key");
         seen.ToString().Should().NotContain(KeyWorld.Sentinel, "no process's command line — the client, the shell, env, the coder — held the key while the unit ran");
+        clientEnvironment.ToString().Should().NotContain(KeyWorld.Sentinel, "the key is not in the environment of the systemd-run client either: no `--setenv` is needed to leave it there, and a process of the same user can read that file");
         var names = KeyRig.EnvNamesOf(Launches(rig, job)).Single();
         names.Should().Contain(Variable);
         names.Where(name => name.Contains("TOKEN", StringComparison.Ordinal) || name.StartsWith("COAI_", StringComparison.Ordinal) || name.Contains("API_KEY", StringComparison.Ordinal)).Should().Equal([Variable], "the one name that crossed, and no other credential or product name");
@@ -228,49 +226,6 @@ public sealed class AKeyCoderLaunchTests
         ended.Stop.Should().Be("key-in-output");
         KeyRig.Row(rig.World.DataDir, Keys(rig, job).Single()).DeadReason.Should().Be(KeyDeadReasons.Exposed);
         (await rig.GitAsync(rig.Repo, "rev-parse", $"refs/heads/coder/{job.JobId}")).Should().Be(rig.Base);
-    }
-
-    /// <summary>What <c>systemctl --user show -p Environment</c> says of the unit (empty when it is not there); read with the product's own program names, never through a shell.</summary>
-    private static string UnitProperties(string unit)
-    {
-        try
-        {
-            using var shown = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("systemctl") { ArgumentList = { "--user", "show", "-p", "Environment", unit }, RedirectStandardOutput = true, UseShellExecute = false })!;
-            var text = shown.StandardOutput.ReadToEnd();
-            shown.WaitForExit();
-
-            return text;
-        }
-        catch (Exception e) when (e is System.ComponentModel.Win32Exception or IOException)
-        {
-            return string.Empty;
-        }
-    }
-
-    /// <summary>The text of every transient unit file of this job under the user's runtime folder (the file systemd-run makes, mode 0644 in a 0700 folder).</summary>
-    private static string TransientFiles(string jobId)
-    {
-        var runtime = Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR") is { Length: > 0 } named ? named : "/run/user/" + Environment.GetEnvironmentVariable("UID");
-        var folder = Path.Combine(runtime, "systemd", "transient");
-        if (!Directory.Exists(folder))
-        {
-            return string.Empty;
-        }
-
-        var text = new StringBuilder();
-        foreach (var file in Directory.EnumerateFiles(folder, $"*{jobId}*"))
-        {
-            try
-            {
-                text.AppendLine(File.ReadAllText(file));
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-                // The unit ended while it was read.
-            }
-        }
-
-        return text.ToString();
     }
 
     // ---------- the commit search never fails open, and reads what git commits (the second judgement) ----------

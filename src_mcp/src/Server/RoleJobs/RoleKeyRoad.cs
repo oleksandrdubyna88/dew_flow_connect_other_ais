@@ -200,7 +200,17 @@ internal sealed class RoleKeyRoad(KeyPool pool, KeyStoreAccess access, Func<stri
 
             if (KeyIds.IsValid(launched.KeyId) && launched.Launch is not null)
             {
-                pool.Record(launched.KeyId, ReportOf(launched, stop, access.NowUtc));
+                var report = ReportOf(launched, stop, access.NowUtc);
+
+                // The launch's OWN key found in its output: the one road for every exposure, so its mark waits for the lock and a mark that cannot be written is a notice.
+                if (report.End == KeyLaunchEnd.Exposed)
+                {
+                    Exposed(launched.KeyId);
+                }
+                else
+                {
+                    pool.Record(launched.KeyId, report);
+                }
             }
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
@@ -242,22 +252,39 @@ internal sealed class RoleKeyRoad(KeyPool pool, KeyStoreAccess access, Func<stri
             : new KeyLaunchReport(KeyLaunchEnd.Transient);
     }
 
-    /// <summary>The exact text of the key of <paramref name="keyId"/> was found in the coder's changed files: the key is dead (exposed), with ONE notice. Never throws.</summary>
-    public void Exposed(string keyId)
+    /// <summary>
+    /// The exact text of the key of <paramref name="keyId"/> was found where it must never be (the coder's changed files, a launch's output): the key is dead (exposed), with ONE notice. The mark waits for the pool's lock as a writing verb does, and when it
+    /// still cannot be written ONE notice of the same code says the key is STILL ENABLED and what to do by hand — an exposed key is never left enabled in silence. True when the mark is written (or the key is no longer in the pool, and its id is kept as exposed);
+    /// false when it is not. Never throws.
+    /// </summary>
+    public bool Exposed(string keyId)
     {
         if (!KeyIds.IsValid(keyId))
         {
-            return;
+            return true;
         }
 
+        string why;
         try
         {
-            pool.Record(keyId, new KeyLaunchReport(KeyLaunchEnd.Exposed));
+            var marked = pool.Record(keyId, new KeyLaunchReport(KeyLaunchEnd.Exposed));
+
+            // A refusal of the data kind is "no such key": the key left the pool while its session ran, and its id was kept as exposed before the pool looked for it. Every other refusal (busy, the folder refused) means nothing was written.
+            if (marked.Ok || marked.Code == KeyExit.Data)
+            {
+                return true;
+            }
+
+            why = marked.Refusal;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            // See Ended.
+            why = $"the key store could not be used: {e.Message}";
         }
+
+        access.Notify(KeyNotices.ExposedNotMarked(keyId, why, access.NowUtc));
+
+        return false;
     }
 
     /// <summary>The secret of a key the session still has, for the search of the coder's changed files; null when the key is gone.</summary>

@@ -75,8 +75,11 @@ internal sealed class KeySession : IDisposable
 
     public KeyFolder Folder { get; }
 
-    /// <summary>Takes the pool. <paramref name="create"/>: make the folder (a verb that writes); otherwise the folder must be there.</summary>
-    public static KeyResult<KeySession> Open(KeyFolder folder, bool create)
+    /// <summary>
+    /// Takes the pool. <paramref name="create"/>: make the folder (a verb that writes); otherwise the folder must be there. <paramref name="wait"/>: how long to wait for the lock when the caller must not give up at the short window of a pick
+    /// (the record that a key was exposed); null is <see cref="AdminWait"/> for a writing verb and <see cref="Wait"/> otherwise.
+    /// </summary>
+    public static KeyResult<KeySession> Open(KeyFolder folder, bool create, TimeSpan? wait = null)
     {
         if (folder.LinkProblem() is { Length: > 0 } link)
         {
@@ -94,7 +97,7 @@ internal sealed class KeySession : IDisposable
         }
 
         // A writer (an add, an import, a sync) may wait longer than a launch's pick: a pick is on the way to a launch, a verb is a person or a boot script.
-        var (held, refusal) = TakeLock(folder, create ? AdminWait : Wait);
+        var (held, refusal) = TakeLock(folder, wait ?? (create ? AdminWait : Wait));
         if (held is null)
         {
             return refusal.Length > 0

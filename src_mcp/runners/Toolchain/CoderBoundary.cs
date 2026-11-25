@@ -41,12 +41,15 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
         return program.Problem.Length > 0 ? [] : CoderUnit.Properties(HostFor(withKey), job, program, runtimeMax);
     }
 
-    /// <summary>The request with the key taken out of its environment and put before the prompt, as the first line of stdin: what the unit's own shell reads (<see cref="CoderUnit.Inner"/>).</summary>
-    private static ProcessRequest WithKeyOnStdin(ProcessRequest request) =>
+    /// <summary>
+    /// The request with every explicit variable taken out of its environment and put before the prompt, one line each at the head of stdin: what the unit's own shell reads (<see cref="CoderUnit.Inner"/>). The environment of the <c>systemd-run</c> client is
+    /// then empty of values: a process of the same user can read it.
+    /// </summary>
+    private static ProcessRequest WithSecretsOnStdin(ProcessRequest request, CoderUnit.Crossing crossing) =>
         request with
         {
-            Environment = request.Environment.Where(pair => pair.Key != CoaiMcp.Runners.Consultation.ClaudeConsultant.KeyVariable).ToDictionary(pair => pair.Key, pair => pair.Value),
-            StdIn = request.Environment[CoaiMcp.Runners.Consultation.ClaudeConsultant.KeyVariable] + "\n" + request.StdIn,
+            Environment = new Dictionary<string, string?>(),
+            StdIn = crossing.StdinHead + request.StdIn,
         };
 
     /// <summary>
@@ -156,24 +159,25 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
             throw new InvalidOperationException($"the coder's program cannot be run in the unit: {program.Problem}");
         }
 
-        // The key is NOT a property of the unit. A `--setenv=NAME` is copied into the unit's Environment property and into a transient unit file of mode 0644 under /run/user for as long as the unit lives (measured, second judgement): so the key travels as the FIRST LINE of
-        // the unit's stdin, which its own shell reads and exports before the exec. Nothing but the pipe, and the child's own environment, ever holds it.
+        // A secret is NOT a property of the unit. A `--setenv=NAME` is copied into the unit's Environment property and into a transient unit file of mode 0644 under /run/user for as long as the unit lives (measured, second judgement; the third judgement found a row's own
+        // ANTHROPIC_API_KEY still going that way): so every explicit variable travels as a line at the head of the unit's stdin — the pool key first — which the unit's own shell reads and exports before the exec. Nothing but the pipe, and the child's own environment,
+        // ever holds it, and the client is started with none.
         var keyed = CarriesKey(request);
-        var sent = keyed ? WithKeyOnStdin(request) : request;
-        var names = CoderUnit.ByName(sent, System.Environment.GetEnvironmentVariable);
+        var crossing = CoderUnit.Cross(request, System.Environment.GetEnvironmentVariable);
+        var sent = WithSecretsOnStdin(request, crossing);
         var unit = CoderUnit.UnitName(job, part);
         var launchHost = HostFor(keyed);
         var record = seen with { Properties = CoderUnit.Properties(launchHost, job, program, request.Timeout + UnitControl.Backstop) };
         try
         {
-            var arguments = CoderUnit.Arguments(launchHost, job, program, unit, request.Timeout + UnitControl.Backstop, request.Arguments, names, Degrade, readsKey: keyed);
+            var arguments = CoderUnit.Arguments(launchHost, job, program, unit, request.Timeout + UnitControl.Backstop, request.Arguments, crossing, Degrade);
             var started = await _units.StartAsync(sent with
             {
                 Executable = host.SystemdRun,
                 Arguments = arguments,
                 WorkingDirectory = job.Tree.Root,
                 InheritsEnvironment = false,
-                Passthrough = CoderUnit.ClientNames(names),
+                Passthrough = CoderUnit.ClientNames(crossing.ByName),
             }, ct);
             var result = started.Problem.Length > 0 ? started.Result with { StdErr = started.Problem } : started.Result;
 
