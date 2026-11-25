@@ -153,12 +153,16 @@ German and Spanish.
 
 Beside the review tools, `coai-mcp` can run a role on another model as a **detached job** that outlives the call, the server and your session:
 
-- `start_role(role, repoPath, taskFile | brief)` starts it and answers at once with a `jobId`. Today: `ba` (plans an epic that has no stories into stories and tasks) and `probe` (a diagnostic).
+- `start_role(role, repoPath, taskFile | brief)` starts it and answers at once with a `jobId`. Today: `ba` (plans an epic that has no stories into stories and tasks), `coder` (does one task in its own git worktree, below) and `probe` (a diagnostic).
 - `role_status(jobId, maxSeconds?)` shows the state, the attempts (which model, why one stopped) and the result; `role_cancel(jobId)` stops the job.
 - If a model hits a limit, refuses or crashes, the job moves to the next model of the role's list (`COAI_ROLES_MODELS`) at once, with one log line and one notice per switch.
 - `validate_work(repoPath, featureFolder)` (or `coai-mcp --validate-work <dir>`) checks a work-plan tree; `coai-mcp --role-delta <jobId> --at <commit>` measures how much of a BA's task files the orchestrator changed (the plan passes below 20 %).
 
-The design is in [ARCHITECTURE.md](ARCHITECTURE.md#role-jobs-and-the-ba-v2-epoch-3).
+**The coder** (`start_role role: "coder"`, `taskFile:` a `task.yaml` of a valid work plan; there is no `start_coder` tool) works on a claude model in a git worktree `coder/<jobId>`. The coder edits files; coai commits, builds and tests. The checks are the repository's own, in `.coai/toolchain.yaml` (per project: `path`, `adapter`, `build` and `test` as an argv one item to a line, `memoryMb`; `skip`; `timeouts`). The file is read at the base commit, so a coder cannot change its own checks, and a repository with no file has no checks and is never green. A red check goes back to the SAME session as a short failure digest, at most `COAI_FIX_ROUNDS` times (default 3, from 0 to 10). The result names the branch, the commit, the files that changed (from git, not from the coder's word) and whether the checks are green.
+
+The coder can write its worktree and nothing else: fixed launch flags (no shell, `--restricted`), and the claude process and every build and test step run in a `systemd-run --user` unit that binds the main checkout read-only. That layer stops writes, not reads. It exists on Linux and WSL only: a coder job is refused on native Windows and on macOS before anything starts.
+
+The design is in [ARCHITECTURE.md](ARCHITECTURE.md#role-jobs-and-the-ba-v2-epoch-3) and [the coder](ARCHITECTURE.md#the-coder-v2-epoch-3).
 
 ## Security lane
 
