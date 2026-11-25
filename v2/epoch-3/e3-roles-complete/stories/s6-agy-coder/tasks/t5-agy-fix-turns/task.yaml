@@ -1,6 +1,6 @@
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: t5-agy-fix-turns
-title: "Fix turns with an agy conversation: --conversation with the handle of turn 0, the conversation id compared on every turn, the usage of each turn, and the check of every turn's own stream against the guard's records"
+title: "Fix turns with an agy conversation: --conversation with the handle of turn 0, the conversation id compared on every turn, the usage of each turn, and the check of every turn's own stream against the guard's records and against the measured mode value"
 kind: code
 complexity: 6
 dependsOn:
@@ -18,7 +18,7 @@ dod:
   - id: d2
     item: "V13 and judgement G8, id AG-S1: a resumed turn whose conversation id is not the handle's — also with exit code 0 — or whose stderr has the recorded not-found line of the fixture ends the attempt as a crash; the worktree goes back to the last coai commit before the next model starts; no fix turn goes on in a new conversation"
   - id: d3
-    item: "ids AG-A2 and AG-M2 and, when the table holds it, AG-G5, after EVERY turn through the turn check of the seam (s7 t2): a tool event that was not denied and names a tool outside read_file, write_file and edit_file; the recorded mode fall-back line of the fixture of t7 on stderr; a tool event with no guard record of the same id and the decision allow — each ends the job coder-boundary, never green, and nothing of that turn is committed; FakeCli plays each case"
+    item: "ids AG-A2 and AG-M2 and, when the table holds them, AG-G5 and AG-M3, after EVERY turn through the turn check of the seam (s7 t2): a tool event that was not denied and names a tool outside read_file, write_file and edit_file; the recorded mode fall-back line of the fixture of t7 on stderr; a tool event with no guard record of the same id and the decision allow; V18, AG-M3: an init line whose permission_mode is not the value the table holds for the release, or a stream with no init line — each ends the job coder-boundary, never green, and nothing of that turn is committed; FakeCli plays each case, and one case has the right argv with the wrong init value, so that the flag alone never passes"
   - id: d4
     item: "V16: the usage line of each turn holds that turn only (the sum agy reports is subtracted)"
   - id: d5

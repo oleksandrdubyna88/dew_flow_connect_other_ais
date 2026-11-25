@@ -362,3 +362,82 @@ For the lead (this judge did not edit them):
 - The probes of section 2 ran on scratch folders under `/tmp` without the `/tmp` and `/var/tmp` binds of a real unit; they show what a bind and
   a hide do, not that the whole build of this repository passes under shape J3 — s7 t5 runs the suite under it.
 - Whether a listener can appear on `127.0.0.1:9` between the preflight row and a refresh: only root can make one; the margin is the first guard.
+
+## 12. Addendum 1 (2026-11-26): after the coder comparison of E2, and the owner's decision on the coder prompt
+
+Judge: Fable, the same role. Read: `v2/epoch-3/e2-coder-one-task/RESULTS_coder_comparison.md` and its `comparison/` folder (merged into
+this branch with `feat/v2-ep3-e2-coder` `ec24ee4c`). Run by the judge: nothing — no vendor CLI, no model call, no probe. **No verdict
+changes, and no release enters the table by this addendum.** Sections 1 to 11 stand as they were written.
+
+### 12.1 What the comparison is evidence for
+
+One task, one run for each vendor (codex: three), started by a harness in the unit shape of s4 t3 and t5: the main checkout and the
+coder root hidden, the sign-in as a copy, for agy the SHELL guard of s4 made fail-closed (not coai's handler, G2). It shows that
+both CLIs did the task inside that shape, that the real sign-in files did not change, and that 17 paths could not be seen from the
+replica of the check unit. That last point does not close S1: the harness kept the copies in a scratch folder under `/tmp`, which a
+check unit replaces with its own; in the product the copies are in the job folder, which the check unit binds. S1 stands.
+
+It is not a measure of any id of section 8: the product ran no row, nothing went red, no turn was resumed, and the guard was not
+coai's binary.
+
+### 12.2 The agy mode (G6, AG-M1, AG-M2)
+
+Observed: the init line of the agy turn named `permission_mode: request-review` while `--mode accept-edits` was on the argv; the
+edits went through. G6 says the mode "is asserted", and AG-M2 has a second half, "the stream names `accept-edits`, when G1 finds
+where". In the one place where the stream names a mode it does NOT name `accept-edits`.
+
+Three readings are open, and one line cannot choose between them: (a) `request-review` is how 1.5.17 names `accept-edits` in a
+headless run (an edit is accepted; a command would be asked, and so is denied — the measure saw `denied_actions: command`); (b) the
+field is another setting, of the account or of the agent, and does not follow `--mode`; (c) the flag did not take, without the
+stderr warning that `--mode auto` gave. Under (c) the turn ran in a mode nobody asked for, and in the default mode a command RAN in
+the measure. With the coder agent there is no command tool and the guard denies `run_command`, so row B9 keeps the layers A and G.
+The layer in doubt is M.
+
+Must-change **G14** (it replaces the stream half of AG-M2):
+
+- The flag is a request. AG-M1 stays as coai's own half; it proves no mode.
+- s6 t7 (d9) measures the `permission_mode` of the init line for no `--mode`, `--mode plan`, `--mode accept-edits` and the
+  `--mode auto` fall-back, fresh and resumed, with no model turn where agy prints the line before one.
+- **AG-M3** — class `turn`. It enters the table only when the value for `accept-edits` differs from the value of the default mode
+  and of the fall-back on every start that was measured. The property: the init line of every turn names the value the table holds
+  for the release. Another value, or a stream with no init line, ends the job `coder-boundary` before anything of that turn is
+  committed. Rows: B9.
+- **AG-M4** — class `release`. It enters the table when AG-M3 cannot. The property: with `--mode accept-edits` an edit inside the
+  worktree is done and a command is denied, fresh and resumed (for 1.5.17 the fresh half was seen in the calls of s4 t5 for U10;
+  the resumed half is not measured, and s6 t7 d9 measures it when AG-M4 is needed). Nothing then asks the mode at the time of a
+  job, and for a job row B9 rests on A and G alone. Rows: B9.
+- Accepted risk **A9**, for the owner, only with AG-M4: the mode a turn ran in cannot be read; a silent fall-back to the default
+  mode is stopped only by the agent file and the guard.
+
+The count of section 8 changes only with the addendum that follows s6 t7: 18 agy ids, and then AG-M3 or AG-M4.
+
+### 12.3 The coder prompt of each vendor (the owner's decision 40, 2026-11-25)
+
+The decision: each vendor gets its own version of the coder prompt — its own tool names, and a line that commands which the
+repository's instruction files order first are not run in the job, because coai runs the checks; the claude text stays as it is.
+It follows from the comparison: codex refused the shipped prompt twice (the names of claude's tools; then `AGENTS.md` of this
+repository, which orders a command before any edit).
+
+It is not a boundary matter, and the judge has no objection: a prompt is a request to a model, and no id of section 8 relies on
+one. Three conditions for the task files, each now a dod line (s5 t4 d4, s6 t3 d6, s7 t2 d5):
+
+1. The added line is narrow. It lifts only "run this command before you work". A line that told the model to disregard the
+   instruction files of the repository would also drop their rules about secrets and paths.
+2. It gives the model no command and names no tool that the vendor's measured list does not hold.
+3. No vendor gets the prompt of another by default, and an override a person wrote for claude is never sent to another vendor.
+
+For codex the line makes accepted risk C4 neither larger nor smaller: `AGENTS.md` still reaches the model, and the vendor sandbox is
+what holds. For agy the guard denies every path under `.agents` (2 denied reads in the comparison), so the model could not read
+those files; there the line only keeps a model from refusing.
+
+### 12.4 X8, seen
+
+codex wrote `"reason":null,"notes":null` on a report with `status: "ok"`: the flat schema makes every member required. coai's
+strict reader is not to be loosened in general. Only a null of a member that the status does not use is read as absent; a null of
+any other member and an unknown member stay errors (s5 t2 d2).
+
+### 12.5 For the lead
+
+- Accepted risks A1 and A2 are not changed by the comparison: the sign-in copies were visible to the coder units, by design.
+- Task files changed with this addendum: s5 t2, s5 t4, s6 t3, s6 t4, s6 t5, s6 t7, s7 t1, s7 t2, s8 t2, s8 t4. No task was added.
+- Not measured, and not checked by this judge: everything of this section. The judge read the comparison file as it was written.

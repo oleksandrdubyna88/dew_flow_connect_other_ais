@@ -1,6 +1,6 @@
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: t2-fix-loop-through-the-seam
-title: "The fix loop, the repair turn and the failover read the session, the report, a lost session and the check of a turn's own stream through the vendor seam; proved with a test vendor"
+title: "The fix loop, the repair turn and the failover read the session, the report, a lost session, the check of a turn's own stream and the prompt of the vendor through the vendor seam; proved with a test vendor"
 kind: code
 complexity: 6
 dependsOn:
@@ -11,6 +11,7 @@ files:
   - src_mcp/src/Server/RoleJobs/CoderWork.cs
   - src_mcp/src/Server/RoleJobs/CoderFixLoop.cs
   - src_mcp/src/Server/RoleJobs/RoleModelLauncher.cs
+  - src_mcp/src/Server/RoleJobs/CoderPrompt.cs
   - src_mcp/tests_fakecli/CoderVerbs.cs
   - src_mcp/tests/ACoderFixLoopThroughTheSeamTests.cs
 dod:
@@ -22,3 +23,5 @@ dod:
     item: "judgement S7, the ids of class turn: the seam gives a check of the turn's own stream that runs after EVERY turn, turn 0 too, before anything of that turn is committed; a wrong answer ends the job coder-boundary and is never green; a session that is not the handle's ends the attempt as a crash; proved with the test vendor: a planted bad item stops the job and the worktree holds no commit of that turn; claude gets the check that says nothing, and its tests pass unchanged"
   - id: d4
     item: "no line of this task names codex or agy: s5 and s6 each add their vendor without a change here"
+  - id: d5
+    item: "V17, the owner's decision 40 (SPEC section C7): the turn-0 prompt, the fix prompt and the repair prompt are rendered from the prompt the seam names, and an override a person wrote is read by that id, so an override of the claude prompt is never sent to another vendor; the three claude prompts are byte for byte what they were: a test holds the sha256 of src_mcp/src/Roles/prompts/coder.md (ee31db20b05e779b817131fdb615be1225271dfad715e3b647cfa38d7d92d7bf) and compares the claude prompts of a fixture task with texts recorded from the code before this change; the prompt of the test vendor is what FakeCli records on turn 0 and on a fix turn; the envelope names the prompt id and the sha256 of the rendered turn-0 prompt, never its text"

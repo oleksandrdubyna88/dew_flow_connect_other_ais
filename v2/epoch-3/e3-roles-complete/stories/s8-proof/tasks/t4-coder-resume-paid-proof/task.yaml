@@ -1,6 +1,6 @@
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: t4-coder-resume-paid-proof
-title: "Real coder job of each shipped vendor with its smallest model: a planted red check, one fix turn in the session of turn 0, green"
+title: "Real coder job of each shipped vendor with its smallest model, started by the product in the product's own unit: a repository whose instruction file orders a command, a planted red check, one fix turn in the session of turn 0, green"
 kind: measure
 complexity: 5
 dependsOn:
@@ -16,3 +16,5 @@ dod:
     item: "2 paid runs per vendor at most and 0.50 USD in total (the count of tokens where the CLI names no cost); the real sign-in file has the same bytes and modification time before and after, and the job's sign-in copy is gone after the job"
   - id: d3
     item: "a vendor the table refuses, or ships with no measured release, is written as not run, with the reason, and is not a missing proof; with both so the task is done when the file says so"
+  - id: d4
+    item: "SPEC section C8, what the coder comparison of E2 could not show (a harness ran codex and agy in the unit shape of the s4 measure; the product ran neither): the job is started by start_role and runs in the unit, with the preflight rows, the turn check and, for agy, the handler of the product; the fixture repository carries an AGENTS.md that orders a command before any edit, and turn 0 of each vendor is not refused; the file holds the prompt id and the sha256 of the rendered turn-0 prompt, how the strict reader took the report (for codex: its null members), and for agy the permission_mode of the init line of each turn beside the value of the table"

@@ -1,6 +1,6 @@
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: t3-agy-coder-launch
-title: "The agy coder launch: the measured argv with the mode and the agent on every turn, --conversation on a fix turn, the guard folder as the working directory and never the worktree, the measured unit with the main checkout hidden, the sign-in copy by its recipe, the minimal environment"
+title: "The agy coder launch: the measured argv with the mode and the agent on every turn, --conversation on a fix turn, the guard folder as the working directory and never the worktree, the measured unit with the main checkout hidden, the sign-in copy by its recipe, the minimal environment, and the agy coder prompt"
 kind: security
 complexity: 6
 dependsOn:
@@ -11,10 +11,11 @@ security: true
 files:
   - src_mcp/runners/Consultation/AntigravityConsultant.cs
   - src_mcp/runners/Toolchain/AgyCoderUnit.cs
+  - src_mcp/src/Roles/prompts/coder.agy.md
   - src_mcp/tests/AAgyCoderLaunchTests.cs
 dod:
   - id: d1
-    item: "V3 and V4, id AG-M1, judgement G5 and G6: the fresh argv is exactly the flag set AG1 that RESULTS_agy_coder.md names, with --mode accept-edits AND --agent coai-coder on EVERY argv; a fix turn adds --conversation with the id of turn 0 and changes nothing else, so a conversation that agy starts in silence is still the coder agent behind the guard; none of the never-flags of SPEC section C3 is reachable (a test tries each)"
+    item: "V3 and V4, id AG-M1, judgement G5 and G6: the fresh argv is exactly the flag set AG1 that RESULTS_agy_coder.md names, with --mode accept-edits AND --agent coai-coder on EVERY argv; a fix turn adds --conversation with the id of turn 0 and changes nothing else, so a conversation that agy starts in silence is still the coder agent behind the guard; none of the never-flags of SPEC section C3 is reachable (a test tries each); the argv is a request and proves no mode: the mode a turn ran in is read from its own stream by the turn check of t5 (SPEC section C8), never taken from the flag"
   - id: d2
     item: "judgement G7, id AG-B1: the working directory of the unit is the guard folder of the job and NEVER the worktree (the seam of s7 t1 carries it; a test fails for an agy launch whose cwd is the worktree); the worktree is the one --add-dir root; the guard folder is bound read-only in the unit when the addendum of t7 holds AG-B3"
   - id: d3
@@ -23,3 +24,5 @@ dod:
     item: "V14, id U7: only the allow-list reaches the CLI, compared name by name from inside a real unit; agy gets no variable for its sign-in; a canary value is in no recorded argv"
   - id: d5
     item: "every existing agy consultant, question and reviewer launch builds the same argv as before, byte for byte"
+  - id: d6
+    item: "V17, the owner's decision 40 (SPEC section C7): src_mcp/src/Roles/prompts/coder.agy.md is the prompt of the agy coder; it differs from coder.md in the tools bullet (the tool names of the measured agent file of t2; no command tool) and in the ONE added bullet of SPEC section C7 (a command that an instruction file of the repository orders before work is not run in this job and is no reason to refuse, because coai runs the checks), and a test holds every other line byte-equal and every tool name equal to a tool of the agent file; FakeCli as agy records this prompt on turn 0; nothing here needs the codex file"
