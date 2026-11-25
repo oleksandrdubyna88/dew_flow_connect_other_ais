@@ -59,6 +59,10 @@ internal sealed record KeyRecord
     public DateTime AddedUtc { get; init; }
     public DateTime? LastUsedUtc { get; init; }
     public DateTime? CooldownUntilUtc { get; init; }
+
+    /// <summary>The id of the OTHER key whose limit set this cooldown (its account was this key's account then), or empty when the cooldown is this key's own: a changed account drops only a cooldown that came from another key.</summary>
+    public string CooldownFrom { get; init; } = string.Empty;
+
     public int ConsecutiveCooldowns { get; init; }
     public int Launches { get; init; }
     public int LimitStops { get; init; }
@@ -77,6 +81,7 @@ internal sealed record KeyRecord
         DeadReason = DeadReason ?? string.Empty,
         Account = Account ?? string.Empty,
         Source = Source ?? KeySources.Local,
+        CooldownFrom = CooldownFrom ?? string.Empty,
         Note = Note ?? string.Empty,
     };
 
