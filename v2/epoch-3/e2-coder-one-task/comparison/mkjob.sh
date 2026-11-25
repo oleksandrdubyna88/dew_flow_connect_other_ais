@@ -4,6 +4,7 @@ set -euo pipefail
 . "$(dirname "$0")/env.sh"
 v=$1; W=$(job_tree "$v"); C=$(job_root "$v"); MT=$(job_mounts "$v")
 mkdir -p "$CMP_CR" "$C" "$MT"
+# testsToDelete-exempt: raw-worktree — a manual comparison harness, not a test: the worktree is the run's own evidence and the harness removes it at its cleanup
 git -C "$CMP_CLONE" worktree add -b "$v-t3" "$W" "$CMP_BASE_SHA" >/dev/null
 # the submodule's content AT THE BASE PIN, offline, from the clone's module store (what CoderSubmodules does): a sibling of the job folder, bound read-only by the units
 pin=$(git -C "$CMP_CLONE" ls-tree "$CMP_BASE_SHA" .agents/conventions | awk '{print $3}')
