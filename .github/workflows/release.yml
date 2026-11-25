@@ -366,14 +366,17 @@ jobs:
             exit 1
           fi
           if ! OUT=$("$EXE" --help 2>&1); then
-            if [ "${{ matrix.rid }}" = "osx-x64" ] && printf '%s' "$OUT" | grep -q 'Bad CPU type'; then
+            if [ "${{ matrix.rid }}" = "osx-x64" ] && grep -q 'Bad CPU type' <<<"$OUT"; then
               echo "osx-x64 cannot be executed on this arm64 runner; smoke skipped for this RID."
               exit 0
             fi
             echo "$OUT"
             exit 1
           fi
-          printf '%s' "$OUT" | grep -q 'coai-mcp'
+          # A here-string, not `printf | grep -q`: this step runs under `-o pipefail`, `grep -q` leaves at its
+          # first match, and printf then dies of SIGPIPE ("printf: write error: Broken pipe") — which
+          # failed osx-x64 and osx-arm64 on the 2.0.0 release (run 45453951340, attempt 1). Same for the other `printf | grep` lines.
+          grep -q 'coai-mcp' <<<"$OUT"
 
           # The binary must report the version this release is stamping. The extension's panel asks
           # a file what it is instead of remembering what it downloaded (a record VS Code shares
@@ -976,7 +979,7 @@ jobs:
           # The binary must report the version this release is stamping, for the reason the mcp job
           # gives: the panel asks a file what it is instead of remembering what it downloaded, so a
           # stamping step that silently stopped working would put that lie back one release later.
-          if ! printf '%s' "$HEALTH" | grep -q "\"version\":\"$VERSION\""; then
+          if ! grep -q "\"version\":\"$VERSION\"" <<<"$HEALTH"; then
             echo "the published binary reports $HEALTH but this release is 'coai-server $VERSION'"
             cat "$LOG"
             exit 1
