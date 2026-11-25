@@ -72,6 +72,53 @@ public sealed class APlanFolderRoundIsTheApprovedThingTests
         back!.IsWellFormed().Should().BeTrue();
     }
 
+    // ---------- d5: the previous release ----------
+
+    /// <summary>
+    /// <c>PlanSource.IsWellFormed</c> as the previous release has it (copied from <c>src_mcp/core/Rounds/PlanSource.cs</c> at 7d0c2f16, before origin folder): the rule its <c>--log</c>, its page data and <c>RoundPlanSources</c> apply to what a
+    /// round row holds. A source it does not accept is read as NO source; nothing throws.
+    /// </summary>
+    private static bool PreviousRelease(PlanSource source)
+    {
+        static bool IsHash(string? value) => value is { Length: >= 7 and <= 64 } && value.All(char.IsAsciiHexDigit);
+        var shared = source.Bytes >= 0 && source.TextId is { Length: > 0 } && (source.Commit is "" || IsHash(source.Commit));
+
+        return shared && source.Origin switch
+        {
+            "commit" => source.Path is { Length: > 0 } && CoaiMcp.Core.RepoPaths.IsRelative(source.Path) && IsHash(source.Blob),
+            "text" => string.IsNullOrEmpty(source.Path) && string.IsNullOrEmpty(source.Blob),
+            _ => false,
+        };
+    }
+
+    [Fact]
+    public void D5_ThePreviousReleaseReadsAFolderSourceAsNoSource_AndItsRuleStillAgreesWithOursForTheOldOrigins()
+    {
+        PreviousRelease(Folder()).Should().BeFalse("a release before origin folder reads it as no source: no line, no round hidden, no error");
+        Folder().IsWellFormed().Should().BeTrue("and this release reads it");
+
+        PlanSource[] old =
+        [
+            new("commit", Commit, "todo/PLAN_x.md", new string('b', 40), 98304, "0123456789abcdef"),
+            new("text", Commit, "", "", 512, "fedcba9876543210"),
+            new("commit", Commit, "", new string('b', 40), 1, "id"),
+            new("text", Commit, "todo/x.md", "", 1, "id"),
+            new("tree", Commit, "a", new string('b', 40), 1, "id"),
+        ];
+        old.Select(source => PreviousRelease(source)).Should().Equal(old.Select(source => source.IsWellFormed()), "the copy of the old rule is faithful for every origin that existed");
+    }
+
+    [Fact]
+    public void D5_ARowThatHoldsAFolderSource_IsReadBackByTheOldRuleAsNothing_NotAsAnError()
+    {
+        var json = JsonSerializer.Serialize(Folder(), ServerJsonContext.Default.PlanSource);
+
+        var read = JsonSerializer.Deserialize(json, ServerJsonContext.Default.PlanSource);
+
+        read.Should().NotBeNull("the old reader still parses the JSON: an unknown origin is a value, not a fault");
+        PreviousRelease(read!).Should().BeFalse();
+    }
+
     [Fact]
     public void D1_ARoundThatReviewedAFolder_IsNamedByTheFolderItReviewed()
     {

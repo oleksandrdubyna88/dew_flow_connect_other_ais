@@ -46,6 +46,7 @@ internal abstract record PlanBindingOutcome
 /// <remarks>
 /// <para><b>The record is the authority, the branch name is only the key.</b> A branch <c>coder/&lt;jobId&gt;</c> inherits nothing unless <c>job.json</c> of that id in THIS data folder says a coder job of this repository made it and carries
 /// a link; a branch named like one that no job made is <see cref="PlanBindingOutcome.NotACoderJob"/> and is judged as it always was (no plan round proceeded, so refused).</para>
+/// <para>A <b>folder</b> round (epoch 3 E3 s3) is bound by <see cref="FolderPlanBinding"/>: the task is inside the scope and the approval id of the pack at the base is the approved one.</para>
 /// <para><b>What must hold</b>, each with its own sentence: the starting branch's session is still the one the job named and its plan has proceeded; that session's plan revision is the one recorded (a different blob or commit means the
 /// plan changed); the plan was a committed file (a pasted text has no folder a task can belong to); the job's base commit descends from the commit the plan round ran on; at that base the plan file is byte for byte the approved blob; and the
 /// task file is a file of that base inside the folder of the plan file. The plan text the round is judged against is read from the approved commit, never from the session's mutable text.</para>
@@ -87,11 +88,26 @@ internal static class CoderPlanBinding
             return Refused(unmet);
         }
 
+        var (text, unread) = await ApprovedTextAsync(git, repoPath, plan, ct);
+
+        return unread.Length > 0
+            ? Refused(unread)
+            : new PlanBindingOutcome.Bound(new InheritedPlan(job.Plan!.SourceSession, job.Plan.StartBranch, HashOf(plan), plan.Commit, plan.Path, job.JobId), text);
+    }
+
+    /// <summary>The text the code rounds are judged against: a plan file as the approved commit holds it, or the pack a folder round made, rebuilt at that commit.</summary>
+    private static async Task<(string Text, string Refusal)> ApprovedTextAsync(GitHistory git, string repoPath, PlanSource plan, CancellationToken ct)
+    {
+        if (plan.Origin == PlanOrigin.Folder)
+        {
+            return await FolderPlanBinding.ApprovedTextAsync(git, repoPath, plan, ct);
+        }
+
         var read = await CommittedPlanReader.ReadAtCommitAsync(git, repoPath, plan.Commit, plan.Path, ct);
 
         return read is PlanRead.Accepted { Source.Blob: var blob } accepted && blob == plan.Blob
-            ? new PlanBindingOutcome.Bound(new InheritedPlan(job.Plan!.SourceSession, job.Plan.StartBranch, HashOf(plan), plan.Commit, plan.Path, job.JobId), accepted.Text)
-            : Refused($"the approved plan file {plan.Path} cannot be read at commit {GitIds.Short(plan.Commit)}: {(read as PlanRead.Refused)?.Sentence ?? "its blob is not the one that was approved"}");
+            ? (accepted.Text, string.Empty)
+            : (string.Empty, $"the approved plan file {plan.Path} cannot be read at commit {GitIds.Short(plan.Commit)}: {(read as PlanRead.Refused)?.Sentence ?? "its blob is not the one that was approved"}");
     }
 
     private static PlanBindingOutcome Refused(string why) => new PlanBindingOutcome.Refused($"{why}; {GateFirst}");
@@ -137,7 +153,7 @@ internal static class CoderPlanBinding
 
         return HashOf(approved) != link.PlanHash || approved.Commit != link.PlanCommit
             ? (null, $"the plan of session {link.SourceSession} changed since the job started (its plan hash is now {GitIds.Short(HashOf(approved))} on commit {GitIds.Short(approved.Commit)}; the job recorded {GitIds.Short(link.PlanHash)} on {GitIds.Short(link.PlanCommit)})")
-            : approved.Origin == PlanOrigin.Commit
+            : approved.Origin is PlanOrigin.Commit or PlanOrigin.Folder
             ? (approved, string.Empty)
             : (null, $"the plan of session {link.SourceSession} was pasted as text, so no task can be shown to belong to it (a plan with no file has no folder)");
     }
@@ -150,6 +166,11 @@ internal static class CoderPlanBinding
             return $"coder job {job.JobId} records no base commit, so it cannot be shown to descend from the approved plan";
         }
 
+        if (plan.Origin == PlanOrigin.Folder && !FolderPlanBinding.Holds(plan, job.TaskFile))
+        {
+            return FolderPlanBinding.Outside(plan, job.TaskFile);
+        }
+
         var ancestry = await git.IsAncestorAsync(repoPath, plan.Commit, job.BaseSha, ct);
         if (!ancestry.Ran || !ancestry.Ok)
         {
@@ -158,7 +179,7 @@ internal static class CoderPlanBinding
                 : "git did not answer in time while the job's base commit was compared with the approved plan; try again in a moment";
         }
 
-        return await PlanAtBaseAsync(git, repoPath, job, plan, ct);
+        return plan.Origin == PlanOrigin.Folder ? await FolderPlanBinding.AtBaseAsync(git, repoPath, job, plan, ct) : await PlanAtBaseAsync(git, repoPath, job, plan, ct);
     }
 
     private static async Task<string> PlanAtBaseAsync(GitHistory git, string repoPath, RoleJobRecord job, PlanSource plan, CancellationToken ct)
@@ -184,8 +205,8 @@ internal static class CoderPlanBinding
     private static PlanSource? ApprovedPlan(PersistedSession session) =>
         session.Rounds.LastOrDefault(round => round.Stage == nameof(Stage.PlanReview) && round.Status == RoundRecord.Done && round.PlanSource is not null)?.PlanSource;
 
-    /// <summary>The id of the plan revision: the git blob of a committed file; the text id of a pasted one.</summary>
-    private static string HashOf(PlanSource plan) => plan.Origin == PlanOrigin.Commit ? plan.Blob : plan.TextId;
+    /// <summary>The id of the plan revision: the git blob of a committed file, the approval id of a folder round; the text id of a pasted one.</summary>
+    private static string HashOf(PlanSource plan) => plan.Origin == PlanOrigin.Text ? plan.TextId : plan.Blob;
 
     private static async Task<string> HeadBranchAsync(GitHistory git, string repoPath, CancellationToken ct)
     {
