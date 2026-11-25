@@ -20,7 +20,10 @@ namespace CoaiMcp.Runners.Detach;
 /// <para>Each road is given a short deadline (<see cref="RoadBudget"/>): a user manager that hangs must cost the caller a second, not a minute. A road that timed out may still have
 /// started its runner; the next one then starts a second, and the runner's lease makes the second exit at once — never two writers.</para>
 /// </remarks>
-public sealed class DetachedLauncher(IProcessLauncher processes)
+/// <param name="processes">Runs the POSIX roads' programs.</param>
+/// <param name="windowsRoad">The Windows road, a seam like <paramref name="processes"/>: <see langword="null"/> is <see cref="WindowsDetach"/>, which calls <c>CreateProcess</c> and never asks <paramref name="processes"/> — so a test that wants
+/// a launcher that starts nothing, or one that fails, must be able to say so on Windows too, or it starts a real runner there.</param>
+public sealed class DetachedLauncher(IProcessLauncher processes, Func<DetachSpec, DetachResult>? windowsRoad = null)
 {
     /// <summary>How long one road may take to answer. A healthy <c>systemd-run</c> answers in about 15 ms.</summary>
     public static readonly TimeSpan RoadBudget = TimeSpan.FromMilliseconds(1500);
@@ -54,7 +57,7 @@ public sealed class DetachedLauncher(IProcessLauncher processes)
     {
         if (OperatingSystem.IsWindows())
         {
-            return WindowsDetach.Start(spec);
+            return (windowsRoad ?? WindowsDetach.Start)(spec);
         }
 
         var said = new List<string>();

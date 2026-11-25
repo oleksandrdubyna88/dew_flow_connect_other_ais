@@ -45,7 +45,7 @@ export async function aStillMissingPathIsSaidOnceAcrossSettingsChanges(): Promis
 
     // Unrelated settings changes, each of which drops the disk's answers and asks again.
     for (let change = 0; change < CHANGES; change += 1) {
-      await config().update('dealPlanLenses', change % 2 === 0, vscode.ConfigurationTarget.Global);
+      await config().update('codeWorkspace', change % 2 === 0 ? 'worktree' : 'none', vscode.ConfigurationTarget.Global);
       await settle(1_500);
     }
     await settle(3_000);
@@ -55,6 +55,6 @@ export async function aStillMissingPathIsSaidOnceAcrossSettingsChanges(): Promis
       `a path still missing was said ${said.length} times after ${CHANGES} settings changes — the toast storm: a settings change must re-ask the disk without resolving a path that is still missing`);
   } finally {
     await config().update('vendors', undefined, vscode.ConfigurationTarget.Global);
-    await config().update('dealPlanLenses', undefined, vscode.ConfigurationTarget.Global);
+    await config().update('codeWorkspace', undefined, vscode.ConfigurationTarget.Global);
   }
 }

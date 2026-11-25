@@ -74,9 +74,12 @@ internal sealed class InstallWorld : IDisposable
 
     internal string CodexToml => Path.Combine(CodexHome.Length > 0 ? CodexHome : Path.Combine(Home, ".codex"), "config.toml");
 
-    internal string StateDir => Path.Combine(Home, ".local", "state", "coai");
+    /// <summary>Where the installer keeps its state, as the installer itself says it: <c>%LOCALAPPDATA%\coai</c> on Windows, <c>~/.local/state/coai</c> elsewhere.</summary>
+    internal string StateDir => Host.StateDir;
 
-    internal string BackupsDir => Path.Combine(StateDir, "install-backups");
+    internal string BackupsDir => Host.BackupsDir;
+
+    private InstallHost Host => InstallHost.From(name => Env.GetValueOrDefault(name), OperatingSystem.IsWindows());
 
     /// <summary>The environment the installer is given: the four variables, a PATH of the wrappers' folder alone, and nothing of the real machine's.</summary>
     internal IReadOnlyDictionary<string, string?> Env => new Dictionary<string, string?>
@@ -105,18 +108,28 @@ internal sealed class InstallWorld : IDisposable
     private string MakeBinary(string folder)
     {
         Directory.CreateDirectory(folder);
-        var path = Path.Combine(folder, OperatingSystem.IsWindows() ? "coai-mcp.exe" : "coai-mcp");
-        File.WriteAllText(path, "#!/bin/sh\necho 'coai-mcp 9.9.9'\n");
-        Executable(path);
 
-        return path;
+        return StandIn(folder, "9.9.9");
     }
 
     /// <summary>A second <c>coai-mcp</c> in another folder, named for the file the installer recognises as ours.</summary>
-    internal string AnotherBinary(params string[] folder)
+    internal string AnotherBinary(params string[] folder) => StandIn(MakeBinaryFolder(folder), "1.0.0");
+
+    /// <summary>
+    /// A <c>coai-mcp</c> the installer can RUN to ask its version: a copy of the suite's FakeCli under the product's name, with the text it answers to <c>--version</c> in a file beside it.
+    /// It is a program rather than a shell file because a <c>coai-mcp.exe</c> that is a shell file cannot be started on Windows, and the installer asks every binary but its own for its version.
+    /// FakeCli is an apphost: it finds its <c>FakeCli.dll</c> beside itself, and that loads the three project assemblies its <c>FakeCli.deps.json</c> names, so those are copied with it (about 4 MB).
+    /// </summary>
+    private static string StandIn(string folder, string version)
     {
-        var path = Path.Combine(MakeBinaryFolder(folder), OperatingSystem.IsWindows() ? "coai-mcp.exe" : "coai-mcp");
-        File.WriteAllText(path, "#!/bin/sh\necho 'coai-mcp 1.0.0'\n");
+        var path = Path.Combine(folder, OperatingSystem.IsWindows() ? "coai-mcp.exe" : "coai-mcp");
+        File.Copy(FakeCliInvocations.Exe, path, overwrite: true);
+        foreach (var companion in new[] { "FakeCli.dll", "FakeCli.runtimeconfig.json", "FakeCli.deps.json", "CoaiMcp.Core.dll", "CoaiMcp.Runners.dll", "CoaiMcp.ServiceDefaults.dll" })
+        {
+            File.Copy(Path.Combine(AppContext.BaseDirectory, companion), Path.Combine(folder, companion), overwrite: true);
+        }
+
+        File.WriteAllText(Path.Combine(folder, "coai-mcp.version"), $"coai-mcp {version}\n");
         Executable(path);
 
         return path;

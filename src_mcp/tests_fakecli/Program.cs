@@ -134,6 +134,12 @@ if (args is ["acp"] && (Environment.GetEnvironmentVariable("FAKECLI_ACP_SCRIPT")
     return CoaiMcp.FakeCli.AcpAgent.Run(acpScriptFromEnv);
 }
 
+// A copy of this program named for the product answers `--version` from the file beside it (the installer's stand-in for `coai-mcp`; CoaiMcpStandIn.cs).
+if (CoaiMcp.FakeCli.CoaiMcpStandIn.Answer(args) is { } standInExit)
+{
+    return standInExit;
+}
+
 // The MCP verbs of claude and codex (the installer's stand-in): started by a wrapper file named for the CLI, BEFORE the vendor mode, for the reason the ACP stand-in is.
 if (args.Length >= 2 && args[0] == "vendor-mcp")
 {
@@ -347,7 +353,7 @@ switch (args0)
         return 0;
 
     // Epoch 3 E2 s2 t5: the fake as a CODER. `write-files` tries each path and says which it could not write (the OS layer's answer, on stderr), exiting 0; `hold-in` says it is working by writing `ready` into a folder, then waits.
-    case ["write-files", ..var writePaths]:
+    case ["write-files", .. var writePaths]:
         return CoaiMcp.FakeCli.CoderVerbs.WriteFiles(writePaths);
 
     case ["hold-in", var holdFolder, var holdMs]:

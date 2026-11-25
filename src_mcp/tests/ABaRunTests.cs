@@ -373,7 +373,7 @@ public sealed class ABaRunTests
         new(world.DataDir, name => name == "COAI_ROLE_LAUNCHER" ? "setsid" : null, world.Log, notice => { world.Notices.Enqueue(notice); return true; })
         {
             Clock = world.Clock,
-            Launcher = new DetachedLauncher(new NothingStarted()),
+            Launcher = new DetachedLauncher(new NothingStarted(), NoRunnerStarted.Succeeds),
             Descriptors = [BaScenario.Descriptor()],
             EnvironmentSource = new Hashtable(),
         };
@@ -406,7 +406,7 @@ public sealed class ABaRunTests
         var service = new RoleJobService(world.DataDir, name => name == "COAI_ROLE_LAUNCHER" ? "setsid" : null, world.Log, _ => true)
         {
             Clock = world.Clock,
-            Launcher = new DetachedLauncher(new NothingStarted()),
+            Launcher = new DetachedLauncher(new NothingStarted(), NoRunnerStarted.Succeeds),
             EnvironmentSource = new Hashtable(),
         };
 

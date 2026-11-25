@@ -49,6 +49,7 @@ public sealed class ADetachedLauncherTests
         else
         {
             Assert.SkipWhen(OperatingSystem.IsWindows(), "setsid is a POSIX program");
+            Assert.SkipUnless(SetsidTool.Exists, "this host has no setsid program (macOS): the launcher falls to nohup, which survives the parent's exit only and was not measured");
         }
 
         using var world = new RoleJobWorld();
@@ -112,7 +113,7 @@ public sealed class ADetachedLauncherTests
         var result = await new DetachedLauncher(new ProcessLauncher()).StartAsync(SpecFor(world, job.JobId), choice, TestContext.Current.CancellationToken);
 
         result.Started.Should().BeTrue(result.Detail);
-        result.Launcher.Should().Be(launcher);
+        result.Launcher.Should().Be(choice == LauncherChoice.Setsid ? SetsidTool.Road : launcher, "the road recorded is the one that worked: a host with no setsid falls to sh-nohup");
         result.Unit.Should().Be(choice == LauncherChoice.SystemdRun ? RoleJobIds.UnitOf(job.JobId) : string.Empty);
         WaitForState(world, job.JobId, current => current.Terminal, "the job to end");
         world.Store.Read(job.JobId)!.State.Should().Be(RoleJobStates.Succeeded);
@@ -138,6 +139,7 @@ public sealed class ADetachedLauncherTests
     [Fact]
     public async Task AUserManagerThatAnswersNonZero_SendsTheStartToSetsid_AndTheResultSaysSo()
     {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "the POSIX roads: Windows has one road, CreateProcess, and never asks the process launcher");
         var asked = new List<string>();
         var launcher = new DetachedLauncher(new ScriptedProcesses(asked, request => request.Executable == "systemd-run" ? 1 : 0, stderrOf: _ => "Failed to connect to user scope bus"));
 
@@ -151,6 +153,7 @@ public sealed class ADetachedLauncherTests
     [Fact]
     public async Task ANamedRoad_IsNeverLeftForAnother()
     {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "the POSIX roads: Windows has one road, CreateProcess, and never asks the process launcher");
         var asked = new List<string>();
         var launcher = new DetachedLauncher(new ScriptedProcesses(asked, _ => 1, stderrOf: _ => "no bus"));
 

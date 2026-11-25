@@ -23,7 +23,7 @@ internal static class CoderGit
         ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES"];
 
     /// <summary>The environment changes: each name in <see cref="Moving"/> removed.</summary>
-    internal static IReadOnlyDictionary<string, string?> Environment { get; } = Moving.ToDictionary(name => name, string?(_) => null, StringComparer.Ordinal);
+    internal static IReadOnlyDictionary<string, string?> Environment { get; } = Moving.ToDictionary(name => name, string? (_) => null, StringComparer.Ordinal);
 
     /// <summary>The hardening flags, then the arguments (with the Windows long-path flag where it belongs).</summary>
     internal static IReadOnlyList<string> Argv(IReadOnlyList<string> args) => [.. Flags, .. TreeGit.Argv(args)];

@@ -175,7 +175,7 @@ public sealed class ABaPublishesAtomicallyTests
         using (repo)
         {
             new BaPublisher(site, "job-1", () => false).Publish(Files()).Should().BeOfType<BaPublished.Stale>();
-            Directory.GetFileSystemEntries(site.EpicFolder).Select(Path.GetFileName).Should().Equal("SPEC.md", "epic.yaml");
+            Directory.GetFileSystemEntries(site.EpicFolder).Select(Path.GetFileName).Should().BeEquivalentTo(["SPEC.md", "epic.yaml"], "the same two entries, in whatever order the file system lists them");
 
             var calls = 0;
             var second = new BaPublisher(site, "job-2", () => ++calls < 2).Publish(Files());
@@ -268,7 +268,7 @@ public sealed class ABaPublishesAtomicallyTests
             var service = new RoleJobService(world.DataDir, _ => null, world.Log, _ => true)
             {
                 Clock = world.Clock,
-                Launcher = new DetachedLauncher(new NothingStarted()),
+                Launcher = new DetachedLauncher(new NothingStarted(), NoRunnerStarted.Succeeds),
                 Descriptors = [BaScenario.Descriptor()],
                 EnvironmentSource = new Hashtable(),
             };
