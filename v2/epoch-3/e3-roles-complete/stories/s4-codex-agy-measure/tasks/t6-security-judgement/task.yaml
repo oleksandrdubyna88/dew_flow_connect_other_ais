@@ -1,0 +1,21 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t6-security-judgement
+title: "The security judgement of the codex and agy write boundary by the important model, before any launch code: ship or refuse per vendor, and the must-change list"
+kind: security
+complexity: 6
+dependsOn:
+  - t3-codex-write-rows
+  - t5-agy-write-rows
+parallel: false
+security: true
+files:
+  - v2/spikes/RESULTS_codex_agy_write_boundary_judgement.md
+  - v2/epoch-3/e3-roles-complete/stories/s5-codex-coder
+  - v2/epoch-3/e3-roles-complete/stories/s6-agy-coder
+dod:
+  - id: d1
+    item: "the important model (the important list, read-only, no other model call) reads the two results files and the claude files they are compared with, and writes per vendor the verdict ship or refuse, for each of B1 to B15 which layer holds it, and a must-change list"
+  - id: d2
+    item: "every row that the CLI flags do not hold is closed by a MEASURED property of the unit, or the verdict is refuse; a property that was asked for and not observed counts as not held"
+  - id: d3
+    item: "the task files of s5 and s6 are changed from the must-change list in the same commit; for a refused vendor its story is marked not built with the reason, and line 2 of the doneWhen of the epic is put to the owner before any code of that story"

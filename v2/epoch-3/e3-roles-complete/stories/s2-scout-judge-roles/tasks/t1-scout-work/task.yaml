@@ -1,0 +1,19 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t1-scout-work
+title: "ScoutWork: the request check, the launch on the scout list, repair turns, the envelope with checked evidence; the descriptor is registered"
+kind: code
+complexity: 6
+dependsOn: []
+parallel: false
+files:
+  - src_mcp/src/Server/RoleJobs/ScoutWork.cs
+  - src_mcp/src/Server/RoleJobs/RoleDescriptors.cs
+  - src_mcp/tests_fakecli/ModelMap.cs
+  - src_mcp/tests/AScoutRunTests.cs
+dod:
+  - id: d1
+    item: "S1 to S3 with FakeCli: valid at turn 0 with the read-only argv; one repair turn in the same session (the handle of turn 0 is in the recorded argv); wrong three times ends failed output-invalid with no result and every answer kept under attempts"
+  - id: d2
+    item: "S4: result.json is built by coai and holds each evidence item with verified true or false and a reason, each file with exists, the counts, repairTurns and the commit the job read; an item that is not verified is never shown as verified and never dropped; every stored text passes the Redaction rule"
+  - id: d3
+    item: "S11: an empty brief is refused before any folder is made; the route is the scout list of the roles table"

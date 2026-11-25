@@ -1,0 +1,18 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t3-role-tool-text
+title: "start_role names scout and judge: the tool description, the refusal list of roles, role_status shows the envelope"
+kind: code
+complexity: 3
+dependsOn:
+  - t2-judge-work
+parallel: false
+files:
+  - src_mcp/src/Tools.cs
+  - src_mcp/src/Server/RoleJobs/RoleJobService.cs
+  - src_mcp/src/Server/RoleJobs/RoleJobAnswers.cs
+  - src_mcp/tests/ARoleToolTextNamesScoutAndJudgeTests.cs
+dod:
+  - id: d1
+    item: "over real stdio the description of start_role names scout and judge, what each takes (brief, optional taskFile) and what each answers; the refusal of an unknown role lists them; there is no new tool"
+  - id: d2
+    item: "role_status returns the same envelope JSON that result.json holds"

@@ -1,0 +1,20 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t3-codex-write-rows
+title: "Measure the rows B1 to B15 of the claude boundary on codex, fresh and resumed, with its own sandbox inside the coder unit"
+kind: measure
+complexity: 6
+dependsOn:
+  - t2-codex-resume-measure
+parallel: false
+security: true
+files:
+  - v2/spikes/RESULTS_codex_coder.md
+dod:
+  - id: d1
+    item: "one row for each flag set with the CLI version, and for each of B1 to B15 of SPEC section C1 the measured answer, fresh and resumed, with the hash of each canary before and after; 16 paid calls at most and the spend written down"
+  - id: d2
+    item: "U3 and U4, with no model: the tools a session has and the switches that leave the shell and the patch tool only; the sandbox of codex started INSIDE the property set of the coder unit (codex sandbox with a probe: a write outside, a network call), and what the CLI does when that sandbox cannot start"
+  - id: d3
+    item: "U5 to U7 and U13, inside the unit: the main checkout hidden except its .git, the worktree of another job hidden, the sign-in file and /proc/<cli pid>/environ tried from a child command, a network limit to the hosts of the vendor; files at the base commit (AGENTS.md, a .codex folder, a rules file, a hook) with a canary outside"
+  - id: d4
+    item: "the file names ONE flag set and the additions of the unit to ship, or says REFUSE and names the row that did not hold"

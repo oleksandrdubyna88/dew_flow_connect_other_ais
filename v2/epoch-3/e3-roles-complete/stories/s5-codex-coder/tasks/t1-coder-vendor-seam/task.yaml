@@ -1,0 +1,22 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t1-coder-vendor-seam
+title: "One seam per vendor for the coder launch (capability, argv, home, sign-in, program), a resume handle that carries the vendor, one table of shipped vendors; claude unchanged"
+kind: security
+complexity: 6
+dependsOn: []
+parallel: false
+security: true
+files:
+  - src_mcp/runners/Consultation/CoderVendors.cs
+  - src_mcp/runners/Consultation/CoderLaunches.cs
+  - src_mcp/runners/Consultation/CoderHandle.cs
+  - src_mcp/runners/Toolchain/CoderUnit.cs
+  - src_mcp/runners/Toolchain/CoderProgram.cs
+  - src_mcp/tests/ACoderVendorSeamTests.cs
+dod:
+  - id: d1
+    item: "one type per vendor gives the write capability probe, the fresh and the resumed argv, the home layout, the sign-in bind or the variable name, and the real path of the program; the claude argv and the property list of the claude unit are byte for byte what they were (the existing coder tests pass unchanged)"
+  - id: d2
+    item: "V5: a resume handle carries the vendor beside the job and the worktree, and a handle of another vendor, job or worktree is refused before a process starts"
+  - id: d3
+    item: "V11: the vendors with a shipped write launch are ONE table, filled only from the verdicts of the judgement; a vendor not in it is refused with a sentence that names the shipped ones; a scan test fails when a second place decides it, and its companion proves the scan matches the one place"

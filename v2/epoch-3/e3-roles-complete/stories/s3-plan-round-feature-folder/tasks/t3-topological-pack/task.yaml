@@ -1,0 +1,18 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t3-topological-pack
+title: "WorkPack: the pack of a scope in topological order, with its limits, as a pure function with vectors"
+kind: code
+complexity: 6
+dependsOn: []
+parallel: true
+files:
+  - src_mcp/core/Work/WorkPack.cs
+  - shared/work-pack-vectors.json
+  - src_mcp/tests/AWorkPackIsTopologicalTests.cs
+dod:
+  - id: d1
+    item: "P1 and P7 from the vectors: feature.yaml, the plan file, the ancestors of the scope, then stories and tasks so that every node comes after the nodes it depends on, ties by the number in the id; the same input gives the same bytes; no IO and no clock"
+  - id: d2
+    item: "P6: a scope that is an epoch, an epic or a story holds the YAML of its ancestors, its own subtree and one line (node and title) for each node outside it that a scope node depends on; a scope that names no node of the folder is refused"
+  - id: d3
+    item: "P5: a pack over 256 KiB is refused with its size and its three largest sections and is never cut; each file is in a fence one backtick longer than the longest run in it, so a file cannot end its own section; the line Not sent names the architecture files and the free md files with their sizes"

@@ -1,0 +1,15 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t4-read-only-scenarios
+title: "Scenarios of the read-only roles with FakeCli: a declared refusal, an exhausted list, a tree that changes, a codex row and an agy row"
+kind: test
+complexity: 5
+dependsOn:
+  - t3-role-tool-text
+parallel: false
+files:
+  - src_mcp/tests/AScoutAndJudgeScenariosTests.cs
+dod:
+  - id: d1
+    item: "S6 and S7: a declared refusal goes to the next model with one switch line and one notice; an exhausted list ends failed with every attempt named; a tree that changes during an attempt ends tree-changed with no failover and no answer"
+  - id: d2
+    item: "S10: with a codex row and an agy row as scout and as judge the recorded argv is the read-only one of each CLI and the read-only folder of agy is prepared; a test proves that no scout or judge launch can carry the coder case of LaunchConfinement"

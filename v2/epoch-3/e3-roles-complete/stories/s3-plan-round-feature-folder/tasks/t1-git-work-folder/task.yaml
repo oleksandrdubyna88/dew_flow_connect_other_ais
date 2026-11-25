@@ -1,0 +1,16 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t1-git-work-folder
+title: "GitWorkFolder: the work-plan folder of a commit through IWorkFolder (one ls-tree, each blob proved against its id; a link and a submodule are not followed)"
+kind: code
+complexity: 5
+dependsOn: []
+parallel: true
+files:
+  - src_mcp/runners/Collecting/GitWorkFolder.cs
+  - src_mcp/runners/Collecting/GitHistory.cs
+  - src_mcp/tests/AFeatureFolderIsReadFromGitTests.cs
+dod:
+  - id: d1
+    item: "the validator over GitWorkFolder at a commit gives the same answer, byte for byte, as over a clean checkout of that commit (fixture repositories in a temp folder; the v2 folder of this repository at HEAD is one case); an edited, a staged and an untracked file of the working tree do not change it"
+  - id: d2
+    item: "P8: a link and a submodule entry inside the folder are not followed; every blob is proved against its id as the committed-plan reader proves one; a folder over 2000 entries and a file over 64 KiB are answered as errors and are never read whole"

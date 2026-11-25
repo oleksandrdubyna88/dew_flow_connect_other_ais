@@ -1,0 +1,20 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t2-agy-write-guard
+title: "The agy write guard: a coder agent with the readers and the measured write tools, and a hook that allows a write only inside the worktree of the job"
+kind: security
+complexity: 6
+dependsOn: []
+parallel: false
+security: true
+files:
+  - src_mcp/runners/Reviewers/AntigravityCoderGuard.cs
+  - src_mcp/runners/Reviewers/AntigravityReadOnly.cs
+  - src_mcp/src/Program.cs
+  - src_mcp/tests/AAgyCoderGuardTests.cs
+dod:
+  - id: d1
+    item: "V15: the handler allows a measured write tool only when the target, resolved through links, is inside the worktree of the job and is not .git; it denies a write outside, a command tool, a tool it does not know and a payload it cannot read; the agent file lists the readers and the measured write tools and nothing else"
+  - id: d2
+    item: "the folder of the guard is the own folder of the job (under the job folder), written and read back before every launch; the read-only agent, hook and folder are byte for byte what they were (their tests pass unchanged)"
+  - id: d3
+    item: "no new one-shot mode is added (the handler stays --agy-hook); if one is needed it is listed in .agents/PROJECT.md and never exits 64"

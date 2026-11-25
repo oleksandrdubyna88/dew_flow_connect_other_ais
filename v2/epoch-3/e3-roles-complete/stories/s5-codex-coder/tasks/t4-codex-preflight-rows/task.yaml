@@ -1,0 +1,18 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t4-codex-preflight-rows
+title: "The preflight rows of a codex coder job: with no model, inside the exact unit, the rows the judgement relies on; a wrong answer refuses the job"
+kind: security
+complexity: 5
+dependsOn:
+  - t3-codex-coder-launch
+parallel: false
+security: true
+files:
+  - src_mcp/runners/Toolchain/BoundaryPreflight.cs
+  - src_mcp/runners/Toolchain/CoderBoundary.cs
+  - src_mcp/tests/ACodexCoderPreflightTests.cs
+dod:
+  - id: d1
+    item: "V9: before each codex coder job the rows are tried inside the exact unit (a child command cannot write outside the worktree, cannot read what is hidden, and has no network if the design says so); a wrong answer refuses the job before any launch and names the row"
+  - id: d2
+    item: "each row goes red when its property is dropped through the test seam; V10: no user manager, native Windows and macOS are refused before any process starts"

@@ -1,0 +1,16 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t3-coder-resume-paid-proof
+title: "Real codex coder job and real agy coder job with the smallest model of each: a planted red check, one fix turn in the session of turn 0, green"
+kind: measure
+complexity: 5
+dependsOn:
+  - t2-read-only-paid-proof
+parallel: false
+security: true
+files:
+  - v2/epoch-3/e3-roles-complete/RESULTS_roles_proof.md
+dod:
+  - id: d1
+    item: "for each vendor the judgement shipped: one real coder job with the smallest model of that vendor on a fixture repository with its own toolchain file and a planted red check; the file holds the job id, the session id of turn 0 and of the fix turn (equal, read from the own stream of the CLI), fixTurns, green, the properties of the unit and the spend"
+  - id: d2
+    item: "2 paid runs per vendor at most and 0.50 USD in total (the count of tokens where the CLI names no cost); the real sign-in file has the same bytes and modification time before and after; a vendor the judgement refused is written as not run, with the reason"

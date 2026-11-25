@@ -1,0 +1,5 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: s2-scout-judge-roles
+title: "scout and judge are role cases of start_role: a read-only launch, repair in the same session, an envelope that coai builds, the judge on the important list"
+dependsOn:
+  - s1-scout-judge-contracts

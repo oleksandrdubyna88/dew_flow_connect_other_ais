@@ -1,0 +1,17 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t2-scout-contract
+title: "The scout contract: shared/scout-output.schema.json and its strict reader (facts with evidence, files, unknown, the refused arm)"
+kind: code
+complexity: 4
+dependsOn:
+  - t1-evidence-check
+parallel: true
+files:
+  - shared/scout-output.schema.json
+  - src_mcp/core/Roles/ScoutOutput.cs
+  - src_mcp/tests/AScoutContractTests.cs
+dod:
+  - id: d1
+    item: "the reader accepts {status: ok, facts:[{claim, evidence:[{file, line, text}]}], files, unknown} and {status: refused, reason}; an unknown member, a fact with no evidence, more than 40 facts, 5 evidence items, 60 files or 20 unknown lines, and a text over its length are errors that name the member"
+  - id: d2
+    item: "a test holds the schema file and the tables of the reader equal; the contract tests of the ba and the coder pass unchanged"

@@ -1,0 +1,6 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: s7-vendor-rows-failover
+title: "codex and agy rows: the measured lists in role-defaults, the route of a coder by shipped vendor, failover across vendors"
+dependsOn:
+  - s5-codex-coder
+  - s6-agy-coder

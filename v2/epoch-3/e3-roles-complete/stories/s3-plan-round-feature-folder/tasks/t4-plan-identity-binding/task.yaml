@@ -1,0 +1,21 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t4-plan-identity-binding
+title: "What a folder round approves: PlanSource origin folder with the list id, and the plan binding of a coder job to the approved scope"
+kind: security
+complexity: 6
+dependsOn:
+  - t2-validate-first
+  - t3-topological-pack
+parallel: false
+security: true
+files:
+  - src_mcp/core/Rounds/PlanSource.cs
+  - src_mcp/src/Server/RoleJobs/CoderPlanBinding.cs
+  - src_mcp/tests/APlanFolderRoundIsTheApprovedThingTests.cs
+dod:
+  - id: d1
+    item: "a folder round records the origin folder, the scope path, the commit, the list id (SHA-256 over the blob id and the path of every packed file of the scope, in pack order) and the id of the pack text; IsWellFormed accepts that shape and no other new one"
+  - id: d2
+    item: "P9: a coder job started under a folder round is bound when its task file is inside the scope, its base descends from the commit of the round and the list id at the base equals the approved one; a task outside the scope and a YAML change inside the scope after the approval are each refused with a sentence of their own; a change outside the scope and a new RESULTS file inside it do not break the binding"
+  - id: d3
+    item: "P10: the rule of the previous release (IsWellFormed before this task, and the reviewedFrom rule of the extension) reads a folder source as no source and no error; the binding tests of a committed plan and of a pasted plan pass unchanged"

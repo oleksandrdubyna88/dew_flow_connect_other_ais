@@ -1,0 +1,17 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t1-epic-acceptance
+title: "Epic acceptance on the real binary over stdio with FakeCli: scout, judge, a codex coder and an agy coder resumed, a plan round over a folder"
+kind: test
+complexity: 6
+dependsOn: []
+parallel: false
+files:
+  - src_mcp/tests/TheRolesCompleteEpicAcceptanceTests.cs
+  - src_mcp/tests_fakecli/CoderVerbs.cs
+dod:
+  - id: d1
+    item: "on a real coai-mcp over stdio with the real detached runner and FakeCli as every CLI: a scout job and a judge job end succeeded with their strict JSON envelopes; a coder job routed to codex and one routed to agy each go red, then green after one fix turn, and the recorded argv shows the session of turn 0 resumed (exec resume, --conversation)"
+  - id: d2
+    item: "in the same run: review_plan with featureFolder on an invalid fixture is refused with zero reviewer launches; on a valid one the prompt that FakeCli recorded holds the sections in topological order; the pack of the v2 folder of this repository for this epic is under 256 KiB"
+  - id: d3
+    item: "no test calls a vendor or reads a real sign-in; every test of this epic runs with a temp HOME and a temp data folder"
