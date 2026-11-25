@@ -47,7 +47,9 @@ public static class WorktreePaths
     }
 
     /// <summary>Case: <c>OrdinalIgnoreCase</c> on Windows and macOS; <c>Ordinal</c> on Linux, where two names differing by case are two folders.</summary>
-    private static StringComparison Comparison =>
+    /// <remarks>The one case rule of every worktree path decision: <see cref="Same"/>, <c>WorktreeManager</c>'s root guard and
+    /// <c>ReviewTreeRoot.Real</c> all compare with it. It follows the operating system, not the volume.</remarks>
+    public static StringComparison Comparison =>
         OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 
     /// <summary>The path with every link on it resolved, root-down — what <c>realpath</c> answers.</summary>

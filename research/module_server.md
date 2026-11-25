@@ -5016,7 +5016,7 @@ itself. It is the product's ONE comparison of a path git answered with a path so
 feature stage's top-level check and the gate history's repository match go through it as well, and
 `Same` answers `false` for a path this machine cannot resolve (a NUL, another operating system's
 record) rather than throwing `GetFullPath`'s argument validation at a yes-or-no question. The two resolved paths are
-compared with the case rule of the operating system, the same as `WorktreeManager`'s guard: `Ordinal` on Linux, where
+compared with the case rule of the operating system, `WorktreePaths.Comparison`, the one rule `WorktreeManager`'s root guard and `ReviewTreeRoot.Real` use as well: `Ordinal` on Linux, where
 `Repo` and `repo` are two folders, and `OrdinalIgnoreCase` on Windows and macOS (2026-11-25, held by
 `AWorktreePathIsComparedByItsRealPathTests`). A case-sensitive macOS volume or a case-insensitive Linux mount is not
 detected: both comparisons follow the operating system, not the volume.
