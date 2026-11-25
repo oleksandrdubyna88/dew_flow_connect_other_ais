@@ -80,7 +80,7 @@ them read.
 - **A settings edit made outside coai may reach the server late.** The extension copies its settings to the server file only
   after the old code has loaded (when you open a coai surface). A `coai.*` value you edit in VS Code's own settings, in a window
   where you have not opened coai, reaches the server the next time any window opens one. See `research/RESULTS_v2_start.md`, "Joint smoke" under section 5.
-- **A real round shown in a real VS Code by hand** was checked by CI's real-editor job, not by a person, before the release.
+- **A round started by hand from the sidebar** was not checked. CI's real-editor job runs its named host scenarios and the cold-start measurements; a real plan → code round passed on the 2.0 RC through the MCP server from Claude Code (2026-11-24, the owner's machine, coai sessions 762657e2).
 - **YamlDotNet is not used.** The work-plan files the new work method will read are an epoch 3 task. 2.0 reads none of them.
 - **Not in 2.0:** the hub, the shared VM instance, the one-click update everywhere, the AskUserQuestion hook, coder
   delegation, the Claude mod. They are in epochs 2 to 5 of `v2/PLAN.md`.
