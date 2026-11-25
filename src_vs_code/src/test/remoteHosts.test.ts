@@ -1,7 +1,7 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { HostChange, HostStanding, commit, consentOf, dayOf, hostMerge, listedHosts, readableOf, standingsOf } from '../remoteHosts';
+import { HostChange, HostStanding, choicesOf, commit, consentOf, dayOf, hostMerge, listedHosts, readableOf, standingsOf } from '../remoteHosts';
 import type { KeeperSeams } from '../remoteKeeper';
 import { EMPTY_FILE, RefusalsRead, refusalsStore, textOf } from '../remoteRefusals';
 import { Backing, FakeDisk, KEY, instant, row, view, windowOver } from './hostsFakes';
@@ -797,7 +797,7 @@ test('A1-T27 (the keeper half): a writer that woke up after a take-over loses no
   assert.equal((await c.keeper.admit('probe')).kind, 'read');
   disk.files.set('refused.json', textOf({ v: 1, gen: written.gen + 1, by: 'woke-up-too', refused: [{ host: 'g', utc: NOW }] }));
   assert.equal((await c.keeper.admit('probe')).kind, 'read');
-  assert.ok(disk.refusedHosts().includes('h') && disk.refusedHosts().includes('g'), 'a window that saw the newer file did not write the union');
+  assert.deepEqual(disk.refusedHosts(), ['g', 'h', 'y'], 'a window that saw the newer file did not write the union of all three refusals');
   // no window that saw it: the copy is gone too, the host is read (residual 5b, asserted so that it is seen)
   const d = new FakeDisk();
   const bk = new Backing();
@@ -805,4 +805,24 @@ test('A1-T27 (the keeper half): a writer that woke up after a take-over loses no
   d.files.set('refused.json', textOf({ v: 1, gen: 9, by: 'woke-up', refused: [] }));
   bk.values.set(KEY, []);
   assert.equal((await windowOver(bk, d).keeper.admit('h')).kind, 'read', 'residual 5b: nothing remembered and no copy');
+});
+
+test('A1-T15 (T15): the choices of the hosts list are the listed hosts and the hosts of the standings, the keeper\'s standing first', async () => {
+  const refused: HostStanding = { host: 'h', answer: 'no', how: 'person', askedUtc: NOW };
+  // an empty list, and a file that refuses `h`: the standings hold `h`, the list does not
+  assert.deepEqual(choicesOf(listedHosts([], []), [refused]).map((one) => [one.host, one.standing?.answer]), [['h', 'no']]);
+  // both hold it: the keeper's standing wins
+  const asked = choicesOf(listedHosts([row('h', 'yes')], []), [refused]);
+  assert.deepEqual(asked.map((one) => [one.host, one.standing?.answer]), [['h', 'no']]);
+  // the host of a damaged list's live terminal with no answer stays, and the order is by code unit
+  const mixed = choicesOf(listedHosts([row('z', 'yes'), 'junk'], ['q']), [refused]);
+  assert.deepEqual(mixed.map((one) => one.host), ['h', 'q', 'z']);
+  assert.equal(mixed.find((one) => one.host === 'q')?.standing, undefined);
+  // through the keeper: a refusal only in the file is among the standings
+  const disk = new FakeDisk();
+  const a = windowOver(new Backing(), disk);
+  await a.keeper.commit({ kind: 'person', host: 'h', answer: 'no' });
+  const b = windowOver(new Backing(), disk);
+  const standings = await b.keeper.standings();
+  assert.deepEqual(choicesOf(listedHosts(b.keeper.stored(), []), standings).map((one) => one.host), ['h'], 'a refusal that is only in the side file could not be chosen to be changed');
 });

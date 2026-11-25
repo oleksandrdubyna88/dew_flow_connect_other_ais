@@ -8,7 +8,7 @@ import { notify, notifyAndAsk, notifyThen } from './notify';
 import { askPerson } from './personWait';
 import { thisSideLabel } from './consultantSides';
 import { credsSession } from './credsSession';
-import { Committed, HostChange, HostStanding, listedHosts, readableOf } from './remoteHosts';
+import { Committed, HostChange, HostStanding, choicesOf, listedHosts, readableOf } from './remoteHosts';
 import { HOSTS_SAID, UnkeptWhy, notKeptSaid } from './remoteHostsSaid';
 import { HostKeeper, failedHostOf, hostKeeper } from './remoteKeeper';
 import { PickRow, Picked, Purpose, RemoteAnswer, RoadSeams, onePerTerminal, reachOf, readsKey, remoteRoad } from './remoteRead';
@@ -226,8 +226,8 @@ const liveHostsOf = (): readonly string[] =>
 async function changeHostsOf(keeper: HostKeeper): Promise<void> {
   const allowNew = allowsNewHosts(configNow());
   const standings = await keeper.standings();
-  const listed = listedHosts(keeper.stored(), liveHostsOf());
-  const rows = listed.map((one) => hostChoice(one.host, standings.find((standing) => standing.host === one.host) ?? one.standing, allowNew));
+  const listed = choicesOf(listedHosts(keeper.stored(), liveHostsOf()), standings);
+  const rows = listed.map((one) => hostChoice(one.host, one.standing, allowNew));
   if (rows.length === 0) {
     await tell(emptySaid(readableOf(keeper.stored()).damaged, allowNew));
 
@@ -426,7 +426,14 @@ export interface RemoteSessionsTestDoor {
   readonly roundStop: RemoteSessions['roundStop'];
 }
 
-const textOrNothing = (path: string): Promise<string | undefined> => readFile(path, 'utf8').catch(() => undefined);
+/** The file's text; `undefined` only when there is no file. Any other error is thrown, so a scenario does not take a file it could not read for a missing one. */
+const textOrNothing = (path: string): Promise<string | undefined> =>
+  readFile(path, 'utf8').catch((error: unknown) => {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return undefined;
+    }
+    throw error;
+  });
 
 export const testDoorOf = (sessions: RemoteSessions, state: vscode.Memento, folder: string): RemoteSessionsTestDoor => ({
   replaceRun: (run) => { boundRun = run ?? runRemote; },

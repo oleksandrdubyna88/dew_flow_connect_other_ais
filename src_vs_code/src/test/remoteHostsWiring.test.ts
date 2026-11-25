@@ -1,12 +1,10 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { test } from 'node:test';
 import { HOSTS_SAID, notKeptSaid } from '../remoteHostsSaid';
 import type { Committed } from '../remoteHosts';
 import { dayOf } from '../remoteHosts';
-import { sourceFiles, sourceOf } from './sourceReading';
+import { bodyOf, sourceFiles, sourceOf } from './sourceReading';
 
 /**
  * The host half is wired as written (E1.S1, A1-T2, A1-T5, A1-T14, A1-T18): source scans of the code that imports `vscode`, each with a
@@ -61,7 +59,7 @@ test('A1-T18: the host half is wired as written', () => {
   assert.equal(countIn(host, /saveWaiting\(\)/gu) >= 1, true);
   // The list's choice binding in remoteAccountsHost.ts is the ONE call site of the accounts modules (E1.S4, A4-T20, in remoteAccountsList.test.ts); the round has none.
   for (const file of ['remoteAccountsRound.ts']) {
-    assert.ok(!(() => { try { return /saveWaiting\(/u.test(readFileSync(join(__dirname, '..', '..', 'src', file), 'utf8')); } catch { return false; } })(), `the round calls saveWaiting: ${file}`);
+    assert.ok(!/saveWaiting\(/u.test(sourceOf(file)), `the round calls saveWaiting: ${file}`);
   }
   assert.equal(countIn(host, /kind: 'mend'/gu), 1, 'kind: mend is written in more than one place of the host file');
   // The hosts folder is named in ONE place, the chat registration (v2 E4); the old activation names it no more.
@@ -157,4 +155,10 @@ test('R7: the host tells the person what "Save now" came to', () => {
   assert.match(host, /saveWaiting\(\)\.then\(\(result\) => after\(result\)\)/u, 'the result of "Save now" is dropped');
   assert.match(host, /pressSaid\(failedHostOf\(result\), result\)/u, 'the result of "Save now" is not turned into W6\'s words');
   assert.equal(countIn(host, /notKeptSaid\(/gu), 2, 'what was not kept is said in more than the change and the press');
+});
+
+test('A1-T15 (T15, host): the hosts list builds its choices through choicesOf, over the keeper\'s standings, and not over the profile list alone', () => {
+  const body = bodyOf(host, 'async function changeHostsOf(');
+  assert.match(body, /choicesOf\(listedHosts\(keeper\.stored\(\), liveHostsOf\(\)\), standings\)/u, 'the choices are not the listed hosts joined with the standings');
+  assert.equal(countIn('const rows = listedHosts(stored, live).map(hostChoice);', /choicesOf\(/gu), 0, 'companion: the scan tells a list built from the profile alone');
 });

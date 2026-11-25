@@ -185,6 +185,22 @@ export function listedHosts(value: unknown, liveHosts: readonly string[]): reado
   return [...known, ...extra];
 }
 
+/**
+ * The choices of the hosts list: the listed hosts and the hosts of the keeper's standings (a refusal that only the side file holds is one),
+ * the keeper's standing first, in code-unit order.
+ */
+export function choicesOf(
+  listed: readonly { readonly host: string; readonly standing: HostStanding | undefined }[],
+  standings: readonly HostStanding[],
+): readonly { readonly host: string; readonly standing: HostStanding | undefined }[] {
+  const byHost = new Map(listed.map((one) => [one.host, one.standing]));
+  for (const standing of standings) {
+    byHost.set(standing.host, standing);
+  }
+
+  return [...byHost].sort(([a], [b]) => byCodeUnit(a, b)).map(([host, standing]) => ({ host, standing }));
+}
+
 // ─────────────────────────────── The write ───────────────────────────────
 
 /** One commit of one key's value: the stored value is read now, `merge` is pure, and nothing is awaited before the write is called. */
