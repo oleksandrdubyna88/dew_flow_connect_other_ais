@@ -434,9 +434,12 @@ first, and a reset puts the worktree back.
 | `Tools.cs`, `tests_fakecli/CoderVerbs.cs`, `tests_fakecli/Program.cs`, `src_mcp/src/Program.cs` | s7 t4, s5 t4, s6 t2, s6 t5 | edited only in s6 and s7; the fake's new verbs go in a new file |
 | `BoundaryPreflight.cs`, `CoderBoundary.cs`, `CoderUnit.cs`, `CoderProgram.cs` | s5 t3, s6 t4, s7 t1 | never |
 | `GitHistory.cs` | s3 t1 (built) | s2 t2 adds one method at the end |
+| `shared/toolchain.schema.json`, `ToolchainParse.cs`, `ToolchainModel.cs`, `CoderEnvelope.cs` | s7 t3 (the instruction step: ONE top-level key of the file, `instructions`, and one member of the envelope; from the second plan round of E3, 2026-11-26) | s3 t1 adds four names of a PROJECT and s3 t4 its envelope members: the names do not overlap; the task that lands second merges the reader |
 | `ARCHITECTURE.md`, `README.md`, `server.md`, `research/module_*.md` | s8 t5 | s7 t4, the last task |
 
-Stories s1 to s5 touch none of the first three rows: they can be built while E3 is built. s6 names `e3-roles-complete/s8-proof`
+Stories s1 to s5 touch none of the first three rows: they can be built while E3 is built. The toolchain reader (the row above) is
+the one group of files both epics edit before s6: E3 s7 t3 and E4 s3 t1 each add names, and no name is shared. A step of E4
+(restore, format, build, test) checks the coder's work; the instruction step of E3 runs before turn 0 and is not one of them. s6 names `e3-roles-complete/s8-proof`
 because that id is in every outcome of E3's judgement. Its real need is E3 s7 t2 (the fix loop through the seam) and, for the
 scenarios of each vendor, the stories of the vendors that ship.
 
