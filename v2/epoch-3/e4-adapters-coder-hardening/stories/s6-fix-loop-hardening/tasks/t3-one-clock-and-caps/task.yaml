@@ -14,7 +14,7 @@ files:
   - src_mcp/tests/ACoderJobHasOneClockTests.cs
 dod:
   - id: d1
-    item: "the default of timeoutMinutes is one number for each role in ONE table; the coder's number is the owner's answer to question 1 of SPEC section N (45 or 30) and is 30 until there is an answer; every other role keeps 30; a given value is used as given; the tool text and the refusal sentence read the table; there is no second timer and no other constant of a default (a scan with a companion)"
+    item: "the default of timeoutMinutes is one number for each role in ONE table; the coder's number is 60 (the owner's answer of 2026-11-25 to question 1 of SPEC section N); every other role keeps 30; a given value is used as given; the tool text and the refusal sentence read the table; there is no second timer and no other constant of a default (a scan with a companion)"
   - id: d2
     item: "before a fix turn the loop compares the time left with the duration of the last round of checks: with less left the job ends `timeout` at once, no model is started, and the sentence says both numbers"
   - id: d3

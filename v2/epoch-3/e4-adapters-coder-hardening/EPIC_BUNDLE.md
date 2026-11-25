@@ -1,6 +1,6 @@
 # coai v2 — epoch 3, epic E4 (adapters dotnet + node, coder hardening) — epic plan for the gate (generated)
 
-Parent plan: v2/PLAN.md; architecture: v2/architecture/server.md (§10, §11, §12, §15, §16 row 9, §23); built on epoch-3 E2 (the coder, the toolchain file, the check boundary, the fix loop, the claude key pool) and, for story s6, on E3 (the vendor seam; the codex and agy coder). The full spec is SPEC.md in the same folder; its digest is below, before the YAML files. This is the plan AFTER the plan gate of 2026-11-25 (proceed, 5 findings accepted: SPEC section P).
+Parent plan: v2/PLAN.md; architecture: v2/architecture/server.md (§10, §11, §12, §15, §16 row 9, §23); built on epoch-3 E2 (the coder, the toolchain file, the check boundary, the fix loop, the claude key pool) and, for story s6, on E3 (the vendor seam; the codex and agy coder). The full spec is SPEC.md in the same folder; its digest is below, before the YAML files. This is the plan AFTER the plan gate of 2026-11-25 (proceed, 5 findings accepted: SPEC section P) and after two later changes of 2026-11-25 (SPEC section Q): the answers of the owner to questions 1, 2, 4 and 5, and `doneWhen` line 8 from the security judgement of E3.
 
 | Story | Tasks | Complexity sum | Depends on |
 |---|---|---|---|
@@ -26,14 +26,14 @@ slot says `not_configured`. Every round runs the whole build and the whole suite
 `timeoutMinutes`, 30 by default.
 
 **Decisions that change server.md.** (1) One wall clock: the job's `timeoutMinutes`, with one default for each role in one table;
-the VALUE of the coder's default (45 or 30) is the owner's. (2) Detection never guesses and never checks a part: what it cannot
+the coder's default is 60 minutes, every other role 30 (the owner, 2026-11-25). (2) Detection never guesses and never checks a part: what it cannot
 turn into commands refuses the repository. (3) Digest readers read the console output, not TRX or JUnit files; the exit code is
 the verdict. (4) Selection has two levels, only the full test command can say green, and the finer level comes only from the
 file's `testFor`. (5) The re-run of a failed test is narrow and bounded, needs a complete list of the failures and proof that each
 excused test ran again and passed, and never excuses the job's own tests. (6) `no-progress` is defined: the same failure
 fingerprints after two fix turns in a row. (7) A `review_code` started by coai is E5's, not E4's (§23 said E4; there is no
 scheduler before E5). (8) Five step names run: restore, format, build, typecheck, test; lint, audit and coverage stay names of
-`skip`. (9) npm only; pnpm, yarn and bun are refused by name (open question 2). (10) The toolchain file gets `restore`, `format`,
+`skip`. (9) npm only; pnpm, yarn and bun are refused by name (the owner confirmed npm only, 2026-11-25). (10) The toolchain file gets `restore`, `format`,
 `testFor` and `testFiles`; `version` stays 1. (11) A detected check cannot be changed by the job it checks.
 
 **A. Where the checks come from.** One pure function, `ToolchainResolve`. A file at the base wins, and a project that states a
@@ -143,10 +143,17 @@ passed` ends `toolchain-refused`.
 PR and CI (epoch 5 E4); a spend cap; a private registry; pnpm, yarn, bun; native Windows and macOS; a run of the checks on the
 base commit before turn 0.
 
-**Open questions for the owner (section N; the plan decides none of them).** (1) The coder's default `timeoutMinutes`: 45 or 30
-(30 until answered). (2) npm only. (3) `testFiles` and `testFor` for this repository, with `src_vs_code` not a node project (s5 t6
-waits for the answer). (4) The paid proof s7 t3: claude haiku, 2 runs and 0.30 USD at most, on a pool key (waits for the answer).
-(5) A red base commit is not checked before turn 0: proposed as a follow-up for E5.
+**The owner's answers (section N; 2026-11-25) and what is open.** (1) The coder's default `timeoutMinutes` is 60; every other role
+keeps 30. (2) npm only. (3) OPEN: `testFiles` and `testFor` for this repository, with `src_vs_code` not a node project (s5 t6
+waits for the answer). (4) The paid proof s7 t3 is allowed: claude haiku, 2 runs and 0.30 USD at most, on a pool key. (5) A red
+base commit is not checked before turn 0: a task of E5; E4 does not change.
+
+**`doneWhen` line 8 (section Q).** "The coder of a vendor whose measure showed it works behind a proxy runs in a unit with no
+network but coai's forwarder with the vendor's hosts" comes from the security judgement of the codex and agy write boundary (E3 s4
+t6, G11). It has NO story yet: a forwarder cannot be designed before E3 s6 t7 d6 has measured agy behind a proxy in a unit with
+no network (nothing measures it for codex). When that measure exists, one story is written from it (E4 has 7 of the 8 stories
+the device allows) and the epic gets a new plan round; when no vendor works behind a proxy the line is met by that recorded
+result. Until then the CLI processes of codex and agy have the whole network (accepted risks A2 and C2 of the judgement).
 
 ## v2/epoch-3/e4-adapters-coder-hardening/epic.yaml
 ```yaml
@@ -164,6 +171,7 @@ doneWhen:
   - "same session resumed is built before this epic (claude by e2-coder-one-task; codex and agy by e3-roles-complete, for each vendor its judgement shipped); here: caps and no-progress stop; flaky re-run, for every shipped vendor"
   - "write boundary at launch; task session inherits the feature's plan proceed"
   - "job lease with generation; survives an MCP client restart"
+  - "the coder of a vendor whose measure showed it works behind a proxy runs in a unit with no network but coai's forwarder with the vendor's hosts (the judgement of E3 s4 t6, G11)"
 spec: SPEC.md
 ```
 
@@ -928,7 +936,7 @@ files:
   - src_mcp/tests/ACoderJobHasOneClockTests.cs
 dod:
   - id: d1
-    item: "the default of timeoutMinutes is one number for each role in ONE table; the coder's number is the owner's answer to question 1 of SPEC section N (45 or 30) and is 30 until there is an answer; every other role keeps 30; a given value is used as given; the tool text and the refusal sentence read the table; there is no second timer and no other constant of a default (a scan with a companion)"
+    item: "the default of timeoutMinutes is one number for each role in ONE table; the coder's number is 60 (the owner's answer of 2026-11-25 to question 1 of SPEC section N); every other role keeps 30; a given value is used as given; the tool text and the refusal sentence read the table; there is no second timer and no other constant of a default (a scan with a companion)"
   - id: d2
     item: "before a fix turn the loop compares the time left with the duration of the last round of checks: with less left the job ends `timeout` at once, no model is started, and the sentence says both numbers"
   - id: d3
@@ -1027,7 +1035,7 @@ files:
   - v2/epoch-3/e4-adapters-coder-hardening/RESULTS_e4_proof.md
 dod:
   - id: d1
-    item: "the job runs on a scratch clone with a scratch data folder, on a claude key of the pool named through COAI_CLAUDE_KEYS_FILE and never on the person's sign-in file; with no usable key the task does not start and says so; it starts only after the owner's answer to question 4 of SPEC section N"
+    item: "the job runs on a scratch clone with a scratch data folder, on a claude key of the pool named through COAI_CLAUDE_KEYS_FILE and never on the person's sign-in file; with no usable key the task does not start and says so; the owner allowed this run on 2026-11-25 (question 4 of SPEC section N: haiku, 2 runs and 0.30 USD at most, a pool key)"
   - id: d2
     item: "the results file holds the job id, the route, the detected toolchain, the rounds with their scope, the format state, fixTurns (at most 2), green true, the wall time and the cost the CLI reported; it quotes no prompt, no answer and no key"
   - id: d3

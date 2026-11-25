@@ -12,4 +12,5 @@ doneWhen:
   - "same session resumed is built before this epic (claude by e2-coder-one-task; codex and agy by e3-roles-complete, for each vendor its judgement shipped); here: caps and no-progress stop; flaky re-run, for every shipped vendor"
   - "write boundary at launch; task session inherits the feature's plan proceed"
   - "job lease with generation; survives an MCP client restart"
+  - "the coder of a vendor whose measure showed it works behind a proxy runs in a unit with no network but coai's forwarder with the vendor's hosts (the judgement of E3 s4 t6, G11)"
 spec: SPEC.md

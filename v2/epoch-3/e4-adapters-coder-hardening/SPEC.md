@@ -1,7 +1,8 @@
 # Spec — epoch 3, E4 "Adapters dotnet + node + coder hardening"
 
 > Status: **plan only, nothing built, 2026-11-25.** Plan gate: `proceed`, 2026-11-25; its 5 accepted findings are section P. The
-> owner's open questions are section N. Scope: the server half (`src_mcp`, `shared/`,
+> owner answered questions 1, 2, 4 and 5 of section N on 2026-11-25; question 3 is open. After the gate one `doneWhen` line came
+> from the security judgement of E3 (section Q). Scope: the server half (`src_mcp`, `shared/`,
 > `.coai/toolchain.yaml`). Written by the planner (Fable) from `v2/` and the code at `feat/v2-ep3-e2-coder` `f19a7fcb`, read-only.
 > Parent plan: [PLAN.md](../../PLAN.md); architecture: [server.md](../../architecture/server.md) §10, §11, §12, §15, §16 row 9, §23.
 > Stories and tasks: the YAML tree under `stories/` (7 stories, 34 tasks, complexity sum 170, no task above complexity 6). No
@@ -38,7 +39,7 @@ What the code has today (checked at `f19a7fcb`):
 
 1. **One wall clock.** §10 names 45 minutes; E2 built the job's `timeoutMinutes`. There is one clock: `timeoutMinutes`, and each
    role has its own default in one table (section H). The VALUE of the coder's default (45, or 30 as today) is the owner's:
-   question 1 of section N.
+   question 1 of section N. Answered 2026-11-25: 60 minutes for a coder, 30 for every other role.
 2. **Detection never guesses and never checks a part.** A repository with a manifest coai cannot turn into commands is
    `toolchain_refused` with the cure, also when another project of it could be checked (section A).
 3. **Digest readers read the console output of the step.** §10 names TRX and JUnit files. A report file needs a folder outside the
@@ -56,7 +57,7 @@ What the code has today (checked at `f19a7fcb`):
 8. **Five step names run in E4**: restore, format, build, typecheck, test. `lint`, `formatCheck`, `audit` and `coverage` stay legal
    names of `skip` and nothing runs them (§11 gives them to epoch 5 E4).
 9. **npm only.** pnpm, yarn and bun are detected and refused by name until each is measured. Whether that is enough is question 2
-   of section N.
+   of section N. Answered 2026-11-25: npm only.
 10. **The toolchain file gets four names** (`restore`, `format`, `testFor`, `testFiles`), and a file project that states a
     command runs exactly what it states (section A2). `version` stays 1: no release has shipped the coder.
 11. **A detected check cannot be changed by the job it checks.** For a project the base has, the check definition (the `scripts`
@@ -356,7 +357,7 @@ Scenarios: **L1** the same failure three times → `no-progress` after 2 fix tur
 | Cap | Value | Setting | The job ends with |
 |---|---|---|---|
 | fix turns, for the whole job | 3 (0 to 10) | `COAI_FIX_ROUNDS` (E2) | `not-green` |
-| wall clock of the job | `timeoutMinutes`; one default for each role: 30 today, and for a coder the owner's answer to question 1 (proposed: 45) | the `start_role` argument | `timeout` |
+| wall clock of the job | `timeoutMinutes`; one default for each role: 30, and 60 for a coder (the owner's answer to question 1, 2026-11-25; the proposal was 45) | the `start_role` argument | `timeout` |
 | repeats of the same failure | 2 | none | `no-progress` |
 | re-runs of a failed test step | 1 for a step, only with at most 5 failed tests; 2 excused tests for a job | `COAI_FLAKY_RERUNS` 0 or 1 | — |
 | one step | the file's `timeouts` (15 m build, 30 m test); restore and typecheck take the build's; format 5 m | the file | a failed step |
@@ -422,7 +423,8 @@ first, and a reset puts the worktree back.
 | php, rust, python, java adapters | epoch 5 E3 | their manifests are known and refused by name |
 | lint, audit, coverage, PR and CI steps | epoch 5 E4 | their names stay legal in `skip` |
 | A status that coai writes into `task.yaml` | E5 / epoch 4 E5 | none |
-| A run of the checks on the base commit before turn 0 (risk 8) | proposed as a follow-up for E5; the owner decides (question 5) | none |
+| A run of the checks on the base commit before turn 0 (risk 8) | a task of E5 (the owner's answer to question 5, 2026-11-25) | none |
+| The forwarder of a coder unit with no network (`doneWhen` line 8; the E3 judgement, G11) | **E4**, in a story that can be written only after E3 s6 t7 d6 measured agy behind a proxy (section Q) | no story yet |
 
 **The files E3 still changes, and E4's order** (the E3 plan at `origin/feat/v2-ep3-e3-roles` `8216af35`):
 
@@ -473,26 +475,36 @@ Risks:
    device (the build: when s1 measured it so).
 6. s6 waits for E3's last story. When E3 is late, the loop hardening is late; s1 to s5 are not.
 7. A 45-minute default (question 1) would make a stuck job cost more wall time than 30. The no-progress stop and the "could not
-   be checked" rule end most of them earlier.
+   be checked" rule end most of them earlier. The owner chose 60 minutes (2026-11-25): the same risk, with 30 more minutes for a
+   stuck job at most.
 8. **A base commit that is already red.** Nothing checks the base before turn 0, with a file or with detection. A coder then gets
    failures that are not its own, may change code outside its task, and the job ends at `no-progress` after two paid turns. A run
    of the checks on the base would cost one whole round for every job (9 minutes here) or a cache by commit, which is a new store
    with its own retention. It is not in E4; the envelope's `filesChanged` and the code gate are what show such a change today.
 9. The frozen check definition (A4) refuses a task whose point is to change a script or a build target. Such a change lands as a
    commit of its own first; the refusal says so.
+10. `doneWhen` line 8 (the forwarder, section Q) has no story. It waits for a measure of E3 (s6 t7 d6). The epic cannot close
+    before that story is planned, or before the measure says that no vendor works behind a proxy.
 
-Open questions for the owner. The plan does not decide them; each line says what the plan does until there is an answer.
+Questions for the owner. Four were answered on 2026-11-25 (owner decision 38 of the v2 decisions list); each answer stands under
+its question. Question 3 is open, and its line says what the plan does until there is an answer.
 
 1. **The coder's default `timeoutMinutes`: 45 or 30.** Proposed: 45 (one round of this repository is 9 minutes). Until the owner
    answers it stays 30; s6 t3 builds the one table and takes the number from the answer.
+   **Answered 2026-11-25: 60 minutes for a coder job; every other role keeps 30.** s6 t3 d1 names the number.
 2. **npm only.** pnpm, yarn and bun are refused by name. Is npm enough for the repositories coai works on first? Another package
    manager is one more measure task and one more line of data: a plan change.
+   **Answered 2026-11-25: npm only.** pnpm, yarn and bun stay refused by name. Nothing in the plan changes.
 3. **This repository's file** gets `testFiles` and `testFor` (s5 t6), and `src_vs_code` is NOT made a node project of it (its
    tests need a compile step, its scenarios a VS Code host). s5 t6 starts after the answer.
+   **Open.** Decision 38 does not name it.
 4. **The paid proof** (s7 t3): one real coder job on claude haiku, 2 runs and 0.30 USD at most, on a pool key named through
    `COAI_CLAUDE_KEYS_FILE`. It needs a usable key of the pool on this machine, and it starts after the answer.
+   **Answered 2026-11-25: allowed** — haiku, 2 runs and 0.30 USD at most, on a pool key. s7 t3 d1 says so.
 5. **A red base commit** (risk 8) is not checked before turn 0. Proposed as a follow-up for E5: the scheduler starts many jobs
    from one integration head, so one check of that head serves them all. Nothing of it is in E4.
+   **Answered 2026-11-25: a task of E5.** E4 does not change. The stories of E5 are not written yet: its planner takes the task
+   from this line.
 
 Recorded, not a question: `epic.yaml` of this epic has the E3 plan's wording of the resume line of `doneWhen` (the same text as on
 `feat/v2-ep3-e3-roles`) and `spec: SPEC.md`; `v2/_gen/v2-spec.json` holds the same two edits. `dependsOn` is not changed; s6 names
@@ -554,3 +566,27 @@ complexity sum 170 (before the gate: 31 and 153).
 The owner-facing points are open questions in section N. The plan decides none of them: the coder's default of 45 or 30 minutes;
 npm only; `testFiles` and `testFor` for this repository, with `src_vs_code` not a node project; the paid proof of s7 t3; and a
 check of the base commit before turn 0 as a follow-up for E5.
+
+## Q. After the plan gate (2026-11-25): the owner's answers, and one line from the E3 judgement
+
+Two things changed the plan after the gate of section P. Both are plan changes: the plan gate reads the bundle again.
+
+1. **The owner's answers** (decision 38 of the v2 decisions list, 2026-11-25), each under its question in section N:
+   - question 1: the coder's default `timeoutMinutes` is 60; every other role keeps 30 → decision 1, section H, s6 t3 d1;
+   - question 2: npm only → decision 9, nothing else;
+   - question 4: the paid run of s7 t3 is allowed (haiku, 2 runs and 0.30 USD at most, a pool key) → s7 t3 d1;
+   - question 5: the check of a red base commit is a task of E5; E4 does not change → section L.
+   Question 3 (this repository's `testFiles` and `testFor`) has no answer; s5 t6 still waits for it.
+2. **`doneWhen` line 8**, from the security judgement of the codex and agy write boundary (E3 s4 t6,
+   `v2/spikes/RESULTS_codex_agy_write_boundary_judgement.md` on `feat/v2-ep3-e3-roles` `d8f57ec7`, item G11 and section 10 item 4):
+   "the coder of a vendor whose measure showed it works behind a proxy runs in a unit with no network but coai's forwarder with
+   the vendor's hosts". `epic.yaml` and `v2/_gen/v2-spec.json` hold the line.
+   - Why it is E4's: E3 is at its device limits (6 tasks in a story, 8 stories in an epic), and this is coder hardening.
+   - Why it has no story yet: the judgement found no property of a user unit that limits the hosts of a process (U13, J5),
+     and that a unit with no network can reach a program outside through a unix socket in a bound folder (J8). The other half —
+     the vendor's CLI working behind a proxy — is not measured. E3 s6 t7 d6 measures it for agy; nothing measures it for codex.
+     A forwarder cannot be designed before that.
+   - What E4 does: when E3 s6 t7 has its results, one story (E4 has 7 of the 8 the device allows) is written from them and the
+     epic gets a new plan round. When the measure shows that no vendor works behind a proxy, the line is met by that recorded
+     result, no story is written, and accepted risk A2 of the judgement stays with the owner.
+   - Until then: the agy and codex CLI processes have the whole network and the host's loopback (accepted risks A2 and C2).
