@@ -86,6 +86,9 @@ public sealed record BoundaryJob(
     /// <summary>The folder of <c>DOTNET_CLI_HOME</c>.</summary>
     public string DotnetFolder => Path.Combine(JobRoot, "dotnet-home");
 
+    /// <summary>The per-job folders a check unit binds at their own path (its <c>HOME</c>, the package and cache folders): every folder of <see cref="Folders"/> but the two temp folders, which are bound at <c>/tmp</c> and <c>/var/tmp</c>. The coder's folder is not one of them.</summary>
+    public IReadOnlyList<string> CheckFolders => [HomeFolder, NuGetFolder, NpmFolder, DotnetFolder];
+
     /// <summary>Every per-job folder coai makes, in the order they are made.</summary>
     public IReadOnlyList<string> Folders => [HomeFolder, TempFolder, VarTempFolder, NuGetFolder, NpmFolder, DotnetFolder];
 

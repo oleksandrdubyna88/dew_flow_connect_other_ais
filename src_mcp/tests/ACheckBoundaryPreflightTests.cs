@@ -33,7 +33,7 @@ public sealed class ACheckBoundaryPreflightTests
         var admitted = admission.Should().BeOfType<BoundaryAdmission.Admitted>(admission.ToString()).Subject;
         var record = admitted.Records.Should().ContainSingle().Which.Value;
         record.Boundary.Should().Be(BoundaryRecord.UnitBoundary);
-        record.Preflight.Select(row => row.Item).Should().Equal(["user-manager", "worktree-write", "main-readonly", "git-readonly", "no-user-manager-inside", "windows-exe", "home-is-the-jobs", "tmp-is-the-jobs", "network-state", "no-sockets-no-interop", "clean-environment"]);
+        record.Preflight.Select(row => row.Item).Should().Equal(["user-manager", "worktree-write", "main-readonly", "git-readonly", "no-user-manager-inside", "windows-exe", "home-is-the-jobs", "tmp-is-the-jobs", "coder-folder-hidden", "network-state", "no-sockets-no-interop", "clean-environment"]);
         record.Preflight.Should().OnlyContain(row => row.Held, string.Join("; ", record.Preflight.Where(row => !row.Held).Select(row => $"{row.Item}: {row.Detail}")));
         record.Preflight.Should().OnlyContain(row => row.Detail.Length > 0);
         File.Exists(Path.Combine(bed.Worktree, ".coai-preflight.exe")).Should().BeFalse("the Windows program's copy is removed when the preflight ends");
@@ -50,6 +50,7 @@ public sealed class ACheckBoundaryPreflightTests
         { "windows-exe", "WSL interop reachable" },
         { "home-is-the-jobs", "HOME is the real one" },
         { "tmp-is-the-jobs", "no per-job temp folder" },
+        { "coder-folder-hidden", "the whole job folder bound again, the coder's folder with it" },
         { "network-state", "host network under a private step" },
         { "no-sockets-no-interop", "/mnt visible" },
         { "clean-environment", "no env -i" },
@@ -89,6 +90,7 @@ public sealed class ACheckBoundaryPreflightTests
         "windows-exe" => Drop(arguments, "InaccessiblePaths=-/run/WSL"),
         "home-is-the-jobs" => Replace(arguments, $"HOME={bed.Job.HomeFolder}", $"HOME={bed.Host.RealHome}"),
         "tmp-is-the-jobs" => Drop(arguments, $"BindPaths={bed.Job.TempFolder}:{BoundaryUnit.UnitTemp}"),
+        "coder-folder-hidden" => Replace(arguments, $"TemporaryFileSystem={bed.Job.JobRoot}:ro", $"BindPaths={bed.Job.JobRoot}"),
         "network-state" => Replace(arguments, "PrivateNetwork=yes", "PrivateNetwork=no"),
         "no-sockets-no-interop" => Drop(arguments, "TemporaryFileSystem=/mnt"),
         _ => Drop(arguments, "-i"),

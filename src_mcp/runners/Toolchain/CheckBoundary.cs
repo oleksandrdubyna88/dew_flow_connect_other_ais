@@ -99,7 +99,7 @@ public sealed class CheckBoundary(IProcessLauncher launcher, BoundaryHost host)
     private static BoundaryAdmission.Refused Refuse(string sentence, IReadOnlyList<PreflightRow> rows) =>
         new(sentence, new BoundaryRecord(BoundaryRecord.UnitBoundary, [], "none", string.Empty, rows));
 
-    private (string Sentence, string Copy) PrepareFolders(BoundaryJob job) => BoundaryFolders.Prepare(host, job, job.Folders, job.TempFolder, job.VarTempFolder);
+    private (string Sentence, string Copy) PrepareFolders(BoundaryJob job) => BoundaryFolders.Prepare(host, job, [.. job.Folders, job.CoderFolder], job.TempFolder, job.VarTempFolder);
 
     private async Task<IReadOnlyList<PreflightRow>> PreflightAsync(BoundaryJob job, CheckNetwork network, string program, CancellationToken ct)
     {

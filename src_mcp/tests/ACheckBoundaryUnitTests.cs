@@ -169,6 +169,36 @@ public sealed class ACheckBoundaryUnitTests
     }
 
     [Fact]
+    public async Task TheUnit_CannotSeeTheCodersFolder_NorWriteTheJobFolderBesideTheFoldersItUses()
+    {
+        NeedAUserManager();
+        await using var bed = await BoundaryBed.CreateAsync();
+        var coderConfig = Path.Combine(bed.Job.CoderHomeFolder, ".claude", "settings.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(coderConfig)!);
+        await File.WriteAllTextAsync(coderConfig, "coder config\n");
+        var script = $$"""
+            w() { if { true > "$1"; } 2>/dev/null; then echo "wrote $2"; else echo "refused $2"; fi; }
+            if [ -e {{bed.Job.CoderFolder}} ]; then echo "sees coder-folder"; else echo "hidden coder-folder"; fi
+            if cat {{coderConfig}} >/dev/null 2>&1; then echo "reads coder-config"; else echo "unreadable coder-config"; fi
+            w {{coderConfig}} coder-config
+            w {{bed.Job.CoderHomeFolder}}/from-unit.txt coder-home
+            w {{bed.Job.JobRoot}}/from-unit.txt job-folder
+            w "$HOME/from-unit.txt" home
+            w "$NUGET_PACKAGES/from-unit.txt" nuget-job-packages
+            """;
+
+        var run = await bed.ShellAsync(script);
+
+        run.Result.ExitCode.Should().Be(0, run.Result.StdErr);
+        var said = run.Result.StdOut.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        said.Should().Contain(["hidden coder-folder", "unreadable coder-config", "refused coder-config", "refused coder-home", "refused job-folder", "wrote home", "wrote nuget-job-packages"], "the coder's folder is not in the unit, the job folder is read-only, and the folders the checks use are still theirs");
+        File.ReadAllText(coderConfig).Should().Be("coder config\n", "the coder's config was not touched");
+        File.Exists(Path.Combine(bed.Job.CoderHomeFolder, "from-unit.txt")).Should().BeFalse();
+        File.Exists(Path.Combine(bed.Job.JobRoot, "from-unit.txt")).Should().BeFalse();
+        File.Exists(Path.Combine(bed.Job.HomeFolder, "from-unit.txt")).Should().BeTrue("HOME is still the job's own writable folder");
+    }
+
+    [Fact]
     public async Task TheUnit_SeesTheJobsHome_NeverTheRealOne_AndASafePath()
     {
         NeedAUserManager();

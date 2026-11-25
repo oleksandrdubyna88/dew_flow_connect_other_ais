@@ -36,9 +36,12 @@ internal static class BoundaryPreflight
 
     internal const string SubmodulesReadOnly = "submodules-readonly";
 
+    /// <summary>The check preflight's item for the coder's own folder (its CLI's home and config): it must not be there inside a check's unit.</summary>
+    internal const string CoderFolderHidden = "coder-folder-hidden";
+
     /// <summary>Every item the script must answer, in the order it asks.</summary>
     internal static readonly IReadOnlyList<string> Items =
-        [WorktreeWrite, MainReadOnly, GitReadOnly, NoUserManager, WindowsProgram, HomeIsTheJobs, TempIsTheJobs, NetworkState, NoSocketsNoInterop, CleanEnvironment];
+        [WorktreeWrite, MainReadOnly, GitReadOnly, NoUserManager, WindowsProgram, HomeIsTheJobs, TempIsTheJobs, CoderFolderHidden, NetworkState, NoSocketsNoInterop, CleanEnvironment];
 
     /// <summary>The items of a check preflight for <paramref name="job"/>: <see cref="Items"/>, and the submodule row when the job has a mount — a job with none is asked exactly what E2 asked.</summary>
     internal static IReadOnlyList<string> ItemsFor(BoundaryJob job) => job.Mounts.Count == 0 ? Items : [.. Items, SubmodulesReadOnly];
@@ -128,6 +131,19 @@ internal static class BoundaryPreflight
         if env | grep -Eq '^(SSH_AUTH_SOCK|DBUS_SESSION_BUS_ADDRESS|GPG_AGENT_INFO|XDG_RUNTIME_DIR|COAI_[A-Za-z0-9_]*|[A-Za-z0-9_]*(API_KEY|TOKEN|SECRET))='; then row clean-environment bad "a name a check must never see is in the environment"; else row clean-environment ok "no vendor key, COAI_ name, agent or bus socket is in the environment"; fi
         """;
 
+    /// <summary>The check script reads the coder's folder as its eighth argument, after the seven of <see cref="Header"/>.</summary>
+    private const string CheckHeader = """
+        coderdir=$8
+        """;
+
+    /// <summary>
+    /// The coder's folder holds the coder CLI's home, its config and its transcripts; a check runs code the coder wrote, so it must see neither the folder nor anything in it. The folder is made on the host before the unit starts, so "not there" is an observation and not an absent folder.
+    /// </summary>
+    private const string CoderFolderRow = """
+        if [ -e "$coderdir" ] || ls -A "$coderdir" >/dev/null 2>&1; then row coder-folder-hidden bad "the coder's own folder (its home and config) is visible inside the check's unit"
+        else row coder-folder-hidden ok "the coder's own folder is not visible inside the check's unit"; fi
+        """;
+
     private const string CoderHeader = """
         root=$8; cred=$9; shift 9; prog=$1; mode=$2; keys=$3; inunit=$4
         """;
@@ -181,9 +197,9 @@ internal static class BoundaryPreflight
     private static string Join(params string[] rows) => string.Join('\n', rows);
 
     /// <summary>
-    /// <c>$1</c> worktree, <c>$2</c> main checkout, <c>$3</c> real home, <c>$4</c> network (<c>none</c>|<c>host</c>), <c>$5</c> job id, <c>$6</c> the Windows program to try (empty: none), <c>$7</c> the resolver file bound back under <c>/mnt</c> for a host-network step (empty: none).
+    /// <c>$1</c> worktree, <c>$2</c> main checkout, <c>$3</c> real home, <c>$4</c> network (<c>none</c>|<c>host</c>), <c>$5</c> job id, <c>$6</c> the Windows program to try (empty: none), <c>$7</c> the resolver file bound back under <c>/mnt</c> for a host-network step (empty: none), <c>$8</c> the coder's folder, which must not be visible.
     /// </summary>
-    private static readonly string Script = Join(Header, WorktreeRow, MainRow, GitRow, ManagerRow, ExeRow, HomeRow, TempRow, NetworkRow, SocketsRow, EnvironmentRow);
+    private static readonly string Script = Join(Header, CheckHeader, WorktreeRow, MainRow, GitRow, ManagerRow, ExeRow, HomeRow, TempRow, CoderFolderRow, NetworkRow, SocketsRow, EnvironmentRow);
 
     /// <summary>
     /// The coder's script: the same rows over the same fragments, plus <c>$8</c> the coder root (a write beside the worktree must be refused), <c>$9</c> the sign-in file inside the unit (empty: none; read-only) and a tenth, the program of the launch (it must be there) — read after a <c>shift 9</c>, because systemd expands <c>${NAME}</c> in a command line, so no script of this family may spell one. After the program come the launch's mode (<c>keyed</c> when it carries a pool key and so binds no sign-in file,
@@ -191,7 +207,7 @@ internal static class BoundaryPreflight
     /// </summary>
     private static readonly string CoderScript = Join(Header, CoderHeader, WorktreeRow, MainRow, CoderRootRow, GitRow, ManagerRow, ExeRow, HomeRow, SignInRow, ProgramRow, TempRow, NetworkRow, SocketsRow, EnvironmentRow, SignInAbsentRow, KeysHiddenRow);
 
-    private static string ScriptFor(BoundaryJob job) => job.Mounts.Count == 0 ? Script : Join(Script, SubmodulesRow(7));
+    private static string ScriptFor(BoundaryJob job) => job.Mounts.Count == 0 ? Script : Join(Script, SubmodulesRow(8));
 
     private static string CoderScriptFor(BoundaryJob job) => job.Mounts.Count == 0 ? CoderScript : Join(CoderScript, SubmodulesRow(4));
 
@@ -199,7 +215,7 @@ internal static class BoundaryPreflight
 
     /// <summary>The command of the preflight unit.</summary>
     internal static IReadOnlyList<string> Command(BoundaryJob job, BoundaryHost host, CheckNetwork network, string program) =>
-        ["/bin/sh", "-c", ScriptFor(job), "coai-preflight", job.Tree.Root, job.Tree.MainCheckout, host.RealHome, network == CheckNetwork.Private ? "none" : "host", job.JobId, program, network == CheckNetwork.Host ? host.ResolverFile : string.Empty, .. MountArguments(job)];
+        ["/bin/sh", "-c", ScriptFor(job), "coai-preflight", job.Tree.Root, job.Tree.MainCheckout, host.RealHome, network == CheckNetwork.Private ? "none" : "host", job.JobId, program, network == CheckNetwork.Host ? host.ResolverFile : string.Empty, job.CoderFolder, .. MountArguments(job)];
 
     /// <summary>
     /// The command of the coder's preflight unit: the program of the launch, the copy of the Windows program to try, the sign-in file as the unit sees it (empty when the launch binds none) and the resolver file, as the launch itself gets them. The network is the host's — the CLI

@@ -55,13 +55,35 @@ public sealed class ASubmoduleMountInTheUnitsTests
 
     private static readonly string[] E2Limits = ["RuntimeMaxSec=300", "MemoryMax=2000M", "MemorySwapMax=0"];
 
+    /// <summary>What a check unit has of the job folder since the coder's folder was taken out of it: an empty read-only tmpfs over it, and the folders the checks use bound on top — the one change to the list E2 recorded.</summary>
+    private static readonly string[] JobView =
+    [
+        $"TemporaryFileSystem={J}:ro", $"BindPaths={J}/home", $"BindPaths={J}/nuget-packages", $"BindPaths={J}/npm-cache", $"BindPaths={J}/dotnet-home",
+    ];
+
+    [Fact]
+    public void TheChecksUnit_BindsNoPartOfTheJobFolderButTheFoldersTheChecksUse_AndNeverTheCodersFolder()
+    {
+        var job = Job();
+
+        var properties = BoundaryUnit.Properties(NoHome(), job, CheckNetwork.Private, TimeSpan.FromMinutes(5));
+
+        properties.Should().NotContain($"BindPaths={J}", "the whole job folder is no longer bound: the coder's home and config are in it");
+        properties.Where(property => property.Contains(job.CoderFolder, StringComparison.Ordinal)).Should().BeEmpty("no property of a check unit names the coder's folder");
+        properties.Should().Contain($"TemporaryFileSystem={J}:ro");
+        job.CheckFolders.Should().NotContain(folder => folder.StartsWith(job.CoderFolder, StringComparison.Ordinal));
+        job.CheckFolders.Should().OnlyContain(folder => properties.Contains($"BindPaths={folder}"));
+        var cover = properties.ToList().IndexOf($"TemporaryFileSystem={J}:ro");
+        job.CheckFolders.Should().OnlyContain(folder => properties.ToList().IndexOf($"BindPaths={folder}") > cover, "a folder is bound after the tmpfs that would otherwise hide it");
+    }
+
     [Fact]
     public void TheChecksUnit_WithNoMount_IsTheListE2Recorded_AndWithOne_ThatListPlusOneReadOnlyBindAndNothingElse()
     {
         string[] e2 =
         [
             .. E2Isolation,
-            $"BindPaths={W}", $"BindReadOnlyPaths={M}", $"BindReadOnlyPaths={W}/.git", $"BindPaths={J}", $"BindPaths={J}/{TempName}:{BoundaryUnit.UnitTemp}", $"BindPaths={J}/vartmp:{BoundaryUnit.UnitVarTemp}",
+            $"BindPaths={W}", $"BindReadOnlyPaths={M}", $"BindReadOnlyPaths={W}/.git", .. JobView, $"BindPaths={J}/{TempName}:{BoundaryUnit.UnitTemp}", $"BindPaths={J}/vartmp:{BoundaryUnit.UnitVarTemp}",
             .. E2Hardening,
             "PrivateNetwork=yes",
             .. E2Limits,

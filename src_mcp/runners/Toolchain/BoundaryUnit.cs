@@ -42,7 +42,7 @@ internal static class BoundaryUnit
             $"BindReadOnlyPaths={tree.MainCheckout}",
             $"BindReadOnlyPaths={tree.GitEntry}",
             .. Mounts(job),
-            $"BindPaths={job.JobRoot}",
+            .. JobView(job),
             $"BindPaths={job.TempFolder}:{UnitTemp}",
             $"BindPaths={job.VarTempFolder}:{UnitVarTemp}",
             .. host.ReadOnlyCaches.Select(cache => $"BindReadOnlyPaths={cache}"),
@@ -58,6 +58,17 @@ internal static class BoundaryUnit
     /// before anything that binds a folder of the job. Nothing else of the list changes: a job with no mount has exactly the list E2 recorded, and one with a mount has that list and these elements.
     /// </summary>
     internal static IReadOnlyList<string> Mounts(BoundaryJob job) => [.. job.Mounts.Select(mount => $"BindReadOnlyPaths={mount.Source}:{mount.Target}")];
+
+    /// <summary>
+    /// What a check unit sees of the job's own folder (epoch 3 E2, the E3 judgement of the write boundary): an empty READ-ONLY tmpfs over the job folder, and on top of it only the folders the checks use (<see cref="BoundaryJob.CheckFolders"/>), each bound writable. The job
+    /// folder also holds the CODER's home and config (<see cref="BoundaryJob.CoderFolder"/>) — its CLI's settings, its transcripts, its caches — which a check, running code the coder wrote, must neither read nor change; before this, the whole job folder was bound writable and the
+    /// coder's folder with it.
+    /// </summary>
+    internal static IReadOnlyList<string> JobView(BoundaryJob job) =>
+    [
+        $"TemporaryFileSystem={job.JobRoot}:ro",
+        .. job.CheckFolders.Select(folder => $"BindPaths={folder}"),
+    ];
 
     /// <summary>
     /// What hides the host from a unit, for a check and for a coder alike: <c>/home</c>, <c>/root</c> and <c>/run/user</c> are empty tmpfs (<c>ProtectHome=tmpfs</c>), <c>/mnt</c> and <c>/dev/shm</c> too, the rest of the file system is read-only, and the WSL
