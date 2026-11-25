@@ -1,0 +1,20 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t1-toolchain-file-names
+title: "The toolchain file gets restore, format, testFor and testFiles; a project that states a command runs exactly what it states"
+kind: code
+complexity: 5
+dependsOn: []
+parallel: false
+files:
+  - shared/toolchain.schema.json
+  - src_mcp/core/Toolchain/ToolchainTables.cs
+  - src_mcp/core/Toolchain/ToolchainParse.cs
+  - src_mcp/core/Toolchain/ToolchainModel.cs
+  - src_mcp/tests/AToolchainFileTests.cs
+dod:
+  - id: d1
+    item: "restore, format and testFor are argv lists and testFiles is a list of folder prefixes inside the project; an item of format may hold {file} and an item of testFor {file} or {stem}; a placeholder in another command, an unknown placeholder, a testFor without testFiles and a prefix that leaves the project are each refused with a sentence that names the member"
+  - id: d2
+    item: "the reader's existing refusal rule for argv text covers the four new lists (a test plants the fixture of that rule in each); version stays 1, and this repository's committed file reads to the same model as before (a test compares the two)"
+  - id: d3
+    item: "the test that holds the schema file and the reader's tables equal passes with the four names; the comment of the schema says the rule of SPEC A2: defaults only for a project that states no command, and `skip` of restore or format takes that step out of a defaulted project"

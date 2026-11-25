@@ -1,0 +1,20 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t4-docs
+title: "Docs: detection and defaults, the steps, the formatter turn, selection, the re-run, the no-progress stop and the caps in ARCHITECTURE.md, README.md and the knowledge base; server.md records what E4 decided differently"
+kind: docs
+complexity: 3
+dependsOn:
+  - t3-paid-detected-run
+parallel: false
+files:
+  - ARCHITECTURE.md
+  - README.md
+  - v2/architecture/server.md
+  - research/module_runners.md
+  - research/module_server.md
+  - research/module_tests.md
+dod:
+  - id: d1
+    item: "ARCHITECTURE.md and README.md name the order of resolution, the refusals of detection, the step names with their network state, the four new names of the toolchain file, the new fields of the envelope, the settings COAI_TOOLCHAIN_DETECT and COAI_FLAKY_RERUNS and the stop `no-progress`; research/module_tests.md lists the new scenarios as covered or not covered"
+  - id: d2
+    item: "server.md gets a section `What epoch 3 E4 decided differently from sections 10, 12 and 23`: one clock, console readers, the two levels of selection, the rule of the re-run, npm only, and that a review_code started by coai is E5's (section 23 said E4)"

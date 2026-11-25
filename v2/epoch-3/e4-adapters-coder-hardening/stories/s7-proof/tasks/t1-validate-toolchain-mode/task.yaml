@@ -1,0 +1,17 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t1-validate-toolchain-mode
+title: "coai-mcp --validate-toolchain <repo>: the resolved toolchain of a commit as JSON, with every refusal"
+kind: code
+complexity: 4
+dependsOn: []
+parallel: false
+files:
+  - src_mcp/src/Program.cs
+  - src_mcp/src/ValidateToolchainMode.cs
+  - .agents/PROJECT.md
+  - src_mcp/tests/TheValidateToolchainModeTests.cs
+dod:
+  - id: d1
+    item: "`--validate-toolchain <repo> [--base <sha>] [--head <sha>]` prints one JSON object: the source, the projects with their facts, every step's argv, working folder and network state, and the notes; a refusal prints the state and its sentences; the mode starts no step, reads no file of the working tree and writes nothing"
+  - id: d2
+    item: "the exit code is 0 for a resolved toolchain, 1 for not_configured and toolchain_refused and 65 for a wrong argument, never 64; the mode is in the one-shot list of .agents/PROJECT.md in the same commit; stdout holds the JSON and nothing else"

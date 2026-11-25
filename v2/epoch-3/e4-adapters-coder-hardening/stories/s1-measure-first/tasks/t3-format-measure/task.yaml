@@ -1,0 +1,18 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t3-format-measure
+title: "Measure the formatters inside the check unit: dotnet format on named files without restore and without network, prettier on named files; name one default per adapter or none"
+kind: measure
+complexity: 4
+dependsOn: []
+parallel: false
+files:
+  - v2/epoch-3/e4-adapters-coder-hardening/RESULTS_s1_format.md
+  - src_mcp/tests/fixtures/toolchain
+  - src_mcp/tests/AFormattersAreMeasuredTests.cs
+dod:
+  - id: d1
+    item: "M7: `dotnet format` is measured in the check unit with only a loopback device and `--no-restore`, in the `whitespace --folder` form and in the `style` form, each with `--include` of three files of a scratch clone of this repository: the time, the exit code, the files it changed (only the included ones, or more) and whether a second run changes nothing"
+  - id: d2
+    item: "M8: prettier `--write` through `npx --no-install` on three named files of a scratch project: the same four answers; for a file with a syntax error the exit code and the text; for a file named `--help` written as `./--help` whether it is read as a file"
+  - id: d3
+    item: "the file names ONE default per adapter (an argv, or `none` with the reason) and the longest time measured; a form that changed a file it was not given, needed the network or took more than 60 seconds for three files is not a default"

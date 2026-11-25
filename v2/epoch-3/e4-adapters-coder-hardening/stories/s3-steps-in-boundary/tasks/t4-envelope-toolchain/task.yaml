@@ -1,0 +1,17 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t4-envelope-toolchain
+title: "The envelope says where the checks came from: the toolchain's source, projects, facts and notes; every step carries its name, network state and working folder"
+kind: code
+complexity: 4
+dependsOn:
+  - t3-checks-at-base-resolve
+parallel: false
+files:
+  - src_mcp/src/Server/RoleJobs/CoderChecksReport.cs
+  - src_mcp/src/Server/RoleJobs/CoderEnvelope.cs
+  - src_mcp/tests/ACoderEnvelopeNamesItsToolchainTests.cs
+dod:
+  - id: d1
+    item: "result.json has `toolchain` {source: file | file+defaults | detected, projects: [{path, adapter, facts, steps}], notes, changedBetweenBaseAndHead}; each entry of `checks` has the step name (restore, build, typecheck, test), network and workingFolder beside the fields of E2"
+  - id: d2
+    item: "every field of E2 keeps its name and its meaning (a test reads a result of this task with the field list of E2 and finds the same values); role_status returns the same JSON that result.json holds"

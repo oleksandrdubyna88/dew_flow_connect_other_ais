@@ -1,0 +1,6 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: s5-format-selection-rerun
+title: "Inside one round of checks: the formatter on the files of the turn, selected tests first with the full run as the verdict, and one re-run of a test that failed once"
+dependsOn:
+  - s3-steps-in-boundary
+  - s4-digest-readers

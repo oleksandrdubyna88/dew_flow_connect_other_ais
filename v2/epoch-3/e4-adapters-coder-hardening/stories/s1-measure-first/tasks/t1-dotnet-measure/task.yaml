@@ -1,0 +1,20 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t1-dotnet-measure
+title: "Measure the .NET commands inside the check unit: restore, build without restore, dotnet test for each runner, and the filter of this repository's test executable"
+kind: measure
+complexity: 5
+dependsOn: []
+parallel: false
+files:
+  - v2/epoch-3/e4-adapters-coder-hardening/RESULTS_s1_dotnet.md
+  - src_mcp/tests/fixtures/toolchain
+  - src_mcp/tests/ADotnetStepsAreMeasuredTests.cs
+dod:
+  - id: d1
+    item: "M1: the results file has one row per command with the SDK version, the exact argv, the exit code and the time, each run inside the check unit of E2 with no property changed: `dotnet restore` on the host network, then `dotnet build --no-restore` and `dotnet test --no-build` with only a loopback device, on a scratch clone of this repository and on a scratch VSTest project"
+  - id: d2
+    item: "M2: for `dotnet test` in three cases (a VSTest project; an MTP project with the runner named in global.json; an MTP project without it) the file has the argv that works or the error, the exit code of a failed test and of a run with zero tests, and the console lines that name a failed test, its message and its file and line; the recorded outputs are in fixtures/toolchain with the checkout path and the user name replaced"
+  - id: d3
+    item: "M3: for this repository's test executable the file has the argv that runs only the tests of two named test files, how long it takes, and the exit code when the filter matches no test"
+  - id: d4
+    item: "a command that needs a property the E2 unit does not have is written down as a finding and the task stops there: the unit is not changed in this task (SPEC rule J1); the runs are recorded tests that are skipped unless their variable names a folder, and they never use the real home"

@@ -1,0 +1,18 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t3-paid-detected-run
+title: "One real coder job (claude haiku on a pool key) on a scratch node repository with no toolchain file: a planted red test to green"
+kind: measure
+complexity: 4
+dependsOn:
+  - t2-epic-acceptance
+parallel: false
+security: true
+files:
+  - v2/epoch-3/e4-adapters-coder-hardening/RESULTS_e4_proof.md
+dod:
+  - id: d1
+    item: "the job runs on a scratch clone with a scratch data folder, on a claude key of the pool named through COAI_CLAUDE_KEYS_FILE and never on the person's sign-in file; with no usable key the task does not start and says so"
+  - id: d2
+    item: "the results file holds the job id, the route, the detected toolchain, the rounds with their scope, the format state, fixTurns (at most 2), green true, the wall time and the cost the CLI reported; it quotes no prompt, no answer and no key"
+  - id: d3
+    item: "at most 2 paid runs and 0.30 USD in total, read from the ledger after each run; the second run only after a recorded change; a run that would pass the cap is not started"

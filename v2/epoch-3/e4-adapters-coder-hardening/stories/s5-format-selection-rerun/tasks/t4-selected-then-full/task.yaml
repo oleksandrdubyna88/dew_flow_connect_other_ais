@@ -1,0 +1,22 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t4-selected-then-full
+title: "Selection, level two: testFor on the changed test files first; when it is green the full test command runs on the same commit and is the verdict"
+kind: code
+complexity: 6
+dependsOn:
+  - t3-affected-projects
+parallel: false
+files:
+  - src_mcp/runners/Toolchain/CheckRunner.cs
+  - src_mcp/core/Toolchain/TestSelection.cs
+  - src_mcp/src/Server/RoleJobs/CoderChecks.cs
+  - src_mcp/tests/ASelectedThenFullTests.cs
+dod:
+  - id: d1
+    item: "a selected run exists only where the FILE names testFor: the selected files are what the job added or changed (base to head) under a testFiles prefix; {file} and {stem} are replaced in place, one item per file; S6: a stem that is not letters, digits and underscores, an unsafe file name or more than 50 files means no selected run"
+  - id: d2
+    item: "S3 and S4: a red selected run ends the round red with its digest and the full command does not run; a green selected run is followed by the full test command on the SAME commit; green is only ever the word of a full run (selected green and full red is red, with the digest of the full run)"
+  - id: d3
+    item: "S5: an exit code or a marker line that toolchains.json holds as `no test ran` for the adapter is `nothing selected`: not green, not red, and the full command runs"
+  - id: d4
+    item: "S7: after a full run has failed once in a job the later rounds run the full command only; that fact is a file in the job folder (written with a temporary file and a rename), so it holds across models; every step record says the scope `selected` or `full` and the number of files"

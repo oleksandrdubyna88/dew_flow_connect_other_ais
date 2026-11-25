@@ -1,0 +1,16 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t2-node-build-readers
+title: "Readers for tsc error lines and for the error block of a failed npm ci, on the recordings of s1"
+kind: code
+complexity: 4
+dependsOn: []
+parallel: false
+files:
+  - src_mcp/core/Toolchain/TscLines.cs
+  - src_mcp/core/Toolchain/NpmErrors.cs
+  - src_mcp/tests/ANodeBuildDigestTests.cs
+dod:
+  - id: d1
+    item: "R1: the recorded tsc output with two errors gives two items {file, line, code, message}; the recorded failed `npm ci` gives one item with npm's error code and the first lines of its message"
+  - id: d2
+    item: "the readers are pure and bounded as the readers of t1; the existing Redaction pass runs before any cut (the planted fixture of that pass is changed by it)"

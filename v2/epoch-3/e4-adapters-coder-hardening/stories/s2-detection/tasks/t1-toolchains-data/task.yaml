@@ -1,0 +1,19 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t1-toolchains-data
+title: "shared/toolchains.json: the stacks, their manifest names, the default argv of every step, the switches, the network state and the measured exit codes, with a strict reader"
+kind: code
+complexity: 4
+dependsOn: []
+parallel: false
+files:
+  - shared/toolchains.json
+  - src_mcp/core/Toolchain/ToolchainDefaults.cs
+  - src_mcp/core/CoaiMcp.Core.csproj
+  - src_mcp/tests/AToolchainDefaultsTests.cs
+dod:
+  - id: d1
+    item: "the file names dotnet and node as built and php, rust, python and java as known and not built, each with its manifest names; for a built stack it has the argv of restore, build, typecheck, test and format exactly as the results of s1 name them (there is no default testFor), the switch names of its steps, the network state of each step, the exit codes and marker lines that mean no test ran, and the file extensions a formatter is given"
+  - id: d2
+    item: "the binary reads only the embedded copy; a test holds the file and the reader's tables equal; an argv item may hold only the placeholders {jobs} and {unit}, and an item of format {file}; an unknown placeholder or an unknown member fails the test"
+  - id: d3
+    item: "a scan test holds the strict rules, each with a planted bad line that it finds: no shell program, no `npm install`, no `npx` without `--no-install`, no `npm ci` without `--ignore-scripts`, no `dotnet test` without `--no-build`; and every step with the host network names a heading of a RESULTS file of this repository that measured why"

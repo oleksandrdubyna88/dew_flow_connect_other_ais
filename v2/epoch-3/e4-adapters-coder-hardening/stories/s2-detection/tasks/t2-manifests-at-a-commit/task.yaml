@@ -1,0 +1,21 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t2-manifests-at-a-commit
+title: "The manifests of a commit: one listing of the tree from the main repository and the manifest files read with limits; a link and a submodule are never read"
+kind: code
+complexity: 5
+dependsOn:
+  - t1-toolchains-data
+parallel: false
+security: true
+files:
+  - src_mcp/runners/Collecting/GitHistory.cs
+  - src_mcp/runners/Toolchain/ManifestsAtCommit.cs
+  - src_mcp/core/Toolchain/ManifestSet.cs
+  - src_mcp/tests/AManifestsAtACommitTests.cs
+dod:
+  - id: d1
+    item: "for a commit, read from the MAIN repository path and never through the worktree's .git pointer, the answer is the manifest files of toolchains.json with their texts: found at most 4 folders deep, outside node_modules, bin, obj and folders whose name starts with a dot; the same commit gives the same answer; nothing of the working tree is read"
+  - id: d2
+    item: "a manifest that is a link is a refusal that names it and is never read; a submodule is never entered and is named in the notes; a manifest over 256 KiB, more than 500 manifest files, more than 16 MiB read in all and a listing over 32 MiB are each a refusal with the number and the limit, never a cut list"
+  - id: d3
+    item: "a commit that is not in the repository and a git that does not answer are refusals, never an empty set; a path with a control character, or one that fails the path rule of the toolchain file (absolute, a drive, `..`), is a refusal that names it"

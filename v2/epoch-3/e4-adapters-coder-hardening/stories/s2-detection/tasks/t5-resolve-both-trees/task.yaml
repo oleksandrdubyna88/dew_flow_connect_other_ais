@@ -1,0 +1,23 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t5-resolve-both-trees
+title: "ToolchainResolve: the file at the base wins; else detection at the base and at the head, and a check the base had is never lost at the head"
+kind: code
+complexity: 6
+dependsOn:
+  - t3-dotnet-detector
+  - t4-node-detector
+parallel: false
+security: true
+files:
+  - src_mcp/core/Toolchain/ToolchainResolve.cs
+  - src_mcp/core/Toolchain/ResolvedToolchain.cs
+  - src_mcp/tests/AToolchainIsResolvedTests.cs
+dod:
+  - id: d1
+    item: "a file at the base commit gives the source `file`, and detection decides nothing for a project that states a command; a project of the file that states NO command gets the adapter's defaults of its own folder at the base (source `file+defaults`), and a refusal of the detector there refuses the file"
+  - id: d2
+    item: "no file at the base: detection at the base and at the head; a project only the head has is added with the defaults; a step (project and step name) that the base had and the head has not is toolchain_refused with the sentence `the worktree removed <step> of <project>`"
+  - id: d3
+    item: "a manifest of a stack that is known and not built (php, rust, python, java), at the base or at the head, is toolchain_refused and names the stack, the path and the cure; no manifest of any known stack is not_configured; one refused project refuses the repository; neither state is ever green and no step is planned"
+  - id: d4
+    item: "COAI_TOOLCHAIN_DETECT=off gives the answer of E2 (no file is not_configured); a value other than on and off is on, with a note; the answer carries the source, the facts of each project and what differs between the base and the head, a changed text of `scripts.build`, `scripts.test` or `scripts.typecheck` included"

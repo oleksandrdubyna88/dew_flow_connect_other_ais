@@ -1,0 +1,18 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t1-dotnet-test-readers
+title: "Readers for the console of dotnet test (VSTest and the MTP form) and for dotnet restore errors, on the recordings of s1"
+kind: code
+complexity: 5
+dependsOn: []
+parallel: false
+files:
+  - src_mcp/core/Toolchain/DotnetTestFailures.cs
+  - src_mcp/core/Toolchain/MsBuildLines.cs
+  - src_mcp/tests/ADotnetTestDigestTests.cs
+dod:
+  - id: d1
+    item: "R1: the recorded VSTest console of s1 with two failed tests and one failed theory case gives one item per failure {step, file, line, code: the full name of the test, message}; the recorded MTP console of `dotnet test` gives the same, through the reader E2 has or a new one, as the recording decides"
+  - id: d2
+    item: "the recorded failed `dotnet restore` gives one item per error with its code; the reader is pure; a line longer than 4096 characters is skipped and every pattern has a match timeout"
+  - id: d3
+    item: "R3: 1 MiB of random lines never throws and gives no item"

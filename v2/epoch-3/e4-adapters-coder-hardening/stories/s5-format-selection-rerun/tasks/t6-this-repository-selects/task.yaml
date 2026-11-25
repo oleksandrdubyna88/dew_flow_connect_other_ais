@@ -1,0 +1,17 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t6-this-repository-selects
+title: ".coai/toolchain.yaml of this repository gets testFiles and testFor; a recorded run proves a selected real test and the full suite under the boundary"
+kind: config
+complexity: 3
+dependsOn:
+  - t4-selected-then-full
+parallel: false
+files:
+  - .coai/toolchain.yaml
+  - v2/epoch-3/e4-adapters-coder-hardening/RESULTS_s5_this_repository.md
+  - src_mcp/tests/AThisRepositoryToolchainFileTests.cs
+dod:
+  - id: d1
+    item: "the committed file names testFiles src_mcp/tests and the testFor argv that s1 t1 measured (M3); the test that reads the committed file gets both, and its build and test argv are unchanged"
+  - id: d2
+    item: "S8: a recorded run on a clean clone under the boundary (skipped unless its variable names a folder): a commit that adds one failing test class gives a red selected run with that test in the digest; the fix gives a green selected run and then the full suite green; the results file holds the argv, the times and the exit codes of every step"

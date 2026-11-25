@@ -1,0 +1,5 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: s2-detection
+title: "Detection and defaults: a repository with no .coai/toolchain.yaml gets its checks from its manifests, read at the base commit and at the head commit"
+dependsOn:
+  - s1-measure-first

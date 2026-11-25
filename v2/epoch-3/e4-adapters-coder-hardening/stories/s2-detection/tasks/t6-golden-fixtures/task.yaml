@@ -1,0 +1,18 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t6-golden-fixtures
+title: "Golden detection and argv on fixture trees: six shapes, one monorepo, and this repository read without its file"
+kind: test
+complexity: 5
+dependsOn:
+  - t5-resolve-both-trees
+parallel: false
+files:
+  - src_mcp/tests/fixtures/toolchain/trees
+  - src_mcp/tests/ADetectionIsGoldenTests.cs
+dod:
+  - id: d1
+    item: "D1: the fixture trees are data files (the path and the text of each file) that the test makes into a temporary git repository, so this repository holds no fixture manifest that its own detection could find; the seven trees are a solution with a VSTest project, a solution with MTP projects and global.json, two project files with no solution, an npm package with jest, an npm package with vitest and TypeScript, an npm workspace, and a monorepo with a solution and two packages"
+  - id: d2
+    item: "D2 to D4: each tree has a golden answer (projects, facts, every step's argv, working folder and network state) at the base and after a head commit that adds a project, removes a test script, adds a Cargo.toml and renames a folder; the test fails on any difference and prints both answers"
+  - id: d3
+    item: "D7 and D10: an empty tree and a tree of documents only give not_configured; this repository's own HEAD commit, with detection forced, gives one dotnet unit (the solution file) with the MTP runner and the node project src_vs_code with npm, and with its file read the answer is the file's"

@@ -1,0 +1,22 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t1-format-step
+title: "The format step: the formatter runs on the files of the turn only, inside the boundary with only a loopback device, and what it changes outside those files is undone"
+kind: security
+complexity: 6
+dependsOn: []
+parallel: false
+security: true
+files:
+  - src_mcp/runners/Toolchain/FormatStep.cs
+  - src_mcp/core/Toolchain/FileArguments.cs
+  - src_mcp/src/Server/RoleJobs/CoderFormat.cs
+  - src_mcp/tests/AFormatStepTests.cs
+dod:
+  - id: d1
+    item: "the files given are the ones the turn's commit added or changed, inside the project, with an extension of the adapter's list, that are not a manifest or a lock file; each is written `./<path from the working folder>`; a name with a control character or a line break is left out; more than 200 files means no run and the state `too-many-files`"
+  - id: d2
+    item: "F2: {file} is replaced in place by one argv item per file; the argv is started with no shell, through CheckBoundary, with only a loopback device and a limit of 5 minutes; a planted file named `--write-everything` reaches the formatter as `./--write-everything` and is read as a file"
+  - id: d3
+    item: "F3 and F4: after the run coai compares the worktree with the turn's commit: a changed path that was not given, a new file git would add or a HEAD that moved puts the worktree back to the turn's commit through CoderRestore, the restore step runs again and the state is `refused` with the paths; a formatter that exits non-zero, runs over its time or cannot start gives the same reset and the state `failed`"
+  - id: d4
+    item: "F5: no formatter in the resolved toolchain is the state `not_configured` and no process starts; a format state never makes a round red or green and is never sent to the coder"

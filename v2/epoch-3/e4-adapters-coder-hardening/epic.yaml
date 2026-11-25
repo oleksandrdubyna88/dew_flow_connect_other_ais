@@ -9,6 +9,7 @@ doneWhen:
   - "parsers tested on recorded real output"
   - ".coai/toolchain.yaml override; not_configured is never green"
   - "this repository is a fixture that runs a real test"
-  - "same session resumed (claude, codex, agy); caps and no-progress stop; flaky re-run"
+  - "same session resumed is built before this epic (claude by e2-coder-one-task; codex and agy by e3-roles-complete, for each vendor its judgement shipped); here: caps and no-progress stop; flaky re-run, for every shipped vendor"
   - "write boundary at launch; task session inherits the feature's plan proceed"
   - "job lease with generation; survives an MCP client restart"
+spec: SPEC.md

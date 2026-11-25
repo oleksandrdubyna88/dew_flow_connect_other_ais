@@ -1,0 +1,5 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: s3-steps-in-boundary
+title: "The steps of a resolved toolchain run inside the E2 check boundary: restore, build, typecheck and test, each with its network state; the toolchain file gets four names"
+dependsOn:
+  - s2-detection

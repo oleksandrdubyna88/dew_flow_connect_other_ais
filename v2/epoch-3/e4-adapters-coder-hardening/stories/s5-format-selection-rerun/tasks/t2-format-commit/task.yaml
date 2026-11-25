@@ -1,0 +1,18 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t2-format-commit
+title: "The format commit: `style: format (coai)`, made by coai through the one commit road, after the turn's commit"
+kind: security
+complexity: 4
+dependsOn:
+  - t1-format-step
+parallel: false
+security: true
+files:
+  - src_mcp/src/Server/RoleJobs/CoderCommits.cs
+  - src_mcp/src/Server/RoleJobs/CoderFormat.cs
+  - src_mcp/tests/AFormatCommitTests.cs
+dod:
+  - id: d1
+    item: "F1: when the format step changed given files only, coai commits them as `style: format (coai)` through CoderCommits: the .git pointer is compared and the search that E2 s7 runs before the commit of a turn on a pool key runs for this commit too; no change means no commit"
+  - id: d2
+    item: "the commit holds only files that were given to the formatter (a test reads `git show --name-only`); a second format run on that commit changes nothing; the function returns the new head, or the turn's head when there was no commit, and nothing else moves HEAD"

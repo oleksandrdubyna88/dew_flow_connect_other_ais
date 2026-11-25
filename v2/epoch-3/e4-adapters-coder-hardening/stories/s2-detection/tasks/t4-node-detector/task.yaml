@@ -1,0 +1,20 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t4-node-detector
+title: "The Node detector: projects from package.json, npm from the lock file, the steps from the scripts, the runner and the prettier evidence; other package managers are refused by name"
+kind: code
+complexity: 5
+dependsOn:
+  - t2-manifests-at-a-commit
+parallel: false
+files:
+  - src_mcp/core/Toolchain/NodeDetector.cs
+  - src_mcp/tests/ANodeDetectorTests.cs
+dod:
+  - id: d1
+    item: "pure: each package.json is a project; a root with `workspaces` is ONE project and its members are not projects; the JSON is read with a depth limit of 32, and a text that is not JSON is a refusal that names the file"
+  - id: d2
+    item: "package-lock.json or npm-shrinkwrap.json beside it means npm; pnpm-lock.yaml, yarn.lock, bun.lock and bun.lockb are a refusal that names the package manager and the cure; two lock files and no lock file are refusals"
+  - id: d3
+    item: "the steps come from facts only: restore always; build when `scripts.build` is there; typecheck when `scripts.typecheck` is there, else when tsconfig.json and the typescript package are both there; test when `scripts.test` is there and is not npm's placeholder; the runner fact (jest, vitest, node-test or unknown) needs BOTH the package and the word in `scripts.test`; no argv item is copied from the manifest"
+  - id: d4
+    item: "prettier is the formatter only when it is a devDependency AND has a configuration (a .prettierrc file, a prettier.config file or the `prettier` member); a project with no build, typecheck and test step gives no step and is listed as unchecked"

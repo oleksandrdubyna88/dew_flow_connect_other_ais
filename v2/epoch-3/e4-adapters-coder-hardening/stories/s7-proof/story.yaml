@@ -1,0 +1,5 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: s7-proof
+title: "Proof: the one-shot that shows a repository's checks, the epic acceptance on the real binary with FakeCli, one paid run on a repository with no toolchain file, the documents"
+dependsOn:
+  - s6-fix-loop-hardening

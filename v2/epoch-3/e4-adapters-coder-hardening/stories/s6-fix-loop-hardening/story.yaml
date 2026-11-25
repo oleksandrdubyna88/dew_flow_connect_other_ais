@@ -1,0 +1,6 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: s6-fix-loop-hardening
+title: "The fix loop: the order of a turn with the format commit, the no-progress stop, the caps and one wall clock, for claude and for every vendor whose coder ships"
+dependsOn:
+  - s5-format-selection-rerun
+  - e3-roles-complete/s8-proof

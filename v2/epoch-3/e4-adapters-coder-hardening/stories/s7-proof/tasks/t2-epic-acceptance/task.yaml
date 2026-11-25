@@ -1,0 +1,18 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t2-epic-acceptance
+title: "Epic acceptance on the real binary over stdio with FakeCli: a repository with no toolchain file to green, the boundary, the inherited plan, a client restart"
+kind: test
+complexity: 6
+dependsOn:
+  - t1-validate-toolchain-mode
+parallel: false
+files:
+  - src_mcp/tests/TheAdaptersEpicAcceptanceTests.cs
+  - src_mcp/tests_fakecli/HardeningVerbs.cs
+dod:
+  - id: d1
+    item: "one test on a real coai-mcp with the detached runner: start_role(coder) on a node fixture repository with NO .coai/toolchain.yaml: red in the selected run, one fix turn in the session of turn 0, a format commit, the selected run green, the full run green; the envelope says the source `detected`"
+  - id: d2
+    item: "the same binary on a dotnet fixture repository with a file runs the file's steps and detection decides nothing; a repository with a Cargo.toml and no file ends failed with the stop toolchain-refused and zero steps; a repository with no manifest ends with not-configured"
+  - id: d3
+    item: "the MCP client is killed while the full run is going: a new client reads the same job to its end, green, with the generation unchanged and no lost notice; review_code on coder/<jobId> is accepted through the plan the branch inherits (E2 s5); nothing outside the worktree changed, and every step record names the unit boundary"

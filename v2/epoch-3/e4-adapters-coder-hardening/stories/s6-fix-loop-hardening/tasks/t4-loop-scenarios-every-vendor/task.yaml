@@ -1,0 +1,19 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t4-loop-scenarios-every-vendor
+title: "Loop scenarios with FakeCli, for claude and for every vendor the table ships: the cap, no-progress, a turn that changes nothing, a flaky test, the format commit"
+kind: test
+complexity: 6
+dependsOn:
+  - t3-one-clock-and-caps
+parallel: false
+files:
+  - src_mcp/tests_fakecli/HardeningVerbs.cs
+  - src_mcp/tests_fakecli/Program.cs
+  - src_mcp/tests/TheHardenedFixLoopTests.cs
+dod:
+  - id: d1
+    item: "on a fixture repository with detected checks and real units: always red with a new failure each turn gives exactly COAI_FIX_ROUNDS fix turns and not-green; the same failure gives `no-progress` after 2; a turn that writes nothing gives one repeat and no new round of checks; a test outside the job's files that fails once gives green with `flaky` and one notice; a file the fake wrote badly formatted gives one format commit"
+  - id: d2
+    item: "each scenario runs with the fake as claude and, through the vendor seam of E3 with an injected table, as every vendor the table ships: the recorded argv of a fix turn is that vendor's resume form with the session of turn 0, and a vendor the table refuses has zero launches"
+  - id: d3
+    item: "no scenario starts a real model; each runs with a temporary HOME and data folder, and the stand-in of the real home has the same bytes after the run"

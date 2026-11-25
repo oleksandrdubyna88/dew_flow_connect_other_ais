@@ -1,0 +1,21 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t2-no-progress-stop
+title: "The no-progress stop: the same failure fingerprints after two fix turns in a row, or fix turns that change nothing, end the job with `no-progress`"
+kind: code
+complexity: 6
+dependsOn:
+  - t1-turn-order
+parallel: false
+files:
+  - src_mcp/core/Coder/FixProgress.cs
+  - src_mcp/src/Server/RoleJobs/CoderFixLoop.cs
+  - src_mcp/src/Server/RoleJobs/RoleStops.cs
+  - src_mcp/src/Server/RoleJobs/CoderPrompt.cs
+  - src_mcp/tests/ANoProgressStopsTheLoopTests.cs
+dod:
+  - id: d1
+    item: "L1 and L2: FixProgress is pure: a red round whose fingerprint set equals the set of the red round before it is one repeat, and a different set puts the count back to 0; two repeats in a row end the job with the stop `no-progress` (R0 red F, fix 1, R1 red F, fix 2, R2 red F: stopped after 2 fix turns with a cap of 3); a new failure each turn ends at the cap with not-green"
+  - id: d2
+    item: "L3: a fix turn after which coai has nothing to commit is one repeat and the checks are NOT run again on the same commit; the next fix prompt says that the last turn changed no file"
+  - id: d3
+    item: "L4 and L5: a round of scope selected and a round of scope full are never equal; a model switch puts the count back to 0 and the cap of fix turns stays the job's; a digest that was cut at 40 items is compared by the items it kept; `no-progress`, like not-green, never fails over; the envelope has `noProgress` {repeats, turn} and lastDigest"

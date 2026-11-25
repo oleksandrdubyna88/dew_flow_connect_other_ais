@@ -1,0 +1,4 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: s1-measure-first
+title: "Measure first: the .NET and Node commands, the formatters and a selected test run inside the E2 check unit, on the real tools, with no model call"
+dependsOn: []

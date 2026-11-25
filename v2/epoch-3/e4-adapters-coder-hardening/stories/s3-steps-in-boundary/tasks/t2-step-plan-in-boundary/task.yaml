@@ -1,0 +1,27 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t2-step-plan-in-boundary
+title: "CheckRunner runs the step plan of a resolved toolchain: restore, build, typecheck and test, every one through CheckBoundary for a coder job, with the network state of the table"
+kind: security
+complexity: 6
+dependsOn:
+  - t1-toolchain-file-names
+parallel: false
+security: true
+files:
+  - src_mcp/runners/Toolchain/CheckRunner.cs
+  - src_mcp/runners/Toolchain/CheckBoundary.cs
+  - src_mcp/runners/Toolchain/BoundaryUnit.cs
+  - src_mcp/core/Toolchain/CheckResult.cs
+  - src_mcp/core/Toolchain/StepPlan.cs
+  - src_mcp/tests/AStepPlanRunsInsideTheBoundaryTests.cs
+dod:
+  - id: d1
+    item: "the step names are restore, build, typecheck and test; the order is the projects' order and, in a project, that order; the first step that does not pass ends the run; a plan with no build, typecheck and test step is not_configured; {jobs} and {unit} are replaced and every argv is started with no shell"
+  - id: d2
+    item: "T6: restore runs on the host network; build on the host network for a project of the file and, for a detected project, with the state toolchains.json holds; typecheck and test with only a loopback device; every record holds the state and its reason; a coder job has no road around CheckBoundary: the scan test of E2 finds the new step code and nothing else that starts a process for a coder job"
+  - id: d3
+    item: "T2: the unit's property list and the names of its environment are equal, item for item, to E2's for the same network state (a test compares the lists for a node step and for a dotnet step); the only additions are the adapter switches, a closed table of names with constant values, and no value comes from coai's own environment"
+  - id: d4
+    item: "T3: a detected or defaulted step runs with its project folder as the working folder; the folder goes through the one link resolver and must be the worktree or a real folder inside it, else the step is refused before a unit is described; a step of the file runs from the repository root as before"
+  - id: d5
+    item: "T4: a step whose program is not in the unit (no node, no dotnet) is a failed step whose log names the program, never a skipped one; the existing tests of the check runner and of the check boundary pass unchanged"

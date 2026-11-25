@@ -1,0 +1,21 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t3-dotnet-detector
+title: "The .NET detector: units from solution files and unreferenced project files, the ProjectReference graph, the test projects and their runner; what is ambiguous is refused"
+kind: code
+complexity: 6
+dependsOn:
+  - t2-manifests-at-a-commit
+parallel: false
+files:
+  - src_mcp/core/Toolchain/DotnetDetector.cs
+  - src_mcp/core/Toolchain/ProjectGraph.cs
+  - src_mcp/tests/ADotnetDetectorTests.cs
+dod:
+  - id: d1
+    item: "pure, from a manifest set: a folder with one solution file is one unit and owns every project file below it; a project file outside every unit that no other project file references is a unit of its own; two solution files in one folder and a solution inside another unit's folder are refusals that name both"
+  - id: d2
+    item: "project files are read as XML with DTD processing prohibited and no resolver (a test plants an external entity and sees that no file is read and no address is asked for); a ProjectReference that leaves the repository is a note and is never read"
+  - id: d3
+    item: "the test projects and their runner are read by the facts s1 t1 measured (the package names, the two MTP properties, the runner of global.json); the steps are the default argv of toolchains.json with {unit} replaced; a unit whose test projects have two runners, or that needs a runner setting the repository does not have, is a refusal that names the cure: the test command in .coai/toolchain.yaml"
+  - id: d4
+    item: "a unit with no test project has no test step and its answer says `tests: none`; more than 20 units is a refusal"

@@ -1,0 +1,19 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t3-node-test-readers
+title: "Readers for the consoles of jest, vitest and node:test, on the recordings of s1"
+kind: code
+complexity: 6
+dependsOn: []
+parallel: false
+files:
+  - src_mcp/core/Toolchain/JestFailures.cs
+  - src_mcp/core/Toolchain/VitestFailures.cs
+  - src_mcp/core/Toolchain/NodeTestFailures.cs
+  - src_mcp/tests/ANodeTestDigestTests.cs
+dod:
+  - id: d1
+    item: "R1: the recorded jest console (one passed, two failed) gives two items with the name of the test, the test file, the line of the first frame inside the project and the assertion message; the same for the recorded vitest console and for the recorded node:test output"
+  - id: d2
+    item: "R2: each reader needs a marker line of its own tool before it reads anything, so the output of one tool gives no item in another tool's reader (a test runs every fixture through every reader)"
+  - id: d3
+    item: "the readers are pure and bounded as the readers of t1, and R3 holds for each"

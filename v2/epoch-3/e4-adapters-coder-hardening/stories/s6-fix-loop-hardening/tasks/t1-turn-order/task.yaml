@@ -1,0 +1,19 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t1-turn-order
+title: "The order of a turn in the loop: the turn's commit, restore, format, the format commit, then the checks of the head coai made"
+kind: code
+complexity: 5
+dependsOn: []
+parallel: false
+files:
+  - src_mcp/src/Server/RoleJobs/CoderFixLoop.cs
+  - src_mcp/src/Server/RoleJobs/CoderChecks.cs
+  - src_mcp/src/Server/RoleJobs/CoderChecksReport.cs
+  - src_mcp/tests/ATurnHasItsFormatCommitTests.cs
+dod:
+  - id: d1
+    item: "after turn 0 and after every fix turn the branch has the turn's commit and, when the formatter changed something, one `style: format (coai)` commit after it; the restore step runs once in a round, before the format step; the build, the typecheck and the test run on the last commit, and the envelope's headSha and filesChanged are of that head"
+  - id: d2
+    item: "F6: the generation is compared before the format commit as before any commit, and a stale runner writes neither; a model switch puts the worktree back to the last commit coai made, the format commit included"
+  - id: d3
+    item: "the envelope's `format` is, per round, {state: formatted | unchanged | not_configured | failed | refused | too-many-files, files, commit, note}; the heartbeat phase is `format` while the formatter runs"

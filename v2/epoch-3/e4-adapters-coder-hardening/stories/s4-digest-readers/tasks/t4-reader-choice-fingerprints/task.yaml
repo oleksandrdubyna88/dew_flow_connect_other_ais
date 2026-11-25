@@ -1,0 +1,22 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t4-reader-choice-fingerprints
+title: "The choice of a reader by adapter, step and runner fact with the raw tail as the last one; a fingerprint on every item; the scan that keeps the recordings clean"
+kind: code
+complexity: 5
+dependsOn:
+  - t1-dotnet-test-readers
+  - t2-node-build-readers
+  - t3-node-test-readers
+parallel: false
+files:
+  - src_mcp/core/Toolchain/FailureDigest.cs
+  - src_mcp/core/Toolchain/DigestFingerprint.cs
+  - src_mcp/tests/AFailureDigestTests.cs
+  - src_mcp/tests/ARecordedOutputIsCleanTests.cs
+dod:
+  - id: d1
+    item: "the reader is chosen by adapter, step name and runner fact; for a step of the file (no runner fact) the adapter's readers are tried in one fixed order and the first that gives an item wins; no item from any reader gives the raw tail of E2, so a digest is never empty; the 40 items and 16 KB of E2 hold for every reader, and the existing digest tests pass unchanged"
+  - id: d2
+    item: "R4: every item has a fingerprint: SHA-256 over the step, the file, the code and the message with digit runs and white space made equal; the line number is not in it; two recordings of one failure, before and after a line was added above it, give the same fingerprint"
+  - id: d3
+    item: "R5: a scan test over fixtures/toolchain fails when a recording holds a home folder path, the user name of the box that recorded it, or a line the Redaction pass would change; a companion proves that the scan finds a planted line of each kind"

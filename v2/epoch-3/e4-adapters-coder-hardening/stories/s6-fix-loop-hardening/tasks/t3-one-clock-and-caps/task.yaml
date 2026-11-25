@@ -1,0 +1,21 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t3-one-clock-and-caps
+title: "One wall clock: the job's timeoutMinutes, 45 by default for a coder; a fix turn that could not be checked in the time left is not begun"
+kind: code
+complexity: 4
+dependsOn:
+  - t2-no-progress-stop
+parallel: false
+files:
+  - src_mcp/src/Server/RoleJobs/RoleJobModels.cs
+  - src_mcp/src/Server/RoleJobs/RoleJobService.cs
+  - src_mcp/src/Server/RoleJobs/CoderFixLoop.cs
+  - src_mcp/src/Tools.cs
+  - src_mcp/tests/ACoderJobHasOneClockTests.cs
+dod:
+  - id: d1
+    item: "start_role with the role coder and no timeoutMinutes gets 45; every other role keeps 30; a given value is used as given; the tool text and the refusal sentence name the two defaults; there is no second timer and no constant of 45 minutes anywhere else (a scan with a companion)"
+  - id: d2
+    item: "before a fix turn the loop compares the time left with the duration of the last round of checks: with less left the job ends `timeout` at once, no model is started, and the sentence says both numbers"
+  - id: d3
+    item: "the envelope has `caps` {fixRounds, timeoutMinutes, noProgressRepeats, flakyReruns} with the value each one had for this job and, for a setting that was not usable, its note"
