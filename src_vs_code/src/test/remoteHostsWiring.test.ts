@@ -111,6 +111,10 @@ test('A1-T14: every word W1 to W13 equals the text of the spec', () => {
     assert.equal(HOSTS_SAID.unkeptHost('h', key, 'Linux'), `Your “Not this host” for “h” is not saved yet (${phrase}). No window of this side (Linux) reads a host over ssh until it is. Each window tries again by itself.`);
     assert.equal(HOSTS_SAID.unkeptStop(key, 'Linux'), `The stop of the accounts round is not saved yet (${phrase}). No window of this side (Linux) reads a host over ssh until it is. Each window tries again by itself.`);
   }
+  // T1: with no marker the notice must not say that every window of the side is stopped
+  assert.equal(HOSTS_SAID.unkeptHost('h', 'disk', 'Linux', false), 'Your “Not this host” for “h” is not saved yet (the disk refused the write). This window reads no host over ssh until it is. Each window tries again by itself.');
+  assert.equal(HOSTS_SAID.unkeptStop('disk', 'Linux', false), 'The stop of the accounts round is not saved yet (the disk refused the write). This window reads no host over ssh until it is. Each window tries again by itself.');
+  assert.ok(!HOSTS_SAID.unkeptHost('h', 'disk', 'Linux', false).includes('No window of this side'));
   assert.equal(HOSTS_SAID.cureMarked, '“Save now” writes it at once, also when another window holds the file and does not finish. If it still cannot be saved, check that the extension’s storage folder can be written.');
   assert.equal(HOSTS_SAID.cureUnmarked, 'Only THIS window knows your answer: the disk refused the note that tells the other windows. Keep this window open, and check that the extension’s storage folder can be written. Other windows of this side may still read hosts.');
   assert.equal(HOSTS_SAID.cureTorn, 'A note that could not be read was removed. It may have held a “Not this host” or a stop, so the accounts round is now stopped: look through CoAI: hosts read over ssh, then start the round.');

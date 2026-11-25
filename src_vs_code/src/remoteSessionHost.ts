@@ -368,7 +368,7 @@ function keeperOf(context: vscode.ExtensionContext, folder: string, changed: () 
     changed,
     unkept: (host, why, marked) => {
       const live = keeperRef.current as HostKeeper;
-      const title = host === undefined ? HOSTS_SAID.unkeptStop(why, sideLabel()) : HOSTS_SAID.unkeptHost(host, why as UnkeptWhy, sideLabel());
+      const title = host === undefined ? HOSTS_SAID.unkeptStop(why, sideLabel(), marked) : HOSTS_SAID.unkeptHost(host, why as UnkeptWhy, sideLabel(), marked);
       raiseUnkept(live, host ?? 'accounts-round', title, marked ? HOSTS_SAID.cureMarked : HOSTS_SAID.cureUnmarked, (result) => afterPress(live, result));
     },
   });

@@ -38,6 +38,10 @@ const forgetSaid = (allowNew: boolean): string => (allowNew
 const sideSaid = (side: string): string =>
   `A “Not this host” is kept on the side of this machine where you gave it — ${side}. “Read” or “Forget” in any window of that side lifts it. If the host is still not read a moment later, another window had not caught up yet: choose it once more. On another side (Windows, a WSL distro, a remote machine) choose it there.`;
 
+/** The second sentence of W9's titles: every window of the side when a marker tells them, only this window when none could be made. */
+const reach = (marked: boolean, side: string): string =>
+  (marked ? `No window of this side (${side}) reads a host over ssh until it is.` : 'This window reads no host over ssh until it is.');
+
 export const HOSTS_SAID = {
   /** W1: the title of the question and of the change question. */
   title: (host: string): string => `Read the Claude session and the AI accounts on “${host}” over ssh?`,
@@ -79,10 +83,10 @@ export const HOSTS_SAID = {
   damagedFile: (side: string, kept: number): string =>
     `The file of hosts you refused on this side (${side}) cannot be read, so no host is read from this side until it is repaired. ${kept} “Not this host” can still be read and are kept. A “Not this host” that was kept only in the file may be lost, and so may a stop of the accounts round. Your answer here writes the file again, with the accounts round STOPPED: look through CoAI: hosts read over ssh, then start the round from the list of AI accounts.`,
   /** W9: a refusal or a Stop that the file did not take. */
-  unkeptHost: (host: string, why: UnkeptWhy, side: string): string =>
-    `Your “Not this host” for “${host}” is not saved yet (${WHY[why]}). No window of this side (${side}) reads a host over ssh until it is. Each window tries again by itself.`,
-  unkeptStop: (why: UnkeptWhy, side: string): string =>
-    `The stop of the accounts round is not saved yet (${WHY[why]}). No window of this side (${side}) reads a host over ssh until it is. Each window tries again by itself.`,
+  unkeptHost: (host: string, why: UnkeptWhy, side: string, marked = true): string =>
+    `Your “Not this host” for “${host}” is not saved yet (${WHY[why]}). ${reach(marked, side)} Each window tries again by itself.`,
+  unkeptStop: (why: UnkeptWhy, side: string, marked = true): string =>
+    `The stop of the accounts round is not saved yet (${WHY[why]}). ${reach(marked, side)} Each window tries again by itself.`,
   cureMarked: '“Save now” writes it at once, also when another window holds the file and does not finish. If it still cannot be saved, check that the extension’s storage folder can be written.',
   cureUnmarked: 'Only THIS window knows your answer: the disk refused the note that tells the other windows. Keep this window open, and check that the extension’s storage folder can be written. Other windows of this side may still read hosts.',
   cureTorn: 'A note that could not be read was removed. It may have held a “Not this host” or a stop, so the accounts round is now stopped: look through CoAI: hosts read over ssh, then start the round.',
