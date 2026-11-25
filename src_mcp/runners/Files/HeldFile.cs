@@ -30,7 +30,7 @@ namespace CoaiMcp.Runners.Files;
 /// while the hold is open inherits it, redirected or not — which is also why no TEST ever holds one in the test host (S2.43 holds it
 /// in a child). <see cref="FileShare.Inheritable"/> is not a share mode but the <c>bInheritHandle</c> of the handle's security
 /// attributes, so the open stays exclusive.</para>
-/// <para><b>On Linux the inheritable take is native</b> (<see cref="LinuxHeldFile"/>): <c>open</c> without <c>O_CLOEXEC</c> and <c>flock(LOCK_EX|LOCK_NB)</c>, because .NET's combined share mode was measured to take a
+/// <para><b>On Linux the inheritable take is native</b> (<see cref="LinuxHeldFile"/>): <c>open</c> with <c>O_CLOEXEC</c>, <c>flock(LOCK_EX|LOCK_NB)</c> and the flag cleared once the take has succeeded, because .NET's combined share mode was measured to take a
 /// SHARED lock there (L-N1, CI run 38923199105; <c>research/RESULTS_kimi_confinement.md</c> §30) — a second inheritable take succeeded. Every other take, inheritable or not, on any host, is .NET's.</para>
 /// </remarks>
 public static class HeldFile

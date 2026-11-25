@@ -5,7 +5,7 @@ using Microsoft.Win32.SafeHandles;
 namespace CoaiMcp.Runners.Files;
 
 /// <summary>
-/// The INHERITABLE take of a lock file on Linux, native: <c>open</c> without <c>O_CLOEXEC</c>, then <c>flock(LOCK_EX | LOCK_NB)</c> — behind the unchanged <see cref="Hold"/> union (DL8 of
+/// The INHERITABLE take of a lock file on Linux, native: <c>open</c> with <c>O_CLOEXEC</c>, <c>flock(LOCK_EX | LOCK_NB)</c>, and the flag cleared once the take has succeeded — behind the unchanged <see cref="Hold"/> union (DL8 of
 /// <c>research/PLAN_kimi_and_vibe_on_linux.md</c>, A2 §3.4).
 /// </summary>
 /// <remarks>
@@ -35,7 +35,7 @@ internal static partial class LinuxHeldFile
     private const int EISDIR = 21;
     private const int ENAMETOOLONG = 36;
 
-    /// <summary><c>open(path, O_RDWR|O_CREAT|O_NOCTTY, 0600)</c> and <c>flock(LOCK_EX|LOCK_NB)</c>: taken over a stream on the descriptor, <c>Busy</c> on <c>EWOULDBLOCK</c>, otherwise <c>Unusable</c> naming the errno.</summary>
+    /// <summary><c>open(path, O_RDWR|O_CREAT|O_NOCTTY|O_CLOEXEC, 0600)</c>, <c>flock(LOCK_EX|LOCK_NB)</c> and, after the stream is made, <c>fcntl(F_SETFD, 0)</c>: taken over a stream on the descriptor, <c>Busy</c> on <c>EWOULDBLOCK</c>, otherwise <c>Unusable</c> naming the errno.</summary>
     public static Hold TakeInheritable(string path) => TakeInheritable(path, handle => new FileStream(handle, FileAccess.ReadWrite, bufferSize: 0));
 
     /// <summary>The same, with the stream over the descriptor behind a seam — a test makes its construction fail.</summary>
@@ -78,6 +78,13 @@ internal static partial class LinuxHeldFile
             handle.Dispose();
 
             return new Hold.Unusable(e);
+        }
+        catch
+        {
+            // Any other failure of the seam: the descriptor, and its flock, are closed here and not left to the finalizer.
+            handle.Dispose();
+
+            throw;
         }
     }
 
