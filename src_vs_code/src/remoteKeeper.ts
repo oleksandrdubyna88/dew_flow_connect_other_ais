@@ -1,4 +1,4 @@
-import { Admission, Committed, Consent, HOSTS_MAX, HostAnswer, HostChange, HostStanding, Merge, commit, consentOf, hostMerge, readableOf, standingsOf } from './remoteHosts';
+import { Admission, AutomaticAllow, Committed, Consent, HOSTS_MAX, HostAnswer, HostChange, HostStanding, Merge, autoCounts, commit, consentOf, hostMerge, readableOf, standingsOf } from './remoteHosts';
 import type { RefusalChange, RefusalsFile, RefusalsRead, RefusalsStore, Unsure, Waiting } from './remoteRefusals';
 import type { KeyValueStore } from './sideSettings';
 
@@ -23,6 +23,8 @@ export interface KeeperSeams {
   readonly now: () => string;
   /** `coai.terminalAccountsAllowNewHosts`, read afresh at every call. */
   readonly allowNew: () => boolean;
+  /** Whether an automatic "yes" counts at all: the build's constant `AUTOMATIC_ALLOW` unless a test of the module hands one in. */
+  readonly automatic?: AutomaticAllow;
   /** After every commit that wrote. */
   readonly changed: () => void;
   /** The notice of a refusal or Stop the file did not take. `host` `undefined` is the Stop. `marked` false: no marker could be made. */
@@ -360,10 +362,14 @@ class Keeper implements HostKeeper {
     });
   }
 
-  private async decide(read: RefusalsRead, host: string): Promise<Admission> {
-    const consent = consentOf(read, this.stored(), host, this.seams.allowNew());
+  private consentOf(read: RefusalsRead, host: string): Consent {
+    return consentOf(read, this.stored(), host, this.seams.allowNew(), this.seams.automatic);
+  }
 
-    return consent === 'ask' && this.seams.allowNew() ? this.automatic(host) : this.answered(consent, host, false);
+  private async decide(read: RefusalsRead, host: string): Promise<Admission> {
+    const consent = this.consentOf(read, host);
+
+    return consent === 'ask' && autoCounts(this.seams.allowNew(), this.seams.automatic) ? this.automatic(host) : this.answered(consent, host, false);
   }
 
   private howOf = (host: string): 'person' | 'auto' => standingsOf(this.stored()).find((one) => one.host === host)?.how ?? 'person';
@@ -385,14 +391,14 @@ class Keeper implements HostKeeper {
   private async afterAuto(host: string, result: Committed): Promise<Admission> {
     const read = await this.look();
 
-    return this.anyWaiting(read) ? { kind: 'unwritten' } : this.answered(consentOf(read, this.stored(), host, this.seams.allowNew()), host, result.kind === 'written');
+    return this.anyWaiting(read) ? { kind: 'unwritten' } : this.answered(this.consentOf(read, host), host, result.kind === 'written');
   }
 
   consent(host: string): Promise<Consent> {
     return this.queued(async () => {
       const read = await this.sync();
 
-      return this.anyWaiting(read) ? this.waitingConsent(read, host) : consentOf(read, this.stored(), host, this.seams.allowNew());
+      return this.anyWaiting(read) ? this.waitingConsent(read, host) : this.consentOf(read, host);
     });
   }
 

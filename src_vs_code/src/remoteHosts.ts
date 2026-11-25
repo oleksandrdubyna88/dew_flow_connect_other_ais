@@ -121,9 +121,10 @@ function strongest(rows: readonly HostAnswer[], host: string): HostAnswer | unde
 /**
  * Whether this host may be contacted. The ONE function that says so; a host is contacted only on `yes`. `file` is the side as it was
  * just read from the disk. In this order: a refusal in the file or a readable "no" in the list is `no`; a file or a list that cannot
- * be read is `damaged`; a person's "yes" is `yes`; an automatic "yes" is `yes` only when `allowNew`, else `ask`; no row is `ask`.
+ * be read is `damaged`; a person's "yes" is `yes`; an automatic "yes" is `yes` only when `allowNew` AND `automatic` is `on` (the cut: it is
+ * `off` in this build, so the row is `ask`); no row is `ask`.
  */
-export function consentOf(file: SideSeen, value: unknown, host: string, allowNew: boolean): Consent {
+export function consentOf(file: SideSeen, value: unknown, host: string, allowNew: boolean, automatic: AutomaticAllow = AUTOMATIC_ALLOW): Consent {
   const list = hostsOf(value);
   const row = strongest(list.rows, host);
   if (isRefused(file, row, host)) {
@@ -133,15 +134,30 @@ export function consentOf(file: SideSeen, value: unknown, host: string, allowNew
     return 'damaged';
   }
 
-  return row === undefined ? 'ask' : yesOf(row, allowNew);
+  return rowConsent(row, autoCounts(allowNew, automatic));
 }
+
+const rowConsent = (row: HostAnswer | undefined, autoCounts: boolean): Consent => (row === undefined ? 'ask' : yesOf(row, autoCounts));
+
+/** Whether an automatic "yes" is an answer at all. */
+export type AutomaticAllow = 'off' | 'on';
+
+/**
+ * The cut of the accounts plan's stop: the build asks the person as it did before the accounts feature. An automatic "yes" counts as no answer
+ * at every door and the accounts door writes none, whatever `coai.terminalAccountsAllowNewHosts` says (the setting has no effect in this build).
+ * A person's "yes" and every "no" are as they were. A later build sets this to `on` only when the plan says so.
+ */
+export const AUTOMATIC_ALLOW: AutomaticAllow = 'off';
+
+/** Whether the accounts door may write an automatic "yes" now, and whether one counts: the setting AND the build's constant. */
+export const autoCounts = (allowNew: boolean, automatic: AutomaticAllow = AUTOMATIC_ALLOW): boolean => allowNew && automatic === 'on';
 
 const isRefused = (file: SideSeen, row: HostAnswer | undefined, host: string): boolean =>
   row?.answer === 'no' || (file.kind === 'file' && file.file.refused.some((one) => one.host === host));
 
 const cannotRead = (file: SideSeen, list: Hosts): boolean => file.kind === 'damaged' || list.damaged;
 
-const yesOf = (row: HostAnswer, allowNew: boolean): Consent => (row.how === 'auto' && !allowNew ? 'ask' : 'yes');
+const yesOf = (row: HostAnswer, autoCounts: boolean): Consent => (row.how === 'auto' && !autoCounts ? 'ask' : 'yes');
 
 /** Whether the terminal's two overflow items are shown: a host that is not answered "no". Used with a read file. */
 export const refusedBy = (file: SideSeen, value: unknown, host: string): boolean => consentOf(file, value, host, true) === 'no';

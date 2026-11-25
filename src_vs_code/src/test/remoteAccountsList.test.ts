@@ -52,7 +52,7 @@ function callsOver(saved: Committed = { kind: 'written', row: undefined, evicted
 
 // ───────────────── A4-T20: a row that shows W12 saves on a press ─────────────────
 
-const waiting = (): Row => hostRowOf(accountsRows(view({ hosts: ['hW'], memory: new Map<string, HostMemory>([['hW', { admission: 'unwritten' }]]) }), NOW), 'hW');
+const waiting = (): Row => hostRowOf(accountsRows(view({ hosts: ['hW'], memory: new Map<string, HostMemory>([['hW', { admission: 'unwritten' }]]) }), NOW, 'on'), 'hW');
 
 test('A4-T20: choosing a W12 row calls saveWaiting once, and neither the change question nor the shared question', async () => {
   const calls = callsOver();
@@ -72,12 +72,12 @@ test('A4-T20: only a saved answer asks for a round; any other answer leaves the 
 
 test('A4-T8 (press): a host row that is not asked yet opens the shared question, any other host row the change question', async () => {
   const asked = callsOver();
-  await choose(hostRowOf(accountsRows(view({ hosts: ['hA'], allowNew: false }), NOW), 'hA'), asked.seams);
+  await choose(hostRowOf(accountsRows(view({ hosts: ['hA'], allowNew: false }), NOW, 'on'), 'hA'), asked.seams);
   assert.deepEqual(asked.log, ['ask hA']);
 
   const changed = callsOver();
   const standings: readonly HostStanding[] = [{ host: 'hB', answer: 'yes', how: 'person', askedUtc: at(-9) }];
-  await choose(hostRowOf(accountsRows(view({ hosts: ['hB'], standings }), NOW), 'hB'), changed.seams);
+  await choose(hostRowOf(accountsRows(view({ hosts: ['hB'], standings }), NOW, 'on'), 'hB'), changed.seams);
   assert.deepEqual(changed.log, ['change hB']);
 });
 
@@ -110,7 +110,7 @@ function copierOver(): { readonly written: string[]; readonly said: string[]; re
 }
 
 test('A4-T9: the copy button hands the copier exactly the row\'s copy, and a row with none copies nothing', async () => {
-  const withJq = hostRowOf(accountsRows(view({ hosts: ['hJ'], memory: new Map<string, HostMemory>([['hJ', { reading: { read: reading({ jqMissing: 'dnf' }), atMs: NOW } }]]) }), NOW), 'hJ');
+  const withJq = hostRowOf(accountsRows(view({ hosts: ['hJ'], memory: new Map<string, HostMemory>([['hJ', { reading: { read: reading({ jqMissing: 'dnf' }), atMs: NOW } }]]) }), NOW, 'on'), 'hJ');
   const over = copierOver();
   const report = await textCopier(over.ports).copy(() => copyDecisionFor(withJq));
 

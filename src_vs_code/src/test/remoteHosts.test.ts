@@ -45,8 +45,8 @@ test('A1-T2: one function decides, over the stores, the setting and the files', 
     ['a bad entry beside a no', [row('h', 'no'), 'junk'], 'no', 'no'],
   ];
   for (const [name, value, on, off] of stores) {
-    assert.equal(consentOf(noFile, value, 'h', true), on, `${name}, setting on`);
-    assert.equal(consentOf(noFile, value, 'h', false), off, `${name}, setting off`);
+    assert.equal(consentOf(noFile, value, 'h', true, 'on'), on, `${name}, setting on`);
+    assert.equal(consentOf(noFile, value, 'h', false, 'on'), off, `${name}, setting off`);
     assert.equal(consentOf(fileWith('h'), value, 'h', true), 'no', `${name}: a refusal in the file is a no`);
     assert.equal(consentOf(fileWith('h'), value, 'h', false), 'no');
     assert.equal(consentOf(damagedFile, value, 'h', true), name.includes('no') && !name.includes('yes') ? 'no' : 'damaged', `${name}, a damaged file`);

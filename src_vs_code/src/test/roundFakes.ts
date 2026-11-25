@@ -140,7 +140,7 @@ export function world(options: Options = {}): World {
 
 /** A round over a world, with the policy the test gives. */
 export const roundOf = (w: World, memory: Memory = new Map(), round = 0, trigger: Trigger = 'timer', policy: UsagePolicy = EVERY_ROUND): Promise<RoundResult> =>
-  runRound(w.seams, memory, round, trigger, policy);
+  runRound(w.seams, memory, round, trigger, policy, 'on');
 
 /** Each call as `a N` (no usage) or `a U` (usage), so a red shows the order. */
 export const callsOf = (w: World): readonly string[] => w.calls.map((call) => `${call.host} ${call.mode === 'claude-usage' ? 'U' : 'N'}`);
