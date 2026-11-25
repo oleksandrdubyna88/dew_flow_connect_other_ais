@@ -1,10 +1,10 @@
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
-id: t2-read-only-paid-proof
+id: t3-read-only-paid-proof
 title: "Real scout job and real judge job with haiku on a scratch clone: the envelopes, the repair turns, the cost"
 kind: measure
 complexity: 4
 dependsOn:
-  - t1-epic-acceptance
+  - t2-epic-acceptance
 parallel: false
 files:
   - v2/epoch-3/e3-roles-complete/RESULTS_roles_proof.md

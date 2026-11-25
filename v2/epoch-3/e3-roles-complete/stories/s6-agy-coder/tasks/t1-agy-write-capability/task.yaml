@@ -1,6 +1,6 @@
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: t1-agy-write-capability
-title: "AgyWriteCapability: the measured release as the floor and every flag of the measured set declared in the help, else a refusal with the cure"
+title: "AgyWriteCapability: only a measured release of the table and every flag of the measured set declared in the help, else a refusal with the cure"
 kind: security
 complexity: 4
 dependsOn: []
@@ -11,6 +11,6 @@ files:
   - src_mcp/tests/AAgyWriteCapabilityTests.cs
 dod:
   - id: d1
-    item: "V6: an agy below the release the rows were measured on, or whose help does not declare each flag of the measured set, is refused before the launch with the cure and is never started with a weaker set; asked on every launch and never cached"
+    item: "V6: a agy coder is launched only when the installed release is EXACTLY one of the measured releases of shared/coder-boundary-releases.json and its help declares each flag of the measured set; an older release, a newer release and a release the CLI does not name are each refused before the launch, and the cure says to measure and judge that release and then add it to the table (SPEC section C2); asked on every launch, never cached, never started with a weaker set"
   - id: d2
-    item: "the release is in the job envelope; a CLI that cannot be started and a help that does not answer are refusals that say so"
+    item: "the release is in the job envelope; a CLI that cannot be started and a help that does not answer are refusals that say so; a test with the table of this repository proves that a release one patch above and one patch below a measured one is refused"

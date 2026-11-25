@@ -1,8 +1,8 @@
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: t4-agy-preflight-rows
-title: "The preflight rows of an agy coder job: with no model, the guard handler answers a set of payloads and the guard files are the expected bytes"
+title: "The preflight rows of an agy coder job: with no model, inside the exact launch unit, one row for EVERY property of the unit the judgement relies on, the answers of the guard handler and the bytes of the guard files"
 kind: security
-complexity: 4
+complexity: 5
 dependsOn:
   - t3-agy-coder-launch
 parallel: false
@@ -13,6 +13,10 @@ files:
   - src_mcp/tests/AAgyCoderPreflightTests.cs
 dod:
   - id: d1
-    item: "V9: before each agy coder job, inside the exact unit, the handler is given a write inside the worktree (allow), a write outside, a write to .git, a write through a link out, a command tool and an unreadable payload (deny each); the agent file and the hook file are read back; a wrong answer refuses the job before any launch and names the row"
+    item: "V9, the unit: before each agy coder job the preflight runs inside the EXACT launch unit (the same property list the launch gets, a test compares the two) and has one row for every id the table holds for agy: the sign-in files cannot be read from a child command, the main checkout and the worktrees of other jobs are hidden, the network limit holds, no user manager and no D-Bus inside, a Windows .exe does not run, the home is the own home of the job, and each other property the verdict relies on"
   - id: d2
-    item: "each row goes red when its part is dropped through the test seam; V10: no user manager, native Windows and macOS are refused before any process starts"
+    item: "V9, the guard: in the same unit the handler is given a write inside the worktree (allow), a write outside, a write to .git, a write through a link out, a command tool and an unreadable payload (deny each); the agent file and the hook file are read back and are the expected bytes"
+  - id: d3
+    item: "a wrong answer of ANY row refuses the job before any launch and names the row; a test holds the rows and the ids of the table equal (an id with no row and a row with no id both fail); each row goes red when its property or its part of the guard is dropped through the test seam"
+  - id: d4
+    item: "V10: no user manager, native Windows and macOS are refused before any process starts"

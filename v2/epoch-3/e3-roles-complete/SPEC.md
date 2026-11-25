@@ -1,9 +1,9 @@
 # Spec — epoch 3, E3 "Roles complete: scout, important/judge, codex + agy rows, review_plan(featureFolder)"
 
-> Status: **plan only, nothing built, 2026-11-25.** Scope: the server half (`src_mcp`, `shared/`). Written by the planner
+> Status: **plan only, nothing built, 2026-11-25.** Plan gate: `proceed`, 2026-11-25; its 5 accepted findings are section J. Scope: the server half (`src_mcp`, `shared/`). Written by the planner
 > (Fable) from `v2/` and the code at `feat/v2-ep3-e2-coder` `0e8e8941`, read-only. Parent plan: [PLAN.md](../../PLAN.md);
 > architecture: [server.md](../../architecture/server.md) §2, §8, §10, §19, §20, §23. Stories and tasks: the YAML tree under
-> `stories/` (8 stories, 38 tasks, no task above complexity 6). Two cornerstones: **s3** (what a plan round over a folder
+> `stories/` (8 stories, 39 tasks, no task above complexity 6). Two cornerstones: **s3** (what a plan round over a folder
 > approves) and **s4** (the codex and agy write boundary: measure first, then a security judgement).
 
 ## 0. Goal, and what is there today
@@ -32,11 +32,12 @@ What the code has today (checked at `0e8e8941`):
 2. **Evidence is an object `{file, line, text}` and coai checks it.** §19 had strings `file:line`. A string cannot be checked;
    an object with the line's text can.
 3. **`review_plan(featureFolder)` has a scope.** The scope is the node that `workItem` names inside the folder (an epoch, an epic or
-   a story); with no `workItem` it is the whole feature. The approved thing is the scope, not the whole folder (section B).
+   a story); with no `workItem` it is the whole feature. The approved thing is the scope and the context the reviewers read with it, not the whole folder (section B).
 4. **Resume of a codex and an agy coder session is built here.** §23 left it to E4, and E4's `doneWhen` names it too. E3 builds
    it for one task; E4 keeps the hardening (section G).
 5. **A vendor's coder ships only on a judgement verdict.** After s4 a vendor is `ship` or `refuse`. A refused vendor stays refused
    for the coder, as today (section C).
+6. **A codex or agy coder runs only on a release that was measured.** An exact list of releases, not a floor (section C2).
 
 ## A. Scout and judge
 
@@ -79,7 +80,9 @@ error; neither half has a JSON Schema engine, so a test holds each file and its 
 **The evidence check** (`src_mcp/core/Roles/RoleEvidence.cs`, pure; files through `RealPath`, the one road that resolves links). An
 item is `verified` when the file is in the tree the job read and that line holds `text` after white space is collapsed. A path that
 is absolute, has a drive or `..`, runs through a link, or is a credential-shaped file is an ERROR of the answer; the file is not
-opened. A file over 2 MiB or not UTF-8 gives `verified: false`.
+opened. A `text` that is empty or only white space is an ERROR of the answer too. It is decided before any line is read (in the
+reader and again in the check), so such an item can never be verified, also not against a blank line. A file over 2 MiB or not
+UTF-8 gives `verified: false`.
 
 **The envelope** (`result.json`, built by coai, never copied from the model): the answer, with `verified` and `why` on every
 evidence item, `exists` on every file, `counts {facts, evidence, verified, filesMissing}`, `repairTurns` and the HEAD commit of
@@ -99,7 +102,8 @@ not there → repair, then `verified: false` with the count. **S5** a path that 
 error, never opened. **S6** a declared refusal → next model, one line and one notice; list exhausted → `failed`. **S7** the tree
 changes → `tree-changed`, no failover. **S8** the three judge rules. **S9** the judge's route; a named model outside the list.
 **S10** scout and judge on a codex row and an agy row: the read-only argv of each CLI; no path to the coder case of
-`LaunchConfinement`. **S11** an empty brief is refused before any folder.
+`LaunchConfinement`. **S11** an empty brief is refused before any folder. **S12** an evidence text that is empty or only white
+space → error before the line check; never `verified: true`.
 
 ## B. `review_plan(featureFolder)`
 
@@ -115,7 +119,7 @@ changes → `tree-changed`, no failover. **S8** the three judge rules. **S9** th
    ancestors of the scope (`epoch.yaml`, `epic.yaml`, the epic's `spec` file); then each story after the stories it depends on,
    and in a story each task after the tasks it depends on. Ties go by the number in the id. One line (node and title) for each node
    outside the scope that a scope node depends on. The same commit gives the same bytes.
-4. **What the reviewers see.** A heading, then the source line: `(packed by the server from <scope> at commit <sha>, list <id>,
+4. **What the reviewers see.** A heading, then the source line: `(packed by the server from <scope> at commit <sha>, approval <id>,
    N files, M bytes; validate_work: valid, limits <source>)`, then a line **Not sent**: the `architecture` files of
    `feature.yaml` with their sizes, the free `*.md` files beside the nodes, the nodes outside the scope (a count). Then one section
    per file: `## <repository-relative path>` and the file in a fence. The fence is one backtick longer than the longest run in the
@@ -126,20 +130,26 @@ changes → `tree-changed`, no failover. **S8** the three judge rules. **S9** th
    epic: the whole `v2` folder was 149 YAML files and 94 KB.
 6. **The working tree guard.** When HEAD is the round's commit, an edited, staged or untracked plan file under the scope is a
    refusal that names the files. When HEAD is another commit, the note says that the working tree was not compared.
-7. **What is approved.** `PlanSource` gets origin `folder`: `Path` is the scope folder, `Blob` is the **list id** (SHA-256 over
-   `<blob id> <path>` of every packed file of the scope, in pack order), `TextId` is the id of the pack. Not the git tree id: a
-   `RESULTS_*.md` written into the epic folder later must not change what was approved.
+7. **What is approved: everything the reviewers read.** `PlanSource` gets origin `folder`: `Path` is the scope folder, `Blob` is
+   the **approval id**, `TextId` is the id of the pack. The approval id is SHA-256 over these lines, in pack order:
+   - `F <blob id> <path>` for EVERY file whose text is in the pack: the scope files, and the context outside the scope
+     (`feature.yaml`, the plan file, the YAML of the ancestors, a `spec` file);
+   - `D <node> <title>` for every dependency outside the scope, exactly as the pack shows it.
+   It is not the git tree id: a `RESULTS_*.md` written into the epic folder later is not in the pack and does not change it. The
+   files of the line **Not sent** were not reviewed and are not in the id.
 8. **The coder binding** (`CoderPlanBinding`): a job started under a folder round is bound when its task file is inside the scope,
-   its base descends from the round's commit, and the list id at the base equals the approved one. A task outside the scope is
-   refused. A YAML change inside the scope after the approval is refused ("the plan changed").
+   its base descends from the round's commit, and the approval id computed at the base equals the approved one. A task outside the
+   scope is refused. After the approval a change of a scope file, of `feature.yaml`, of the plan file, of an ancestor's YAML, or of
+   the id or title of an outside dependency refuses a coder start. The sentence names the first path or node that differs: coai
+   builds the list at the round's commit and at the base and compares them. The cure is a new plan round.
 9. **Old readers.** `folder` is a new value of a stored field. The previous release reads it as "no source" and no error
-   (`PlanSource.IsWellFormed` and the extension's `reviewedFrom` rule). This is measured, not assumed (s3 t4 d3).
+   (`PlanSource.IsWellFormed` and the extension's `reviewedFrom` rule). This is measured, not assumed (s3 t4 d5).
 
 Scenarios: **P1** valid → reviewers, the pack in order, the same bytes twice. **P2** invalid → refused, zero launches, no round
 row. **P3** two inputs at once; `expectedCommit` not the tip. **P4** the working tree guard. **P5** a pack over 256 KiB. **P6**
 scope by `workItem`; a `workItem` that names no node of the folder. **P7** order vectors (ties, a story that depends on a story of
-another epic, a dependency outside the scope). **P8** a link, a submodule. **P9** the binding (inside, outside, changed, a new
-RESULTS file). **P10** the old reader. **P11** a slow git inside the 45 s deadline of `PlanInputs`. **P12** a device cap of 3 with
+another epic, a dependency outside the scope). **P8** a link, a submodule. **P9** the binding: a task inside and outside the scope; a changed scope file; changed context (`feature.yaml`, the plan file, an
+ancestor, the title of an outside dependency); a new RESULTS file and a node nobody in the scope depends on do not break it. **P10** the old reader. **P11** a slow git inside the 45 s deadline of `PlanInputs`. **P12** a device cap of 3 with
 4 epics → refused, source `device`.
 
 ## C. The codex and agy coder
@@ -177,13 +187,25 @@ own sandbox, seen working INSIDE the unit. The unit of E2 binds the main checkou
 
 ### C2. How the role refuses
 
-1. **Build:** one table, `CoderVendors.Shipped` (`src_mcp/runners/Consultation/`). A vendor is in it only when the judgement file
-   says `ship`. Today: claude. A vendor not in it is dropped from a coder route with a sentence; a model the caller named on it is
-   refused (the rule of `CoderRoute.Narrow`).
-2. **Launch:** a write capability per vendor, the twin of `ClaudeWriteCapability` (`ClaudeWriteCapability.cs:23`): the release is at
-   or above the one the rows were measured on, and the help declares every flag of the measured set. Else refused with the cure.
-3. **Job:** the preflight with no model, in the exact unit, with the vendor's rows. A wrong answer ends `coder-boundary` before any
-   launch.
+1. **Build:** one table, `shared/coder-boundary-releases.json`, read by `CoderVendors` (`src_mcp/runners/Consultation/`). Per
+   vendor it holds the verdict (`ship` or `refuse`), the measured releases, and the ids of the properties the verdict relies on.
+   It is filled only from the judgement file. A vendor with `refuse`, or with no release, is dropped from a coder route with a
+   sentence; a model the caller named on it is refused (the rule of `CoderRoute.Narrow`).
+2. **Launch: only a measured release.** A codex or agy coder starts only when the installed release is EXACTLY one of the releases
+   of the table, and the help declares every flag of the measured set. An older release, a newer release and a release the CLI
+   does not name are each refused before the launch. There is no floor and no range in E3: a release between two measured ones was
+   not measured. (claude keeps the floor of E2, `ClaudeWriteCapability.cs:23`; E3 does not change it.)
+3. **Job: every property the verdict relies on is probed.** The preflight runs with no model, inside the EXACT launch unit, before
+   each job. It has one row for each id of the table: what is hidden from a child command, the sign-in files, the network limit,
+   no user manager inside, the vendor's own sandbox or guard where the verdict relies on it. A wrong answer ends `coder-boundary`
+   before any launch and names the row. A test holds the rows and the ids of the table equal, and each row goes red when its
+   property is dropped.
+
+**How the list of releases is updated.** (1) Run the row measure of s4 on the new release: the same rows B1 to B15, fresh and
+resumed, the same canaries; the results go under a heading with the release in the vendor's results file. (2) The important model
+writes a judgement for that release (a new section of the judgement file). (3) ONE commit adds the release to the table with the
+two headings. A test reads the repository and fails for an entry whose results heading or judgement verdict is not there. Until
+then the vendor's coder is refused on that release with this cure, and the route goes on to the next vendor.
 
 No setting makes a weaker launch. No `cwd-only` mode. Native Windows and macOS stay refused.
 
@@ -228,12 +250,28 @@ written down (tokens where the CLI names no cost).
 Before any argv is frozen and before any code of s5 or s6: the important model (the `important` list), read-only, reads the two
 results files and the claude files. It writes `v2/spikes/RESULTS_codex_agy_write_boundary_judgement.md`: per vendor `ship` or
 `refuse`, for each row B1 to B15 which layer holds it, and a must-change list. The task files of s5 and s6 are changed from that
-list in the same commit (E2 did this for s2). For a refused vendor: its story is not built, and the epic's `doneWhen` line 2 goes to
-the owner before any code (it is a plan change).
+list in the same commit (E2 did this for s2). The judgement also lists, with ids, every property each verdict relies on (C2).
+
+**A refused vendor never blocks the other one.** The stories are split for this: s7 (the seam, the table, the fix loop through
+the seam, the rows) depends only on s4 and is built in every case. s5 (codex) and s6 (agy) each depend on s4 and s7, never on each
+other. The judgement commit applies its own verdicts:
+
+| codex | agy | s5 | s6 | Failover test of s8 t1 | Acceptance and paid proof | `doneWhen` line 2 |
+|---|---|---|---|---|---|---|
+| ship | ship | built | built | claude → codex → agy | both vendors resumed | met |
+| ship | refuse | built | folder removed | claude → codex | codex resumed; a start on agy is refused | the owner narrows it to codex |
+| refuse | ship | folder removed | built | claude → agy | agy resumed; a start on codex is refused | the owner narrows it to agy |
+| refuse | refuse | folder removed | folder removed | claude models only | a start on each is refused; no paid coder run | not met; the owner decides |
+
+"Folder removed" means: the judgement commit deletes the story folder of the refused vendor and its entry in the `dependsOn` of
+s8, and writes the reason in the judgement file. `validate_work` accepts the folder after that commit, and no story waits for one
+that is not built. The plan changed, so the epic gets a new plan round. A refused vendor is never a required launch: the route
+drops it, the tests of s7 and s8 run all four combinations with an injected table, and in every one the fake CLI records zero
+launches of a refused vendor.
 
 ### C6. The launch and the resume (the shape; the argv is frozen by s4)
 
-- One seam per vendor (`CoderVendors`): the capability probe, the fresh and the resumed argv, the home layout, the sign-in bind or
+- One seam per vendor (`CoderVendors`, story s7): the capability probe, the fresh and the resumed argv, the home layout, the sign-in bind or
   the variable name, the program's real path. The claude argv and the claude unit stay byte for byte.
 - codex: turn 0 is `codex exec` with the measured set, cwd = the worktree, `CODEX_HOME` inside the job's coder home. A fix turn is
   `codex exec resume <thread of turn 0>` with the limit as a `-c` override, from the same folder, with the same home.
@@ -248,12 +286,12 @@ the owner before any code (it is a plan change).
 - The fix loop, the commits, the checks and their boundary do not change (`CoderFixLoop`, `CheckBoundary`).
 
 Scenarios: **V1** codex fresh argv = the measured set. **V2** codex fix turn = `exec resume` with the thread of turn 0. **V3**, **V4**
-the same for agy. **V5** a handle of another job, worktree or vendor. **V6** a CLI below the measured release, or a flag not in
+the same for agy. **V5** a handle of another job, worktree or vendor. **V6** a release that is not in the table (older, newer, not named), or a flag not in
 its help. **V7** the fake as coder inside the real unit: a write to the main checkout, beside the worktree, to `.git`, to the home
 → stopped, `coder-boundary`, never green. **V8** a child command cannot read what is hidden, cannot start a unit, cannot run an
-`.exe`; a control unit shows the reads work without the additions. **V9** each preflight row goes red when its property is dropped.
-**V10** no user manager, native Windows, macOS → refused. **V11** a vendor that is not shipped. **V12** failover claude → codex →
-agy. **V13** a lost session. **V14** the environment and no secret in an argv. **V15** the agy write guard. **V16** agy usage per
+`.exe`; a control unit shows the reads work without the additions. **V9** one preflight row for every id of the table; each goes red when its property is dropped.
+**V10** no user manager, native Windows, macOS → refused. **V11** a vendor that is not shipped. **V12** failover in each of the four combinations of C5; zero launches of a refused
+vendor. **V13** a lost session. **V14** the environment and no secret in an argv. **V15** the agy write guard. **V16** agy usage per
 turn.
 
 ## D. Rows and the failover order
@@ -309,19 +347,20 @@ Every switch is one log line and one `role-model-switched` notice that names the
 
 | Item | Built by | E3's part |
 |---|---|---|
-| Resume of a codex and an agy coder session, for one task | **E3** (s5, s6) | E4's `doneWhen` "same session resumed (claude, codex, agy)" becomes: caps, no-progress stop and flaky re-run hold for all three |
+| Resume of a codex and an agy coder session, for one task | **E3** (s5, s6) | E4's `doneWhen` line now says so: the resume is from E2 (claude) and E3 (codex, agy); E4 keeps the caps, the no-progress stop and the flaky re-run for every shipped vendor |
 | The formatter turn, test selection, flaky re-run, the stop on a repeated failure | E4 | none |
 | Detection, default argv, parsers of other stacks | E4 | none |
 | Parallel tasks, slots, merges, a `review_code` started by coai | E5 | none |
-| The claude key pool | E2 s7 (branch `feat/v2-ep3-e2-s7-keypool`) | s5 starts after that branch is merged: both change `CoderHandle`, `CoderUnit`, `CoderLaunches` and `RoleFailover` |
-| A status that coai writes into `task.yaml` | E5 / epoch 4 E5 | it would change the list id of an approved scope; that epic decides how |
+| The claude key pool | E2 s7 (branch `feat/v2-ep3-e2-s7-keypool`) | s7 starts after that branch is merged: both change `CoderHandle`, `CoderUnit`, `CoderLaunches` and `RoleFailover` |
+| A status that coai writes into `task.yaml` | E5 / epoch 4 E5 | it would change the approval id of a scope; that epic decides how |
 
 Also not in E3: a pool of codex or agy credentials; `cons`, `consask` and reviewers on the pool; a coder on native Windows or macOS;
 `review_feature(featureFolder)` (server.md §8 names it; no epic's `doneWhen` holds it); a document written by the judge; attachments;
 the extension showing a `folder` source (extension half).
 
-Order inside the epic: s1 → s2; s3 alone; s4 → s5 → s6 → s7; s8 last. s3 and s4 can start at once. The codex and agy stories need
-E2's coder: `epic.yaml` names only E1 in `dependsOn`, and this plan did not change that file (section H, question 4).
+Order inside the epic: s1 → s2; s3 alone; s4 → s7 → s5 and s6 (side by side, neither needs the other); s8 last. s3 and s4 can
+start at once. The story numbers are not the order: s7 comes before s5 and s6. The codex and agy stories need E2's coder, and
+`epic.yaml` of E3 now names `e2-coder-one-task` in `dependsOn`.
 
 ## H. Risks, and what only the owner can answer
 
@@ -334,16 +373,21 @@ Risks:
 4. A role job has no spend cap of its own. The paid tasks state a cap and stop from the ledger.
 5. A plan valid on one device can be invalid on another (limits are per device); the refusal names the source.
 6. The fable judge is the most costly model. The proof runs the judge on haiku through a scratch `important` list.
+7. An update of the codex or agy CLI refuses that vendor's coder until the new release is measured and judged (C2). This is the
+   cost of "only a measured release"; the route goes on to the next vendor.
+8. A change of `feature.yaml` or of the plan file after an approval refuses every coder start under that approval (B7). The cure
+   is a new plan round.
 
 Questions for the owner:
 
 1. **The credential for the codex and agy measures and coder jobs.** A copy of the person's sign-in file in a scratch home (risk 2),
    or a separate API credential with a spend limit? Without an answer s4 t2 to t5 do not start.
-2. **A refused vendor.** If the judgement says `refuse` for codex or agy, is line 2 of `doneWhen` narrowed for that vendor?
+2. **A refused vendor.** The table of C5 says what the plan does in each case. The owner decides line 2 of `doneWhen` when a
+   vendor is refused.
 3. **The lists of section D**: the scout and coder failover entries, and which measured model takes which role when codex or agy
    is the main AI.
-4. **`epic.yaml`**: add `e2-coder-one-task` to `dependsOn` of E3, and reword E4's resume line (section G)? Both are changes of the
-   parent plan.
+4. **The parent plan** was corrected with the gate findings (section J): E3 depends on E2, E4's resume line, two cornerstones in
+   `feature.yaml`. Not changed: `PLAN.md` still says "10 cornerstone stories"; the list now has 12.
 5. **Paid caps**: 44 small calls in s4 (22 per vendor), 0.10 USD for the scout and judge proof, 0.50 USD for the coder proof. agy
    draws on a quota that is not unlimited.
 
@@ -352,7 +396,7 @@ Questions for the owner:
 Build order: the story order of section G; in a story the `dependsOn` of its tasks. Measure tasks come before the code that
 depends on them, and the judgement comes before any codex or agy launch code.
 
-Test plan: every scenario S1 to S11, P1 to P12 and V1 to V16 has a test that carries its number in its name, or the task result says
+Test plan: every scenario S1 to S12, P1 to P12 and V1 to V16 has a test that carries its number in its name, or the task result says
 which test covers it. FakeCli is the only double; the units, git, the detached runner and stdio are real. Structural scans have a
 companion that proves they match something. The whole MCP suite runs through the MTP executable, never `dotnet test`.
 
@@ -360,11 +404,31 @@ Definition of Done:
 
 - [ ] `start_role` runs `scout` and `judge`; each envelope is strict JSON built by coai, with checked evidence.
 - [ ] `review_plan(featureFolder)` refuses an invalid folder before any round and packs a valid one in topological order; a coder
-      job is bound to the approved scope.
-- [ ] For each vendor the judgement shipped: a coder job fixes a red check in the SAME session of turn 0, inside a boundary whose
-      rows B1 to B15 were measured. For a vendor it refused: the refusal is in the product and in the results, and the owner
+      job is bound to the approved scope and to the context the reviewers read.
+- [ ] For each vendor the judgement shipped: a coder job fixes a red check in the SAME session of turn 0, on a measured release,
+      inside a boundary whose rows B1 to B15 were measured and whose relied-on properties the preflight probes before each job. For a vendor it refused: the refusal is in the product and in the results, and the owner
       decided line 2.
 - [ ] The codex and agy rows of `shared/role-defaults.json` hold measured names only.
 - [ ] The epic acceptance passes on the real binary; the paid proofs are inside their caps and written down.
 - [ ] `validate_work` accepts the `v2` folder; `plan-lifecycle.mjs` is clean; ARCHITECTURE.md, README.md and server.md say what was
       built and what was not.
+
+## J. Epic plan gate (proceed, 2026-11-25) — accepted changes
+
+The gate read `EPIC_BUNDLE.md` at `db3a0d8e`. All 5 findings were accepted.
+
+1. **Only measured releases for the codex and agy boundary** (s5 t1, s6 t1, s7 t1). The write capability accepts an exact list of
+   measured releases, not a floor. Section C2 says how a release is added: measure, judgement, one commit, a test that holds the
+   table to its evidence.
+2. **The preflight probes every property the verdict relies on** (s5 t3, s6 t4, s4 t6). The judgement lists the properties with
+   ids; the preflight has one row per id inside the exact launch unit before each job; a wrong answer refuses the job. For agy this
+   is more than the answers of the hook: the sign-in files, what is hidden, the network limit.
+3. **The approval covers the reviewed context outside the scope** (s3 t4; B7, B8). The approval id holds every packed file and
+   every outside-dependency line. A changed ancestor, plan file, `feature.yaml` or dependency title refuses a coder start.
+4. **A refused vendor never blocks the other** (C5). The seam moved out of the codex story into s7; s5 and s6 depend on s4 and s7
+   only; the judgement commit removes a refused vendor's story; the failover test and the acceptance run per combination.
+5. **A blank evidence text is an error** (s1 t1 to t3; S12). It is refused before the line check and can never be verified.
+
+Parent plan, corrected in the same change: `epic.yaml` of E3 gets `e2-coder-one-task` in `dependsOn` and `spec: SPEC.md` (the pack
+of section B reads the `spec` file; E1 has the same line); E4's `doneWhen` says that the resume is built by E2 and E3;
+`feature.yaml` `cornerstones` gets s3 and s4 of this epic. `v2/_gen/v2-spec.json` holds the same three edits.

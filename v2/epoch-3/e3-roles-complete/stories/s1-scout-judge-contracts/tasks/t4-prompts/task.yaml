@@ -15,6 +15,6 @@ files:
   - src_mcp/tests/AScoutAndJudgePromptTests.cs
 dod:
   - id: d1
-    item: "each built prompt holds the brief, the path of taskFile when one was given, the output shape, the rule that the role writes nothing and that an evidence text is copied from the file, and the refused arm; an override in RolePrompts is used first"
+    item: "each built prompt holds the brief, the path of taskFile when one was given, the output shape, the rule that the role writes nothing and that an evidence text is copied from the file and is never blank, and the refused arm; an override in RolePrompts is used first"
   - id: d2
     item: "a changed limit shows in the built prompt: the numbers come from the tables of the reader, not from the prompt file"

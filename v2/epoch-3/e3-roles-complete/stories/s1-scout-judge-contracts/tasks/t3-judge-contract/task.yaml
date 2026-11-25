@@ -14,6 +14,6 @@ dod:
   - id: d1
     item: "the reader accepts {status: ok, verdict: approve|revise|reject, summary, findings:[{id, severity, title, detail, evidence, fix}], decision} and {status: refused, reason}; severity is one of blocking, major, minor, nit; an unknown member and a text over its length are errors that name the member"
   - id: d2
-    item: "S8: approve with a blocking finding, revise or reject with no finding, and a finding id used twice are errors with a sentence"
+    item: "S8: approve with a blocking finding, revise or reject with no finding, and a finding id used twice are errors with a sentence; S12: an evidence text that is empty or only white space is an error of the reader"
   - id: d3
     item: "a test holds the schema file and the tables of the reader equal"

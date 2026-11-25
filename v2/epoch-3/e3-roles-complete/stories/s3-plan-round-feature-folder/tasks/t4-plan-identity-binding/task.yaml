@@ -1,6 +1,6 @@
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: t4-plan-identity-binding
-title: "What a folder round approves: PlanSource origin folder with the list id, and the plan binding of a coder job to the approved scope"
+title: "What a folder round approves: PlanSource origin folder with an approval id over everything the reviewers read (the scope and the context outside it), and the plan binding of a coder job to it"
 kind: security
 complexity: 6
 dependsOn:
@@ -14,8 +14,12 @@ files:
   - src_mcp/tests/APlanFolderRoundIsTheApprovedThingTests.cs
 dod:
   - id: d1
-    item: "a folder round records the origin folder, the scope path, the commit, the list id (SHA-256 over the blob id and the path of every packed file of the scope, in pack order) and the id of the pack text; IsWellFormed accepts that shape and no other new one"
+    item: "a folder round records the origin folder, the scope path, the commit, the approval id (SHA-256 over the approval lines of the pack: every packed file of the scope AND of the context outside it, and every outside-dependency line) and the id of the pack text; IsWellFormed accepts that shape and no other new one"
   - id: d2
-    item: "P9: a coder job started under a folder round is bound when its task file is inside the scope, its base descends from the commit of the round and the list id at the base equals the approved one; a task outside the scope and a YAML change inside the scope after the approval are each refused with a sentence of their own; a change outside the scope and a new RESULTS file inside it do not break the binding"
+    item: "P9: a coder job started under a folder round is bound when its task file is inside the scope, its base descends from the commit of the round and the approval id computed at the base equals the approved one; a task outside the scope is refused with a sentence of its own"
   - id: d3
+    item: "P9: after the approval a change of a scope file, of feature.yaml, of the plan file, of the YAML of an ancestor, and of the id or the title of an outside dependency EACH refuses a coder start (one test for each), and the sentence names the first path or node that differs, found by comparing the lines at the commit of the round with the lines at the base"
+  - id: d4
+    item: "P9: a new RESULTS file inside the scope, a file the pack did not hold, and a change of a node outside the scope that no scope node depends on do not break the binding"
+  - id: d5
     item: "P10: the rule of the previous release (IsWellFormed before this task, and the reviewedFrom rule of the extension) reads a folder source as no source and no error; the binding tests of a committed plan and of a pasted plan pass unchanged"

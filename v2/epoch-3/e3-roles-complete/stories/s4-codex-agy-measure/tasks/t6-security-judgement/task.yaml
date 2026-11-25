@@ -1,6 +1,6 @@
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: t6-security-judgement
-title: "The security judgement of the codex and agy write boundary by the important model, before any launch code: ship or refuse per vendor, and the must-change list"
+title: "The security judgement of the codex and agy write boundary by the important model, before any launch code: ship or refuse per vendor, the properties each verdict relies on, and the must-change list"
 kind: security
 complexity: 6
 dependsOn:
@@ -12,10 +12,15 @@ files:
   - v2/spikes/RESULTS_codex_agy_write_boundary_judgement.md
   - v2/epoch-3/e3-roles-complete/stories/s5-codex-coder
   - v2/epoch-3/e3-roles-complete/stories/s6-agy-coder
+  - v2/epoch-3/e3-roles-complete/stories/s8-proof/story.yaml
 dod:
   - id: d1
-    item: "the important model (the important list, read-only, no other model call) reads the two results files and the claude files they are compared with, and writes per vendor the verdict ship or refuse, for each of B1 to B15 which layer holds it, and a must-change list"
+    item: "the important model (the important list, read-only, no other model call) reads the two results files and the claude files they are compared with, and writes per vendor: the verdict ship or refuse for the measured release, for each of B1 to B15 which layer holds it, and a must-change list"
   - id: d2
     item: "every row that the CLI flags do not hold is closed by a MEASURED property of the unit, or the verdict is refuse; a property that was asked for and not observed counts as not held"
   - id: d3
-    item: "the task files of s5 and s6 are changed from the must-change list in the same commit; for a refused vendor its story is marked not built with the reason, and line 2 of the doneWhen of the epic is put to the owner before any code of that story"
+    item: "for each verdict ship the file lists, with an id each, EVERY property of the unit and of the guard that the verdict relies on (what is hidden, the sign-in files, the network limit, no user manager inside, the sandbox or the guard of the vendor): these ids are the preflight rows of s5 t3 and s6 t4 and the ids of the table of s7 t1"
+  - id: d4
+    item: "the commit applies the row of SPEC section C5 for the combination that came out: the task files of a shipped vendor are changed from the must-change list; the story folder of a refused vendor and its entry in the dependsOn of s8 are removed, with the reason in the judgement file; validate_work accepts the v2 folder after the commit, and no story left depends on a story that is not built"
+  - id: d5
+    item: "when a vendor is refused, line 2 of the doneWhen of the epic is put to the owner before any code of s5, s6 or s8"

@@ -1,10 +1,10 @@
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
-id: t3-codex-coder-launch
+id: t2-codex-coder-launch
 title: "The codex coder launch: the measured argv fresh and resumed, the worktree as cwd, CODEX_HOME in the job folder, the unit additions of the judgement, the minimal environment"
 kind: security
 complexity: 6
 dependsOn:
-  - t2-codex-write-capability
+  - t1-codex-write-capability
 parallel: false
 security: true
 files:

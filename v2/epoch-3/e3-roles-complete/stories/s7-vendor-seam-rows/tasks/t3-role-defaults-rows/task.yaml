@@ -1,5 +1,5 @@
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
-id: t1-role-defaults-rows
+id: t3-role-defaults-rows
 title: "shared/role-defaults.json: the codex and agy main-AI rows from the measured lists, and the failover entries of scout and coder"
 kind: config
 complexity: 4
@@ -14,4 +14,4 @@ dod:
   - id: d1
     item: "the codex and agy main-AI rows hold roles and bands made of names from RESULTS_model_lists.md only, as the owner confirmed them (SPEC section D and section H, question 3); no name is added that the CLI did not print; the vendor-routing rule holds for every entry"
   - id: d2
-    item: "the scout and coder lists of the claude main-AI row get the failover entries of SPEC section D behind whenVendorRow; the route vectors cover each new list; the roles tool answers them"
+    item: "the scout and coder lists of the claude main-AI row get the failover entries of SPEC section D behind whenVendorRow; a coder entry of another vendor is added only for a vendor whose verdict is ship; the route vectors cover each new list; the roles tool answers them"

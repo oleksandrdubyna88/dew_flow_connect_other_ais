@@ -16,3 +16,5 @@ dod:
     item: "P6: a scope that is an epoch, an epic or a story holds the YAML of its ancestors, its own subtree and one line (node and title) for each node outside it that a scope node depends on; a scope that names no node of the folder is refused"
   - id: d3
     item: "P5: a pack over 256 KiB is refused with its size and its three largest sections and is never cut; each file is in a fence one backtick longer than the longest run in it, so a file cannot end its own section; the line Not sent names the architecture files and the free md files with their sizes"
+  - id: d4
+    item: "the pack also answers its approval lines: one line with the blob id and the path for EVERY file whose text is in the pack (the scope files, and feature.yaml, the plan file, the YAML of the ancestors and a spec file outside the scope), and one line with the node and the title for every outside dependency as the pack shows it, in pack order"

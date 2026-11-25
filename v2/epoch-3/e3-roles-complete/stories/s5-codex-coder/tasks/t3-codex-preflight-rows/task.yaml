@@ -1,0 +1,20 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t3-codex-preflight-rows
+title: "The preflight rows of a codex coder job: with no model, inside the exact launch unit, one row for EVERY property the judgement relies on; a wrong answer refuses the job"
+kind: security
+complexity: 5
+dependsOn:
+  - t2-codex-coder-launch
+parallel: false
+security: true
+files:
+  - src_mcp/runners/Toolchain/BoundaryPreflight.cs
+  - src_mcp/runners/Toolchain/CoderBoundary.cs
+  - src_mcp/tests/ACodexCoderPreflightTests.cs
+dod:
+  - id: d1
+    item: "V9: before each codex coder job the preflight runs inside the EXACT launch unit (the same property list the launch gets, a test compares the two) and has one row for every id the table holds for codex: what is hidden from a child command, the sign-in file, the network limit, no user manager inside, the sandbox of codex where the verdict relies on it; a wrong answer refuses the job before any launch and names the row"
+  - id: d2
+    item: "a test holds the rows and the ids of the table equal (an id with no row and a row with no id both fail); each row goes red when its property is dropped through the test seam"
+  - id: d3
+    item: "V10: no user manager, native Windows and macOS are refused before any process starts"

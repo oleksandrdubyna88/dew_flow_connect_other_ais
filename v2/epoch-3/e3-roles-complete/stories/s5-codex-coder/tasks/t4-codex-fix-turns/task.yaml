@@ -1,0 +1,16 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t4-codex-fix-turns
+title: "Fix-turn scenarios with FakeCli as codex: exec resume with the handle of turn 0, the report from the output file, the recorded no-session text"
+kind: test
+complexity: 4
+dependsOn:
+  - t3-codex-preflight-rows
+parallel: false
+files:
+  - src_mcp/tests_fakecli/CoderVerbs.cs
+  - src_mcp/tests/ACodexCoderFixTurnsTests.cs
+dod:
+  - id: d1
+    item: "FakeCli as codex: red, then green after 2 fix turns; the recorded argv shows exec resume with the thread of turn 0 on both, from the worktree, with the same CODEX_HOME; the report is read from the output file; an invalid report gets ONE repair turn in the same thread"
+  - id: d2
+    item: "V13: a resume that answers with the recorded no-session text of the fixture ends the attempt as a crash, and the next model starts from the last coai commit; no fix turn starts a new session by itself"
