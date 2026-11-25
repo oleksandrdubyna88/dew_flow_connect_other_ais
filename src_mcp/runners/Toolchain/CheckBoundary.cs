@@ -75,7 +75,7 @@ public sealed class CheckBoundary(IProcessLauncher launcher, BoundaryHost host)
         }
     }
 
-    private string EarlyRefusal(BoundaryJob job) => host.PlatformRefusal() is { Length: > 0 } platform ? platform : job.Problem();
+    private string EarlyRefusal(BoundaryJob job) => host.PlatformRefusal() is { Length: > 0 } platform ? platform : job.Problem() is { Length: > 0 } problem ? problem : job.MountsOnDiskProblem();
 
     private async Task<BoundaryAdmission> AskEveryNetworkAsync(BoundaryJob job, IReadOnlyCollection<CheckNetwork> networks, string program, CancellationToken ct)
     {
@@ -107,7 +107,7 @@ public sealed class CheckBoundary(IProcessLauncher launcher, BoundaryHost host)
         var command = BoundaryPreflight.Command(job, host, network, program);
         var started = await StartAsync(job, unit, network, PreflightBudget, new Dictionary<string, string?>(), command, ct);
 
-        return BoundaryPreflight.Rows(started, started.Problem.Length == 0 && await _units.EnsureGoneAsync(unit), BoundaryPreflight.Items);
+        return BoundaryPreflight.Rows(started, started.Problem.Length == 0 && await _units.EnsureGoneAsync(unit), BoundaryPreflight.ItemsFor(job));
     }
 
     /// <summary>Runs one step inside its unit: the program with the argv, <c>env -i</c> and the allow-list set inside, the deadline and the cancel honoured, and the unit asked after and stopped if it is still there.</summary>

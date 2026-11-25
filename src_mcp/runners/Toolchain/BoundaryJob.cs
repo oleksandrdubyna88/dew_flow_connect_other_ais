@@ -58,6 +58,16 @@ public sealed record BoundaryJob(
     public static BoundaryJob ForCoder(string jobId, CoderTree tree, string jobRoot) =>
         new(jobId, tree, jobRoot, NetworkChoice.DefaultBuild, NetworkChoice.DefaultTest);
 
+    /// <summary>
+    /// The submodule contents bound READ-ONLY into every unit of the job, each at its path in the worktree (epoch 3 E2 s6, the recorded change). Empty for a job with no submodule that could be provided; the property lists of the units are then exactly E2's.
+    /// </summary>
+    public IReadOnlyList<ReadOnlyMount> Mounts { get; init; } = [];
+
+    /// <summary>
+    /// The folder the mounts' sources are made in: a SIBLING of the job folder, never inside it — a unit binds the job folder writable, and a source reachable through it could be changed from inside, read-only bind or not. No unit binds it; it is only a source.
+    /// </summary>
+    public string MountsFolder => JobRoot.TrimEnd(System.IO.Path.DirectorySeparatorChar) + ".mounts";
+
     /// <summary>The job's <c>HOME</c> (and <c>XDG_*</c> by default): never the real one.</summary>
     public string HomeFolder => Path.Combine(JobRoot, "home");
 
@@ -136,7 +146,76 @@ public sealed record BoundaryJob(
 
         var odd = new[] { Tree.Root, Tree.MainCheckout, JobRoot }.FirstOrDefault(path => !IsPlain(path));
 
-        return odd is null ? InsideProblem() : $"The path '{odd}' cannot be given to a unit: it must be absolute and hold no space, colon, backslash or control character.";
+        return odd is not null
+            ? $"The path '{odd}' cannot be given to a unit: it must be absolute and hold no space, colon, backslash or control character."
+            : InsideProblem() is { Length: > 0 } inside ? inside : MountsProblem();
+    }
+
+    /// <summary>
+    /// The sentence that says a mount cannot be given to a unit, or empty — decided on the spelling alone (epoch 3 E2 s6): the source is a folder UNDER <see cref="MountsFolder"/> (never inside the writable worktree, the job folder or the main checkout, where it could be changed
+    /// from inside), the target is a path UNDER the worktree and not its <c>.git</c>, both can be spelled into a bind (no space, colon, backslash or control character), and no two mounts share a source or lie one in the other.
+    /// </summary>
+    private string MountsProblem()
+    {
+        foreach (var mount in Mounts)
+        {
+            var odd = new[] { mount.Source, mount.Target }.FirstOrDefault(path => !IsPlain(path));
+            if (odd is not null)
+            {
+                return $"The mount path '{odd}' cannot be given to a unit: it must be absolute and hold no space, colon, backslash or control character.";
+            }
+
+            if (!Inside(MountsFolder, mount.Source) || string.Equals(MountsFolder, mount.Source, StringComparison.Ordinal) || new[] { Tree.Root, JobRoot, Tree.MainCheckout }.Any(writable => Inside(writable, mount.Source)))
+            {
+                return $"The mount source '{mount.Source}' is not a folder under the mounts folder '{MountsFolder}', or lies where a unit could write it: a mount's source must be coai's own folder beside the job's.";
+            }
+
+            if (!Inside(Tree.Root, mount.Target) || string.Equals(Tree.Root, mount.Target, StringComparison.Ordinal) || Inside(Tree.GitEntry, mount.Target))
+            {
+                return $"The mount target '{mount.Target}' is not a path under the worktree '{Tree.Root}' (or it is the .git entry): a mount may only be bound onto a folder of the worktree.";
+            }
+        }
+
+        for (var first = 0; first < Mounts.Count; first++)
+        {
+            for (var second = first + 1; second < Mounts.Count; second++)
+            {
+                if (Inside(Mounts[first].Target, Mounts[second].Target) || Inside(Mounts[second].Target, Mounts[first].Target) || string.Equals(Mounts[first].Source, Mounts[second].Source, StringComparison.Ordinal))
+                {
+                    return $"The mounts at '{Mounts[first].Target}' and '{Mounts[second].Target}' share a source or lie one in the other, so they were not given to a unit.";
+                }
+            }
+        }
+
+        return string.Empty;
+    }
+
+    /// <summary>
+    /// What only the disk can say about the mounts, asked at admission: every folder from the worktree down to a target, and the mounts folder and each source, is a real folder and not a link — a link in the path of a bind would carry the bind
+    /// somewhere else (a target that is a link into <c>/etc</c> is the case). Empty when there is no mount or all hold. The preflight then asks the OS whether the bind is there and read-only.
+    /// </summary>
+    public string MountsOnDiskProblem()
+    {
+        foreach (var mount in Mounts)
+        {
+            var below = Path.GetRelativePath(Tree.Root, mount.Target).Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries);
+            var walked = Tree.Root;
+            foreach (var segment in below)
+            {
+                walked = Path.Combine(walked, segment);
+                if (Files.RealPath.Lstat(walked).Kind != Files.EntryKind.Directory)
+                {
+                    return $"The mount target '{mount.Target}' is not a plain folder of the worktree ('{walked}' is missing, a link or a file), so no mount was made onto it.";
+                }
+            }
+
+            if (Files.RealPath.Lstat(MountsFolder).Kind != Files.EntryKind.Directory || Files.RealPath.Lstat(mount.Source).Kind != Files.EntryKind.Directory)
+            {
+                return $"The mount source '{mount.Source}' is not a plain folder of coai's mounts folder (it is missing, a link or a file).";
+            }
+        }
+
+        return string.Empty;
     }
 
     /// <summary>
@@ -165,3 +244,6 @@ public sealed record BoundaryJob(
     private static bool IsPlain(string path) =>
         Path.IsPathFullyQualified(path) && !path.Any(c => char.IsWhiteSpace(c) || char.IsControl(c) || c is ':' or '\\');
 }
+
+/// <summary>A folder of coai's own bound READ-ONLY at <paramref name="Target"/> (a path in the worktree) inside a unit.</summary>
+public sealed record ReadOnlyMount(string Source, string Target);

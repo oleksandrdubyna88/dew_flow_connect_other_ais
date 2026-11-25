@@ -71,7 +71,7 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
     public async Task<BoundaryAdmission> AdmitAsync(BoundaryJob job, string executable, CancellationToken ct = default, bool withKey = false)
     {
         var launchHost = HostFor(withKey);
-        var early = host.PlatformRefusal() is { Length: > 0 } platform ? platform : withKey && job.KeysFolderProblem() is { Length: > 0 } hidden ? hidden : job.CoderProblem();
+        var early = host.PlatformRefusal() is { Length: > 0 } platform ? platform : withKey && job.KeysFolderProblem() is { Length: > 0 } hidden ? hidden : job.CoderProblem() is { Length: > 0 } problem ? problem : job.MountsOnDiskProblem();
         if (early.Length > 0)
         {
             return Refuse(early, []);
@@ -127,7 +127,7 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
             Passthrough = UnitControl.Client,
         }, ct);
 
-        return BoundaryPreflight.Rows(started, started.Problem.Length == 0 && await _units.EnsureGoneAsync(unit), BoundaryPreflight.CoderItems);
+        return BoundaryPreflight.Rows(started, started.Problem.Length == 0 && await _units.EnsureGoneAsync(unit), BoundaryPreflight.CoderItemsFor(job));
     }
 
     /// <summary>

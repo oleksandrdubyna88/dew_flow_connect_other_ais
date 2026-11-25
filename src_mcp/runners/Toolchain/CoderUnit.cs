@@ -56,6 +56,7 @@ internal static partial class CoderUnit
             $"BindReadOnlyPaths={job.CoderRoot}",
             $"BindPaths={tree.Root}",
             $"BindReadOnlyPaths={tree.GitEntry}",
+            .. BoundaryUnit.Mounts(job),
             $"BindPaths={job.CoderFolder}",
             $"BindPaths={job.CoderTempFolder}:{BoundaryUnit.UnitTemp}",
             $"BindPaths={job.CoderVarTempFolder}:{BoundaryUnit.UnitVarTemp}",
