@@ -17,8 +17,7 @@ public sealed partial class AKeyHardeningTests
     public void M2_ASetgidBitAlone_IsNotASharedInstance_TheFolderIs0700AndTheKeyIs0600()
     {
         using var world = new KeyWorld();
-        File.SetUnixFileMode(world.DataDir, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute | UnixFileMode.GroupRead | UnixFileMode.GroupExecute | UnixFileMode.SetGroup);
-        Assert.SkipUnless((File.GetUnixFileMode(world.DataDir) & UnixFileMode.SetGroup) != 0, "this file system does not keep the setgid bit");
+        Assert.SkipUnless(SetgidSupport.Real.TryApply(world.DataDir, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute | UnixFileMode.GroupRead | UnixFileMode.GroupExecute | UnixFileMode.SetGroup, out var why), why);
 
         world.AddKey("A", "a");
 
@@ -31,8 +30,7 @@ public sealed partial class AKeyHardeningTests
     public void M2_OnASharedInstance_TheFirstAdd_AnImport_AndASync_EachSayEveryMemberOfTheGroupReadsEveryKey()
     {
         using var world = new KeyWorld(shared: true);
-        File.SetUnixFileMode(world.DataDir, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute | UnixFileMode.GroupRead | UnixFileMode.GroupExecute | UnixFileMode.SetGroup);
-        Assert.SkipUnless((File.GetUnixFileMode(world.DataDir) & UnixFileMode.SetGroup) != 0, "this file system does not keep the setgid bit");
+        Assert.SkipUnless(SetgidSupport.Real.TryApply(world.DataDir, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute | UnixFileMode.GroupRead | UnixFileMode.GroupExecute | UnixFileMode.SetGroup, out var why), why);
         var run = new KeysRun(world);
         run.Settings["COAI_KEYS_SHARED"] = "1";
         const string Said = "every member of its group can read every key";
@@ -48,8 +46,7 @@ public sealed partial class AKeyHardeningTests
     public void M2_AStartOnASharedInstance_SaysSoInTheLog_AndAnIgnoredBitIsSaidToo()
     {
         using var world = new KeyWorld();
-        File.SetUnixFileMode(world.DataDir, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute | UnixFileMode.GroupRead | UnixFileMode.GroupExecute | UnixFileMode.SetGroup);
-        Assert.SkipUnless((File.GetUnixFileMode(world.DataDir) & UnixFileMode.SetGroup) != 0, "this file system does not keep the setgid bit");
+        Assert.SkipUnless(SetgidSupport.Real.TryApply(world.DataDir, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute | UnixFileMode.GroupRead | UnixFileMode.GroupExecute | UnixFileMode.SetGroup, out var why), why);
         var variables = new Dictionary<string, string> { ["COAI_CLAUDE_KEY_one"] = KeyWorld.Token("a") };
 
         string StartWith(string shared)
