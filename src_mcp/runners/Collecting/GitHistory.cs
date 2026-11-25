@@ -217,6 +217,24 @@ public sealed partial class GitHistory(IProcessLauncher launcher)
             ? RunAsync(repoPath, ["cat-file", "blob", oid], ct)
             : Refused;
 
+    /// <summary>
+    /// EVERY entry under a folder at a commit, recursively — <c>mode type oid size\tpath\0</c> like <see cref="EntryAtAsync"/>, with a link and a submodule listed as the entries they are and a directory not listed at all
+    /// (<c>-r</c> without <c>-t</c>). The listing is the one read of a folder (epoch 3 E3 s3): <paramref name="maxChars"/> bounds what is held, and a stream the launcher cut is <see cref="GitAnswer.Truncated"/>.
+    /// </summary>
+    public Task<GitAnswer> TreeUnderAsync(string repoPath, string sha, string folder, int maxChars, CancellationToken ct = default) =>
+        IsCommitish(sha) && IsRepoRelative(folder)
+            ? RunAsync(repoPath, ["--literal-pathspecs", "ls-tree", "-r", "-l", "-z", "--full-tree", sha, "--", folder], ct, maxChars: maxChars)
+            : Refused;
+
+    /// <summary>
+    /// Several blobs in one process — <c>cat-file --batch</c>, the ids on stdin, one per line. The answer is raw: for each id <c>&lt;oid&gt; blob &lt;size&gt;\n</c>, the bytes, then <c>\n</c> (or <c>&lt;oid&gt; missing\n</c>). The caller proves each
+    /// object against its id; every id goes through <see cref="IsCommitish"/> first, as <see cref="BlobAsync"/>'s does.
+    /// </summary>
+    public Task<GitAnswer> BlobsAsync(string repoPath, IReadOnlyList<string> oids, int maxChars, CancellationToken ct = default) =>
+        oids.All(IsCommitish)
+            ? RunAsync(repoPath, ["cat-file", "--batch"], ct, string.Concat(oids.Select(oid => oid + "\n")), maxChars)
+            : Refused;
+
     /// <summary>The branch HEAD is on, as one line; no output (exit 1) on a detached HEAD.</summary>
     public Task<GitAnswer> HeadBranchAsync(string repoPath, CancellationToken ct = default) =>
         RunAsync(repoPath, ["symbolic-ref", "--quiet", "--short", "HEAD"], ct);
@@ -240,6 +258,15 @@ public sealed partial class GitHistory(IProcessLauncher launcher)
                 root,
                 ["--no-optional-locks", "--literal-pathspecs", "status", "--porcelain=v1", "-z", "--untracked-files=no", "--", path],
                 ct)
+            : Refused;
+
+    /// <summary>
+    /// The porcelain status of several paths WITH the untracked files named one by one — <c>XY path\0</c>, empty when all are untouched. Run from the ROOT, like <see cref="PathStatusAsync"/>, and read by <c>PorcelainReader</c>;
+    /// <c>--untracked-files=all</c> because a new <c>task.yaml</c> in a new folder is the case a plan folder has.
+    /// </summary>
+    public Task<GitAnswer> FolderStatusAsync(string root, IReadOnlyList<string> paths, CancellationToken ct = default) =>
+        paths.All(IsRepoRelative)
+            ? RunAsync(root, ["--no-optional-locks", "--literal-pathspecs", "status", "--porcelain=v1", "-z", "--untracked-files=all", "--", .. paths], ct)
             : Refused;
 
     /// <summary>
@@ -345,10 +372,10 @@ public sealed partial class GitHistory(IProcessLauncher launcher)
     /// </remarks>
     private static Task<GitAnswer> Refused => Task.FromResult(new GitAnswer(true, false, string.Empty));
 
-    private async Task<GitAnswer> RunAsync(string repoPath, string[] args, CancellationToken ct)
+    private async Task<GitAnswer> RunAsync(string repoPath, string[] args, CancellationToken ct, string stdIn = "", int maxChars = 0)
     {
-        var result = await launcher.RunAsync(
-            new ProcessRequest("git", args, repoPath) { Timeout = Budget }, ct);
+        var request = new ProcessRequest("git", args, repoPath) { Timeout = Budget, StdIn = stdIn };
+        var result = await launcher.RunAsync(maxChars > 0 ? request with { MaxOutputChars = maxChars } : request, ct);
 
         // A timeout or a cancellation is not an answer about the repository — it is us having learned
         // nothing, and the caller must record `failed` rather than a skip.

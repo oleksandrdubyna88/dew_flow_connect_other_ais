@@ -195,7 +195,7 @@ public static class CommittedPlanReader
     /// The sentence for a read that cannot be believed, or empty. In this order: did it finish, did it succeed, was
     /// the capture whole — the flag is refused even when the id would match, because it is evidence the id cannot see.
     /// </summary>
-    private static string CaptureGate(GitAnswer answer, string what)
+    internal static string CaptureGate(GitAnswer answer, string what)
     {
         if (!answer.Ran)
         {
