@@ -10,7 +10,8 @@
 > `653140c3`; where the plan of today says something else, the plan of today holds. Sections R1–R11 and epics E0–E2
 > named in the moved text are those of that revision. **Part 2, § I (2026-11-25).** The plan was 138 KB when it
 > stopped at `07370c49`. The revision for epoch 3 rewrote it whole, and its text at the stop — the plan that epoch 2
-> approved and that epic E1 built (#1047, `d0241e45`) — is § I, word for word.
+> approved and that epic E1 built (#1047, `d0241e45`) — is § I, word for word. **§ J (2026-11-25)** is one section
+> of the revised plan, moved word for word to keep the plan under 100 KB: what the code does on `d0241e45`.
 
 | § | What it holds | Why it is not in the plan |
 |---|---|---|
@@ -23,6 +24,7 @@
 | G | § 3, the consent, as reviewed: with the reasons for one store, for the settings' names and for their scope | The plan keeps the rules and one sentence of each reason |
 | H | Three passages of § 1 and § 4 in full: why a QuickPick, why the working folder `/`, why `TZ=UTC` | The plan keeps the rule and the measured fact of each |
 | I | **Part 2.** The plan as it stood at the stop (`07370c49`, 2026-11-25): its status block and every section after the ledger — the goal, the owner's decisions, what the code did, § 1 to § 5 of the design, what the plan does not do, Security with the eight residuals of the refusals file, Growth, the boundaries, the build order, the test plan, the Definition of Done and the epics with R1–R12 | The revision for epoch 3 rewrote the plan whole. The plan of today cites § I for what epic E1 built and what stays in force: the refusals file, its lock and its markers, the script and its reply, the tests of E1 |
+| J | From the plan as revised for epoch 3 (`3a42eebc`): *What the code does today — verified on `d0241e45`*, with its file and line references, *What was measured, and what the real window showed*, the questions Q1–Q4 as they were asked (the owner answered Q1–Q3 on 2026-11-25; the plan holds the answers), and the owner's decisions 1–20, each with how it stands after the stop | The plan was 98 KB and the plan round's five findings needed room; the plan keeps a short list and cites § J. **What § J says of a per-host "yes" and of Q1's other way was overtaken by the plan round's finding 0: every door needs the permission** |
 
 ## § A — The owner's decisions in full, and the questions with their answers
 
@@ -2085,3 +2087,110 @@ plan (kind `epics`), recorded in the ledger — **but for C1, which this approve
   recommends the account only.
 - **C6 — one lock between VS Code windows for the round.** Justified by R2 or R9 showing that two windows doubling
   the logins matters.
+
+## § J — What the code does on `d0241e45`, and what was measured: from the plan as revised for epoch 3 (`3a42eebc`), word for word
+
+### What the code does today — verified on `d0241e45` (main, after #1047)
+
+All paths are under `src_vs_code/` unless they start with `research/`, `todo/` or `.agents/`. No extension release
+holds this code: the newest tag is `extension-v2.0.0`, cut before #1047.
+
+- **The host comes from the terminal's name.** `credsSession(name)` (`src/credsSession.ts:65`) matches
+  `^Creds: (<host>) / (<session>)$` (`:36`); the host class is `[A-Za-z0-9][A-Za-z0-9._-]*` (`:31`). Nothing in the
+  code knows that `wsl` is not an ssh host: `accountsArgv` (`src/remoteSsh.ts:55`) gives it to `ssh` like any other.
+- **The runner.** `runAccounts(host, mode)` (`src/remoteSsh.ts:155`) sends `ACCOUNTS_SCRIPT` on stdin to
+  `ssh <pinned options> -- <host> sh -s -- <mode>`, with `SSH_OPTIONS` (`:30`) unchanged, an absolute `ssh` path
+  (`:82`), 30 s and 64 KiB (`ACCOUNTS_LIMITS`, `:101`) and `killTree` (`:194`). The tree is killed on Windows only
+  (`src/processLauncher.ts:64`); see [PLAN_a_timed_out_ssh_call_ends_its_whole_tree.md](PLAN_a_timed_out_ssh_call_ends_its_whole_tree.md).
+- **The script.** `ACCOUNTS_SCRIPT` (`src/remoteAccountsScript.ts:72`), 222 lines, pinned by its sha256 in a test.
+  It puts `$HOME/.local/bin` IN FRONT of the inherited `PATH` (`:276`). Vendor limits 3, 2, 8 and 4 s (`:35`),
+  reader limits (`:38`), the ceiling of 30 s (`:41`). The mode `claude-usage` runs every stage of the other mode
+  and the usage command.
+- **The round.** `runRound` (`src/remoteAccountsRound.ts:387`): the distinct hosts of the live `Creds:` terminals
+  (`accountsHosts`, `:66`), one at a time; every host's first call is `no-claude-usage`; one more call on the host
+  that first answers with an account whose usage is due. `USAGE_POLICY` is `off` (`:39`). The memory holds ONE
+  entry for each host (`publishedState`, `:268`), so two readings of one host would overwrite each other. Before a
+  call and before a result the generation, the Stop and the door are checked (`checked`, `:282`).
+- **The door allows a new host by itself.** `HostKeeper.admit` (`src/remoteKeeper.ts:355`) answers `read` for a
+  "yes"; for a host with no row it writes an automatic "yes" (`automatic`, `:376`; the marker `how: 'auto'`,
+  `src/remoteHosts.ts:21`) while `coai.terminalAccountsAllowNewHosts` is on (`package.json:637`,
+  `src/modelKeys.ts:27`, `src/sideConfig.ts:67`). `consentOf` (`src/remoteHosts.ts:126`) is the one function that
+  says whether a host may be contacted. A person's "no" and the Stop are in `terminal-hosts/refused.json` of each
+  side (`RefusalsFile`, `src/remoteRefusals.ts:44`), written under a lock, with markers for a change that did not
+  land.
+- **A waiting marker reads as `damaged` at the session door.** `waitingConsent` (`src/remoteKeeper.ts:399`); the
+  door then says that the list cannot be read (todo T8).
+- **A press reads the consent once.** `remoteRoad` (`src/remoteRead.ts:426`) asks the door at `:337`; the later
+  spawns of the press, at most three (`CALLS_MAX`, `:305`), check only the terminal (`readOnce`, `:348`; todo T9).
+- **The session question was reworded** to *"Read the Claude session and the AI accounts on “x” over ssh?"*
+  (`src/remoteHostsSaid.ts:47`), code `read-remote-session` (`src/remoteSessionHost.ts:58`).
+- **The view is a QuickPick** (`src/remoteAccountsHost.ts:456`), opened by `coai.terminalAccounts`
+  (`package.json:288`; its `view/title` entry at `:1046`, `navigation@91` at `:1048`), grouped by account (`accountsRows`,
+  `src/remoteAccountsRows.ts:408`). It is drawn again only when a read lands, so *read just now*
+  (`readAge`, `:105`; `agoWords`, `src/gaugeWords.ts:92`) stays as it is between two rounds. Two notices:
+  `allowedNotice` and `everyTenNotice` (`src/remoteAccountsHost.ts:385`, `:402`).
+- **A tab with a table exists once, and is the pattern.** `RoundsLogPanel` (`src/roundsLogPanel.ts`): one
+  `WebviewPanel` for each window, revealed when it is open (`:94`, `:98`), `enableFindWidget` for Ctrl+F (`:104`), a
+  nonce (`src/webviewNonce.ts`), a `ready` handshake and a record of what the page was told. A page is tested by
+  RUNNING it (`.agents/PROJECT.md`; `src/test/bundledPage.test.ts`, `src/test/pageDom.ts`).
+
+#### What was measured, and what the real window showed
+
+- **Step 0 and W1–W5, 2026-11-19, one VM** (the RESULTS file; the plan's tables: the appendix, § D). `sh` is
+  `dash`; `claude` and `agy` are in `~/.local/bin`. `claude auth status --json` names the account in 0.3 s and
+  writes no file. `claude -p "/usage" …` prints the usage in 3.6 s with no model call and rewrites four cache files
+  of its own. Codex: the last `token_count` record of a session file holds the limits. agy states no usage.
+  **Not settled:** who rewrote `~/.claude.json` during one read (W6), and what a usage read starts (W7).
+- **The real window, 2026-11-25, VSIX 2.0.901.** (1) `ssh wsl` failed every 10 minutes. (2) The owner rejected the
+  per-host standing of 20 hosts. (3) The list showed no number: the Claude usage is off in that build, and the
+  Codex week window of one host had no reading. (4) *Read just now* did not change in 10 minutes. (5) The rows
+  could not be read as "which host, which AI, which account, which limit".
+- **Found by the review of #1047, as todos:** T46 — the `claude-usage` path is 31 s at worst against the 30 s
+  ceiling ([PLAN_the_usage_mode_stays_under_the_30_s_ceiling.md](PLAN_the_usage_mode_stays_under_the_30_s_ceiling.md));
+  T9 ([PLAN_a_press_rereads_the_consent_before_each_spawn.md](PLAN_a_press_rereads_the_consent_before_each_spawn.md));
+  T8 ([PLAN_a_waiting_marker_has_its_own_door_sentence.md](PLAN_a_waiting_marker_has_its_own_door_sentence.md)).
+  This revision takes the three up: T46 in § 4, T8 and T9 in § 3.
+- **Not measured: anything about WSL.** W9 (§ 5) comes before the WSL road is specified.
+
+### The questions Q1–Q4 as they were asked — from *Owner decisions* of the same revision, word for word
+
+**The questions as they were asked.** The text takes the stated line for each, and Q3 is now settled as above;
+an answer the other way changes the named section before epoch 3 is approved, and is no ledger entry.
+
+| # | The question | The line this text takes |
+|---|---|---|
+| Q1 | Does the ONE permission also cover the read of a terminal's Claude session by the chat doors (*take the question*, *add the question*)? | **Yes** (decision 8: one consent, not two). The question's text says so. The other way: the chat keeps its per-host question, and the permission covers the accounts round only (§ 3) |
+| Q2 | A WSL distro that is NOT running: a read would start it, every 10 minutes, with its services | **It is listed and never started by CoAI**; it says *not running, so not read*. Answered: not started |
+| Q3 | The installer (E6) under the new consent. Decision 19 said "no press", when a per-host "yes" stood behind it. A permission worded "may I read?" cannot cover a change of a machine | **Nothing is installed under the permission to read.** Answered: one more "yes", once for all hosts, for "install `jq` where it is missing"; where the user has no rights, the command is shown |
+| Q4 | The merge conditions ask the owner to check a VSIX built from the head of each of E2, E3 and E4 in a real window BEFORE that epic merges (the check of 2.0.901 came after the merge, and found three things) | **Yes**, three checks, each a short table of rows (*Epics*) |
+
+### Owner decisions 1–20, each with how it stands after the stop — from *Owner decisions* of the plan as it stood at `3a42eebc` with the plan round folded in, word for word
+
+1. An icon beside the chat icon in the terminal panel's title bar opens the view. **Stands.**
+2. No real time: a round every 10 minutes. **Stands.**
+3. Claude usage: Claude Code itself makes the call on the VM, so our script never touches the token. **Stands.**
+4. Several hosts may share one account; usage is read once for each account in a round. **Stands for the read.**
+   The view groups by HOST now (decision 23), and a shared account says so on each host.
+5. The same numbers as the agent-models mod line: "left", a dash for a missing value, never a zero. **Stands.**
+6. **O1:** the `curl` road (b) is allowed as a fallback and not built. **Stands.**
+7. **O2:** full email addresses are shown, in the view only. **Stands.**
+8. **O3:** no separate consent for the accounts read and the session read. **Stands as "one consent"; that consent
+   is the permission of decision 22 (Q1).**
+9. **O4:** the interval is a fixed 10 minutes. **Stands.**
+10. **O5:** the passive Codex read is enough. **Stands.**
+11. **O6:** the icon is always visible. **Stands.**
+12. **O7:** step 0 ran on one VM as its `root` user on 2026-11-19. **Done.**
+13. **N1:** the four cache files Claude Code writes on a read are accepted, and a rewrite of `~/.claude.json`. It
+    does not cover a live session that is disturbed, nor files that grow without bound. **Stands**, for a VM and
+    for a WSL user.
+14. **N2:** the round runs by itself from the start of the extension. **Replaced by 22:** only after the permission.
+15. **N3:** answered by the run of W1–W5. **Done.**
+16. **N4:** `agy --version` runs in every round. **Stands.**
+17. **N5:** where `jq` is missing it is installed, when the user may; else the view shows the exact command.
+    **Stands; it is E6.** Until E6 the view shows the command.
+18. **Q1:** a new host is allowed by itself, with a daily notice. **Replaced by 22.**
+19. **Q2:** the install needs no press. **Replaced by Q3 (2026-11-25): one more one-time "yes" for installs.**
+20. Two settings, on by default. **The first, `coai.terminalAccountsAllowNewHosts`, is retired by 22. The second,
+    `coai.terminalAccountsInstallMissingTools`, is not built: Q3's answer replaces it.** The one-time "yes" for
+    installs, which a person gives and withdraws, is the one switch; a setting beside it would be a second place
+    that says the same thing, and one that a settings file can change.
