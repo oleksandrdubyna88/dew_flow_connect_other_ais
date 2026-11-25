@@ -1,6 +1,6 @@
 # PLAN — E1 stories: the agy hook knows its own folder, looks only at local paths, and refuses a spelling Windows reads elsewhere
 
-> Status: **coded and tested, 2026-11-18 (E1 on branch `fix/agy-hook-windows-dot-dot`, 33050c8f + review fixes); real runs on Linux and Windows passed (RESULTS §7); not merged, not released. Stories written 2026-11-18.** Parent:
+> Status: **IMPLEMENTED, 2026-11-24** — E1 (S1 W3, S2 W2, S3 W1) shipped in #1023 (merge 9721a7fe, 2026-11-24); released in mcp 0.66.1 (2026-11-24) and server 0.16.4 (#1042, 2026-11-24, release run 45412033457, 12 assets). The check with the release `coai-server` 0.16.4 binary on the host passed on 2026-11-24 (agy 1.5.13): the in-root read was allowed and its marker read; the other job's file by absolute path, by `..` and through a link inside the root was each denied with the contract sentence, and the secret was never read. **Not deployed:** on 2026-11-25 the owner chose to skip the deploy, so the Team server still serves 0.16.3. W3 does not hit today's server (its job roots sort after the hook folder), so 0.16.3 stays safe there. Stories written 2026-11-18. Parent:
 > [PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text.md](PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text.md) (its `## Epics`, E1; epoch 1,
 > one change recorded: 1.1). The only epic of the plan. Three stories, all three security stories, each with a spec written before
 > its code. **Cornerstone: E1.S2.** The parent's ledger line reads `Cornerstones: 1 of 1 — E1.S2`.
@@ -55,7 +55,7 @@ agy always sends it, it is one of `workspacePaths`, and a payload without it is 
 ## 2. The rule after E1
 
 D0, D1, D2, D4, D5 and D7 are the parent rule's steps, unchanged
-([the S1 spec of the parent plan](../research/PLAN_the_agy_hook_checks_the_path_S1_spec.md), section 1). D2 to D10 deny with the path reason.
+([the S1 spec of the parent plan](PLAN_the_agy_hook_checks_the_path_S1_spec.md), section 1). D2 to D10 deny with the path reason.
 
 | Step | What must hold | Story |
 |---|---|---|
