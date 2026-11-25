@@ -955,3 +955,19 @@ test('A5-T3: no language’s chat article still says the reads change nothing on
     assert.ok(!text.includes(CHANGE_NOTHING[language] as string), `the ${language} chat article still has the sentence that the reads change nothing on the machine`);
   }
 });
+
+/** What the chat article says Forget does: allowing the host again by itself only while the setting is on (review of PR #1047, T32 and T33). */
+const FORGET_UNDER_THE_SETTING: Readonly<Record<string, string>> = {
+  en: 'so the host is allowed again by itself while **Allow new hosts by themselves** (`coai.terminalAccountsAllowNewHosts`) is on; with it off you are asked again',
+  de: 'sodass der Host wieder von selbst erlaubt wird, solange **Allow new hosts by themselves** (`coai.terminalAccountsAllowNewHosts`) an ist; ist es aus, werden Sie wieder gefragt',
+  es: 'así que el host se permite de nuevo por sí solo mientras **Allow new hosts by themselves** (`coai.terminalAccountsAllowNewHosts`) esté activado; si está desactivado, se le vuelve a preguntar',
+  ru: 'и хост снова разрешается сам, пока включена **Allow new hosts by themselves** (`coai.terminalAccountsAllowNewHosts`); при выключенной вас спросят снова',
+  uk: 'і хост знову дозволяється сам, поки ввімкнено **Allow new hosts by themselves** (`coai.terminalAccountsAllowNewHosts`); коли вимкнено, вас запитають знову',
+};
+
+test('A5-T2 (T32, T33): every language’s chat article allows a forgotten host again by itself only while the setting is on', () => {
+  for (const language of HELP_LANGUAGES) {
+    const text = accountsArticleText(language, 'chat-with-other-ai');
+    assert.ok(text.includes(FORGET_UNDER_THE_SETTING[language] as string), `the ${language} chat article says Forget allows the host again with no word of the setting`);
+  }
+});
