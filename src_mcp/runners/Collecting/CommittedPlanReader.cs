@@ -127,7 +127,7 @@ public static class CommittedPlanReader
             : new Placement(string.Empty, string.Empty, $"git rev-parse answered {lines.Count} lines for the root and HEAD, not 2 — report it with the git version");
     }
 
-    private static string NotCompared(string head, string sha) =>
+    public static string NotCompared(string head, string sha) =>
         $"the working tree was not compared: HEAD is {GitIds.Short(head)} and the plan was read at {GitIds.Short(sha)}";
 
     private sealed record Placement(string Root, string Head, string Refusal);
@@ -195,7 +195,7 @@ public static class CommittedPlanReader
     /// The sentence for a read that cannot be believed, or empty. In this order: did it finish, did it succeed, was
     /// the capture whole — the flag is refused even when the id would match, because it is evidence the id cannot see.
     /// </summary>
-    internal static string CaptureGate(GitAnswer answer, string what)
+    public static string CaptureGate(GitAnswer answer, string what)
     {
         if (!answer.Ran)
         {
