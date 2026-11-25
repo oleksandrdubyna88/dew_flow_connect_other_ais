@@ -441,3 +441,16 @@ any other member and an unknown member stay errors (s5 t2 d2).
 - Accepted risks A1 and A2 are not changed by the comparison: the sign-in copies were visible to the coder units, by design.
 - Task files changed with this addendum: s5 t2, s5 t4, s6 t3, s6 t4, s6 t5, s6 t7, s7 t1, s7 t2, s8 t2, s8 t4. No task was added.
 - Not measured, and not checked by this judge: everything of this section. The judge read the comparison file as it was written.
+
+### 12.6 After the second plan round (2026-11-26): the instruction step
+
+The plan round on the bundle at `6ec9a211` found that condition 1 of 12.3 was not enough: the added line said "because coai runs
+the checks", and nothing made coai run the command an instruction file orders. The plan now has an instruction step (SPEC C9; s7
+t3). For the boundary, read by the same judge, with nothing run:
+
+- The step runs code of the repository at the BASE commit, before any model, in a check unit with no network and no credential.
+  It is the trust of a check definition, not of the coder's work: the coder cannot change it for its own job.
+- Its output is repository text put into a prompt. It gives a model no tool and no command. It goes to the vendor of the model,
+  as `AGENTS.md` does (accepted risks C4 and A7 stand).
+- A declared step that cannot run refuses the job. A job never starts with a cut or missing instruction text.
+- No id of section 8 is added: the step is not a property a verdict relies on.

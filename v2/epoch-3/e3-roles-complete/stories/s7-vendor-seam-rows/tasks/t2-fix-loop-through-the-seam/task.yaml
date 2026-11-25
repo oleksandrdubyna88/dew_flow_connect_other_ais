@@ -5,6 +5,7 @@ kind: code
 complexity: 6
 dependsOn:
   - t1-coder-vendor-seam
+  - t3-instruction-step
 parallel: false
 security: true
 files:
@@ -24,4 +25,6 @@ dod:
   - id: d4
     item: "no line of this task names codex or agy: s5 and s6 each add their vendor without a change here"
   - id: d5
-    item: "V17, the owner's decision 40 (SPEC section C7): the turn-0 prompt, the fix prompt and the repair prompt are rendered from the prompt the seam names, and an override a person wrote is read by that id, so an override of the claude prompt is never sent to another vendor; the three claude prompts are byte for byte what they were: a test holds the sha256 of src_mcp/src/Roles/prompts/coder.md (ee31db20b05e779b817131fdb615be1225271dfad715e3b647cfa38d7d92d7bf) and compares the claude prompts of a fixture task with texts recorded from the code before this change; the prompt of the test vendor is what FakeCli records on turn 0 and on a fix turn; the envelope names the prompt id and the sha256 of the rendered turn-0 prompt, never its text"
+    item: "V17, the owner's decision 40 (SPEC section C7): the turn-0 prompt, the fix prompt and the repair prompt are rendered from the prompt the seam names, and an override a person wrote is read by that id, so an override of the claude prompt is never sent to another vendor; the three claude prompts are byte for byte what they were: a test holds the sha256 of src_mcp/src/Roles/prompts/coder.md (ee31db20b05e779b817131fdb615be1225271dfad715e3b647cfa38d7d92d7bf) and, for a repository that declares no instruction step, compares the claude prompts of a fixture task with texts recorded from the code before this change (equal, byte for byte); the prompt of the test vendor is what FakeCli records on turn 0 and on a fix turn; the envelope names the prompt id and the sha256 of the rendered turn-0 prompt, never its text"
+  - id: d6
+    item: "V20 and V22, SPEC section C9 items 6 and 7: the output of the instruction step of t3 is appended to the turn-0 prompt of EVERY vendor, claude too, as ONE block that coai writes after the rendered prompt (the heading Run by coai before your turn, the argv, the base commit, the output in a fence longer than any run of backticks in it) — not a slot of a prompt file, so coder.md and its sha test do not change; with a step the claude prompt is the recorded text followed by the block, and FakeCli as claude and as the test vendor each record the canary line of the fixture step on turn 0; with no step claude is sent no block, and a vendor whose prompt points at the block is sent the block that says nothing was run; a fix turn and a repair turn do not repeat the block; a new session after a failover carries it again"

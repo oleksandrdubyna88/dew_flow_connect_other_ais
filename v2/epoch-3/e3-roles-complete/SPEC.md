@@ -1,12 +1,13 @@
 # Spec — epoch 3, E3 "Roles complete: scout, important/judge, codex + agy rows, review_plan(featureFolder)"
 
-> Status: **s1 to s3 are built and s4 is measured and judged; s5 to s8 are plan only, 2026-11-26.** Plan gate: `proceed`,
-> 2026-11-25; its 5 accepted findings are section J. After the gate the plan changed (section K): the security judgement of s4
-> t6, the coder comparison of E2 and the owner's decisions 39 and 40. The changed plan needs a new plan round. Scope: the server
-> half (`src_mcp`, `shared/`). Written by the planner
+> Status: **s1 to s3 are built (s3 t6 is open) and s4 is measured and judged; s5 to s8 are plan only, 2026-11-26.** Plan gate:
+> `proceed`, 2026-11-25; its 5 accepted findings are section J. After the gate the plan changed (section K): the security
+> judgement of s4 t6, the coder comparison of E2 and the owner's decisions 39 and 40. Second plan round: `proceed`, 2026-11-26;
+> its 2 accepted findings are section L. Scope: the server half (`src_mcp`, `shared/`, `.coai/toolchain.yaml`). Written by the
+> planner
 > (Fable) from `v2/` and the code at `feat/v2-ep3-e2-coder` `0e8e8941`, read-only. Parent plan: [PLAN.md](../../PLAN.md);
 > architecture: [server.md](../../architecture/server.md) §2, §8, §10, §19, §20, §23. Stories and tasks: the YAML tree under
-> `stories/` (8 stories, 43 tasks, no task above complexity 6). Two cornerstones: **s3** (what a plan round over a folder
+> `stories/` (8 stories, 44 tasks, no task above complexity 6). Two cornerstones: **s3** (what a plan round over a folder
 > approves) and **s4** (the codex and agy write boundary: measure first, then a security judgement).
 
 ## 0. Goal, and what is there today
@@ -133,8 +134,13 @@ space → error before the line check; never `verified: true`.
    The pack: 256 KiB (server.md §8; the ceiling a committed plan has today, `src_mcp/core/Rounds/DocumentRules.cs:31`). Over a
    limit → refused with the size and the three largest sections. Nothing is cut. Measured on 2026-11-25, before the files of this
    epic: the whole `v2` folder was 149 YAML files and 94 KB.
-6. **The working tree guard.** When HEAD is the round's commit, an edited, staged or untracked plan file under the scope is a
-   refusal that names the files. When HEAD is another commit, the note says that the working tree was not compared.
+6. **The working tree guard.** When HEAD is the round's commit, EVERY file of the pack is compared with the working tree: the
+   scope files AND the context outside the scope (`feature.yaml`, the plan file, the YAML of the ancestors, a `spec` file). An
+   edited, a staged or a deleted one is a refusal that names the files, and so is an untracked `.yaml` file under the scope.
+   The guard takes its list from the pack, so what the reviewers read and what is compared cannot differ. A file that is not
+   in the pack is no reason to refuse. When HEAD is another commit, the note says that the working tree was not compared.
+   (The code of s3 t5 compares the packed paths already; its tests cover the scope only. s3 t6 adds the tests of the
+   context and the sentence that names it.)
 7. **What is approved: everything the reviewers read.** `PlanSource` gets origin `folder`: `Path` is the scope folder, `Blob` is
    the **approval id**, `TextId` is the id of the pack. The approval id is SHA-256 over these lines, in pack order:
    - `F <blob id> <path>` for EVERY file whose text is in the pack: the scope files, and the context outside the scope
@@ -151,7 +157,7 @@ space → error before the line check; never `verified: true`.
    (`PlanSource.IsWellFormed` and the extension's `reviewedFrom` rule). This is measured, not assumed (s3 t4 d5).
 
 Scenarios: **P1** valid → reviewers, the pack in order, the same bytes twice. **P2** invalid → refused, zero launches, no round
-row. **P3** two inputs at once; `expectedCommit` not the tip. **P4** the working tree guard. **P5** a pack over 256 KiB. **P6**
+row. **P3** two inputs at once; `expectedCommit` not the tip. **P4** the working tree guard: a scope file, and each file of the packed context outside the scope. **P5** a pack over 256 KiB. **P6**
 scope by `workItem`; a `workItem` that names no node of the folder. **P7** order vectors (ties, a story that depends on a story of
 another epic, a dependency outside the scope). **P8** a link, a submodule. **P9** the binding: a task inside and outside the scope; a changed scope file; changed context (`feature.yaml`, the plan file, an
 ancestor, the title of an outside dependency); a new RESULTS file and a node nobody in the scope depends on do not break it. **P10** the old reader. **P11** a slow git inside the 45 s deadline of `PlanInputs`. **P12** a device cap of 3 with
@@ -339,10 +345,14 @@ this job, because coai runs the checks. The claude text stays exactly as it is t
    every other line byte-equal, so the three texts cannot drift apart.
 3. The tools bullet names only tools of the vendor's measured list. codex (id CX-T1): read with read-only shell commands, change
    with `apply_patch`, no build, no test and no git command. agy: the tool names of the measured agent file; no command tool.
-4. The added bullet is one sentence, the same for both vendors: a command that an instruction file of the repository
-   (`AGENTS.md`, `CLAUDE.md` and the files they name) orders before work is not run in this job and is no reason to refuse,
-   because coai runs the build, the tests and the checks after the turn; every other rule of those files still applies. It is
-   narrow on purpose: it lifts no rule about the code, the paths or secrets, and it gives the model no command.
+4. The added bullet is the same for both vendors, and it says only what is true (second plan round, section L): an instruction
+   file of the repository (`AGENTS.md`, `CLAUDE.md` and the files they name) may order a command before work; the model does
+   not run it, and that is no reason to refuse; what coai ran for this job before the turn is at the end of the prompt, under
+   the heading "Run by coai before your turn"; when that section says that nothing was run, the model does the task from what
+   it can read and names the command in `notes`; every other rule of those files still applies. The first wording ("because
+   coai runs the checks") is gone: it promised a run that nothing in the plan made. What coai does run before a turn is the
+   instruction step of C9. The bullet is narrow on purpose: it lifts no rule about the code, the paths or secrets, and it
+   gives the model no command.
 5. The fix prompt and the repair prompt go the same road. `CoderPrompt.Fix` says "you have no shell" today: true for claude,
    false for codex. The words that differ come from the vendor's file. The claude fix and repair prompts stay byte for byte.
 6. An override a person wrote is per vendor: `<dataDir>/prompts/coder.md` is claude's; `coder.codex.md` and `coder.agy.md` are
@@ -351,7 +361,7 @@ this job, because coai runs the checks. The claude text stays exactly as it is t
 
 **What the line is not.** It is not a boundary: the unit, the vendor sandbox and the guard hold what a model may do (accepted
 risks C4 and A7). Rule text of the repository still reaches a codex model. An agy model cannot read `.agents` at all (the guard),
-so for agy the line only keeps the model from refusing.
+so for agy the text of a repository's rules arrives only through the instruction step of C9.
 
 Tasks: s7 t1 d1 and s7 t2 d5 (the seam and the road; claude byte for byte), s5 t4 d4 (codex), s6 t3 d6 (agy), s8 t2 d2 and s8 t4
 d4 (the proof).
@@ -389,6 +399,52 @@ ran in. The rule (addendum 1 of the judgement, G14):
 
 No launch is passed on the flag alone.
 
+### C9. The instruction step: what coai runs before turn 0 (second plan round, section L)
+
+**Why.** An instruction file of a repository can order a command before any edit: a rule resolver, a security check. A coder
+of coai runs no command of its own (claude and agy have none; codex is told to run none). So either coai runs that command,
+or nobody does, and the coder must be told which of the two happened. coai never finds the command by reading prose.
+
+1. **Declared.** `.coai/toolchain.yaml` gets ONE optional top-level key, `instructions`: `argv` (a block list, run with no
+   shell; the reader's refusal rule for argv text holds), `perFile` (optional: a block list that is appended once for EACH entry
+   of the task's `files`; an item may hold `{file}`) and `timeoutSeconds` (1 to 300; 60 when absent). `version` stays 1. A
+   repository whose instruction files order a command declares it here. With no key, coai runs nothing and says so.
+2. **Read at the base commit**, as the checks are: a job cannot change the step that instructs it.
+3. **Run by coai, once for a job, before any model is launched**, in a check unit of E2 (`CheckBoundary`): the worktree at the
+   base commit, the job's own home, no credential, no network, the property list of a test step. The tree and HEAD are
+   compared before and after it (the rule of the checks). After s7 t5 the unit does not see the coder folder.
+4. **The output** is its standard output: UTF-8, at most 64 KiB, exit code 0. Standard error goes to the step log. The text is
+   kept in the job folder and used again for a later attempt of the same job (a failover starts a new session).
+5. **A declared step that cannot run refuses the job.** A non-zero exit, a run past its time, more than 64 KiB, bytes that are
+   not UTF-8, a changed tree, a unit that cannot start: the job ends with the stop `instructions-failed` before any model is
+   launched. It is a coder's own stop: no failover, never green. The envelope names the argv, the exit code, the size and the
+   last lines of standard error. Nothing is cut and no job starts with half an instruction. A key the reader cannot read is
+   `toolchain-refused`, as for every other key of the file.
+6. **Into the prompt of every vendor, claude too.** coai appends ONE block after the rendered prompt, under the heading "Run by
+   coai before your turn": the argv, the base commit, and the output in a fence longer than any run of backticks in it. It is a
+   block that coai writes, not a slot of a prompt file. So `coder.md` keeps its bytes and its sha256, and the sha test of s7 t2
+   d5 is not changed. **What does change for claude, said plainly:** on a repository that declares the step, a claude coder is
+   sent today's prompt followed by the block; on a repository that declares none it is sent today's bytes and nothing else.
+   A fix turn and a repair turn resume the session and do not repeat the block.
+7. **With no step declared**, a codex and an agy coder get the block too, and it says: nothing was run, this repository
+   declares no `instructions` step. Their prompt bullet (C7 item 4) points at the block in both cases, so it is true in both.
+8. **The envelope** gets `instructions {declared, argv, exitCode, bytes, sha256, ms}`. `declared: false` is in the envelope of
+   every job that ran with no step, so an orchestrator sees that a coder worked without the repository's own command.
+9. **This repository.** Its `AGENTS.md` orders the rule resolver. Its `.coai/toolchain.yaml` declares the resolver's `read` for
+   the files of the task. The size of that output is not known: s7 t3 measures it on three past tasks first. When one is over
+   64 KiB the step is NOT declared with a cut text; the task result says so and the lead decides.
+
+**What the step is not.** It is not a check of the coder's work: the build and the tests after the turn are that. It is not a
+boundary. Its output is text of the repository at the base commit, as `AGENTS.md` is, and it reaches the vendor of the model.
+
+Scenarios: **V20** a declared step: its output is in the turn-0 prompt that each vendor's CLI was sent, claude's too, and in
+the envelope by its sha256. **V21** each failure of item 5 ends `instructions-failed` with zero model launches. **V22** no step
+declared: the claude prompt is byte for byte today's; a codex and an agy prompt hold the block that says nothing was run; the
+envelope says `declared: false`.
+
+Tasks: s7 t3 (the key, the run, the refusal, the envelope, this repository's file), s7 t2 d5 and d6 (the block), s5 t4 d4 and
+s6 t3 d6 (the bullet), s8 t2 d2 and s8 t4 d4 (the proof: the effect, not only "not refused").
+
 ## D. Rows and the failover order
 
 **The rule does not change** (E1 spec A): a limit, a refusal or a crash goes to the next model at once; only the last model waits;
@@ -408,7 +464,7 @@ the coder's own stops never fail over. A read-only role restarts from turn 0. A 
 The owner accepted the right column for scout and coder on 2026-11-25 (decision 35). Not answered: which measured model takes which
 role when codex or agy is the main AI.
 
-**The codex and agy main-AI rows** are empty today ("no measured model list"). s4 t1 measures the lists; s7 t1 fills the rows with
+**The codex and agy main-AI rows** are empty today ("no measured model list"). s4 t1 measures the lists; s7 t4 fills the rows with
 measured names only. Which model takes which role is the owner's word. Seen on 2026-11-25, not yet a record: `agy models` of 1.5.16
 prints ids (27 names; `gemini-4-argon-medium` and `gemini-3.8-flash-low` are among them; it also lists Claude models, which the
 vendor-routing rule never uses there). s4 t1 writes the record.
@@ -453,6 +509,7 @@ Every switch is one log line and one `role-model-switched` notice that names the
 | Detection, default argv, parsers of other stacks | E4 | none |
 | Parallel tasks, slots, merges, a `review_code` started by coai | E5 | none |
 | The claude key pool | E2 s7 (branch `feat/v2-ep3-e2-s7-keypool`) | s7 starts after that branch is merged: both change `CoderHandle`, `CoderUnit`, `CoderLaunches` and `RoleFailover`. Merged: it came with `feat/v2-ep3-e2-coder` on 2026-11-26 (section 0) |
+| The reader of `.coai/toolchain.yaml` (`ToolchainParse.cs`, `ToolchainModel.cs`, `shared/toolchain.schema.json`) | E3 s7 t3 adds ONE top-level key, `instructions`; E4 s3 t1 adds four names of a project (`restore`, `format`, `testFor`, `testFiles`) | the names do not overlap; the task that lands second merges the reader. E4's SPEC section L names the same boundary |
 | A unit with no network and coai's forwarder with the vendor's hosts (judgement G11) | E4 (`doneWhen` line 8 of its `epic.yaml` on `feat/v2-ep3-e4-plan`); its story is written after s6 t7 d6 | s6 t7 d6 measures agy behind a proxy; nothing else |
 | What claude does with a file that a check planted in the coder's home (judgement, section 4 point 3) | a follow-up for E2 | s7 t5 closes the hole for every vendor and writes the follow-up as a todo (d5) |
 | A status that coai writes into `task.yaml` | E5 / epoch 4 E5 | it would change the approval id of a scope; that epic decides how |
@@ -489,9 +546,12 @@ Risks:
    when the init line does not tell the modes apart) the mode a turn ran in cannot be read. codex: C1 for a command of the
    model, B6 inside the job folder, B10 and B11 are one layer, the vendor sandbox; C2 the codex process has the whole network;
    C3 a real refresh was never run; C4 `AGENTS.md` reaches the model.
-10. The prompt line of C7 tells a model not to run a command that the repository's own instructions order. A repository whose
-    rules need that command to be RUN by the model gets a coder that did not run it; the checks of coai and the code gate are
-    what catch the difference.
+10. The prompt line of C7 tells a model not to run a command that the repository's own instructions order. coai runs that
+    command only when the repository declares it (C9). A repository that orders a command in prose and declares no step gets
+    a coder that worked without it: the prompt says so to the model, the envelope says `declared: false`, and the checks of
+    coai and the code gate are what catch the difference.
+11. The output of the instruction step is paid for in every job (up to 64 KiB of prompt), and it is repository text sent to
+    the vendor of the model, as the rest of the prompt is.
 
 Questions for the owner:
 
@@ -531,21 +591,26 @@ rows of codex and agy.
 Build order: the story order of section G; in a story the `dependsOn` of its tasks. Measure tasks come before the code that
 depends on them, and the judgement comes before any codex or agy launch code.
 
-Test plan: every scenario S1 to S12, P1 to P12 and V1 to V19 has a test that carries its number in its name, or the task result says
+Test plan: every scenario S1 to S12, P1 to P12 and V1 to V22 has a test that carries its number in its name, or the task result says
 which test covers it. FakeCli is the only double; the units, git, the detached runner and stdio are real. Structural scans have a
 companion that proves they match something. The whole MCP suite runs through the MTP executable, never `dotnet test`.
 
 Definition of Done:
 
 - [ ] `start_role` runs `scout` and `judge`; each envelope is strict JSON built by coai, with checked evidence.
-- [ ] `review_plan(featureFolder)` refuses an invalid folder before any round and packs a valid one in topological order; a coder
+- [ ] `review_plan(featureFolder)` refuses an invalid folder before any round and packs a valid one in topological order; a file
+      of the pack that differs in the working tree, in the scope or in the context outside it, refuses the round; a coder
       job is bound to the approved scope and to the context the reviewers read.
 - [ ] For each vendor the judgement shipped: a coder job fixes a red check in the SAME session of turn 0, on a measured release,
       inside a boundary whose rows B1 to B15 were measured and whose relied-on properties the preflight probes before each job. For a vendor it refused: the refusal is in the product and in the results, and the owner
       decided line 2.
 - [ ] The codex and agy rows of `shared/role-defaults.json` hold measured names only.
-- [ ] Each shipped vendor's coder gets its own prompt: its own tool names and the one added line; the claude prompt is byte for
-      byte what it was; on a repository whose instruction file orders a command, turn 0 of a real job is not refused.
+- [ ] Each shipped vendor's coder gets its own prompt: its own tool names and the one added line; the claude prompt file is byte
+      for byte what it was.
+- [ ] A command that a repository declares as its instruction step is run by coai before turn 0, and its output is in the
+      prompt of every vendor's coder; a declared step that cannot run refuses the job; with no step the prompt says that
+      nothing was run. On a repository whose instruction file orders a command and declares it, a real job of each shipped
+      vendor is not refused and its commit follows a rule that only the step's output holds.
 - [ ] The mode of an agy turn is read from its stream or named as measured for the release; no launch is passed on the flag.
 - [ ] The epic acceptance passes on the real binary; the paid proofs are inside their caps and written down.
 - [ ] `validate_work` accepts the `v2` folder; `plan-lifecycle.mjs` is clean; ARCHITECTURE.md, README.md and server.md say what was
@@ -595,3 +660,28 @@ dod items of existing tasks. No complexity number changed.
 For the lead: each cause is a change of an approved plan. Whether the parent plan's change count stops the plan is the lead's
 decision (the judgement, section 10 item 2). In E4's plan the forwarder line and the owner's answers of decision 38 are on
 `feat/v2-ep3-e4-plan`.
+
+## L. Second plan round (proceed, 2026-11-26) — accepted changes
+
+The round (coai session `26308fe5`) read `EPIC_BUNDLE.md` at `6ec9a211`. Both findings were accepted. No new round follows.
+
+1. **C7 and s8 t4 told a coder that coai runs required commands, and nothing made coai run them** (major, security). Now:
+   section C9, the instruction step. A repository declares the command in `.coai/toolchain.yaml`; coai runs it before turn 0 in
+   a check unit at the base commit and appends its output to the prompt of every vendor's coder, claude's too; a declared step
+   that cannot run refuses the job (`instructions-failed`); the prompt bullet of codex and agy points at the block and is
+   true with and without a step (C7 item 4). The claude prompt FILE and its sha test do not change; what a claude coder is
+   sent on a repository that declares a step does (C9 item 6). The proof checks the effect: s8 t4 d4 needs a commit that
+   follows a rule only the step's output holds, and s7 t3 d3 tests every failure with zero model launches. Scenarios V20 to
+   V22.
+2. **B and s3 t5 let a changed context file outside the scope pass in silence** (major, reliability). The plan text said "under
+   the scope". Now B item 6 says every file of the pack, the context too; P4 names both. The code of s3 t5 already takes its
+   list from the pack (`WorkingTreeGuard.Differing`); what was missing is a test of the context and a sentence that names it:
+   the new task s3 t6.
+
+Tasks. One added: s3 t6 (44 tasks). In s7, which holds the device limit of 6: the rows of `shared/role-defaults.json` (the old
+t3) moved into t4 (`t4-coder-route-by-vendor`, d4 and d5, complexity 6), and t3 is now `t3-instruction-step` (complexity 5). t2
+depends on the new t3 and has a d6. Changed text: s5 t4 d4, s6 t3 d6, s7 t2 d5, s8 t2 d2, s8 t4 d4.
+
+For the lead: the bullet of the vendor prompts no longer holds the words of decision 40 "(coai runs the checks)". The owner's
+intent is kept (a coder of codex or agy does not refuse because of such a command), and the line now says what coai ran. Whether
+this repository's own file declares the resolver depends on the size s7 t3 measures. Both findings are plan changes.

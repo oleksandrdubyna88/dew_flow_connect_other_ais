@@ -1,13 +1,16 @@
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: t4-coder-route-by-vendor
-title: "The route of a coder keeps the vendors the table ships; the words claude only leave the product"
+title: "shared/role-defaults.json gets the codex and agy main-AI rows from the measured lists and the failover entries of scout and coder; the route of a coder keeps the vendors the table ships; the words claude only leave the product"
 kind: code
-complexity: 4
+complexity: 6
 dependsOn:
   - t1-coder-vendor-seam
-  - t3-role-defaults-rows
 parallel: false
 files:
+  - shared/role-defaults.json
+  - shared/role-model-names.json
+  - shared/role-route-vectors.json
+  - src_mcp/tests/ARolesAnswerTests.cs
   - src_mcp/src/Server/RoleJobs/CoderRoute.cs
   - src_mcp/src/Tools.cs
   - src_mcp/tests/ACoderRouteByVendorTests.cs
@@ -18,3 +21,7 @@ dod:
     item: "tested with an injected table for each of the four combinations of ship and refuse for codex and agy: the route holds exactly the shipped vendors, and a refused vendor is in no route"
   - id: d3
     item: "a Claude model on codex or agy is still refused by the vendor-routing rule; the tool description and the refusals name the shipped vendors and no longer say claude only"
+  - id: d4
+    item: "(moved here from the rows task, unchanged) the codex and agy main-AI rows hold roles and bands made of names from RESULTS_model_lists.md only, as the owner confirmed them (SPEC section D and section H, question 3); no name is added that the CLI did not print; the vendor-routing rule holds for every entry"
+  - id: d5
+    item: "(moved here from the rows task, unchanged) the scout and coder lists of the claude main-AI row get the failover entries of SPEC section D behind whenVendorRow; a coder entry of another vendor is added only for a vendor whose verdict is ship; the route vectors cover each new list; the roles tool answers them"

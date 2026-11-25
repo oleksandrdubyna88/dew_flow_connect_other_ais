@@ -1,0 +1,19 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t6-working-tree-guard-context
+title: "The working tree guard of a folder round compares every packed file: the scope and the context outside it, each named in the refusal"
+kind: test
+complexity: 3
+dependsOn:
+  - t5-tool-and-round-scenarios
+parallel: false
+files:
+  - src_mcp/src/Server/Stages/FeatureFolderPlan.cs
+  - src_mcp/tests/APlanRoundOverAFeatureFolderTests.cs
+  - research/module_server.md
+dod:
+  - id: d1
+    item: "P4, second plan round finding 2: with HEAD at the commit of the round and a scope that is ONE story, an edit of feature.yaml, of the plan file, of epoch.yaml, of the YAML of the epic and of its spec file EACH refuses the round before any reviewer is launched, and the sentence names the file (one test for each of the five); the same for a staged change and for a deleted file of the context (one test each)"
+  - id: d2
+    item: "the guard takes its list from the pack: a test builds the pack of a fixture and fails when a packed path is not in the compared set, so a file that enters the pack later is compared without a change of the guard; a file the reviewers do not read (a RESULTS file, a free .md, a node outside the scope that no scope node depends on) is still no reason to refuse"
+  - id: d3
+    item: "the refusal says file(s) the reviewers read, not file(s) of the scope, and names at most ten; the task result says for each test of d1 whether it was red before a change of the code (the code of t5 compares the packed paths already); research/module_server.md says what is compared"

@@ -13,7 +13,7 @@ dod:
   - id: d1
     item: "on a real coai-mcp over stdio with the real detached runner and FakeCli as every CLI: a scout job and a judge job end succeeded with their strict JSON envelopes"
   - id: d2
-    item: "the test reads the table of this repository, so it passes in each of the four combinations: for each vendor the table ships, a coder job routed to it goes red, then green after one fix turn, the recorded argv shows the session of turn 0 resumed (exec resume, --conversation), and the prompt the fake recorded on turn 0 is that vendor's own (V17); for each vendor the table refuses, start_role with a model of that vendor is refused and the fake records no launch of it"
+    item: "the test reads the table of this repository, so it passes in each of the four combinations: for each vendor the table ships, a coder job routed to it goes red, then green after one fix turn, the recorded argv shows the session of turn 0 resumed (exec resume, --conversation), and the prompt the fake recorded on turn 0 is that vendor's own (V17) and ends with the block of the instruction step that the fixture repository declares (V20); in the same run a fixture whose declared step exits non-zero ends instructions-failed with no launch (V21); for each vendor the table refuses, start_role with a model of that vendor is refused and the fake records no launch of it"
   - id: d3
     item: "in the same run: review_plan with featureFolder on an invalid fixture is refused with zero reviewer launches; on a valid one the prompt that FakeCli recorded holds the sections in topological order; the pack of the v2 folder of this repository for this epic is under 256 KiB"
   - id: d4
