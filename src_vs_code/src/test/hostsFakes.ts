@@ -123,7 +123,7 @@ export class FakeDisk implements RefusalsDisk {
     if (this.failMark || markers.length >= 32) {
       return undefined;
     }
-    let name = '';
+    let name: string;
     do {
       this.sequence += 1;
       name = `unsure-${this.sequence}.json`;

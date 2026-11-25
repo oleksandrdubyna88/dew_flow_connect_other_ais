@@ -129,6 +129,9 @@ const isFullFor = (known: RefusalsFile | undefined, host: string): boolean =>
 /** The hosts a new file can start with: the first `HOSTS_MAX` distinct ones, in order (§ S1.4). */
 const firstDistinct = (rows: readonly { readonly host: string }[]): readonly string[] => [...new Set(rows.map((one) => one.host))].slice(0, HOSTS_MAX);
 
+/** § S1.4: a "no" the new file cannot hold among its first `HOSTS_MAX` distinct hosts is not written over. */
+const fitsFirst = (change: Extract<HostChange, { kind: 'mend' }>, rows: readonly { readonly host: string }[]): boolean => change.answer !== 'no' || firstDistinct(rows).includes(change.host);
+
 const rowOf = (done: Committed): HostAnswer | undefined => (done.kind === 'written' || done.kind === 'kept' ? done.row : undefined);
 
 const answerAfterFile = (result: Committed, copy: Committed): Committed =>
@@ -524,9 +527,11 @@ class Keeper implements HostKeeper {
       return NOTHING;
     }
     const rows = this.mendRows(change);
-    if (change.answer === 'no' && !firstDistinct(rows).includes(change.host)) {
-      return { kind: 'full' };
-    }
+
+    return fitsFirst(change, rows) ? this.mendWritten(rows) : { kind: 'full' };
+  }
+
+  private async mendWritten(rows: readonly { readonly host: string; readonly utc: string }[]): Promise<Committed> {
     const made = await this.seams.refusals.commit({ kind: 'mend', gen: this.remembered?.gen ?? 0, rows, utc: this.seams.now() });
     await this.look();
 

@@ -271,12 +271,15 @@ const migrate: Merger<'migrate'> = (file, change, by) => {
   return add.length === 0 ? FULL : next(file, by, { refused: [...file.refused, ...add], migratedUtc: file.migratedUtc ?? change.utc });
 };
 
+/** Some remembered refusals are missing and none can be added: the answer is `full`, never `kept` (§ S1.5: a regain the file does not take is held). */
 const regain: Merger<'regain'> = (file, change, by) => {
   const { add, missing } = addable(file, change.rows);
+
+  return missing > 0 && add.length === 0 ? FULL : regained(file, change, by, add);
+};
+
+const regained = (file: RefusalsFile, change: Extract<RefusalChange, { kind: 'regain' }>, by: string, add: readonly Refusal[]): Changed => {
   const stop = stopToAdd(file, change.stop);
-  if (missing > 0 && add.length === 0) {
-    return FULL;
-  }
 
   return add.length === 0 && stop === undefined ? KEPT : next(file, by, { refused: [...file.refused, ...add], ...(stop === undefined ? {} : { stop }) }, change.gen);
 };

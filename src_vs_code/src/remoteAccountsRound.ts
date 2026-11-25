@@ -321,9 +321,12 @@ async function settled(context: Context, state: RoundState, host: string, mode: 
   return { kind: 'published', state: next, read };
 }
 
-/** What ends a step before its door: a Stop or a moved generation ends the round; a host with no terminal is skipped. */
+/** Whether the round is over: the generation moved, or a Stop is saved (read again, so a Forget that came while it was read is seen too). */
+const ended = async (context: Context): Promise<boolean> => moved(context) || (await context.seams.stopped()) || moved(context);
+
+/** What ends a step before its door, and again before its call: a Stop or a moved generation ends the round; a host with no terminal is skipped. */
 async function beforeCall(context: Context, state: RoundState, host: string): Promise<Step | undefined> {
-  if (moved(context) || (await context.seams.stopped()) || moved(context)) {
+  if (await ended(context)) {
     return { kind: 'abandoned', state };
   }
 
@@ -344,11 +347,10 @@ async function hostStep(context: Context, state: RoundState, host: string, call:
 
     return { kind: 'skipped', state: skipped };
   }
-  if (moved(context) || (await seams.stopped()) || moved(context)) {
-    return { kind: 'abandoned', state };
-  }
-  if (!hostLive(seams, host)) {
-    return { kind: 'skipped', state };
+  // the door took time: the Stop, the generation and the terminal are looked at again, right before the call
+  const late = await beforeCall(context, state, host);
+  if (late !== undefined) {
+    return late;
   }
   const mode = modeFor(call);
 

@@ -191,31 +191,38 @@ class AccountsWindow implements TerminalAccounts {
     if (this.disposed) {
       return undefined;
     }
-    let ran = false;
-    const result = await this.latch(async () => {
-      ran = true;
-      this.running = true;
-      this.roundStartedMs = Date.now();
-      this.roundGeneration = this.generation;
+    const mine = { ran: false };
+    const result = await this.latch(() => this.oneRound(trigger, mine));
+    this.runPending(mine.ran);
+
+    return result;
+  }
+
+  private async oneRound(trigger: Trigger, mine: { ran: boolean }): Promise<RoundResult | undefined> {
+    mine.ran = true;
+    this.running = true;
+    this.roundStartedMs = Date.now();
+    this.roundGeneration = this.generation;
+    this.landed.fire();
+    try {
+      return await settleRound(
+        () => runRound(this.seams, this.memoryNow, this.round, trigger),
+        (done) => this.afterRound(done),
+        () => { this.apply(timerFor({ kind: 'at', atMs: Date.now() + ROUND_GAP_MS }, this.test, Date.now())); },
+        () => { defaultRemoteSeams().log(ROUND_FAILED_LINE); },
+      );
+    } finally {
+      this.running = false;
       this.landed.fire();
-      try {
-        return await settleRound(
-          () => runRound(this.seams, this.memoryNow, this.round, trigger),
-          (done) => this.afterRound(done),
-          () => { this.apply(timerFor({ kind: 'at', atMs: Date.now() + ROUND_GAP_MS }, this.test, Date.now())); },
-          () => { defaultRemoteSeams().log(ROUND_FAILED_LINE); },
-        );
-      } finally {
-        this.running = false;
-        this.landed.fire();
-      }
-    });
+    }
+  }
+
+  /** A Start that came while a round ran is run when that round has ended (the door refuses a second round, it does not queue one). */
+  private runPending(ran: boolean): void {
     if (ran && this.startPending && !this.disposed) {
       this.startPending = false;
       void this.runNow('refresh');
     }
-
-    return result;
   }
 
   /** After a round, or after one that failed (`done` is nothing): the memory it left, and the next timer, counted from its end or from now. */
