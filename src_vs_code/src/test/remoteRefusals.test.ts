@@ -60,7 +60,7 @@ test('A1-T21: nothing automatic shortens the file, by construction', () => {
 test('A1-T23 (the read half): what the file reads as', () => {
   const ok = textOf({ ...fileOf(['a', 'b']), migratedUtc: T, stop: { utc: T } });
   assert.deepEqual(refusalsOf(ok)?.refused.map((one) => one.host), ['a', 'b']);
-  for (const bad of ['not json', '[]', '{}', '{"v":2,"gen":1,"by":"x","refused":[]}', '{"v":1}', '{"v":1,"gen":0,"by":"x","refused":[]}', '{"v":1,"gen":1,"by":"","refused":[]}',
+  for (const bad of ['not json', '[]', '{}', '{"v":2,"gen":1,"by":"x","refused":[]}', '{"v":1}', '{"v":1,"gen":0,"by":"x","refused":[]}', '{"v":1,"gen":1,"by":"","refused":[]}', '{"v":1,"gen":9007199254740992,"by":"x","refused":[]}',
     '{"v":1,"gen":1,"by":"x","refused":[{"host":"","utc":"t"}]}', '{"v":1,"gen":1,"by":"x","refused":[],"stop":5}', JSON.stringify({ ...fileOf([]), refused: Array.from({ length: 101 }, (_, n) => ({ host: `h${n}`, utc: T })) }), ' '.repeat(REFUSALS_BYTES_MAX + 1)]) {
     assert.equal(refusalsOf(bad), undefined, `a file that cannot be read was read: ${bad.slice(0, 40)}`);
   }

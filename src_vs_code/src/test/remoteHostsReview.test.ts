@@ -2,7 +2,7 @@ import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { EMPTY_FILE, textOf } from '../remoteRefusals';
-import { Backing, FakeDisk, KEY, row, windowOver } from './hostsFakes';
+import { Backing, FakeDisk, KEY, instant, row, windowOver } from './hostsFakes';
 
 /**
  * The Opus review of E1.S1 (findings 1 to 5): the keeper does what § S1.3, § S1.4 and § S1.5 already say. Pure: a fake `globalState` and
@@ -175,4 +175,78 @@ test('R11: a "Save now" that is not whole names the host of the item that failed
   assert.equal(result.kind, 'full');
   assert.equal((result as { failedHost?: string }).failedHost, 'h2', 'the press did not name the host that did not fit');
   assert.ok(disk.refusedHosts().includes('h1'));
+});
+
+test('R12 (T2): a window that remembers a full file with h and reads an older full file without h admits nothing for h', async () => {
+  const backing = new Backing();
+  const disk = new FakeDisk();
+  const a = windowOver(backing, disk);
+  const others = Array.from({ length: 99 }, (_, n) => `r${n}`);
+  disk.files.set('refused.json', fileOf(...others, 'h'));
+  await a.keeper.admit('probe');
+  // an older file of 100 other refusals goes over it (a stale writer), and the copy in the list is gone
+  disk.files.set('refused.json', textOf({ ...EMPTY_FILE, gen: 2, by: 'older', refused: [...others, 'x'].map((host) => ({ host, utc: NOW })) }));
+  backing.values.set(KEY, []);
+  a.view.sync();
+  const decision = await a.keeper.admit('h');
+  assert.notEqual(decision.kind, 'read', 'a refusal the file had no room to take was dropped and the host was read');
+  assert.equal(await a.keeper.consent('h'), 'no');
+});
+
+test('R13 (T4): a profile that refuses the copy of a "no" does not stop the file from taking it', async () => {
+  const backing = new Backing();
+  const disk = new FakeDisk();
+  const a = windowOver(backing, disk);
+  (a.view as { update: unknown }).update = async () => { throw new Error('the profile is full'); };
+  await a.keeper.commit({ kind: 'person', host: 'h', answer: 'no' });
+  assert.ok(disk.refusedHosts().includes('h') || (await a.keeper.consent('h')) === 'no', 'a refused copy left the refusal nowhere');
+  assert.deepEqual(disk.refusedHosts(), ['h'], 'the refusal was not written to the file');
+  assert.equal((await a.keeper.admit('h')).kind, 'refused');
+});
+
+test('R14 (T7): a torn note that is still there after the press is not reported as removed', async () => {
+  const disk = new FakeDisk();
+  const a = windowOver(new Backing(), disk);
+  disk.files.set(TORN, '{');
+  disk.unmark = async () => undefined;
+  const result = await a.keeper.saveWaiting();
+  assert.ok(['written', 'kept'].includes(result.kind));
+  assert.ok(disk.file()?.stop !== undefined, 'the stop was not kept');
+  assert.equal(a.keeper.savedTorn(), false, 'the press said the torn note was removed, and it is still there');
+});
+
+test('R15 (T11): a mend whose "no" does not fit among the first 100 rows answers full and writes nothing', async () => {
+  const backing = new Backing();
+  backing.values.set(KEY, Array.from({ length: 100 }, (_, n) => row(`r${n}`, 'no')));
+  const disk = new FakeDisk();
+  disk.files.set('refused.json', '{');
+  const a = windowOver(backing, disk);
+  const result = await a.keeper.commit({ kind: 'mend', host: 'new', answer: 'no' });
+  assert.equal(result.kind, 'full', 'a repair that dropped the selected refusal was reported as written');
+  assert.ok(disk.files.get('refused.json') === '{', 'a file was written although the refusal did not fit');
+});
+
+test('R16 (T12): the markers are listed BEFORE the file is read, so a hand-over between the two is still seen', async () => {
+  const disk = new FakeDisk();
+  disk.lock = { token: 'hung' };
+  await windowOver(new Backing(), disk).keeper.commit({ kind: 'person', host: 'h', answer: 'no' });
+  assert.equal(disk.markers().length, 1);
+  disk.lock = undefined;
+  const plain = disk.read;
+  let handed = false;
+  disk.read = async () => {
+    const got = await plain();
+    if (!handed) {
+      handed = true;
+      await instant();
+      disk.files.set('refused.json', fileOf('h'));
+      for (const name of disk.markers()) {
+        disk.files.delete(name);
+      }
+    }
+
+    return got;
+  };
+  const c = windowOver(new Backing(), disk);
+  assert.equal(await c.keeper.consent('h'), 'no', 'a refusal that landed between the file read and the marker list was seen in neither');
 });

@@ -126,10 +126,13 @@ const stops = (result: Committed): boolean => result.kind !== 'written' && resul
 const isFullFor = (known: RefusalsFile | undefined, host: string): boolean =>
   known !== undefined && known.refused.length >= HOSTS_MAX && !known.refused.some((one) => one.host === host);
 
+/** The hosts a new file can start with: the first `HOSTS_MAX` distinct ones, in order (§ S1.4). */
+const firstDistinct = (rows: readonly { readonly host: string }[]): readonly string[] => [...new Set(rows.map((one) => one.host))].slice(0, HOSTS_MAX);
+
 const rowOf = (done: Committed): HostAnswer | undefined => (done.kind === 'written' || done.kind === 'kept' ? done.row : undefined);
 
 const answerAfterFile = (result: Committed, copy: Committed): Committed =>
-  (result.kind === 'full' ? result : copy.kind === 'damaged' ? { kind: 'written', row: undefined, evicted: [] } : copy);
+  (result.kind === 'full' ? result : copy.kind === 'damaged' || copy.kind === 'unwritten' ? { kind: 'written', row: undefined, evicted: [] } : copy);
 
 class Keeper implements HostKeeper {
   private tail: Promise<unknown> = Promise.resolve();
@@ -189,12 +192,14 @@ class Keeper implements HostKeeper {
     return this.seams.refusals.read();
   }
 
+  /** A regain the file did not take (not written, not kept: busy, a disk that refuses, or no room) is held and marked (§ S1.5). */
   private async holdIf(result: Committed, had: RefusalsFile): Promise<void> {
-    if (result.kind !== 'unwritten') {
+    if (isLanded(result)) {
       return;
     }
+    const why = result.kind === 'unwritten' ? result.why : 'disk';
     for (const item of heldOfFile(had)) {
-      await this.hold(item, result.why);
+      await this.hold(item, why);
     }
   }
 
@@ -401,9 +406,14 @@ class Keeper implements HostKeeper {
     if (isFullFor(this.remembered, host)) {
       return Promise.resolve({ kind: 'full' });
     }
-    const copy = commit(this.seams.state, this.seams.key, change, hostMerge(this.seams.now()));
+    const copy = this.copied(change);
 
     return this.queued(() => this.refuseAfterCopy(host, copy));
+  }
+
+  /** The copy of a "no" in the list, started in the step of the press. A profile that refuses it gives `unwritten`; it never rejects, so the file is still written. */
+  private copied(change: HostChange): Promise<Committed> {
+    return commit(this.seams.state, this.seams.key, change, hostMerge(this.seams.now())).catch((): Committed => ({ kind: 'unwritten', why: 'disk' }));
   }
 
   private async refuseAfterCopy(host: string, copy: Promise<Committed>): Promise<Committed> {
@@ -487,7 +497,7 @@ class Keeper implements HostKeeper {
       return { kind: 'full' };
     }
 
-    return this.refuseAfterCopy(change.host, commit(this.seams.state, this.seams.key, change, hostMerge(this.seams.now())));
+    return this.refuseAfterCopy(change.host, this.copied(change));
   }
 
   private async mendDamage(change: Extract<HostChange, { kind: 'mend' }>, read: RefusalsRead): Promise<Committed> {
@@ -514,6 +524,9 @@ class Keeper implements HostKeeper {
       return NOTHING;
     }
     const rows = this.mendRows(change);
+    if (change.answer === 'no' && !firstDistinct(rows).includes(change.host)) {
+      return { kind: 'full' };
+    }
     const made = await this.seams.refusals.commit({ kind: 'mend', gen: this.remembered?.gen ?? 0, rows, utc: this.seams.now() });
     await this.look();
 
@@ -632,9 +645,16 @@ class Keeper implements HostKeeper {
     for (const one of torn) {
       await this.seams.refusals.unmark(one.name);
     }
-    this.tornRemoved = true;
+    this.tornRemoved = await this.noneLeft(torn);
 
     return result;
+  }
+
+  /** The markers are listed again: `unmark` never throws, so only the list says whether the torn notes are gone. */
+  private async noneLeft(torn: readonly Waiting[]): Promise<boolean> {
+    const again = await this.seams.refusals.read();
+
+    return again.kind === 'file' && !again.waiting.some((one) => torn.some((was) => was.name === one.name));
   }
 
   savedTorn = (): boolean => this.tornRemoved;

@@ -120,7 +120,7 @@ function refusedOf(value: unknown): readonly Refusal[] | undefined {
   return made.every((one) => one !== undefined) ? (made as readonly Refusal[]) : undefined;
 }
 
-const isGen = (value: unknown): value is number => typeof value === 'number' && Number.isInteger(value) && value >= 1;
+const isGen = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 1;
 
 /** The record in a text, or nothing: too large, not JSON, or not an object. */
 function recordFromText(text: string): Rec | undefined {
@@ -272,8 +272,11 @@ const migrate: Merger<'migrate'> = (file, change, by) => {
 };
 
 const regain: Merger<'regain'> = (file, change, by) => {
-  const { add } = addable(file, change.rows);
+  const { add, missing } = addable(file, change.rows);
   const stop = stopToAdd(file, change.stop);
+  if (missing > 0 && add.length === 0) {
+    return FULL;
+  }
 
   return add.length === 0 && stop === undefined ? KEPT : next(file, by, { refused: [...file.refused, ...add], ...(stop === undefined ? {} : { stop }) }, change.gen);
 };
@@ -408,8 +411,9 @@ class Writer {
   }
 
   async read(): Promise<RefusalsRead> {
-    const file = await this.readFile();
+    // The markers first: a marker that is removed after its change landed is then covered by the file read that comes after it.
     const marks = await this.disk.marks();
+    const file = await this.readFile();
     if (file === undefined || marks === 'failed') {
       return { kind: 'damaged' };
     }
