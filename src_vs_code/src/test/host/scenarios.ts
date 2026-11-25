@@ -986,13 +986,13 @@ const SCENARIOS: readonly Scenario[] = [
     run: theConsentOfAHostIsKeptInTheRealGlobalState,
   },
   {
-    // A1-H1 of the accounts plan (E1.S1): the hosts store in a real editor — the automatic yes, a person's no in the list and in the real refusals file, the Stop, and a profile put back as found.
-    name: 'the hosts store writes the automatic yes, the refusal in the list and in the refusals file, and the Stop, and leaves the profile as it was found',
+    // A1-H1 of the accounts plan (E1.S1, as the cut leaves it): the hosts store in a real editor — a host with no answer stays not-asked and no automatic row is written, a person's no in the list and in the real refusals file, the Stop, and a profile put back as found.
+    name: 'the hosts store writes no automatic yes, keeps the refusal in the list and in the refusals file, and the Stop, and leaves the profile as it was found',
     run: theHostsStoreWritesTheListAndTheRefusalsFile,
   },
   {
-    // A1-H2 (E1.S1): the setting through the real configuration; the scenario fails, it does not skip, when the editor refuses the user-level key.
-    name: 'the setting terminalAccountsAllowNewHosts reaches the round door through the real configuration',
+    // A1-H2 (E1.S1, as the cut leaves it): the setting is read through the real configuration and has no effect on the round door; the scenario fails, it does not skip, when the editor refuses the user-level key.
+    name: 'the setting terminalAccountsAllowNewHosts is read from the real configuration and has no effect on the round door',
     run: theSettingReachesTheDoorThroughTheRealConfiguration,
   },
   {
