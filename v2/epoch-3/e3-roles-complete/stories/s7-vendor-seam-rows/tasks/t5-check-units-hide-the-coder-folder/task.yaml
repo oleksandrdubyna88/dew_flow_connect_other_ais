@@ -1,0 +1,26 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t5-check-units-hide-the-coder-folder
+title: "No check unit sees the coder folder or another job's folder: the job folder is hidden and the check's own folders are bound one by one, with a preflight row for each (a measured hole: a build step read the sign-in copy and wrote the guard file)"
+kind: security
+complexity: 4
+dependsOn: []
+parallel: false
+security: true
+files:
+  - src_mcp/runners/Toolchain/BoundaryUnit.cs
+  - src_mcp/runners/Toolchain/BoundaryPreflight.cs
+  - src_mcp/runners/Toolchain/CheckBoundary.cs
+  - src_mcp/tests/ACheckUnitHidesTheCoderFolderTests.cs
+  - src_mcp/tests/ACheckBoundaryUnitTests.cs
+  - research/module_runners.md
+dod:
+  - id: d1
+    item: "judgement S1 and section 4 (measured there: with BindPaths of the whole job folder a command of a check unit read the sign-in copies and wrote hooks.json): BoundaryUnit.Properties no longer binds the job folder; in every check unit the job folder is an empty read-only tmpfs and the check's own folders (BoundaryJob.Folders) are bound one by one, so a folder made later under the job folder is hidden unless it is named there; the check's HOME, temp folders and caches work as before"
+  - id: d2
+    item: "judgement S2: the folder that holds all job folders is hidden in every check unit before the job's own folders are bound, also when COAI_CODER_JOBS puts it outside the home"
+  - id: d3
+    item: "ids K1 and K2: the preflight of the CHECK unit, in BOTH network states, has a row for a canary that coai plants in the job's coder folder (it cannot be read, listed or written) and a row for a canary in a stand-in folder of another job (it cannot be read); a wrong answer refuses the job before any check; each row goes red when its property is dropped through the test seam, and a control unit with the old bind shows that the read then works"
+  - id: d4
+    item: "on a real unit: a check step with the host network (the fake as a build) cannot read a stand-in sign-in copy in the coder's home and cannot write a stand-in guard folder; the real build and the whole suite of this repository still pass under the new property list, and the numbers are in the task result; the property list of the claude CODER's unit is byte for byte what it was"
+  - id: d5
+    item: "research/module_runners.md says what a check unit sees; the task result carries the follow-up for E2 as a written todo: what claude 2.1.330 does with a file that a check planted in the coder's home before this fix was not measured"

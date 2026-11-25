@@ -1,0 +1,31 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t7-agy-open-rows-measure
+title: "Measure what the judgement left open for agy before any code of this story: B13 on a resumed turn, the guard folder read-only, the stream beside the hook, a sign-in copy with no refresh token, the program from a read-only copy, agy behind a proxy; then the owner's word"
+kind: measure
+complexity: 6
+dependsOn: []
+parallel: false
+security: true
+files:
+  - v2/spikes/RESULTS_agy_coder.md
+  - v2/spikes/RESULTS_codex_agy_write_boundary_judgement.md
+  - shared/coder-boundary-releases.json
+  - src_mcp/tests/fixtures/role-stops/agy-mode-fallback.json
+  - src_mcp/tests/fixtures/role-stops/agy-copy-expired.json
+dod:
+  - id: d1
+    item: "before anything else the installed release is read with a scratch home: when it is not the release of RESULTS_agy_coder.md the task stops and reports, because the rows of s4 t5 must be measured again on the new release first (about 22 paid turns; the spend is the owner's word); the sha256 of the measured program file is recorded"
+  - id: d2
+    item: "judgement G1, row B13, with the smallest model, the coder agent, the guard and the unit of RESULTS_agy_coder.md sections 2 and 3, cwd = the guard folder, the worktree an --add-dir root: a RESUMED turn with canary PreToolUse and SessionStart hooks, an agent and a rule committed in .agents of the worktree; and a resumed turn after a hooks file and an agent file were written into the worktree between the turns (as a check can write them); recorded for each: no canary hook ran, and the guard still saw and decided every tool call"
+  - id: d3
+    item: "the guard folder bound read-only in the unit: does a turn work, and what agy writes into its cwd at all (the tree diff of the guard folder); the tool events of the stream beside the hook payloads: is the id of a tool event the toolCall.id the hook saw, which name the stream uses, how a denied tool looks; where the stream names the mode; the stderr line of a mode fall-back saved as the fixture; the hook name of the multi-edit tool when the model can be made to use it"
+  - id: d4
+    item: "judgement G10, the sign-in: a copy with a valid access token and NO refresh token: agy models and one turn; the text and exit code of such a copy whose expiry is in the past, saved as the fixture; agy models in a unit with no repository refreshes an expired full copy, and a full copy whose expiry was set to the past is refreshed at the start; the 8-hex fingerprint of the refresh token (never the value) is the same after each"
+  - id: d5
+    item: "judgement G9, the program: a copy of the measured binary in another folder, bound read-only: --version, models and one turn; what agy tries to write or fetch for an update of itself there (stderr, the diff of the home and of the temp folder), and whether a setting or a variable turns the self-update off"
+  - id: d6
+    item: "judgement G11, the network: a unit with PrivateNetwork=yes and the proxy variables at a relay inside the unit that passes each connection through a unix socket to a forwarder outside (harness scripts; they log host and port only): do agy models and one turn work; the list of hosts; which connection, if any, does not use the proxy"
+  - id: d7
+    item: "12 paid turns at most, every call and its tokens written down; the real sign-in file and the manifest of the real ~/.gemini are the same before and after; no agy command runs in the real home; every copy is deleted; nothing in the results is a token or a part of one"
+  - id: d8
+    item: "the results are a new section of RESULTS_agy_coder.md under a heading with the release, with one line holds or does not hold for each of d2 to d6; the important model writes an addendum of the judgement (ship or refuse for the release; which of the ids AG-P2, AG-G5, AG-B2, AG-B3 and AG-R2 enter the table; the accepted risks of its section 7 as they then stand); the addendum is put to the OWNER, and only with the owner's recorded word ONE commit adds the release with its two headings and the sha256 to shared/coder-boundary-releases.json (SPEC section C2); when B13 does not hold on a resumed turn the addendum says refuse and the row of SPEC section C5 applies"

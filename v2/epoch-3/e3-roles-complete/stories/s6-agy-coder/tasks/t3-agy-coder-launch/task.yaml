@@ -1,6 +1,6 @@
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: t3-agy-coder-launch
-title: "The agy coder launch: the measured argv fresh and resumed with --conversation, the guard folder, the unit additions of the judgement, the minimal environment"
+title: "The agy coder launch: the measured argv with the mode and the agent on every turn, --conversation on a fix turn, the guard folder as the working directory and never the worktree, the measured unit with the main checkout hidden, the sign-in copy by its recipe, the minimal environment"
 kind: security
 complexity: 6
 dependsOn:
@@ -14,8 +14,12 @@ files:
   - src_mcp/tests/AAgyCoderLaunchTests.cs
 dod:
   - id: d1
-    item: "V3 and V4: the fresh argv is exactly the flag set that RESULTS_agy_coder.md names; a fix turn has --conversation with the id of turn 0 and the same guard; none of the never-flags of SPEC section C3 is reachable (a test tries each)"
+    item: "V3 and V4, id AG-M1, judgement G5 and G6: the fresh argv is exactly the flag set AG1 that RESULTS_agy_coder.md names, with --mode accept-edits AND --agent coai-coder on EVERY argv; a fix turn adds --conversation with the id of turn 0 and changes nothing else, so a conversation that agy starts in silence is still the coder agent behind the guard; none of the never-flags of SPEC section C3 is reachable (a test tries each)"
   - id: d2
-    item: "the unit has the additions the judgement listed and a home of its own in the job folder; V14: only the allow-list and the sign-in of agy reach the CLI, read from inside a real unit, and a canary value is in no recorded argv"
+    item: "judgement G7, id AG-B1: the working directory of the unit is the guard folder of the job and NEVER the worktree (the seam of s7 t1 carries it; a test fails for an agy launch whose cwd is the worktree); the worktree is the one --add-dir root; the guard folder is bound read-only in the unit when the addendum of t7 holds AG-B3"
   - id: d3
+    item: "ids U2, U3, U6 and U8: the unit is the measured one — the main checkout and the coder root HIDDEN and not read-only, only <main>/.git and the worktree bound back, the folder of all jobs hidden, a home of its own in the job's coder folder with the sign-in copy of s7 t6 by the recipe the addendum allows (the copy with no refresh token, a fresh access token before every launch and a turn capped at 45 minutes; or the full copy, read-write); never the real sign-in file"
+  - id: d4
+    item: "V14, id U7: only the allow-list reaches the CLI, compared name by name from inside a real unit; agy gets no variable for its sign-in; a canary value is in no recorded argv"
+  - id: d5
     item: "every existing agy consultant, question and reviewer launch builds the same argv as before, byte for byte"

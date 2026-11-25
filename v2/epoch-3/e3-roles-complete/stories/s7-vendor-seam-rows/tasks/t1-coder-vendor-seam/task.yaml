@@ -1,6 +1,6 @@
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: t1-coder-vendor-seam
-title: "One seam per vendor for the coder launch (capability, argv, home, sign-in, program), a resume handle that carries the vendor, and shared/coder-boundary-releases.json as the one table; claude unchanged"
+title: "One seam per vendor for the coder launch (capability, argv, unit, working directory, home, sign-in, program), a resume handle that carries the vendor, and shared/coder-boundary-releases.json as the one table of verdicts, measured releases and property ids; claude unchanged"
 kind: security
 complexity: 6
 dependsOn: []
@@ -12,16 +12,17 @@ files:
   - src_mcp/runners/Consultation/CoderLaunches.cs
   - src_mcp/runners/Consultation/CoderHandle.cs
   - src_mcp/runners/Toolchain/CoderUnit.cs
+  - src_mcp/runners/Toolchain/CoderBoundary.cs
   - src_mcp/runners/Toolchain/CoderProgram.cs
   - src_mcp/tests/ACoderVendorSeamTests.cs
 dod:
   - id: d1
-    item: "one type per vendor gives the write capability probe, the fresh and the resumed argv, the home layout, the sign-in bind or the variable name, and the real path of the program; the claude argv, the property list of the claude unit and the floor of ClaudeWriteCapability are what they were (the existing coder tests pass unchanged)"
+    item: "judgement S6: one type per vendor gives the write capability probe, the fresh and the resumed argv, the property list of the unit (so a vendor can HIDE the main checkout and the coder root where claude binds them read-only), the working directory of the unit (CoderBoundary forces the worktree today; agy needs its guard folder), the environment allow-list, the home layout, the sign-in recipe and the real path of the program; the claude argv, the property list of the claude unit and the floor of ClaudeWriteCapability are what they were (the existing coder tests pass unchanged)"
   - id: d2
     item: "V5: a resume handle carries the vendor beside the job and the worktree, and a handle of another vendor, job or worktree is refused before a process starts"
   - id: d3
-    item: "V11: shared/coder-boundary-releases.json is the ONE table: per vendor the verdict (ship or refuse), the measured releases (exact; each with the heading of its results and of its judgement) and the ids of the properties the verdict relies on; a vendor with the verdict refuse or with no release is refused with a sentence that names the shipped vendors; a scan test fails when a second place decides it, and its companion proves the scan matches the one place"
+    item: "V11, judgement S5: shared/coder-boundary-releases.json is the ONE table: per vendor the verdict (ship or refuse), the measured releases (exact; each with the heading of its results, the heading of its judgement and the sha256 of the measured program file) and the ids of the properties the verdict relies on, each with its class (pre, launch, turn or release, judgement section 8); it starts with the verdict ship and NO release for codex and for agy — a release is added only by the commit of s5 t6 or s6 t7; a vendor with the verdict refuse or with no release is refused with a sentence that names the shipped vendors; a scan test fails when a second place decides it, and its companion proves the scan matches the one place"
   - id: d4
-    item: "the table is filled only from the judgement file: a test reads the repository and fails for a release whose results heading or judgement verdict is not there, and for a relied-on id that the judgement does not list"
+    item: "the table is filled only from the judgement file: a test reads the repository and fails for a release whose results heading, judgement verdict or sha256 is not there, for a relied-on id that the judgement does not list, and for an id whose class differs from the judgement's"
   - id: d5
-    item: "the seam is built for every combination of verdicts: with both vendors refused the table still refuses them by data and the tests of this task pass"
+    item: "the seam is built for every combination of verdicts: with both vendors refused, or with no release for either, the table still refuses them by data and the tests of this task pass"

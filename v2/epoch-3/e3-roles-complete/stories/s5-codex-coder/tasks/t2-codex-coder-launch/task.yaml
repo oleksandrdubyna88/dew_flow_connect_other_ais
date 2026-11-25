@@ -1,6 +1,6 @@
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: t2-codex-coder-launch
-title: "The codex coder launch: the measured argv fresh and resumed, the worktree as cwd, CODEX_HOME in the job folder, the unit additions of the judgement, the minimal environment"
+title: "The codex coder launch: the measured argv fresh and resumed, the worktree as cwd, the profile in config.toml before every turn, CODEX_HOME in the job folder, the measured unit with the main checkout hidden, the minimal environment with the refresh override"
 kind: security
 complexity: 6
 dependsOn:
@@ -10,11 +10,16 @@ security: true
 files:
   - src_mcp/runners/Consultation/CodexConsultant.cs
   - src_mcp/runners/Toolchain/CodexCoderUnit.cs
+  - shared/coder-report.codex.schema.json
   - src_mcp/tests/ACodexCoderLaunchTests.cs
 dod:
   - id: d1
-    item: "V1 and V2: the fresh argv is exactly the flag set that RESULTS_codex_coder.md names, with the worktree as cwd; a fix turn is exec resume with the thread of turn 0 and the same limit; none of the never-flags of SPEC section C3 is reachable (a test tries each)"
+    item: "V1 and V2, id CX-C2: the fresh argv is exactly the flag set CX1 that RESULTS_codex_coder.md names, as the addendum of t6 confirmed it, with the worktree as cwd; a fix turn is exec resume with the thread of turn 0 and every flag of the fresh argv that exec resume accepts; none of the never-flags of SPEC section C3 is reachable (a test tries each)"
   - id: d2
-    item: "the unit has the additions the judgement listed (what is hidden from a child command, a home with CODEX_HOME inside the job folder); V14: only the allow-list and the one name of the vendor variable reach the CLI, read from inside a real unit, and a canary value is in no recorded argv"
+    item: "id CX-C1, judgement X4 and X8: the job's config.toml (the permission profile coai as default_permissions) is written and read back before EVERY launch, fresh and resumed, and no turn starts without it; the output schema is the flat variant the API accepts, a test holds it equal to coai's report reader, and the reader stays the check of a report"
   - id: d3
+    item: "judgement X5, ids U2, U3, U6 and U8: the unit is the measured one — the main checkout and the coder root HIDDEN and not read-only, only <main>/.git and the worktree bound back, the folder of all jobs hidden, the /tmp shape under which codex sandbox starts and the same shape in the preflight and in the launch, a home with CODEX_HOME inside the job's coder folder that holds the sign-in COPY of s7 t6; never RestrictNamespaces, never ReadWritePaths=/mnt"
+  - id: d4
+    item: "V14, ids U7 and CX-R2: only the allow-list, CODEX_HOME and CODEX_REFRESH_TOKEN_URL_OVERRIDE with the dead local address of the judgement, section 9, reach the CLI, read from inside a real unit and compared name by name; a canary value is in no recorded argv"
+  - id: d5
     item: "every existing codex consultant, question and reviewer launch builds the same argv as before, byte for byte"

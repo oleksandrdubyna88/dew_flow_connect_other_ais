@@ -1,16 +1,22 @@
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: t1-agy-write-capability
-title: "AgyWriteCapability: only a measured release of the table and every flag of the measured set declared in the help, else a refusal with the cure"
+title: "AgyWriteCapability: only a measured release of the table with the measured bytes and every flag of the measured set declared in the help, launched from coai's own copy of the program so that a self-update of agy changes nothing; else a refusal with the cure"
 kind: security
-complexity: 4
-dependsOn: []
+complexity: 6
+dependsOn:
+  - t7-agy-open-rows-measure
 parallel: false
 security: true
 files:
   - src_mcp/runners/Reviewers/AgyWriteCapability.cs
+  - src_mcp/runners/Toolchain/CoderProgramStore.cs
   - src_mcp/tests/AAgyWriteCapabilityTests.cs
 dod:
   - id: d1
-    item: "V6: a agy coder is launched only when the installed release is EXACTLY one of the measured releases of shared/coder-boundary-releases.json and its help declares each flag of the measured set; an older release, a newer release and a release the CLI does not name are each refused before the launch, and the cure says to measure and judge that release and then add it to the table (SPEC section C2); asked on every launch, never cached, never started with a weaker set"
+    item: "V6 and id AG-P1 of the judgement: an agy coder is launched only when the release of the program file the unit will run is EXACTLY one of the measured releases of shared/coder-boundary-releases.json, its sha256 is the one the table holds for that release, and its help declares --mode with accept-edits, --agent, --add-dir, --conversation and the stream formats; an older release, a newer release, a release the CLI does not name and a file with another hash are each refused before the launch, and the cure says to measure and judge that release and then add it to the table (SPEC section C2); asked on every launch, never cached, never started with a weaker set"
   - id: d2
-    item: "the release is in the job envelope; a CLI that cannot be started and a help that does not answer are refusals that say so; a test with the table of this repository proves that a release one patch above and one patch below a measured one is refused"
+    item: "the release and the hash are in the job envelope; a CLI that cannot be started and a help that does not answer are refusals that say so; a test with the table of this repository proves that a release one patch above and one patch below a measured one is refused"
+  - id: d3
+    item: "judgement G9, id AG-P2, when the addendum of t7 holds it: coai keeps the measured program in a store of its own (a machine-local folder, read and execute only, one folder for each release named by the release and the sha256), copies a file there only when its sha256 is the table's, launches the agy coder ONLY from the store, and removes a store folder whose release left the table (about 280 MB for each measured release, nothing else grows); the person's own agy can update itself at any time and neither changes a running job nor refuses the next one; a test replaces the stand-in installed file between two launches and the second launch runs the stored bytes"
+  - id: d4
+    item: "when the addendum does not hold AG-P2: the launch runs the installed file after the checks of d1, and a self-update refuses the vendor with the cure of d1 until the new release is measured; the route goes on to the next vendor"

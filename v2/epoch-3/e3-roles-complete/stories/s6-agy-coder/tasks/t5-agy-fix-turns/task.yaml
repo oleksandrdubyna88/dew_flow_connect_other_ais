@@ -1,19 +1,25 @@
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: t5-agy-fix-turns
-title: "Fix turns with an agy conversation: --conversation with the handle of turn 0, the usage of each turn, the recorded not-found text"
+title: "Fix turns with an agy conversation: --conversation with the handle of turn 0, the conversation id compared on every turn, the usage of each turn, and the check of every turn's own stream against the guard's records"
 kind: code
-complexity: 5
+complexity: 6
 dependsOn:
   - t4-agy-preflight-rows
 parallel: false
+security: true
 files:
   - src_mcp/src/Server/RoleJobs/RoleFailover.cs
+  - src_mcp/runners/Consultation/AgyTurnCheck.cs
   - src_mcp/tests_fakecli/CoderVerbs.cs
   - src_mcp/tests/AAgyCoderFixTurnsTests.cs
 dod:
   - id: d1
-    item: "FakeCli as agy: red, then green after 2 fix turns; the recorded argv shows --conversation with the id of turn 0 on both, with the same home and guard folder; an invalid report gets ONE repair turn in the same conversation"
+    item: "FakeCli as agy: red, then green after 2 fix turns; the recorded argv shows --conversation with the id of turn 0 on both, with --mode accept-edits and --agent coai-coder, the same home and the same guard folder as cwd; an invalid report gets ONE repair turn in the same conversation"
   - id: d2
-    item: "V13 and V16: a turn that answers with the recorded not-found text of the fixture ends the attempt as a crash and the next model starts from the last coai commit; the usage line of each turn holds that turn only (the sum agy reports is subtracted)"
+    item: "V13 and judgement G8, id AG-S1: a resumed turn whose conversation id is not the handle's — also with exit code 0 — or whose stderr has the recorded not-found line of the fixture ends the attempt as a crash; the worktree goes back to the last coai commit before the next model starts; no fix turn goes on in a new conversation"
   - id: d3
+    item: "ids AG-A2 and AG-M2 and, when the table holds it, AG-G5, after EVERY turn through the turn check of the seam (s7 t2): a tool event that was not denied and names a tool outside read_file, write_file and edit_file; the recorded mode fall-back line of the fixture of t7 on stderr; a tool event with no guard record of the same id and the decision allow — each ends the job coder-boundary, never green, and nothing of that turn is committed; FakeCli plays each case"
+  - id: d4
+    item: "V16: the usage line of each turn holds that turn only (the sum agy reports is subtracted)"
+  - id: d5
     item: "nothing here needs the codex story: the tests pass with a table in which codex is refused"

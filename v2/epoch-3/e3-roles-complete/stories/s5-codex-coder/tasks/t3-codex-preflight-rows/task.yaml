@@ -1,8 +1,8 @@
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: t3-codex-preflight-rows
-title: "The preflight rows of a codex coder job: with no model, inside the exact launch unit, one row for EVERY property the judgement relies on; a wrong answer refuses the job"
+title: "The preflight rows of a codex coder job: with no model, inside the exact launch unit, one row for EVERY id of class pre of the judgement — the unit, the vendor sandbox probed with codex sandbox, the tool list, the config, the refresh override; a wrong answer refuses the job"
 kind: security
-complexity: 5
+complexity: 6
 dependsOn:
   - t2-codex-coder-launch
 parallel: false
@@ -10,11 +10,16 @@ security: true
 files:
   - src_mcp/runners/Toolchain/BoundaryPreflight.cs
   - src_mcp/runners/Toolchain/CoderBoundary.cs
+  - src_mcp/tests_fakecli/CoderVerbs.cs
   - src_mcp/tests/ACodexCoderPreflightTests.cs
 dod:
   - id: d1
-    item: "V9: before each codex coder job the preflight runs inside the EXACT launch unit (the same property list the launch gets, a test compares the two) and has one row for every id the table holds for codex: what is hidden from a child command, the sign-in file, the network limit, no user manager inside, the sandbox of codex where the verdict relies on it; a wrong answer refuses the job before any launch and names the row"
+    item: "V9, the unit: before each codex coder job the preflight runs inside the EXACT launch unit (the same property list the launch gets, a test compares the two) and has one row for each of U1 to U9 of the judgement, section 8: the worktree; the main checkout and the coder root HIDDEN (a file of them cannot be read or listed); .git; no user manager, no bus, no interop, no Windows program; the job's own HOME and temp folders; the environment compared name by name; the folder of another job; the program with its sha256"
   - id: d2
-    item: "a test holds the rows and the ids of the table equal (an id with no row and a row with no id both fail); each row goes red when its property is dropped through the test seam"
+    item: "V9, the vendor sandbox, ids CX-V1 to CX-V6, with codex sandbox -P coai and a probe inside that unit: it starts; a write in the worktree works; a write into the job folder and beside the worktree does not reach the disk; the job's auth.json, the job folder and the main checkout cannot be read; a listener that coai opens on the host loopback is reached from the unit and NOT from the sandbox; no foreign process and no canary name in /proc; .git, .agents and .codex of the worktree cannot be written"
   - id: d3
+    item: "V9, the rest: CX-T1 and CX-C3 (codex debug prompt-input with the exact flags gives the measured tool names, also with a stand-in project that holds a .codex/config.toml with an MCP server), CX-C1 (config.toml read back, byte for byte), CX-R2 (the override is in the environment and a connection to its address is REFUSED), CX-R3 (the sign-in is the job's copy, 0600; the real ~/.codex is not there) and, when the table holds it, CX-R4 (the placeholder)"
+  - id: d4
+    item: "a wrong answer of ANY row refuses the job before any launch and names the row; a test holds the pre ids of the table for codex and the rows equal (an id with no row and a row with no id both fail); each row goes red when its property is dropped through the test seam; a row never carries the output of a program it ran, and no row prints a token"
+  - id: d5
     item: "V10: no user manager, native Windows and macOS are refused before any process starts"

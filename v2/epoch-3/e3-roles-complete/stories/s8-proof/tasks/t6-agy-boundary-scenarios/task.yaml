@@ -1,0 +1,17 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t6-agy-boundary-scenarios
+title: "Boundary scenarios with FakeCli as the agy coder inside the real unit: writes outside, reads of what is hidden, a new unit, a Windows program (moved here from s6, which is at the limit of 6 tasks)"
+kind: test
+complexity: 5
+dependsOn: []
+parallel: false
+security: true
+files:
+  - src_mcp/tests/AAgyCoderBoundaryTests.cs
+dod:
+  - id: d1
+    item: "V7: the fake coder writes the main checkout, a folder beside the worktree, the .git pointer and the stand-in home: each is stopped by the OS, the job ends coder-boundary and is never green, and the main checkout is byte-equal"
+  - id: d2
+    item: "V8: a child command of the fake cannot read a file of the hidden main checkout, the worktree of another job, the folder of another job or the sign-in files of the stand-in REAL home, cannot start a unit and cannot run a Windows .exe; a control unit without the additions shows that the same reads then work"
+  - id: d3
+    item: "said by a test, so that nobody reads the unit as more than it is: a child command of the fake CAN read the job's own sign-in copy inside the unit (accepted risk A1 of the judgement) — for agy only the agent file, the guard and the mode keep a command from existing"

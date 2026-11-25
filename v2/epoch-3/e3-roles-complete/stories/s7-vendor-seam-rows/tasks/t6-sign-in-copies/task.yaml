@@ -1,0 +1,28 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t6-sign-in-copies
+title: "The sign-in of a vendor reaches its coder unit only as a copy coai makes for the job: the recipe of the seam, a refresh step in a unit with no model and no repository, the gate before every launch, the real file never touched, and the commit search for the copy's tokens"
+kind: security
+complexity: 6
+dependsOn:
+  - t1-coder-vendor-seam
+  - t5-check-units-hide-the-coder-folder
+parallel: false
+security: true
+files:
+  - src_mcp/runners/Toolchain/SignInCopy.cs
+  - src_mcp/src/Server/RoleJobs/CoderCommits.cs
+  - src_mcp/src/Server/RoleJobs/CoderWork.cs
+  - src_mcp/tests/ASignInCopyTests.cs
+dod:
+  - id: d1
+    item: "judgement S3: the sign-in of a vendor that signs in with a file reaches its coder unit only as a COPY that coai makes for the job from the recipe of the seam (which file, which fields are kept): mode 0600 in a 0700 folder of the job's coder home, never a bind of the real file, made for the job and never kept after it — removed when the job ends and by the sweep of E2 after a kill; claude does not change"
+  - id: d2
+    item: "the recipe can put a placeholder in the place of a field (codex: the refresh token, when the table holds CX-R4) and can name a refresh step with no model (agy: when the table holds AG-R2): that step runs in a unit of its own with the isolation of the family and the network, a scratch home with the full copy, and NO repository, worktree, guard or model; only the access token and its expiry go into the coder's copy, and the full copy of the step is deleted before the coder starts"
+  - id: d3
+    item: "the gate of a recipe is asked before EVERY launch (codex: CX-R1 of s5 t1; agy with AG-R2: expiry >= now + the RuntimeMaxSec of the unit + 5 minutes), and a turn of a vendor whose copy cannot be refreshed is capped by the life of its token"
+  - id: d4
+    item: "the real sign-in file is opened for reading only; its sha256 and modification time before and after the job are in the envelope (a hash, never text), and a difference is a notice to the person"
+  - id: d5
+    item: "judgement S4, id K3: the commit search of E2 s7 (staged blobs and names, before and after git add, fail closed) also gets the token texts of the job's copy as they are AFTER the turn; a hit ends the job coder-boundary and nothing is committed; a test plants a token of a made-up copy in a file, in a file name and behind a working-tree-encoding attribute"
+  - id: d6
+    item: "no token text reaches an argv, a log, a notice, the envelope or an exception (the sentinel tests of E2 s7, extended to this type); every test runs with a temp home and never reads a real sign-in"

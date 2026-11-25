@@ -13,4 +13,6 @@ dod:
   - id: d1
     item: "V7: the fake coder writes the main checkout, a folder beside the worktree, the .git pointer and the stand-in home: each is stopped by the OS, the job ends coder-boundary and is never green, and the main checkout is byte-equal"
   - id: d2
-    item: "V8: a child command of the fake cannot read a file of the hidden main checkout, the worktree of another job or the stand-in sign-in file, cannot start a unit and cannot run a Windows .exe; a control unit without the additions shows that the same reads then work"
+    item: "V8: a child command of the fake cannot read a file of the hidden main checkout, the worktree of another job, the folder of another job or the sign-in file of the stand-in REAL home, cannot start a unit and cannot run a Windows .exe; a control unit without the additions shows that the same reads then work"
+  - id: d3
+    item: "said by a test, so that nobody reads the unit as more than it is: a child command of the fake CAN read the job's own sign-in copy inside the unit — that read is closed by the vendor's sandbox (ids CX-V3 and CX-V5, the preflight rows of t3), which the fake does not have"

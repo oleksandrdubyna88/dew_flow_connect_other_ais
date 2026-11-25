@@ -1,11 +1,12 @@
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: t2-fix-loop-through-the-seam
-title: "The fix loop, the repair turn and the failover read the session, the report and a lost session through the vendor seam; proved with a test vendor"
+title: "The fix loop, the repair turn and the failover read the session, the report, a lost session and the check of a turn's own stream through the vendor seam; proved with a test vendor"
 kind: code
-complexity: 5
+complexity: 6
 dependsOn:
   - t1-coder-vendor-seam
 parallel: false
+security: true
 files:
   - src_mcp/src/Server/RoleJobs/CoderWork.cs
   - src_mcp/src/Server/RoleJobs/CoderFixLoop.cs
@@ -18,4 +19,6 @@ dod:
   - id: d2
     item: "V13: a lost session on a fix turn ends the attempt as a crash and the next model starts from the last coai commit; no fix turn starts a new session by itself; one usage line for each launch"
   - id: d3
+    item: "judgement S7, the ids of class turn: the seam gives a check of the turn's own stream that runs after EVERY turn, turn 0 too, before anything of that turn is committed; a wrong answer ends the job coder-boundary and is never green; a session that is not the handle's ends the attempt as a crash; proved with the test vendor: a planted bad item stops the job and the worktree holds no commit of that turn; claude gets the check that says nothing, and its tests pass unchanged"
+  - id: d4
     item: "no line of this task names codex or agy: s5 and s6 each add their vendor without a change here"

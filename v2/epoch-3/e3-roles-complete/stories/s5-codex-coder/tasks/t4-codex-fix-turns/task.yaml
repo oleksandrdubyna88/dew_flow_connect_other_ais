@@ -1,16 +1,20 @@
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: t4-codex-fix-turns
-title: "Fix-turn scenarios with FakeCli as codex: exec resume with the handle of turn 0, the report from the output file, the recorded no-session text"
-kind: test
-complexity: 4
+title: "Fix turns with FakeCli as codex: exec resume with the handle of turn 0, the report from the output file, the recorded no-session and refresh-failed texts, and the check of every turn's own stream"
+kind: code
+complexity: 5
 dependsOn:
   - t3-codex-preflight-rows
 parallel: false
+security: true
 files:
+  - src_mcp/runners/Consultation/CodexTurnCheck.cs
   - src_mcp/tests_fakecli/CoderVerbs.cs
   - src_mcp/tests/ACodexCoderFixTurnsTests.cs
 dod:
   - id: d1
-    item: "FakeCli as codex: red, then green after 2 fix turns; the recorded argv shows exec resume with the thread of turn 0 on both, from the worktree, with the same CODEX_HOME; the report is read from the output file; an invalid report gets ONE repair turn in the same thread"
+    item: "FakeCli as codex: red, then green after 2 fix turns; the recorded argv shows exec resume with the thread of turn 0 on both, from the worktree, with the same CODEX_HOME and the same flags; the report is read from the output file; an invalid report gets ONE repair turn in the same thread"
   - id: d2
-    item: "V13: a resume that answers with the recorded no-session text of the fixture ends the attempt as a crash, and the next model starts from the last coai commit; no fix turn starts a new session by itself"
+    item: "V13: a resume that answers with the recorded no-session text of the fixture ends the attempt as a crash, and the next model starts from the last coai commit; no fix turn starts a new session by itself; the recorded refresh-failed text of the fixture of t6 is a lost sign-in, so the other models of codex are skipped"
+  - id: d3
+    item: "ids CX-S1 and CX-T4 of the judgement, after EVERY turn, through the turn check of the seam (s7 t2): a thread id that is not the handle's ends the attempt as a crash; an item of the stream that is a tool outside the measured list (an MCP call, a web search, and an agent call when the addendum of t6 says the stream shows it) ends the job coder-boundary, never green, and nothing of that turn is committed; FakeCli plays each case"

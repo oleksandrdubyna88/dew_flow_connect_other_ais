@@ -12,7 +12,8 @@ files:
   - v2/spikes/RESULTS_codex_agy_write_boundary_judgement.md
   - v2/epoch-3/e3-roles-complete/stories/s5-codex-coder
   - v2/epoch-3/e3-roles-complete/stories/s6-agy-coder
-  - v2/epoch-3/e3-roles-complete/stories/s8-proof/story.yaml
+  - v2/epoch-3/e3-roles-complete/stories/s7-vendor-seam-rows
+  - v2/epoch-3/e3-roles-complete/stories/s8-proof
 dod:
   - id: d1
     item: "the important model (the important list, read-only, no other model call) reads the two results files and the claude files they are compared with, and writes per vendor: the verdict ship or refuse for the measured release, for each of B1 to B15 which layer holds it, and a must-change list"
