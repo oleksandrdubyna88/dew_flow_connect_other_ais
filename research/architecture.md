@@ -483,7 +483,7 @@ the coai folder (`cwd`). A relative path, a missing field or any failure to reso
 On the Team server this keeps one job's reviewer out of another job's folder. A link swapped after the check, hard links and bind mounts are
 not closed; `SECURITY.md` lists the limits.
 
-**It knows its own folder, and looks only at local paths (2026-11-18, `todo/PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text.md`).** Three
+**It knows its own folder, and looks only at local paths (2026-11-18, `research/PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text.md`).** Three
 corrections to the paragraph above, which stays as written.
 - *The coai folder is where the hook runs, not the payload's `cwd`.* agy sorts `workspacePaths` and sends its first entry as `cwd`, so a
   granted root that sorts before the coai folder was taken for the coai folder and every read in it was denied

@@ -1,6 +1,6 @@
 # SPEC — E1.S3: no dot segment where text folds, the documents, and the real Windows run (W1, gate findings 3 and 4)
 
-> Status: **spec written 2026-11-18; its story is coded and tested, 2026-11-18 (E1 on branch `fix/agy-hook-windows-dot-dot`, 33050c8f + review fixes); real runs on Linux and Windows passed (RESULTS §7); not merged, not released.** Parent:
+> Status: **spec written 2026-11-18; its story is IMPLEMENTED, 2026-11-24** — E1 (S1 W3, S2 W2, S3 W1) shipped in #1023 (merge 9721a7fe, 2026-11-24); released in mcp 0.66.1 (2026-11-24) and server 0.16.4 (#1042, 2026-11-24, release run 45412033457, 12 assets). The check with the release `coai-server` 0.16.4 binary on the host passed on 2026-11-24 (agy 1.5.13): the in-root read was allowed and its marker read; the other job's file by absolute path, by `..` and through a link inside the root was each denied with the contract sentence, and the secret was never read. **Not deployed:** on 2026-11-25 the owner chose to skip the deploy, so the Team server still serves 0.16.3. W3 does not hit today's server (its job roots sort after the hook folder), so 0.16.3 stays safe there. Parent:
 > [PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text_E1.md](PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text_E1.md) (story S3), of
 > [PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text.md](PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text.md) (W1, option A).
 > A security story: spec by Fable, code by Sonnet, review by Opus. It builds on S1 and S2. Not the cornerstone.
@@ -41,7 +41,7 @@ Where `site.FoldsDotsAsText` is true, a `Path` with a segment that is exactly `.
   so, and one rule is easier to state. The model sent neither in 11 measured runs.
 - **`Path` only.** Roots, the payload's `cwd` and the coai folder are text from coai and agy, never from the model. Row T5 pins it.
 - **Not a link's own text.** The kernel applies a relative link's `..` to the path it has already resolved, which is what the
-  walk does. `RealPath`'s `..` rule does not change (the plan: other sites rely on it).
+  walk does. `RealPath`'s `..` rule does not change (the plan: other sites rely on it). *(Superseded 2026-11-18 by the Opus review of E1: on Windows NT reads a relative link's text with `..` folded, so this is a probable escape, not measured. Follow-up: [PLAN_the_agy_hook_on_windows_judges_a_links_dot_text.md](../todo/PLAN_the_agy_hook_on_windows_judges_a_links_dot_text.md); see `SECURITY.md` and `RESULTS_agy_read_file.md` §7.)*
 - **`HookSite.OfThisProcess()`** passes `OperatingSystem.IsWindows()`.
 - **Off Windows nothing changes.** There the kernel is the walk.
 

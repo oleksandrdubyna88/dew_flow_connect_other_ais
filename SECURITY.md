@@ -58,7 +58,7 @@ delete may touch — go through `src_mcp/runners/Files/RealPath.cs`. A few other
   `workspacePaths`, and not inside the real path of the coai folder. A relative path, a missing or
   malformed field, a second spelling of `Path`, a duplicate JSON property and any resolution failure deny. It fails closed and never
   falls back to the spelling. The reason does not echo the path. On the Team server this keeps one job's reviewer out of another
-  job's folder under `/tmp`, which agy's own boundary allows. Since 2026-11-18 (the plan `todo/PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text.md`):
+  job's folder under `/tmp`, which agy's own boundary allows. Since 2026-11-18 (the plan `research/PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text.md`):
   - **The hook knows its own folder.** The coai folder is the parent of the hook process's own working folder, which agy sets to the
     `.agents` folder that holds the hook script. The payload's `cwd` names nothing: agy sorts `workspacePaths` and sends its first entry as
     `cwd`, so `cwd` can be a granted root. A hook that does not run from a folder named `.agents`, or whose folder does not resolve,
@@ -110,7 +110,7 @@ delete may touch — go through `src_mcp/runners/Files/RealPath.cs`. A few other
     in the user profile by itself and allows a read under the temp folder, and the model sent no `.` or `..` in 11 ordinary runs. Whether
     agy cleans a path before it opens it is not measured. That Windows sends no NTLM handshake is shown by a recording reader in the tests;
     no packet capture was taken (`pktmon` needs administrator rights; the real run in `research/RESULTS_agy_read_file.md` §7 says so).
-  - **Windows, closed by the plan `todo/PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text.md` (2026-11-18), see `research/RESULTS_agy_read_file.md` §7.**
+  - **Windows, closed by the plan `research/PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text.md` (2026-11-18), see `research/RESULTS_agy_read_file.md` §7.**
     Before it, this item read (kept as history): "Windows, not closed here: (a) `..` after a link or junction. `RealPath` applies `..` to the
     path resolved so far, the Unix rule. Win32 folds `..` as text before it follows links. A path such as
     `<root>\node_modules\junction\..\..\..\..\Users\me\.ssh\id_rsa` can pass the hook and be read outside the root, if agy itself allows

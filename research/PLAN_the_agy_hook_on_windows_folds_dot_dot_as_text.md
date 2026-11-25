@@ -1,12 +1,26 @@
 # PLAN — the agy read-only hook on Windows folds `..` as text and never opens a network path
 
-> Status: **coded and tested, 2026-11-18 (E1 on branch `fix/agy-hook-windows-dot-dot`, 33050c8f + review fixes); real runs on Linux and Windows passed (RESULTS §7); not merged, not released. History: plan written 2026-11-16; plan gate `proceed` 2026-11-18 (session 6830eaba, 2 reviewers, 4 findings accepted and folded in: §2 "Gate round 1"); allowed over the PR cap by the owner on 2026-11-18.** Scope: `src_mcp/runners/Files/RealPath.cs` (or the hook's call of it),
+> Status: **IMPLEMENTED, 2026-11-24** — E1 (S1 W3, S2 W2, S3 W1) shipped in #1023 (merge 9721a7fe, 2026-11-24); released in mcp 0.66.1 (2026-11-24) and server 0.16.4 (#1042, 2026-11-24, release run 45412033457, 12 assets). The check with the release `coai-server` 0.16.4 binary on the host passed on 2026-11-24 (agy 1.5.13): the in-root read was allowed and its marker read; the other job's file by absolute path, by `..` and through a link inside the root was each denied with the contract sentence, and the secret was never read. **Not deployed:** on 2026-11-25 the owner chose to skip the deploy, so the Team server still serves 0.16.3. W3 does not hit today's server (its job roots sort after the hook folder), so 0.16.3 stays safe there. **History:** plan written 2026-11-16; plan gate `proceed` 2026-11-18 (session 6830eaba, 2 reviewers, 4 findings accepted and folded in: §2 "Gate round 1"); allowed over the PR cap by the owner on 2026-11-18. Scope: `src_mcp/runners/Files/RealPath.cs` (or the hook's call of it),
 > `src_mcp/runners/Reviewers/AntigravityReadOnly.cs`, their tests, and the documents that list the hook's limits. W1 and W2 are Windows
 > only. W3 (change 1.1) affects every OS, the Team server included, as a latent denial.
 >
 > Found by the Opus review of the parent plan's branch, 2026-11-16; parent:
-> [PLAN_the_agy_hook_checks_the_path.md](../research/PLAN_the_agy_hook_checks_the_path.md). The parent's path check ships with these two gaps stated as
+> [PLAN_the_agy_hook_checks_the_path.md](PLAN_the_agy_hook_checks_the_path.md). The parent's path check ships with these two gaps stated as
 > limits. They are moved here so the parent plan does not change a second time after its approval.
+>
+> **Deviations from the plan as approved.** (1) Change 1.1 (W3, below): step 1's measurement found that agy sorts `workspacePaths`
+> and names the first as `cwd`, so the hook now finds the coai folder from its own working folder (`HookSite`, a folder named `.agents`)
+> and denies with one stderr line when it cannot. It is the only change after approval. (2) Code round (8 of 8 reviewers): the
+> statuses, the complexity of `Placed` and the stderr line were accepted; a distinct deny reason for dot segments and network paths was
+> rejected — the deny sentence is the spec's contract and the host checks look for it. (3) The Opus review found that `..` inside a
+> Windows symlink's own text is still judged with the Unix rule; with the dot segments in a root's own text, it is moved to the
+> follow-up plan [PLAN_the_agy_hook_on_windows_judges_a_links_dot_text.md](../todo/PLAN_the_agy_hook_on_windows_judges_a_links_dot_text.md)
+> (plan only, not started; one more PR over the cap allowed by the owner on 2026-11-25) and stated as a limit in `SECURITY.md`.
+> (4) Not run, both need administrator rights: a junction to a UNC target and a packet capture (`SECURITY.md`).
+>
+> **Done / not done.** Done: E1 coded, reviewed, merged, released (mcp 0.66.1, server 0.16.4), real runs on Linux and Windows
+> (`research/RESULTS_agy_read_file.md` §7), the host check with the release binary. Not done: the Team server deploy of 0.16.4 (skipped by
+> the owner on 2026-11-25; 0.16.3 serves), so `POST_DEPLOY.md` keeps its 0.16.3 line; the follow-up plan above.
 
 ## Plan changes
 > Epoch 1 · approved 2026-11-18 · by reviewers · state: open
@@ -40,7 +54,7 @@ The model sends:
 3. Windows folds the text to `C:\Users\me\.ssh\id_rsa` and reads outside the root.
 
 The read goes through only if agy itself allows it. agy on Windows is not measured. On Linux agy denies `$HOME` by itself. Scenario B7 of
-[the S1 spec](../research/PLAN_the_agy_hook_checks_the_path_S1_spec.md) (`job-1/l3/../secret.txt`) passes on Windows for the wrong reason.
+[the S1 spec](PLAN_the_agy_hook_checks_the_path_S1_spec.md) (`job-1/l3/../secret.txt`) passes on Windows for the wrong reason.
 
 ### W2. A network path is looked up before it is judged
 
