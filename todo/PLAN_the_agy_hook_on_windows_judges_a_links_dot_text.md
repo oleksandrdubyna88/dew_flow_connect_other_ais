@@ -6,7 +6,7 @@
 > walks a link's text and `RealPath`'s Unix rule is the kernel's rule.
 >
 > Found by the Opus review of epic E1 of the parent plan,
-> [PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text.md](PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text.md), 2026-11-18. E1 refuses a dot
+> [PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text.md](../research/PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text.md), 2026-11-18. E1 refuses a dot
 > segment in the `Path` the model sends. It left "a dot segment in a link's own text" as a limit and called it "left to the kernel". That was
 > wrong for Windows: this plan is the repair.
 

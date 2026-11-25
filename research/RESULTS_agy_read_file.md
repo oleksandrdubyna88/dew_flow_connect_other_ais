@@ -173,22 +173,22 @@ did not try. The secret marker appears in none of the four outputs. Script: `liv
 ### Windows, not closed here
 
 An Opus review found two Windows-only gaps. This change does not fix them. They move to the follow-up plan
-`todo/PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text.md`. (W1) `RealPath` applies `..` to the path resolved so far, the Unix
+`research/PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text.md`. (W1) `RealPath` applies `..` to the path resolved so far, the Unix
 rule, but Win32 folds `..` as text before it follows a link or junction, so `<root>\junction\..\..\..\Users\me\.ssh\id_rsa` is judged
 inside and read outside, if agy allows that read (not measured on Windows). (W2) A UNC `Path` is resolved before it is judged, so the
 hook looks it up over SMB: that can send the user's NTLM credentials to that host, or stall past the hook's 10 s timeout. Neither applies on
 Linux, the Team server or WSL. Not measured on a Windows machine: both are read from the code and the Win32 rules.
 
-*(Note 2026-11-18: closed by `todo/PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text.md` and its epic E1. Both gaps were measured on a
+*(Note 2026-11-18: closed by `research/PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text.md` and its epic E1. Both gaps were measured on a
 Windows machine and are described in §7: W1 was confirmed in the real hook, and W2 is closed by a reader that looks at no path that is
 not local. The paragraph above is kept as it was written.)*
 
 ## 7. Windows, and the payload's cwd (2026-11-18)
 
-Found by step 1 of `todo/PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text.md`, which measured agy on Windows for the first time
+Found by step 1 of `research/PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text.md`, which measured agy on Windows for the first time
 and, in the same runs, found that §6 had read agy's `cwd` wrong. This section carries the measurement, the W3 finding on both
 operating systems, and what the change does about each. The rule and its tests are the specs of the plan's epic E1
-(`todo/PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text_E1.md` and its three story specs). Where §6 says otherwise, this section
+(`research/PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text_E1.md` and its three story specs). Where §6 says otherwise, this section
 supersedes it. The text of §6 stays as written.
 
 **Harness.** This machine's Windows host (Windows build 10.0.26300), agy 1.5.11, `gemini-4-hydrogen-low`, `--mode plan --agent
@@ -396,6 +396,15 @@ own .agents folder` and denied.
 
 Logs: the session scratchpad `winprobe/e1/` (`logs/*.ndjson`, `logs/payloads.log`, `replay-bare-hook.txt`). Every probe folder and
 junction was removed afterwards.
+
+### The host check with the release binary (2026-11-24)
+
+The `coai-server` 0.16.4 release binary (`coai-server-0.16.4-linux-x64.tar.gz`, sha256 checked) on the Team server's host, agy 1.5.13,
+with a hook folder copied from the server's (`<folder>/.agents`, its script pointed at that binary) and two job folders under `/tmp`, one
+granted. The in-root read was allowed and its marker read (2 of 2). The other job's file by absolute path, by `..` and through a link
+inside the root was each denied with `coai: this consultation reads only inside the folders it was given`; the secret marker was read 0
+times. The probe folders were removed. **The deploy was not done:** on 2026-11-25 the owner chose to skip it, so the Team server still
+serves 0.16.3, where W3 does not apply (its job roots under `/tmp` sort after the hook folder under `/root`).
 
 ### Limits of this section
 
