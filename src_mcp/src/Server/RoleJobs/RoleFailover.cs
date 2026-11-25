@@ -668,7 +668,7 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
         var ranWith = (launched.Invocation?.RanWith ?? LaunchOptions.None).VersionedBy(launch.CliVersion);
         new UsageLedger(run.DataDir).RecordJob(
             string.Empty, model.Vendor, model.Model, run.Request.Role, stop is null ? "ok" : stop.Kind.Length > 0 ? stop.Kind : stop.Word,
-            duration, share, UsageKinds.Role, "RoleJob", ranWith, resetsUtc: UsageLedger.StatedResetOf(launch.Terminal, DateTimeOffset.UtcNow), keyId: launched.KeyId);
+            duration, share, UsageKinds.Role, "RoleJob", ranWith, resetsUtc: UsageLedger.StatedResetOf(launch.Terminal, DateTimeOffset.UtcNow), keyId: launched.KeyId, job: run.Request.JobId);
 
         // The launch that carried a pool key has ONE ledger line, and the same place tells the pool how it ended: a limit puts the key in cooldown, a refused key is dead, a good launch clears the cooldown.
         if (launched.KeyId.Length > 0)
