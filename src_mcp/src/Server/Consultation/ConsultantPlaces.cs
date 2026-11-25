@@ -120,9 +120,25 @@ public sealed class ConsultantPlaces(string homesRoot, string store, IProcessLau
     /// <summary>How long a turn waits for its folder's cross-process lock — only the home sweep holds it otherwise, and briefly.</summary>
     public static readonly TimeSpan LockWait = TimeSpan.FromSeconds(10);
 
-    /// <summary>How the folder's turn lock is waited for — off the calling thread, at most <see cref="LockWait"/>; a test's seam for a cancellation there.</summary>
+    /// <summary>
+    /// How the folder's turn lock is waited for — off the calling thread, at most <see cref="LockWait"/>, and ended at the next jitter of the
+    /// wait when <c>ct</c> is cancelled (the token is handed to the wait itself: <c>Task.Run</c>'s own token only stops a delegate that has
+    /// not started); a test's seam for a cancellation there.
+    /// </summary>
     internal Func<string, CancellationToken, Task<Hold>> TakingTheLock { get; set; } =
-        static (path, ct) => Task.Run(() => HeldFile.TakeWithin(path, LockWait), ct);
+        static (path, ct) => Task.Run(() => TakenWithin(path, ct), ct);
+
+    /// <summary>The wait for the lock, as a withdrawn caller sees it: a cancellation, not a busy lock that says "try again in a moment".</summary>
+    private static Hold TakenWithin(string path, CancellationToken ct)
+    {
+        var hold = HeldFile.TakeWithin(path, LockWait, ct: ct);
+        if (hold is Hold.Busy)
+        {
+            ct.ThrowIfCancellationRequested();
+        }
+
+        return hold;
+    }
 
     /// <summary>The cure a refused place carries: the copy is coai's, so the cause is in the tree or this machine.</summary>
     public const string Cure =
