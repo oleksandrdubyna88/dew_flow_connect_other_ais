@@ -290,9 +290,15 @@ async function checked(context: Context, host: string): Promise<Gate> {
 /** A Stop, a refusal or a Forget since the round started: the generation is not the round's. */
 const moved = (context: Context): boolean => context.seams.generation() !== context.token;
 
-/** The door's answer — unless the generation moved while it was awaited: then nothing is published, whatever the door said. */
-const afterDoor = (context: Context, door: Admission): Gate =>
-  (moved(context) ? { kind: 'abandon' } : door.kind === 'read' ? { kind: 'ok' } : { kind: 'refused', admission: door.kind });
+/**
+ * The door's answer — unless the generation moved while it was awaited: then nothing is published, whatever the door said. After a `read`
+ * the Stop is read again (a Stop saved by another window leaves the generation as it was): a Stop then abandons the round, as (b) does.
+ */
+const afterDoor = async (context: Context, door: Admission): Promise<Gate> =>
+  (moved(context) ? { kind: 'abandon' } : door.kind === 'read' ? readAfterStop(context) : { kind: 'refused', admission: door.kind });
+
+/** A Stop saved by another window while the door was awaited does not move the generation: the Stop is read once more, as failure of (b). */
+const readAfterStop = async (context: Context): Promise<Gate> => ((await ended(context)) ? { kind: 'abandon' } : { kind: 'ok' });
 
 /** A result that failed a check is dropped and logged once: a Stop ends the round, a refusal keeps the kind the door answered. */
 function droppedStep(seams: RoundSeams, state: RoundState, host: string, gate: Exclude<Gate, { readonly kind: 'ok' }>): Step {

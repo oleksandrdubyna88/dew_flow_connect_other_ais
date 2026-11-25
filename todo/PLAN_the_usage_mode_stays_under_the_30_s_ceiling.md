@@ -18,8 +18,10 @@ count the KILL second. Changing a limit or the ceiling changes the table and the
 
 ## What a fix needs
 
-- Either count the KILL second in the table (shorten a reader limit by one second, or raise the ceiling to 32 s), or
-  prove that the stages cannot overlap that way, with a run that has a command ignore TERM.
+- Either count the KILL second in the table, or prove that the stages cannot overlap that way, with a run that has a
+  command ignore TERM. Shortening one reader limit by one second gives exactly 30 s, which fails the runner's strict
+  `<` check and leaves no margin: the fix must bring the worst path at least 2 s under the ceiling (so, shorten the
+  readers by 2 s or more in total), or raise the runner's ceiling with a margin (33 s or more for a 31 s path). Which of the two is chosen is the plan change's decision, not the coder's.
 - The test sums the limits PLUS one KILL second for each stage, in each mode, and asserts the total is under the
   ceiling.
 - The script's sha256 is repinned if the script changes; the spec's table follows.

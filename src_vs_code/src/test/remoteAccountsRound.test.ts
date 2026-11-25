@@ -618,6 +618,19 @@ test('A3-T30: a refusal or a Forget shown by the change signal bumps the generat
 
 // ───────────────── the review fixes of E1.S3 ─────────────────
 
+test('A3-T29 (CR): a Stop saved in another window (stopped() only, generation unchanged) while the check\'s door is awaited publishes nothing', async () => {
+  const w = world({ hosts: ['a'], door: (_host, asked, self) => { if (asked === 1) { self.control.stopped = true; } return READ_OK; } });
+
+  const result = await roundOf(w, new Map(), 0, 'timer', OFF);
+
+  assert.equal(result.abandoned, true, 'a Stop saved while the door was awaited was not seen after the door answered read');
+  assert.equal(result.memory.get('a')?.reading, undefined, 'a reading came back after Stop');
+  assert.equal(w.parsed.length, 0, 'the reply of a stopped round was parsed for a reading to keep');
+  assert.equal(w.landed.count, 0, 'the list was redrawn for a result that was dropped');
+  assert.deepEqual(w.dropped, ['a']);
+  assert.deepEqual([...memoryAfter(new Map(), result)], [], 'a stopped round\'s memory came back');
+});
+
 test('A3-T29 (F1): a Stop given while the check\'s door is awaited, on the LAST host, publishes nothing', async () => {
   const w = world({ hosts: ['a'], door: (_host, asked, self) => { if (asked === 1) { self.control.generation += 1; } return READ_OK; } });
 
