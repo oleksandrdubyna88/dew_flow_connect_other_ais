@@ -84,23 +84,37 @@ internal static class Tools
             });
 
         yield return McpServerTool.Create(
-            // `planText`, `committedPlan` and `expectedCommit` are optional WITH C# defaults — the `resolve` lesson: without
-            // one the SDK publishes an argument as required. Exactly one of the first two is wanted — a refusal says so.
-            async (string repoPath, string branch, string? planText = null, string? committedPlan = null, string? expectedCommit = null, string? workItem = null) =>
+            // `planText`, `committedPlan`, `featureFolder` and `expectedCommit` are optional WITH C# defaults — the `resolve` lesson: without
+            // one the SDK publishes an argument as required. Exactly one of the first three is wanted — a refusal says so.
+            async (string repoPath, string branch, string? planText = null, string? committedPlan = null, string? expectedCommit = null, string? workItem = null, string? featureFolder = null) =>
                 await (await host.CurrentAsync()).ReviewPlanAsync(
-                    repoPath, branch, new PlanInput(planText ?? string.Empty, committedPlan ?? string.Empty, expectedCommit ?? string.Empty) { WorkItem = workItem ?? string.Empty }),
+                    repoPath, branch,
+                    new PlanInput(planText ?? string.Empty, committedPlan ?? string.Empty, expectedCommit ?? string.Empty) { WorkItem = workItem ?? string.Empty, FeatureFolder = featureFolder ?? string.Empty }),
             new McpServerToolCreateOptions
             {
                 Name = "review_plan",
                 Title = "Send the plan to every enabled provider for independent critique",
                 Description = """
                     The plan gate. One reviewer per enabled provider reads the plan and nothing else (no checkout), and
-                    answers findings. Give the plan ONE way: `planText` (the plan document, verbatim) or `committedPlan`
+                    answers findings. Give the plan ONE way: `planText` (the plan document, verbatim), `committedPlan`
                     (the repo-relative path of a plan file that is COMMITTED — the server reads it from git at the
-                    branch's tip, so a large plan never passes through you). `committedPlan` is refused, before any
+                    branch's tip, so a large plan never passes through you) or `featureFolder` (the repo-relative folder
+                    of a COMMITTED work plan, the one that holds feature.yaml, such as `v2`). `committedPlan` is refused, before any
                     round is spent, when the file is not in that commit, is not a regular UTF-8 text file of 1 byte to
                     256 KiB, is a credential-shaped name, or is edited or staged in the checkout (when the checkout is on that commit; otherwise nothing is compared and the round notes it); commit it first.
-                    `expectedCommit` (40 hex, only with `committedPlan`) refuses the round if the branch tip moved.
+                    `expectedCommit` (40 hex, only with `committedPlan` or `featureFolder`) refuses the round if the branch tip moved.
+
+                    With `featureFolder` the server reads the folder from git at the branch tip (never the working tree), validates
+                    the whole feature with this device's work-method limits — an invalid folder is refused with its first 10 errors
+                    (code, node, message), the total and the limits' source, before any reviewer, round or worktree — and packs the
+                    SCOPE for the reviewers in topological order: feature.yaml, the plan file, the ancestors, then each story after the stories it depends
+                    on, with one line for each outside dependency and a line `Not sent` naming what they did not get (the architecture files, free
+                    markdown files, the count of other nodes). The scope is the node `workItem` names (an epoch, epic, story or task folder
+                    inside the feature folder); with no `workItem` it is the whole feature. A file over 64 KiB, a folder over 2 000 entries or a pack over
+                    256 KiB is refused, never cut; an edited, staged or untracked plan file under the scope is refused when the checkout is on that commit.
+                    The approval of such a round is an id over every file the reviewers read and every outside dependency: a coder job is bound only when its
+                    task is inside the scope, and a later change to what the reviewers read — not a new RESULTS file — refuses its start and names the
+                    first path or node that differs; the cure is a new plan round.
                     Every reviewer is told the plan ends at its `END OF PLAN` line; one that did not receive it
                     whole does not count as answering. The reply
                     carries the merged, de-duplicated findings, the honest reviewer count, the
