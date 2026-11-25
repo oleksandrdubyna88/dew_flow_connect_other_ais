@@ -31,6 +31,12 @@ internal static class CoderCommits
             return (string.Empty, before);
         }
 
+        // Git does not see a file written inside the empty folder of a gitlink (it takes the folder for a submodule's own and ignores what is in it), so the folders are looked at on the disk BEFORE anything is staged.
+        if (WrittenInTheMounts(tree) is { } written)
+        {
+            return (string.Empty, Protected(written));
+        }
+
         var staged = await git.InCoderTreeAsync(tree, ["add", "-A"], ct);
         if (!staged.Ran || !staged.Ok)
         {
@@ -41,6 +47,14 @@ internal static class CoderCommits
         if (!pending.Ran || !pending.Ok)
         {
             return (string.Empty, Failed("git diff --cached in the worktree", pending));
+        }
+
+        if (ProtectedHit(tree, pending.Out) is { } hit)
+        {
+            // What was staged is unstaged again: the refusal leaves the index as the turn found it, and the worktree as the coder left it.
+            await git.InCoderTreeAsync(tree, ["reset", "-q"], ct);
+
+            return (string.Empty, Protected(hit));
         }
 
         if (secret is not null && pending.Out.Length > 0 && await SearchStagedAsync(git, tree, pending.Out, secret, ct) is { } after)
@@ -59,6 +73,32 @@ internal static class CoderCommits
 
         return await HeadAsync(git, tree, ct);
     }
+
+    private static RoleWorkOutcome.Failed Protected(string name) =>
+        new("coder-commit", $"the coder's change touches '{name}', which is the base's own (.gitmodules or a submodule's path) and is never a coder's to change, so nothing was committed");
+
+    /// <summary>
+    /// The first protected submodule path whose folder in the worktree is no longer the empty folder git leaves for a gitlink — something was written in it, or it was replaced by a file or a link — or null. Null too for a tree that protects nothing.
+    /// </summary>
+    internal static string? WrittenInTheMounts(CoderTree tree) =>
+        tree.Protected.Where(name => name != CoderMounts.GitmodulesFile).FirstOrDefault(name => Touched(Path.Combine(tree.Root, name)));
+
+    private static bool Touched(string full) =>
+        Runners.Files.RealPath.Lstat(full).Kind switch
+        {
+            Runners.Files.EntryKind.File or Runners.Files.EntryKind.Link => true,
+            Runners.Files.EntryKind.Directory => Directory.EnumerateFileSystemEntries(full).Any(),
+            _ => false,
+        };
+
+    /// <summary>
+    /// The first name of git's NUL-separated list of staged paths that is a protected name of the tree (<see cref="CoderTree.Protected"/>) or lies below one — <c>.gitmodules</c>, a submodule's path (a deleted gitlink and every file written where it is). Null when none, and always
+    /// null for a tree that protects nothing.
+    /// </summary>
+    internal static string? ProtectedHit(CoderTree tree, string namesZ) =>
+        tree.Protected.Count == 0
+            ? null
+            : namesZ.Split('\0', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault(name => tree.Protected.Any(guarded => string.Equals(name, guarded, StringComparison.Ordinal) || name.StartsWith(guarded + "/", StringComparison.Ordinal)));
 
     private static RoleWorkOutcome.Failed Exposed() =>
         new(RoleStopWords.KeyInOutput, "the exact text of the turn's claude key is in what the coder wrote, so nothing was committed, the key is dead (exposed) and the job stops; revoke the key at the vendor");
