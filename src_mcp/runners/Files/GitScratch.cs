@@ -52,11 +52,19 @@ public static class GitScratch
     /// directory is descended, and the target of every link is checked to have lost nothing, or the deletion stops with the names
     /// (<see cref="LinkTargetLostException"/>; E4.1 of <c>todo/PLAN_vibe_and_kimi_runtimes_E4.md</c>).</para>
     /// </remarks>
-    public static void DeleteEvenIfReadOnly(string dir)
+    public static void DeleteEvenIfReadOnly(string dir) => Delete(dir, readLinkTargets: true);
+
+    /// <summary>
+    /// <see cref="DeleteEvenIfReadOnly"/> for a tree whose links were made by code that is not coai's (a coder job's folder: the checks wrote into its HOME): a link is removed by its own name and its target is NOT listed, before or after. The check of a target exists for a
+    /// Kimi home's own link (a refresh may rotate a file under it); here a link to <c>/proc</c> would lose a name between the two listings for ever, and a link to a dropped share or a very large folder would make the sweep wait.
+    /// </summary>
+    public static void DeleteLeavingLinkTargetsUnread(string dir) => Delete(dir, readLinkTargets: false);
+
+    private static void Delete(string dir, bool readLinkTargets)
     {
         if (Snapshots.SnapshotLinks.IsLink(dir))
         {
-            Unlink(dir);
+            Unlink(dir, readLinkTargets);
 
             return;
         }
@@ -64,7 +72,7 @@ public static class GitScratch
         Writable(dir);
         foreach (var entry in LinksFirst(Directory.EnumerateFileSystemEntries(dir)))
         {
-            DeleteEntry(entry);
+            DeleteEntry(entry, readLinkTargets);
         }
 
         Directory.Delete(dir);
@@ -98,15 +106,17 @@ public static class GitScratch
     /// deletes the entries of a folder one by one around a lock file (<see cref="FolderLock"/>) — unlike <see cref="DeleteEvenIfReadOnly"/>,
     /// which is for a DIRECTORY and refuses a file.
     /// </summary>
-    public static void DeleteEntry(string entry)
+    public static void DeleteEntry(string entry) => DeleteEntry(entry, readLinkTargets: true);
+
+    private static void DeleteEntry(string entry, bool readLinkTargets)
     {
         if (Snapshots.SnapshotLinks.IsLink(entry))
         {
-            Unlink(entry);
+            Unlink(entry, readLinkTargets);
         }
         else if (Directory.Exists(entry))
         {
-            DeleteEvenIfReadOnly(entry);
+            Delete(entry, readLinkTargets);
         }
         else
         {
@@ -119,12 +129,27 @@ public static class GitScratch
     /// attributes, so a link whose target is gone is removed too. The target is READ (its entry names, through the link's own
     /// reparse data) before and after, never entered, and a name that is gone stops the deletion.
     /// </summary>
-    private static void Unlink(string link)
+    private static void Unlink(string link, bool readLinkTargets)
     {
         var isDirectory = File.GetAttributes(link).HasFlag(FileAttributes.Directory);
+        if (!readLinkTargets)
+        {
+            Remove(link, isDirectory);
+
+            return;
+        }
+
         var target = Junctions.Target(link);
         var before = Look(target, isDirectory).Without(ItsOwnNameInItsParent(link, target));
 
+        Remove(link, isDirectory);
+
+        AfterUnlink?.Invoke(link);
+        Verify(link, target, before, isDirectory);
+    }
+
+    private static void Remove(string link, bool isDirectory)
+    {
         if (isDirectory)
         {
             Directory.Delete(link, recursive: false);
@@ -133,9 +158,6 @@ public static class GitScratch
         {
             File.Delete(link);
         }
-
-        AfterUnlink?.Invoke(link);
-        Verify(link, target, before, isDirectory);
     }
 
     /// <summary>

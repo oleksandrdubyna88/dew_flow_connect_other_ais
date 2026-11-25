@@ -351,6 +351,35 @@ public sealed class ARoleJobLeaseTests
     }
 
     [Fact]
+    public void A16_ACoderJobsFolderThatCannotBeRemoved_KeepsItsRecord_UntilItCan()
+    {
+        Assert.SkipUnless(FolderHolds.CanMakeOneUndeletable, "a privileged Unix process ignores the mode that makes a folder undeletable");
+        var clock = new ManualClock(T0);
+        using var world = new RoleJobWorld(clock);
+        using var jobs = TempDir.For("coai-coder-jobs-");
+        var job = world.NewJob(role: RoleDescriptors.Coder);
+        using (var lease = world.Store.TryTake(job.JobId)!)
+        {
+            lease.Write(current => Terminal(current, RoleJobStates.Succeeded, T0.UtcDateTime)).Should().BeOfType<RoleJobWrite.Written>();
+        }
+
+        var folder = Path.Combine(jobs.Path, job.JobId);
+        Directory.CreateDirectory(Path.Combine(folder, "coder"));
+        clock.Advance(TimeSpan.FromDays(40));
+        string? Settings(string name) => name == CoderOsLayer.JobsVariable ? jobs.Path : null;
+
+        using (FolderHolds.Undeletable(folder))
+        {
+            RoleJobRetention.Apply(world.Store, Serilog.Core.Logger.None, Settings).Should().BeEmpty("the folder stays, so the record stays: the next retention finds the job again");
+            world.Store.Read(job.JobId).Should().NotBeNull();
+        }
+
+        RoleJobRetention.Apply(world.Store, Serilog.Core.Logger.None, Settings).Should().Equal(job.JobId);
+        Directory.Exists(folder).Should().BeFalse();
+        world.Store.Read(job.JobId).Should().BeNull();
+    }
+
+    [Fact]
     public void A16_TheRowsStay_WhenTheFolderGoes()
     {
         var clock = new ManualClock(T0);

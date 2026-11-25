@@ -1,3 +1,4 @@
+using CoaiMcp.Runners.Files;
 using CoaiMcp.Runners.Toolchain;
 using CoaiMcp.Runners.Worktrees;
 using CoaiMcp.Server.RoleJobs;
@@ -75,7 +76,7 @@ public sealed class ACoderJobFoldersTests : IDisposable
     }
 
     [Fact]
-    public void AMountsFolderThatIsALink_IsUnlinked_AndWhatItPointsAtIsLeftAlone()
+    public void AMountsFolderThatIsALink_IsLeftAsItIs_NotFollowedAndNotRemoved()
     {
         Assert.SkipWhen(OperatingSystem.IsWindows(), "a symbolic link needs a privilege on Windows");
         using var elsewhere = TempDir.For("coai-elsewhere-");
@@ -85,6 +86,51 @@ public sealed class ACoderJobFoldersTests : IDisposable
         CoderJobFolders.RemoveMounts(BoundaryOf(Job), Job, _failures.AsFailureSink()).Should().BeFalse("a link is not a folder of coai's: it is not followed and not removed");
 
         File.ReadAllText(Path.Combine(elsewhere.Path, "precious.txt")).Should().Be("keep\n");
+        new DirectoryInfo(Folder(Job + ".mounts")).LinkTarget.Should().NotBeNull("the link itself is where it was: it is not a folder of coai's");
+        CoderJobFolders.RemoveOf(Settings, Job, _failures.AsFailureSink()).Should().BeTrue("a link in the place of a folder is nothing of coai's to remove, and it must not keep a job's record for ever");
+    }
+
+    [Fact]
+    public void ALinkInsideAJobFolder_IsRemovedByItsOwnName_AndItsTargetIsNeverRead()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "a symbolic link needs a privilege on Windows");
+        using var elsewhere = TempDir.For("coai-elsewhere-");
+        File.WriteAllText(Path.Combine(elsewhere.Path, "precious.txt"), "keep\n");
+        var home = Path.Combine(Make(Job), "coder", "home");
+        Directory.CreateDirectory(home);
+        Directory.CreateSymbolicLink(Path.Combine(home, "to-a-folder"), elsewhere.Path);
+        Directory.CreateSymbolicLink(Path.Combine(home, "to-proc"), "/proc");
+        var read = new List<string>();
+        GitScratch.Reading = read.Add;
+        try
+        {
+            CoderJobFolders.RemoveOf(Settings, Job, _failures.AsFailureSink()).Should().BeTrue(string.Join("; ", _failures));
+        }
+        finally
+        {
+            GitScratch.Reading = null;
+        }
+
+        Directory.Exists(Folder(Job)).Should().BeFalse("a link made by a check, to /proc or to anywhere, does not stop the job folder's removal");
+        read.Should().BeEmpty("the target of a link in a job folder is not listed, before or after: it may be /proc or a dropped share");
+        File.ReadAllText(Path.Combine(elsewhere.Path, "precious.txt")).Should().Be("keep\n");
+    }
+
+    [Fact]
+    public void AFolderThatCannotBeRemoved_StaysAndIsSaid_AndIsRemovedWhenItCan()
+    {
+        Assert.SkipUnless(FolderHolds.CanMakeOneUndeletable, "a privileged Unix process ignores the mode that makes a folder undeletable");
+        Make(Job);
+
+        using (FolderHolds.Undeletable(Folder(Job)))
+        {
+            CoderJobFolders.RemoveOf(Settings, Job, _failures.AsFailureSink()).Should().BeFalse("the job's record must stay while its folder does");
+            _failures.Should().NotBeEmpty();
+        }
+
+        Make(Job);
+        CoderJobFolders.RemoveOf(Settings, Job, _failures.AsFailureSink()).Should().BeTrue();
+        Directory.Exists(Folder(Job)).Should().BeFalse();
     }
 
     [Fact]

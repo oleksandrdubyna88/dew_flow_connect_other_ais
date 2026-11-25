@@ -32,24 +32,30 @@ internal static class RoleJobRetention
         var removed = new List<string>();
         foreach (var job in doomed)
         {
-            if (Remove(store, job.JobId, log))
+            if (Remove(store, job, settings, log))
             {
                 removed.Add(job.JobId);
-                if (settings is not null && job.Role == RoleDescriptors.Coder)
-                {
-                    CoderJobFolders.RemoveOf(settings, job.JobId, e => log.Warning(e, "the folders of coder job {JobId} could not be removed; they stay", job.JobId));
-                }
             }
         }
 
         return removed;
     }
 
-    private static bool Remove(RoleJobStore store, string jobId, Serilog.ILogger log)
+    private static bool Remove(RoleJobStore store, RoleJobRecord job, Func<string, string?>? settings, Serilog.ILogger log)
     {
+        var jobId = job.JobId;
         if (store.FolderOf(jobId) is not { } folder || HeldFile.TryHold(folder.LeaseFile) is not { } held)
         {
             // The lease is held: a runner is still finishing in a folder it has already marked over. Not now.
+            return false;
+        }
+
+        // A coder job's own folders go BEFORE its record, under the lease: when one cannot be removed the record stays, and the next retention finds the job again.
+        if (settings is not null && job.Role == RoleDescriptors.Coder
+            && !CoderJobFolders.RemoveOf(settings, jobId, e => log.Warning(e, "the folders of coder job {JobId} could not be removed; the job's record stays until they are", jobId)))
+        {
+            held.Dispose();
+
             return false;
         }
 
