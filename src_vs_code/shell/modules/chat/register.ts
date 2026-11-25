@@ -38,6 +38,7 @@ import { fileAt, useFileProbe } from '../../../src/pathFamily';
 import { startPathWatch } from '../../../src/pathWatchHost';
 import { hostRuntime } from '../../../src/hostRuntime';
 import { storageReadsThisSide } from '../../../src/sideConfig';
+import { bindTerminalAccounts, type TerminalAccounts } from '../../../src/remoteAccountsHost';
 import { bindRemoteSessions, type RemoteSessions } from '../../../src/remoteSessionHost';
 import { bindReattach } from '../../../src/terminalHost';
 import { bindSkipShell, type SkipShellTestDoor } from '../../../src/skipShellHost';
@@ -50,6 +51,10 @@ import { mark } from '../../measure';
 export interface ChatRegistration {
   readonly chatPanels: ChatPanels;
   readonly remote: RemoteSessions;
+  /** The folder of this side's storage that holds the refusals file: named in ONE place, handed to the road and to its test door. */
+  readonly hostsFolder: string;
+  /** The accounts of the open ssh hosts (accounts plan E1.S3), bound beside the remote sessions. */
+  readonly terminalAccounts: TerminalAccounts;
   readonly skipShell: SkipShellTestDoor;
   /** Stops the heartbeat's timer (its FILE is left on purpose — see `chatStoreHeartbeat.ts`); a second call does nothing more. */
   readonly stopHeartbeat: () => void;
@@ -64,7 +69,7 @@ interface OpenedStore {
 
 /** Where the chat's own disposals and registrations go: the `vscode.ExtensionContext` of the host, as the old `activate` took it. */
 export function registerChat(context: vscode.ExtensionContext): ChatRegistration {
-  const { remote, skipShell, chatPanels } = bindThisSide(context);
+  const { remote, hostsFolder, terminalAccounts, skipShell, chatPanels } = bindThisSide(context);
   const { chatStore, restoreDeps, migration } = openTheStore(context, chatPanels);
   // HOUSEKEEPING, and the INDEX the picker reads (story B1), then the follower of renames and the sweep of what the last run left behind.
   const housekeeping = startKeeping(chatPanels, chatStore, migration);
@@ -90,11 +95,11 @@ export function registerChat(context: vscode.ExtensionContext): ChatRegistration
     registerSerializer(restoreDeps, migration),
   );
 
-  return { chatPanels, remote, skipShell, stopHeartbeat };
+  return { chatPanels, remote, hostsFolder, terminalAccounts, skipShell, stopHeartbeat };
 }
 
 /** The bindings the old `activate` made for chat, in its order: the data root, the one path watch, the side, the remote road, the skip-list check, the registry. */
-function bindThisSide(context: vscode.ExtensionContext): { readonly remote: RemoteSessions; readonly skipShell: SkipShellTestDoor; readonly chatPanels: ChatPanels } {
+function bindThisSide(context: vscode.ExtensionContext): { readonly remote: RemoteSessions; readonly hostsFolder: string; readonly terminalAccounts: TerminalAccounts; readonly skipShell: SkipShellTestDoor; readonly chatPanels: ChatPanels } {
   // WHERE this window keeps its data, before anything below resolves a path (the chat store is built from one); the host's one runtime holds the answer, so
   // the legacy module, loaded or not, reads the same. And how this host asks the disk whether a CLI path of the other OS's spelling is a file HERE.
   storageReadsThisSide(context);
@@ -115,7 +120,11 @@ function bindThisSide(context: vscode.ExtensionContext): { readonly remote: Remo
   bindChatSide(context);
   bindChatPresets(context);
   // The road to a `Creds: <host> / <session>` terminal's Claude session (E2.S3): the consent, the picked ids, the hosts command.
-  const remote = bindRemoteSessions(context);
+  // The refusals file lives in a folder of this side's storage: the ONE place that names it, handed on to the road and to the test door.
+  const hostsFolder = vscode.Uri.joinPath(context.globalStorageUri, 'terminal-hosts').fsPath;
+  const remote = bindRemoteSessions(context, hostsFolder);
+  // The accounts of the open ssh hosts (E1.S3): a round 30 s after the first eligible terminal, then 10 minutes after each one ended. In test mode it never arms itself.
+  const terminalAccounts = bindTerminalAccounts(context, remote, context.extensionMode === vscode.ExtensionMode.Test);
   // The person's own skip list may hide the terminal keys of CoAI (E3.S3): tell once, offer Add for the user list, never write a workspace.
   const skipShell = bindSkipShell(context);
   // One registry per window: a conversation belongs to a Claude Code tab, and tabs are per window. The legacy sidebar's bug chat reaches it through the chat module.
@@ -123,7 +132,7 @@ function bindThisSide(context: vscode.ExtensionContext): { readonly remote: Remo
   // A terminal that opens (creds opens its terminals late, after the serializer restored the chats) takes back the conversation of its name (E3.S1).
   bindReattach(context, chatPanels);
 
-  return { remote, skipShell, chatPanels };
+  return { remote, hostsFolder, terminalAccounts, skipShell, chatPanels };
 }
 
 /** The chat store, and the migration that carries the old memento into it: what a restored tab reads and every command writes. */

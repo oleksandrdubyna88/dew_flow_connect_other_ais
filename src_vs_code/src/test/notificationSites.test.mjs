@@ -294,7 +294,20 @@ test('a `code` belongs to a notice, and an object that merely has a `code` prope
 // 181 -> 176 on 2026-11-23 (v2 E4, story s6-dead-v1-out), five sites removed (E4) with the escalation watcher and its answer flow: the modal of a waiting review
 // (`a-review-is-waiting`), the answer that could not be written (`answer-not-written`), a question already answered elsewhere (`question-already-answered`),
 // an id that is not a file name (`question-id-is-not-a-filename`) and "no review is waiting" (`no-question-waiting`). The server has no held gate left to ask.
-const PLACES_THIS_SPEAKS = 176;
+// 176 -> 177 on 2026-11-24 (E1.S1 of todo/PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E1_S1_spec.md), one site: a "Not this host" or a stop that the refusals
+// file did not take (`remote-host-refusal-not-kept`, a warning with the one action Save now). The two sites the first text of the spec added do not exist.
+// 177 -> 179 on 2026-11-24 (E1.S4 of todo/PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E1.md), two sites of the accounts list's window: the daily notice of the
+// hosts the round allowed by itself (`accounts-hosts-allowed`, one action Open settings) and the first-round notice that the hosts a person allowed are now read every
+// 10 minutes (`accounts-read-every-ten-minutes`).
+const PLACES_THIS_SPEAKS = 179;
+
+test('A4-T18: the two notices of the accounts list are in the inventory by their codes', () => {
+  const { codes } = count();
+
+  for (const code of ['accounts-hosts-allowed', 'accounts-read-every-ten-minutes']) {
+    assert.ok(codes.includes(code), `${code} is not among the codes the counter reads`);
+  }
+});
 
 test('the POPULATION changes only on purpose', () => {
   // Routing must not move it in either direction: the completeness promise is made over this

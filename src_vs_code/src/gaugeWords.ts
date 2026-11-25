@@ -89,7 +89,7 @@ function seenWords(reading: GaugeReading, nowMs: number): string {
 /** The units an age is said in, largest first — rounded DOWN, so a reading is never said to be fresher than it is old. */
 const AGO_UNITS: readonly (readonly [number, string])[] = [[DAY_MS, 'd'], [HOUR_MS, 'h'], [MINUTE_MS, 'min']];
 
-function agoWords(ms: number): string {
+export function agoWords(ms: number): string {
   if (!Number.isFinite(ms)) {
     return 'at an unknown time';
   }

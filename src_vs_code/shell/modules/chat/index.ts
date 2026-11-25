@@ -11,6 +11,7 @@ import { adoptRegistrationsFor } from '../../../src/shellBridge';
 import { chooseFromBug as chooseFromBugIn } from '../../../src/chatCommand';
 import { flushChatUsage } from '../../../src/chatUsageFile';
 import { loadShellModule } from '../../../src/hostRuntime';
+import { terminalAccountsTestDoorOf } from '../../../src/remoteAccountsHost';
 import { testDoorOf } from '../../../src/remoteSessionHost';
 import { CHAT_COMMANDS, MODULE_INSTALL, PANEL_CHAT } from '../../ids';
 import type { ChatModule, InstallModule } from '../../lazy';
@@ -128,7 +129,8 @@ export const start: ChatModule['start'] = (context) => {
 
   return context.extensionMode === vscode.ExtensionMode.Test
     ? {
-      remoteSessions: testDoorOf(registered.remote),
+      remoteSessions: testDoorOf(registered.remote, context.globalState, registered.hostsFolder),
+      terminalAccounts: terminalAccountsTestDoorOf(registered.terminalAccounts),
       skipShell: registered.skipShell,
       chat: { adoptedCommands: () => [...handlers.keys()], adoptedSerializer: () => serializer !== undefined } satisfies ChatTestDoor,
     }

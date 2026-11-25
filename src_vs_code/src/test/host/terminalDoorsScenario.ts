@@ -4,7 +4,6 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 import type { CoaiExports } from '../../extension';
-import { answersOf, withAnswer } from '../../remoteRead';
 import type { RemoteRun } from '../../remoteSsh';
 import { until, activated } from './hostHelpers';
 
@@ -56,11 +55,11 @@ async function front(terminal: vscode.Terminal): Promise<void> {
 /** The context key of the terminal items follows the active terminal and the host's answer. */
 export async function theTerminalItemsFollowTheActiveTerminalAndTheAnswer(): Promise<void> {
   const door = await boundDoor();
-  const before = answersOf(door.answers.read());
+  const before = await door.stored();
   const creds = vscode.window.createTerminal({ name: `Creds: ${HOST} / ${SESSION}` });
   const plain = vscode.window.createTerminal({ name: 'plain shell' });
   try {
-    await door.answers.write(withAnswer([], HOST, 'yes', new Date().toISOString()));
+    await door.commit({ kind: 'person', host: HOST, answer: 'yes' });
 
     await front(creds);
     await until(() => door.readsKey() === true, 'a Creds terminal whose host said yes does not show the items');
@@ -70,12 +69,12 @@ export async function theTerminalItemsFollowTheActiveTerminalAndTheAnswer(): Pro
     await until(() => door.readsKey() === true, 'the items did not come back with the Creds terminal');
 
     // An answer written to the real globalState changes the key without the active terminal changing.
-    await door.answers.write(withAnswer(door.answers.read(), HOST, 'no', new Date().toISOString()));
+    await door.commit({ kind: 'person', host: HOST, answer: 'no' });
     await until(() => door.readsKey() === false, 'a "no" for the host is written and the items are still shown (the key is not set after an answer is written)');
-    await door.answers.write(withAnswer(door.answers.read(), HOST, 'yes', new Date().toISOString()));
+    await door.commit({ kind: 'person', host: HOST, answer: 'yes' });
     await until(() => door.readsKey() === true, 'a "yes" for the host is written and the items are still hidden');
   } finally {
-    await door.answers.write(before);
+    await door.restore(before);
     creds.dispose();
     plain.dispose();
   }
@@ -84,7 +83,7 @@ export async function theTerminalItemsFollowTheActiveTerminalAndTheAnswer(): Pro
 /** A real press of *CoAI: take the question* on a Creds terminal reaches the bound road once — or stops at the chat's own readiness, and reaches nothing. */
 export async function aPressOnACredsTerminalReachesTheBoundRoadOnce(): Promise<void> {
   const door = await boundDoor();
-  const before = answersOf(door.answers.read());
+  const before = await door.stored();
   const calls: (readonly string[])[] = [];
   door.replaceRun(async (_host, _session, operands) => {
     calls.push(operands);
@@ -93,7 +92,7 @@ export async function aPressOnACredsTerminalReachesTheBoundRoadOnce(): Promise<v
   });
   const terminal = vscode.window.createTerminal({ name: `Creds: ${HOST} / ${SESSION}` });
   try {
-    await door.answers.write(withAnswer([], HOST, 'yes', new Date().toISOString()));
+    await door.commit({ kind: 'person', host: HOST, answer: 'yes' });
     await front(terminal);
     const refusals = ledgerRows('no-question-from-terminal', REFUSAL);
     const notReady = ledgerRows('chat-not-ready', '');
@@ -109,7 +108,7 @@ export async function aPressOnACredsTerminalReachesTheBoundRoadOnce(): Promise<v
     }
   } finally {
     door.replaceRun(undefined);
-    await door.answers.write(before);
+    await door.restore(before);
     terminal.dispose();
   }
 }

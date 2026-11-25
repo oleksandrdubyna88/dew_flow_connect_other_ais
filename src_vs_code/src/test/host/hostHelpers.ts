@@ -82,6 +82,7 @@ interface InstallDoors {
 
 interface ChatDoors {
   readonly remoteSessions?: unknown;
+  readonly terminalAccounts?: unknown;
   readonly skipShell?: unknown;
   readonly chat?: { readonly adoptedCommands: () => readonly string[]; readonly adoptedSerializer: () => boolean };
 }

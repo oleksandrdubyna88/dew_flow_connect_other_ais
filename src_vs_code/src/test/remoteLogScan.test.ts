@@ -39,9 +39,9 @@ function argumentsFrom(text: string, open: number): string {
   return text.slice(open + 1);
 }
 
-/** Every `console.<name>(`, `notify(`, `logged(` and `seams.log(` call (the last two are the remote reader's own log road) of a text whose arguments hold a banned word — each reported as the call's own text. Across lines. */
+/** Every `console.<name>(`, `notify(`, `logged(`, `seams.log(`, `defaultRemoteSeams().log(` and a bare `write(` call (the alias of the log seam in `remoteAccountsHost.ts`) of a text whose arguments hold a banned word — each reported as the call's own text. Across lines. */
 function logLeaks(text: string): readonly string[] {
-  const calls = [...text.matchAll(/\b(?:console\.[A-Za-z]+|notify|logged|seams\.log)\(/gu)];
+  const calls = [...text.matchAll(/(?:\b(?:console\.[A-Za-z]+|notify|logged|seams\.log|defaultRemoteSeams\(\)\.log)|(?<![.\w])write)\(/gu)];
 
   return calls
     .map((call) => ({ call: call[0], args: argumentsFrom(text, (call.index ?? 0) + call[0].length - 1) }))
@@ -60,6 +60,9 @@ test('S2-T10: the scanner finds what it must, on samples', () => {
   assert.equal(logLeaks('logged(seams, got.output);').length, 1, 'stdout through the remote reader\'s log road');
   assert.equal(logLeaks('seams.log(`${operands}`);').length, 1, 'an operand through the log seam');
   assert.equal(logLeaks('console.error("a (b) c", folder);').length, 1, 'a banned word after a string that holds parentheses');
+  assert.equal(logLeaks('defaultRemoteSeams().log(`failed: ${reason}`);').length, 1, 'a caught error through the default log seam');
+  assert.equal(logLeaks('const write = defaultRemoteSeams().log; write(run.stdout);').length, 1, 'stdout through the alias of the log seam');
+  assert.deepEqual(logLeaks('defaultRemoteSeams().log(ROUND_FAILED_LINE); write(droppedLine(host)); child.stdin.write(script);'), [], 'a fixed line through either, and a write of a member');
 
   assert.deepEqual(logLeaks('seams.log(logLine(host, session, end, stderrTail));'), [], 'the one log call of the remote reader');
   assert.deepEqual(logLeaks('logged(seams, BAD_OPERAND_LOG);'), [], 'a fixed line through the log road');
@@ -147,4 +150,82 @@ test('S4-T11 companions: the scan finds the two registrations and the Asked bran
   assert.ok(/console\.error\(/u.test(helper ?? ''), 'the Asked terminal branch has no console.error call, so the scan of it matches nothing');
   // The scanner itself reaches this shape: a terminal door's catch that put the error back.
   assert.equal(logLeaks(`registerCommand('coai.takeFromTerminal', () => { takeFromTerminal(a).catch((reason: unknown) => { void notify({ detail: asText(reason) }); }); })`).length, 1, 'the scanner misses a terminal door that logs an error');
+});
+
+// ───────────────── A2-T21: the four accounts modules (E1.S2) ─────────────────
+
+const ACCOUNTS_MODULES = ['remoteFraming.ts', 'remoteAccountsScript.ts', 'remoteAccountsUsage.ts', 'remoteAccountsReply.ts'];
+
+/** What a pure parser module must not hold, each with its name: a log or a notice, a message that carries data, the editor, a process, a file, code built at run time. */
+const FORBIDDEN: ReadonlyArray<readonly [string, RegExp]> = [
+  ['a console call', /\bconsole\./u],
+  ['a notify call', /\bnotify\(/u],
+  ['an error whose message is a template literal', /throw new Error\(`/u],
+  ['an import or require of vscode, node:child_process or node:fs', /(?:\bfrom|\brequire\(|\bimport)\s*'(?:vscode|node:child_process|child_process|node:fs|fs|node:fs\/promises)'/u],
+  ['eval', /\beval\(/u],
+  ['new Function', /\bnew Function\b/u],
+];
+
+const forbiddenIn = (text: string): readonly string[] => FORBIDDEN.filter(([, pattern]) => pattern.test(text)).map(([name]) => name);
+
+test('A2-T21: the scan finds each forbidden thing in a sample, so a scan that matches nothing is seen', () => {
+  const samples: Readonly<Record<string, string>> = {
+    'a console call': 'console.error(x);',
+    'a notify call': 'void notify({ title: t });',
+    'an error whose message is a template literal': 'throw new Error(`bad ${x}`);',
+    'an import or require of vscode, node:child_process or node:fs': "import * as vscode from 'vscode';",
+    eval: 'eval(code);',
+    'new Function': 'const f = new Function("a");',
+  };
+  assert.deepEqual(Object.keys(samples).sort(), FORBIDDEN.map(([name]) => name).sort(), 'a forbidden thing has no sample');
+  for (const [name, sample] of Object.entries(samples)) {
+    assert.deepEqual(forbiddenIn(sample), [name], `the scan does not find ${name} in its sample`);
+  }
+  assert.deepEqual(forbiddenIn("import { framed } from './remoteFraming';"), [], 'an ordinary import is not forbidden');
+  assert.deepEqual(forbiddenIn("const fs = require('node:fs');").length, 1, 'a require of node:fs is forbidden');
+  assert.deepEqual(forbiddenIn("import 'vscode';"), ['an import or require of vscode, node:child_process or node:fs'], 'a side-effect import of vscode is forbidden');
+  assert.deepEqual(forbiddenIn("import 'node:fs';").length, 1, 'a side-effect import of node:fs is forbidden');
+  assert.deepEqual(forbiddenIn("import './remoteFraming';"), [], 'the allowed module is not forbidden, as a side-effect import either');
+});
+
+test('A2-T21: the name pattern finds the four accounts modules, and they hold no log, notice, editor, process, file or run-time code', () => {
+  const files = remoteFiles();
+  for (const wanted of ACCOUNTS_MODULES) {
+    assert.ok(files.includes(wanted), `the name pattern does not find ${wanted}`);
+    assert.deepEqual(logLeaks(sourceOf(wanted)), [], `${wanted} writes stdout, an operand or an error's message to a log`);
+    assert.deepEqual(forbiddenIn(sourceOf(wanted)), [], `${wanted} holds something a pure parser module must not`);
+  }
+});
+
+// ───────────────── A3-T28: one rule takes control and format characters out (E1.S3; S2 X12) ─────────────────
+
+/** The character class of the plain rule, written as source text: control and format characters. */
+const PLAIN_CLASS = String.raw`[\p{Cc}\p{Cf}]`;
+
+/** The files of `src/*.ts` (tests are in `src/test`, so none is here) that hold the class. */
+const filesWithPlainClass = (names: readonly string[], read: (name: string) => string): readonly string[] => names.filter((name) => read(name).includes(PLAIN_CLASS));
+
+test('A3-T28 companion: the scan finds the class in a sample, and finds nothing in text without it', () => {
+  assert.deepEqual(filesWithPlainClass(['a.ts', 'b.ts'], (name) => (name === 'a.ts' ? `x.replace(/${PLAIN_CLASS}/gu, '')` : 'const none = 1;')), ['a.ts']);
+  assert.deepEqual(filesWithPlainClass(['b.ts'], () => 'const none = 1;'), []);
+});
+
+test('A3-T28: the plain rule stands in ONE file, and the two older copies call it', () => {
+  assert.deepEqual(filesWithPlainClass(sourceFiles(), sourceOf), ['remoteAccountsReply.ts'], 'the plain rule stands in two files');
+  for (const file of ['remoteSsh.ts', 'remoteRead.ts']) {
+    assert.match(sourceOf(file), /import\s*\{[^}]*\bwithoutControls\b[^}]*\}\s*from\s*'\.\/remoteAccountsReply'/u, `${file} does not import withoutControls from ./remoteAccountsReply`);
+  }
+  assert.ok(!/from\s*'\.\/remote(?:Ssh|Read)'/u.test(sourceOf('remoteAccountsReply.ts')), 'remoteAccountsReply.ts imports a file that imports it: an import circle');
+});
+
+// ───────────────── A4-T19: the scan reaches the files of the accounts list (E1.S4) ─────────────────
+
+test('A4-T19: the log scan reaches the rows and the host of the accounts list, and both are clean', () => {
+  const files = remoteFiles();
+  for (const wanted of ['remoteAccountsRows.ts', 'remoteAccountsHost.ts']) {
+    assert.ok(files.includes(wanted), `the name pattern does not find ${wanted}`);
+    assert.deepEqual(logLeaks(sourceOf(wanted)), [], `${wanted} writes stdout, an operand or an error's message to a log or a notice`);
+  }
+  assert.ok(/\bnotify\(/u.test(sourceOf('remoteAccountsHost.ts')), 'the host has no notify( call, so the scan of its notices matches nothing');
+  assert.ok(/\bdefaultRemoteSeams\(\)\.log\(/u.test(sourceOf('remoteAccountsHost.ts')), 'the host writes no log line, so the scan of its log matches nothing');
 });

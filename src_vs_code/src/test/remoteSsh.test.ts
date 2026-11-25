@@ -6,7 +6,8 @@ import { existsSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import test from 'node:test';
 import { Platform } from '../hostSide';
-import { REMOTE_LIMITS, RemoteLimits, RemoteRun, RemoteSeams, SSH_OPTIONS, runRemote, sshArgv, sshExecutable } from '../remoteSsh';
+import { ACCOUNTS_LIMITS, REMOTE_LIMITS, RemoteLimits, RemoteRun, RemoteSeams, SSH_OPTIONS, accountsArgv, defaultRemoteSeams, runAccounts, runRemote, sshArgv, sshExecutable } from '../remoteSsh';
+import { ACCOUNTS_CEILING_SECONDS, ACCOUNTS_MODES, ACCOUNTS_REPLY_BYTES_MAX, ACCOUNTS_SCRIPT, AccountsMode } from '../remoteAccountsScript';
 import { REMOTE_SCRIPT, RemoteCall, operandsOf, shQuoted } from '../remoteScript';
 import { readRemote } from '../remoteFrame';
 import { Captured, CaptureOptions } from '../versionProbe';
@@ -395,4 +396,118 @@ test('S2-T21: the options win over a person\'s config (the REAL ssh -G)', (conte
   } finally {
     rmSync(config, { force: true });
   }
+});
+
+// ───────────────── E1.S3: the runner of the accounts call (contract C3) ─────────────────
+
+/** A word the type does not allow, as a test of the run-time check. The cast is the point: the check must hold when the compiler cannot. */
+const notAMode = (word: string): AccountsMode => word as AccountsMode;
+
+const AH = 'h';
+
+test('A3-T1: the accounts argv is the pinned one, for both modes', () => {
+  for (const mode of ACCOUNTS_MODES) {
+    const argv = accountsArgv('ai1-dev2', mode);
+
+    assert.ok(!argv.includes('-n'), 'the remote sh -s would read an empty stdin');
+    assert.deepEqual([...argv], [...SSH_OPTIONS, '--', 'ai1-dev2', 'sh', '-s', '--', `'${mode}'`]);
+  }
+  assert.deepEqual([...ACCOUNTS_MODES].sort(), ['claude-usage', 'no-claude-usage'], 'the companion: the two modes the argv is built for');
+  assert.deepEqual([...SSH_OPTIONS], [...PARENT_OPTIONS], 'SSH_OPTIONS is not its E2 value: a change to it is a plan change');
+});
+
+test('A3-T2: a bad host or mode never reaches ssh', async () => {
+  for (const host of ['-oProxyCommand=x', 'h;id', 'h\n']) {
+    assert.throws(() => accountsArgv(host, 'claude-usage'), { message: 'The remote read was asked in a form its host or operands do not allow.' }, `the host ${JSON.stringify(host)} was given to ssh`);
+    const spy = fake(OK);
+    assert.equal(refusalOf(await runAccounts(host, 'claude-usage', ACCOUNTS_LIMITS, spy.seams)), 'This terminal’s name cannot be given to ssh safely, so nothing was read.');
+    assert.equal(spy.calls.length, 0, `the host ${JSON.stringify(host)} reached a spawn`);
+  }
+  for (const word of ['', 'usage', 'claude-usage;id']) {
+    assert.throws(() => accountsArgv(AH, notAMode(word)), { message: 'The remote read was asked in a form its host or operands do not allow.' }, 'a mode outside the list reached ssh');
+    const spy = fake(OK);
+    assert.equal(refusalOf(await runAccounts(AH, notAMode(word), ACCOUNTS_LIMITS, spy.seams)), 'This terminal’s name cannot be given to ssh safely, so nothing was read.');
+    assert.equal(spy.calls.length, 0, `a mode outside the list reached ssh: ${JSON.stringify(word)}`);
+  }
+  const good = fake(OK);
+  assert.equal((await runAccounts(AH, 'no-claude-usage', ACCOUNTS_LIMITS, good.seams)).kind, 'answered');
+  assert.equal(good.calls.length, 1, 'the companion: a good host and mode DO reach capture');
+});
+
+test('A3-T3: the session reader is unchanged — its argv and its sentences, byte for byte', async () => {
+  assert.deepEqual([...sshArgv('ai1-dev2', [S])], [...SSH_OPTIONS, '--', 'ai1-dev2', 'sh', '-s', '--', "'small-tasks'"]);
+  const sentence = async (answer: Captured, limits: RemoteLimits = REMOTE_LIMITS, over: Parameters<typeof fake>[1] = {}): Promise<string> =>
+    refusalOf(await runRemote(H, S, [S], REMOTE_SCRIPT, limits, fake(answer, over).seams));
+
+  assert.equal(await sentence({ code: -1, output: '', ended: 'capped', stderrTail: '' }), '“ai1-dev2” sent more than 8 MiB, so the read was stopped.');
+  assert.equal(await sentence({ code: -1, output: '', ended: 'timeout', stderrTail: '' }), '“ai1-dev2” did not answer over ssh within 15 s.');
+  assert.equal(await sentence(OK, REMOTE_LIMITS, { exists: false }), 'ssh was not found at “/usr/bin/ssh”, so the Claude session on “ai1-dev2” cannot be read.');
+  assert.equal(refusalOf(await runRemote(H, S, [S], REMOTE_SCRIPT, REMOTE_LIMITS, fake(() => Promise.reject(new Error('x'))).seams)), 'ssh could not be run, so the Claude session on “ai1-dev2” cannot be read.');
+});
+
+test('A3-T4: the accounts call sends ACCOUNTS_SCRIPT, under its own limits', async () => {
+  assert.ok(ACCOUNTS_LIMITS.maxStdoutBytes >= ACCOUNTS_REPLY_BYTES_MAX, 'the runner caps the stdout below the largest reply the parser accepts');
+  assert.equal(ACCOUNTS_LIMITS.ms, ACCOUNTS_CEILING_SECONDS * 1000, 'the runner\'s limit and the ceiling the script\'s limits are summed against differ');
+  const spy = fake(OK);
+
+  await runAccounts(AH, 'no-claude-usage', ACCOUNTS_LIMITS, spy.seams);
+
+  const call = spy.calls[0];
+  assert.equal(call?.input, ACCOUNTS_SCRIPT, `the script that was sent is not ACCOUNTS_SCRIPT${call?.input === REMOTE_SCRIPT ? ': it is REMOTE_SCRIPT' : ''}`);
+  assert.deepEqual(call?.options, { cwd: '/usr/bin', maxStdoutBytes: 65536, killTree: true });
+  assert.equal(call?.shell, false);
+  assert.equal(call?.capMs, 30_000);
+  assert.deepEqual(call?.args, accountsArgv(AH, 'no-claude-usage'));
+  for (const word of call?.args ?? []) {
+    assert.ok(!/[\r\n]/u.test(word) && word.length <= 300, `the script (or a part of it) is in the argv: ${word.slice(0, 40)}`);
+  }
+
+  const slow = fake({ code: -1, output: '', ended: 'timeout', stderrTail: '' });
+  assert.equal(refusalOf(await runAccounts(AH, 'claude-usage', { ms: 50, maxStdoutBytes: 65536 }, slow.seams)), '“h” did not answer over ssh within 0.05 s.');
+  const capped = fake({ code: -1, output: '', ended: 'capped', stderrTail: '' });
+  const said = refusalOf(await runAccounts(AH, 'claude-usage', ACCOUNTS_LIMITS, capped.seams));
+  assert.ok(!said.includes('0.0625 MiB'), '0.0625 MiB is not a size a person reads');
+  assert.equal(said, '“h” sent more than 64 KiB, so the read was stopped.');
+
+});
+
+test('A3-T5: ssh\'s own failure is not an answer; any other exit code is the parser\'s', async () => {
+  const run = (code: number, stderrTail: string): Promise<RemoteRun> => runAccounts(AH, 'no-claude-usage', ACCOUNTS_LIMITS, fake({ code, output: 'x', stderrTail }).seams);
+
+  const denied = refusalOf(await run(255, 'Permission denied (publickey).\n'));
+  assert.ok(denied.endsWith('Permission denied (publickey).'), `exit 255 was read as an answer: ${denied}`);
+  assert.deepEqual(await run(1, ''), { kind: 'answered', code: 1, stdout: 'x' });
+});
+
+test('A3-T6: the accounts sentences name the accounts, the session\'s name the Claude session', async () => {
+  const accounts = async (over: Parameters<typeof fake>[1], answer: Captured | (() => Promise<Captured>) = OK): Promise<string> =>
+    refusalOf(await runAccounts(AH, 'no-claude-usage', ACCOUNTS_LIMITS, fake(answer, over).seams));
+  const session = async (over: Parameters<typeof fake>[1], answer: Captured | (() => Promise<Captured>) = OK): Promise<string> =>
+    refusalOf(await runRemote(AH, S, [S], REMOTE_SCRIPT, REMOTE_LIMITS, fake(answer, over).seams));
+
+  assert.equal(await accounts({ exists: false }), 'ssh was not found at “/usr/bin/ssh”, so the AI accounts on “h” cannot be read.');
+  assert.equal(await accounts({}, () => Promise.reject(new Error('x'))), 'ssh could not be run, so the AI accounts on “h” cannot be read.');
+  assert.equal(await session({ exists: false }), 'ssh was not found at “/usr/bin/ssh”, so the Claude session on “h” cannot be read.');
+  assert.equal(await session({}, () => Promise.reject(new Error('x'))), 'ssh could not be run, so the Claude session on “h” cannot be read.');
+});
+
+test('A3-T7: a failed accounts call is one log line of four fields, session=accounts, and no stdout', async () => {
+  const spy = fake({ code: 255, output: 'ACCOUNTS-STDOUT-MARK', stderrTail: 'Permission denied (publickey).\n' });
+
+  await runAccounts(AH, 'claude-usage', ACCOUNTS_LIMITS, spy.seams);
+
+  assert.deepEqual(spy.logs, ['ConnectOtherAIs: remote read host=h session=accounts end=exit 255 stderr=Permission denied (publickey).']);
+  assert.ok(!spy.logs.join('').includes('claude-usage'), 'the mode is in the log line');
+  assert.ok(!spy.logs.join('').includes('ACCOUNTS-STDOUT-MARK'), 'the stdout is in the log line');
+  const ok = fake(OK);
+  await runAccounts(AH, 'claude-usage', ACCOUNTS_LIMITS, ok.seams);
+  assert.deepEqual(ok.logs, [], 'a call that answered 0 wrote a log line');
+});
+
+test('A3-T7: the default seams are one exported function, whose log is the one console call', () => {
+  const seams = defaultRemoteSeams();
+
+  assert.equal(typeof seams.log, 'function');
+  assert.equal(typeof seams.capture, 'function');
+  assert.equal(typeof seams.exists, 'function');
 });

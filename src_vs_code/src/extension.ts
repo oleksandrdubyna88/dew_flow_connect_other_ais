@@ -48,6 +48,7 @@ import { readLog, serverRun, serverRunAt } from './roundsDbRead';
 import { FEATURES, FeaturesCache, hasFeature } from './binaryFeatures';
 import { FIRST_SEEN_KEY, NEW_CONTROLS, seenNow } from './newTags';
 import { sideHereOf, sidesIn, stampThisSide, type SeenSide } from './sidesSeen';
+import { type TerminalAccountsTestDoor } from './remoteAccountsHost';
 import { type RemoteSessionsTestDoor } from './remoteSessionHost';
 import { type SkipShellTestDoor } from './skipShellHost';
 import { StorageFingerprint } from './dataMove';
@@ -84,6 +85,11 @@ export interface CoaiExports {
    * it is absent, so no other extension can write a consent into this profile or replace the ssh call. `remoteExportGuard.test.ts` holds that.
    */
   readonly remoteSessions?: RemoteSessionsTestDoor;
+  /**
+   * The accounts round of the open ssh hosts, for a host scenario (E1.S3, A3-H1): replace the call, run a round, ask what is armed. Present ONLY in test
+   * mode, for the same reason: in production no other extension can start a round or replace the ssh call. Built by the chat module (`shell/modules/chat/index.ts`); `remoteExportGuard.test.ts` holds that.
+   */
+  readonly terminalAccounts?: TerminalAccountsTestDoor;
   /**
    * The BOUND skip-shell check, for a host scenario (E3.S3): replace the offer, run the check, save and restore the memory. Present ONLY in test
    * mode, for the same reason: in production no other extension can answer the offer or write this profile's memory. `skipShellWiring.test.ts` holds that.

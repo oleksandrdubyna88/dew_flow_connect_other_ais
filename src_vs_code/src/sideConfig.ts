@@ -6,7 +6,7 @@ import { asText } from './asText';
 import { storageChoiceFrom, useStorageSettings } from './dataDir';
 import { thisSide } from './installer';
 import { notify, notifyThen } from './notify';
-import { copyWouldReplace, ignoredWorkspaceValues, IgnoredValue, userLayerReader } from './modelKeys';
+import { ALLOW_NEW_HOSTS_KEY, allowNewHostsFrom, copyWouldReplace, ignoredLayerOf, ignoredWorkspaceValues, IgnoredValue, userLayerReader } from './modelKeys';
 import { MIGRATION_TRIGGERS, scheduleCatalogMigration } from './catalogMigrationHost';
 import { Notice } from './notice';
 
@@ -58,6 +58,17 @@ function afterOverlayWrite(context: vscode.ExtensionContext, key: string): void 
     void scheduleCatalogMigration(context);
   }
 }
+
+/**
+ * Whether the accounts round may allow a host that has no answer by itself. Read from the person's own user layer, afresh at every
+ * call, through `userLayer` and NEVER through `readerFor`: that one answers from this side's overlay first, a second place the value
+ * could come from. The caller passes a NEW configuration object each time.
+ */
+export const allowsNewHosts = (config: vscode.WorkspaceConfiguration): boolean => allowNewHostsFrom(userLayer(config)(ALLOW_NEW_HOSTS_KEY));
+
+/** The repository layer that sets `key` and is ignored for it, folder first. */
+export const ignoredLayerFor = (config: vscode.WorkspaceConfiguration, key: string): 'workspace' | 'folder' | undefined =>
+  ignoredLayerOf((section) => config.inspect(section), key);
 
 /**
  * Tell the person that a workspace or folder tried to set a model and was not applied — with the one

@@ -3,6 +3,8 @@ import { win32 } from 'node:path';
 import { credsSession } from './credsSession';
 import { Platform, hostPlatform } from './hostSide';
 import { system32 } from './processLauncher';
+import { withoutControls } from './remoteAccountsReply';
+import { ACCOUNTS_SCRIPT, AccountsMode, isAccountsMode } from './remoteAccountsScript';
 import { callOf, shQuoted } from './remoteScript';
 import { Captured, capture } from './versionProbe';
 
@@ -42,11 +44,32 @@ const REFUSED_WORD = 'The remote read was asked in a form its host or operands d
  * this is the second check of the same rules, at the one road in.</p>
  */
 export function sshArgv(host: string, operands: readonly string[]): readonly string[] {
-  if (credsSession(`Creds: ${host} / s`).kind !== 'session' || callOf(operands) === undefined) {
+  if (callOf(operands) === undefined) {
     throw new Error(REFUSED_WORD);
   }
 
-  return [...SSH_OPTIONS, '--', host, 'sh', '-s', '--', ...operands.map(shQuoted)];
+  return argvWith(host, operands);
+}
+
+/** The accounts call's words: the same options, the host and ONE of the two mode words. THROWS the same fixed text for a bad host or a mode outside the list. */
+export function accountsArgv(host: string, mode: AccountsMode): readonly string[] {
+  if (!isAccountsMode(mode)) {
+    throw new Error(REFUSED_WORD);
+  }
+
+  return argvWith(host, [mode]);
+}
+
+/** C1's host class, the ONE test of it in this file. */
+const hostOk = (host: string): boolean => credsSession(`Creds: ${host} / s`).kind === 'session';
+
+/** `--` right before the host, then the remote command; every word after `sh -s --` is single-quoted for the remote login shell. THROWS when the host fails its class. */
+function argvWith(host: string, words: readonly string[]): readonly string[] {
+  if (!hostOk(host)) {
+    throw new Error(REFUSED_WORD);
+  }
+
+  return [...SSH_OPTIONS, '--', host, 'sh', '-s', '--', ...words.map(shQuoted)];
 }
 
 /**
@@ -74,6 +97,9 @@ export interface RemoteLimits {
 
 export const REMOTE_LIMITS: RemoteLimits = { ms: 15_000, maxStdoutBytes: 8 * 1024 * 1024 };
 
+/** The accounts call's ceilings: 30 s (the script's own limits are summed against it) and 64 KiB, above the largest reply the parser accepts. */
+export const ACCOUNTS_LIMITS: RemoteLimits = { ms: 30_000, maxStdoutBytes: 64 * 1024 };
+
 /** What a call came to: the VM answered (any exit code but 255 and a failed start), or the person is told why not. */
 export type RemoteRun =
   | { readonly kind: 'answered'; readonly code: number; readonly stdout: string }
@@ -89,7 +115,8 @@ export interface RemoteSeams {
   readonly env: NodeJS.ProcessEnv;
 }
 
-function defaultSeams(): RemoteSeams {
+/** The seams of a real run. Exported so the round's log gate writes through the same default and no second console call exists. */
+export function defaultRemoteSeams(): RemoteSeams {
   return {
     capture,
     exists: (path) => access(path).then(() => true, () => false),
@@ -116,20 +143,43 @@ export async function runRemote(
   operands: readonly string[],
   script: string,
   limits: RemoteLimits = REMOTE_LIMITS,
-  seams: RemoteSeams = defaultSeams(),
+  seams: RemoteSeams = defaultRemoteSeams(),
 ): Promise<RemoteRun> {
+  return ranWith(host, { argv: argvOf(host, session, operands), label: session, subject: SESSION_SUBJECT }, script, limits, seams);
+}
+
+/**
+ * The accounts call: the same road, with `ACCOUNTS_SCRIPT` ALWAYS on stdin — there is no script parameter, so no other text can be sent.
+ * NEVER rejects. A bad host or a mode outside the list is a `refused` with no call.
+ */
+export function runAccounts(host: string, mode: AccountsMode, limits: RemoteLimits = ACCOUNTS_LIMITS, seams: RemoteSeams = defaultRemoteSeams()): Promise<RemoteRun> {
+  return ranWith(host, { argv: accountsArgvOf(host, mode), label: 'accounts', subject: ACCOUNTS_SUBJECT }, ACCOUNTS_SCRIPT, limits, seams);
+}
+
+/** What a call is ABOUT: its argv (nothing when a rule refused it), the label of its log line and the words of its sentences. */
+interface Ask {
+  readonly argv: readonly string[] | undefined;
+  readonly label: string;
+  readonly subject: string;
+}
+
+const SESSION_SUBJECT = 'the Claude session';
+const ACCOUNTS_SUBJECT = 'the AI accounts';
+
+/** One call. NEVER rejects: every failure is a `refused` with a sentence that holds no stdout, no operand and no caught error. The log line is written here and nowhere else. */
+async function ranWith(host: string, ask: Ask, script: string, limits: RemoteLimits, seams: RemoteSeams): Promise<RemoteRun> {
   try {
-    return await ranRemote(host, session, operands, script, limits, seams);
+    return await ranAsked(host, ask, script, limits, seams);
   } catch {
     // A seam that rejected or threw. Nothing of it reaches the person or the log: only that ssh could not be run.
-    logRead(seams, host, session, 'not-started', '');
+    logRead(seams, host, ask.label, 'not-started', '');
 
-    return refused(`ssh could not be run, so the Claude session on “${host}” cannot be read.`);
+    return refused(`ssh could not be run, so ${ask.subject} on “${host}” cannot be read.`);
   }
 }
 
-async function ranRemote(host: string, session: string, operands: readonly string[], script: string, limits: RemoteLimits, seams: RemoteSeams): Promise<RemoteRun> {
-  const argv = argvOf(host, session, operands);
+async function ranAsked(host: string, ask: Ask, script: string, limits: RemoteLimits, seams: RemoteSeams): Promise<RemoteRun> {
+  const { argv, label, subject } = ask;
   if (argv === undefined) {
     logged(seams, BAD_OPERAND_LOG);
 
@@ -137,17 +187,26 @@ async function ranRemote(host: string, session: string, operands: readonly strin
   }
   const exe = sshExecutable(seams.platform, seams.env);
   if (!(await seams.exists(exe.path))) {
-    logRead(seams, host, session, 'no-ssh', '');
+    logRead(seams, host, label, 'no-ssh', '');
 
-    return refused(missingSentence(host, exe.path, seams.platform));
+    return refused(missingSentence(host, subject, exe.path, seams.platform));
   }
   const options = { cwd: exe.cwd, maxStdoutBytes: limits.maxStdoutBytes, killTree: true };
   const got = await seams.capture(exe.path, argv, false, limits.ms, undefined, undefined, script, options);
 
-  return outcomeOf(host, session, limits, got, seams);
+  return outcomeOf(host, label, limits, got, seams);
 }
 
-/** The argv, or nothing when the session is not the first operand or a rule refuses. */
+/** The accounts argv, or nothing when a rule refuses. */
+function accountsArgvOf(host: string, mode: AccountsMode): readonly string[] | undefined {
+  try {
+    return accountsArgv(host, mode);
+  } catch {
+    return undefined;
+  }
+}
+
+/** The session argv, or nothing when the session is not the first operand or a rule refuses. */
 function argvOf(host: string, session: string, operands: readonly string[]): readonly string[] | undefined {
   try {
     return operands[0] === session ? sshArgv(host, operands) : undefined;
@@ -156,8 +215,8 @@ function argvOf(host: string, session: string, operands: readonly string[]): rea
   }
 }
 
-function missingSentence(host: string, path: string, platform: Platform): string {
-  const base = `ssh was not found at “${path}”, so the Claude session on “${host}” cannot be read.`;
+function missingSentence(host: string, subject: string, path: string, platform: Platform): string {
+  const base = `ssh was not found at “${path}”, so ${subject} on “${host}” cannot be read.`;
 
   return platform === 'win32' ? `${base} Install the Windows optional feature “OpenSSH Client”.` : base;
 }
@@ -165,9 +224,18 @@ function missingSentence(host: string, path: string, platform: Platform): string
 /** The refusal sentence for each way a capture ends without an exit code. */
 const END_SENTENCES: ReadonlyMap<string, (host: string, limits: RemoteLimits, said: string) => string> = new Map([
   ['timeout', (host: string, limits: RemoteLimits) => `“${host}” did not answer over ssh within ${limits.ms / 1000} s.`],
-  ['capped', (host: string, limits: RemoteLimits) => `“${host}” sent more than ${limits.maxStdoutBytes / 1_048_576} MiB, so the read was stopped.`],
+  ['capped', (host: string, limits: RemoteLimits) => `“${host}” sent more than ${sizeWords(limits.maxStdoutBytes)}, so the read was stopped.`],
   ['not-started', (_host: string, _limits: RemoteLimits, said: string) => `ssh could not be started: ${said}`],
 ]);
+
+/** A byte count in the unit it divides into evenly: 8 MiB stays `8 MiB`, 64 KiB says `64 KiB`. */
+function sizeWords(bytes: number): string {
+  if (bytes % 1_048_576 === 0) {
+    return `${bytes / 1_048_576} MiB`;
+  }
+
+  return bytes % 1024 === 0 ? `${bytes / 1024} KiB` : `${bytes} bytes`;
+}
 
 const tailOf = (got: Captured): string => got.stderrTail ?? '';
 
@@ -212,8 +280,6 @@ function logged(seams: RemoteSeams, line: string): void {
   }
 }
 
-/** A line of ssh's stderr is text from the VM: its control characters (an escape sequence, a bell) and its format characters (a bidi override, a zero-width space) never reach the person or the log. */
-const withoutControls = (line: string): string => line.replace(/[\p{Cc}\p{Cf}]/gu, '');
 
 /**
  * ssh's last line: the last one that is not empty, control characters taken out, at most 300 characters with `…` after a cut.

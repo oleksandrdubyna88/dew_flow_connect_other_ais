@@ -285,6 +285,12 @@
         "category": "ConnectOtherAIs"
       },
       {
+        "command": "coai.terminalAccounts",
+        "title": "AI accounts and usage",
+        "category": "ConnectOtherAIs",
+        "icon": "$(account)"
+      },
+      {
         "command": "coai.chatNow",
         "title": "CoAI: default",
         "category": "ConnectOtherAIs"
@@ -627,6 +633,12 @@
           "default": false,
           "scope": "machine",
           "markdownDescription": "Let coai use a **Kimi sign-in folder that lives on network storage** (NFS, CIFS/SMB, sshfs and the like) on WSL2 or Linux. Off by default, and coai then refuses to start Kimi and says how to fix it: Kimi's sign-in token is replaced every time it refreshes, so a Kimi running on **another machine** that shares the same home can refresh it first and leave you **signed out** — and coai cannot see that other machine. Turn it on only if you never run Kimi anywhere else with this home. When it is on, the Kimi card carries a one-line warning. A **machine** setting: a workspace's `.vscode/settings.json` cannot switch it on, Settings Sync does not copy it, and a WSL window keeps its own value. Needs `coai-mcp` **0.61.0** or later. Also on the Kimi card, under *Connection*."
+        },
+        "coai.terminalAccountsAllowNewHosts": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "markdownDescription": "**Allow new hosts by themselves**, for the list of AI accounts of the terminal panel. On (the default): the host of an open `Creds: <host> / <session>` terminal that has no answer yet is allowed by the accounts round itself, with no question, and is read over ssh every 10 minutes; a notice names such hosts at most once a day, and **CoAI: hosts read over ssh** → *Not this host* forbids one. Off: you are asked first — no host is contacted without your own *Read*, a host with no answer says *not asked yet*, and a host that was allowed automatically counts as not answered until you press *Read*. Only your own **user** setting counts: a workspace's or a folder's `.vscode/settings.json` cannot switch it, and an imported config file is refused this key."
         },
         "coai.alsoWatchDataDirectories": {
           "type": "array",
@@ -1029,6 +1041,11 @@
           "command": "coai.askFromTerminal",
           "when": "view == terminal",
           "group": "navigation@90"
+        },
+        {
+          "command": "coai.terminalAccounts",
+          "when": "view == terminal",
+          "group": "navigation@91"
         },
         {
           "command": "coai.takeFromTerminal",

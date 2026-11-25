@@ -327,3 +327,33 @@ test('the skip-shell check knows exactly the commands the manifest binds under t
   }
   assert.deepEqual([...SKIP_SHELL_IDS], skipped, 'SKIP_SHELL_IDS is not exactly the manifest default of terminal.integrated.commandsToSkipShell, in order');
 });
+
+// ───────────────── A4-T15: the accounts icon, as the manifest declares it (E1.S4) ─────────────────
+
+const ACCOUNTS = 'coai.terminalAccounts';
+
+test('A4-T15: the accounts command is declared once, with its title, its category and its icon', () => {
+  const rows = MANIFEST.contributes.commands.filter((row) => row.command === ACCOUNTS);
+
+  assert.equal(rows.length, 1, `${ACCOUNTS} is declared ${rows.length} times in contributes.commands, not once`);
+  assert.equal(rows[0]?.title, 'AI accounts and usage');
+  assert.equal(rows[0]?.category, 'ConnectOtherAIs');
+  assert.equal(rows[0]?.icon, '$(account)');
+});
+
+test('A4-T15: the icon sits in the terminal title bar right after Ask other AI, and nowhere else', () => {
+  const titleRows = (MANIFEST.contributes.menus['view/title'] ?? []).filter((row) => row.command === ACCOUNTS);
+
+  assert.equal(titleRows.length, 1, `${ACCOUNTS} has ${titleRows.length} view/title rows, not one`);
+  assert.equal(titleRows[0]?.when, 'view == terminal');
+  assert.equal(titleRows[0]?.group, 'navigation@91', 'the accounts icon sits before Ask other AI');
+  const ask = (MANIFEST.contributes.menus['view/title'] ?? []).find((row) => row.command === DOOR);
+  assert.equal(ask?.group, 'navigation@90', 'Ask other AI moved');
+  const elsewhere = Object.entries(MANIFEST.contributes.menus).filter(([menu, rows]) => menu !== 'view/title' && rows.some((row) => row.command === ACCOUNTS));
+  assert.deepEqual(elsewhere.map(([menu]) => menu), [], 'the accounts command is offered from another menu — and a commandPalette row would hide it from the palette');
+});
+
+test('A4-T15: the accounts command has no keybinding, and the skip-list default is unchanged', () => {
+  assert.equal(MANIFEST.contributes.keybindings.filter((row) => row.command === ACCOUNTS).length, 0, 'a chord for the accounts command would have to join the skip list');
+  assert.deepEqual(MANIFEST.contributes.configurationDefaults?.[SKIP_LIST], ['coai.askFromTerminal', 'coai.goToFromTerminal'], 'the skip list default changed');
+});

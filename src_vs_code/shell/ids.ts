@@ -40,6 +40,7 @@ export const PANEL_CHAT = 'coaiChat';
  */
 export const CHAT_COMMANDS: readonly string[] = [
   'coai.terminalHosts',
+  'coai.terminalAccounts',
   'coai.chatWithOtherAi',
   'coai.askFromTerminal',
   'coai.takeTheQuestion',
@@ -95,6 +96,7 @@ export const COMMANDS: readonly string[] = [
   'coai.takeFromTerminal',
   'coai.addFromTerminal',
   'coai.terminalHosts',
+  'coai.terminalAccounts',
   'coai.chatNow',
   'coai.chatChoose',
   'coai.goToConversation',

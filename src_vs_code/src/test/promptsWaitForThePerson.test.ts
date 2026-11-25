@@ -85,10 +85,12 @@ test('notifyAndAsk waits for the person through askPerson; the doors that do not
   assert.equal([...notify.matchAll(/askPerson\(/gu)].length, 1, 'notify, notifyOnce and notifyThen never wait, so never pause');
 });
 
-test('the one createQuickPick is the conversation picker, which nothing awaits', () => {
-  // `switchConversations` shows the picker and returns: no operation waits on it, so there is nothing to pause. A second
-  // createQuickPick is a new decision, not this one — this goes red so it is made.
+test('the two createQuickPick sites are the conversation picker and the accounts list, which nothing awaits', () => {
+  // `switchConversations` shows the picker and returns: no operation waits on it, so there is nothing to pause. A third
+  // createQuickPick is a new decision, not these two — this goes red so it is made.
+  // The second was made on 2026-11-24 (E1.S4 of the accounts plan): `openList` of `remoteAccountsHost.ts` shows the list and returns, and its handlers
+  // are detached; no operation waits on it, and what a press starts (a round, a question) is its own and goes through its own door.
   const sites = sources().filter(({ text }) => /\bwindow\.createQuickPick\b|\bwindow\.createInputBox\b/u.test(text));
 
-  assert.deepEqual(sites.map((one) => one.file), ['conversationPickerCommand.ts']);
+  assert.deepEqual(sites.map((one) => one.file), ['conversationPickerCommand.ts', 'remoteAccountsHost.ts']);
 });

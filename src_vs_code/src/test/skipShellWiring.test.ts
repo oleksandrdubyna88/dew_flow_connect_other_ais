@@ -56,7 +56,7 @@ test('the skip-shell test door is built only behind the test-mode check', () => 
   const built = [...text.matchAll(/skipShell\s*:\s*registered\.skipShell/gu)];
 
   assert.equal(built.length, 1, `the scan expected ONE place that hands out the door, found ${built.length}`);
-  const before = text.slice(Math.max(0, (built[0]?.index ?? 0) - 200), built[0]?.index ?? 0);
+  const before = text.slice(Math.max(0, (built[0]?.index ?? 0) - 400), built[0]?.index ?? 0);
   assert.match(before, /extensionMode\s*===\s*vscode\.ExtensionMode\.Test\s*\?\s*\{[^}]*$/u, 'the skip-shell test door is reachable outside test mode');
   assert.match(sourceOf('extension.ts'), /readonly skipShell\?:\s*SkipShellTestDoor/u, 'the field of CoaiExports is not optional, so production would have to supply it');
   assert.equal([...sourceOf('extension.ts').matchAll(/bindSkipShell\(/gu)].length, 0, 'the old activation binds the check again, beside the chat module');

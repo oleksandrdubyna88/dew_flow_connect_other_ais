@@ -4,12 +4,12 @@
     "The plan, the todo/README row and the Definition of Done quote THIS file, so that a call",
     "site added tomorrow turns a test red instead of making three documents quietly wrong."
   ],
-  "sites": 176,
+  "sites": 179,
   "direct": 0,
   "modal": 24,
-  "events": 152,
+  "events": 155,
   "inTheFunnel": 3,
-  "routed": 176,
+  "routed": 179,
   "byApi": {
     "showInformationMessage": 0,
     "showWarningMessage": 0,
@@ -18,6 +18,8 @@
   "perFile": {},
   "codes": [
     "a-catalog-edit-refused",
+    "accounts-hosts-allowed",
+    "accounts-read-every-ten-minutes",
     "add-a-server-that-could-not-be-checked",
     "adopt-a-data-directory",
     "approve-the-microsoft-application",
@@ -135,6 +137,7 @@
     "question-not-taken-from-terminal",
     "read-remote-session",
     "reload-after-the-folder-changed",
+    "remote-host-refusal-not-kept",
     "remove-a-reviewer",
     "remove-a-team-server",
     "remove-role",
