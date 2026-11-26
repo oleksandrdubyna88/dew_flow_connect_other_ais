@@ -178,6 +178,13 @@ test('E3S3-T5: each cause of retirement — a closed scope host, a list that no 
   const kept = await round(world({ hosts: ['wsl'] }), broken, first.memory);
   assert.deepEqual(keysOf(kept.memory).filter((key) => key.startsWith('wsl:')), ['wsl:Debian/root', 'wsl:Ubuntu/alice', 'wsl:Ubuntu/bob', 'wsl:Ubuntu/root']);
   assert.equal(kept.memory.get('wsl')?.wsl?.failed, 'The list of WSL distros could not be read: WSL did not answer within 30 s.');
+  // a RUNNING list that fails is not "none running": every cached reading stays with its date, and no distro is said to be not running
+  const noRunning: WslPort = { ...portOf(UBUNTU).port, list: (running) => Promise.resolve(running ? { kind: 'answered', code: 1, stdout: '' } : answered(u16('Ubuntu\r\n'))) };
+  const keptAll = await round(world({ hosts: ['wsl'] }), noRunning, first.memory);
+  assert.deepEqual(keysOf(keptAll.memory).filter((key) => key.startsWith('wsl:')), ['wsl:Debian/root', 'wsl:Ubuntu/alice', 'wsl:Ubuntu/bob', 'wsl:Ubuntu/root']);
+  assert.equal(keptAll.memory.get('wsl:Ubuntu/alice')?.reading?.atMs, first.memory.get('wsl:Ubuntu/alice')?.reading?.atMs);
+  assert.equal(keptAll.memory.get('wsl')?.wsl?.failed, 'The list of running WSL distros could not be read: wsl.exe ended with exit 1.');
+  assert.deepEqual(keptAll.memory.get('wsl')?.wsl?.distros, []);
 });
 
 test('E3S3-T5: a place whose call failed keeps its older reading with that read\'s time; a distro that stopped in the round keeps no table', async () => {

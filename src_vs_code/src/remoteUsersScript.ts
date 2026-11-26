@@ -11,7 +11,7 @@ import { USER_CLASS, uidFits } from './remotePlaces';
  */
 
 /**
- * The text that is sent to a distro, byte for byte the first `sh` block after the heading `## W6` of the S1 spec: 39 lines, 1088 bytes, ASCII only,
+ * The text that is sent to a distro, byte for byte the first `sh` block after the heading `## W6` of the S1 spec: 39 lines, 1106 bytes, ASCII only,
  * each line ends with LF. It holds `${` twice and six backslashes, so each is written escaped here. `remoteUsersScript.test.ts` holds the hash, the spec's
  * pin line and the block to one another (E3S1-T10); a change of the text is a change of the spec.
  */
@@ -23,7 +23,7 @@ export const USERS_SCRIPT = `coai_users() {
   [ "$#" -eq 0 ] || { printf 'COAI-BAD operands\\n'; return 0; }
   [ -r /etc/passwd ] || { printf 'COAI-BAD passwd\\n'; return 0; }
   n=0
-  while IFS=: read -r name pw uid gid gecos home shell; do
+  while IFS=: read -r name pw uid gid gecos home shell || [ -n "$name" ]; do
     case $name in
       ''|*[!a-z0-9_-]*|[!a-z_]*) continue ;;
     esac

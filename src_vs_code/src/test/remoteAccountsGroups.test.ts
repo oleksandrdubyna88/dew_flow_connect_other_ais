@@ -372,3 +372,28 @@ test('E2S2-T19: equal keys fall back to the name ascending in both directions, w
     assert.deepEqual(view.groupBy === 'account' ? view.accounts.map((one) => one.text.slice(0, 3)) : [], ['abe', 'zed'], `both are dashes, so the name decides (${dir})`);
   }
 });
+
+// ───────────────── the Server view sorts a host by the SELECTED tool's row ─────────────────
+
+test('E2S2-T15 (review): a host block in Server sorts by the row of the selected tool, and a host without that tool is a dash that sorts last', () => {
+  const claudeAt = (usedFive: number, email = 'ann@example.test') => claude({ email, usage: usageOf(usedFive, 10, null) });
+  const model = tableModel(inputOf({
+    hosts: ['ha', 'hb', 'hc'],
+    memory: memoryOf(
+      ['ha', seen(reading({ claude: claudeAt(20), codex: codexOf(codexUsage({ windows: [{ minutes: 300, usedPercent: 90, resetsAtMs: NOW + min(65) }, { minutes: 10_080, usedPercent: 14, resetsAtMs: NOW + min(6_000) }] })) }), 1)],
+      ['hb', seen(reading({ claude: claudeAt(50, 'bob@example.test') }), 1)],
+      ['hc', seen(reading({ codex: codexOf(codexUsage({ windows: [{ minutes: 300, usedPercent: 95, resetsAtMs: NOW + min(65) }, { minutes: 10_080, usedPercent: 14, resetsAtMs: NOW + min(6_000) }] })) }), 1)],
+    ),
+  }));
+  const order = (tool: ViewState['sort']['tool'], dir: ViewState['sort']['dir']): readonly string[] => {
+    const view = viewOf(model, state('server', 'left5h', dir, tool), compare);
+
+    return view.groupBy === 'server' ? view.blocks.map((one) => one.host) : [];
+  };
+  // Claude: ha 80 left, hb 50 left, hc has no Claude (a dash). Ascending: 50, 80, dash. Codex's 10 % of ha must not put ha first.
+  assert.deepEqual(order('claude-code', 'asc'), ['hb', 'ha', 'hc']);
+  assert.deepEqual(order('claude-code', 'desc'), ['ha', 'hb', 'hc'], 'a dash is last in both directions');
+  // Codex: hc 5 left, ha 10 left, hb has no Codex (a dash).
+  assert.deepEqual(order('codex', 'asc'), ['hc', 'ha', 'hb']);
+  assert.deepEqual(order('codex', 'desc'), ['ha', 'hc', 'hb']);
+});

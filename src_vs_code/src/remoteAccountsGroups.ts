@@ -139,7 +139,8 @@ export function viewOf(model: TableModel, state: ViewState, compare: Compare): V
   function server(): View {
     const blocks = model.blocks.map(function (block): Sorted<Block> {
       const rows = order(block.rows.map(function (row): Sorted<ToolRow> { return { s: rowValues(row, RANK[row.tool]), v: row }; }));
-      const first = rows.length > 0 ? rowValues(rows[0], block.host) : null;
+      const chosen = rows.find(function (row) { return row.tool === by.tool; });
+      const first = chosen === undefined ? null : rowValues(chosen, block.host);
       const pick = function (key: string): string | number | null { return first === null ? null : first[key]; };
 
       return {

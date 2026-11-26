@@ -114,9 +114,9 @@ launcher decoded it (UTF-8):
 |---|---|---|
 | The list | exit 0 and decodable | Its names, in its order, are the distros; the first 16 are taken (§ W12) |
 | The list | anything else | S3; **no further `wsl.exe` call in this round** |
-| The running list | exit 0 and decodable | **The running set is its names that are ALSO names of the list** |
-| The running list | another exit code | The running set is empty: every distro says *not running, so not read*. (What "none running" answers was not measured: H2) |
-| The running list | `timeout`, `not-started`, `capped`, or `undecodable` | S3; no further `wsl.exe` call in this round |
+| The running list | exit 0 and decodable | **The running set is its names that are ALSO names of the list** (this alone makes a distro *not running*) |
+| The running list | another exit code | **It could not be read** (S3, the running wording): no distro is called, and none is said to be *not running* — a list that fails is never "none running". The cached readings of the WSL places stay, with their own dates. (What a PC with none running answers was not measured: H2) |
+| The running list | `timeout`, `not-started`, `capped`, or `undecodable` | S3, the running wording; no further `wsl.exe` call in this round. Only a list that WAS read and leaves a distro out makes it *not running* |
 
 A distro that is in the list and not in the running set gets **no call of any kind** and the line S4 (Q2).
 
@@ -140,10 +140,10 @@ saved during the re-read be followed by a `-d` call.)
 
 ## W6 — The users script (`src/remoteUsersScript.ts`)
 
-`USERS_SCRIPT` is the text below, byte for byte: **39 lines**, 1088 bytes, each line ends with LF, ASCII only,
+`USERS_SCRIPT` is the text below, byte for byte: **39 lines**, 1106 bytes, each line ends with LF, ASCII only,
 no backslash but in `\n`, no backtick.
 
-Pinned sha256: `7dc333a9d82e0e6b1a526e010630fdabf8c09c66523f1865528fc8863a980c1f`
+Pinned sha256: `f3dc140c82526d128f5881def682a17fe074dfb336585230507a7471329e7d30`
 
 E3S1-T10 holds three things to one another: the sha256 of the constant, the pin line above, and the first `sh`
 block after the heading `## W6`. Run 2026-11-26 by `sh` (dash) and by `bash` on this PC's own `/etc/passwd`: the
@@ -158,7 +158,7 @@ coai_users() {
   [ "$#" -eq 0 ] || { printf 'COAI-BAD operands\n'; return 0; }
   [ -r /etc/passwd ] || { printf 'COAI-BAD passwd\n'; return 0; }
   n=0
-  while IFS=: read -r name pw uid gid gecos home shell; do
+  while IFS=: read -r name pw uid gid gecos home shell || [ -n "$name" ]; do
     case $name in
       ''|*[!a-z0-9_-]*|[!a-z_]*) continue ;;
     esac
@@ -191,6 +191,7 @@ coai_users() {
 { </dev/null 2>/dev/null coai_users "$@"; printf 'COAI-USERS-END\n'; }
 ```
 
+- **A last entry with no line end is read** (`read … || [ -n "$name" ]`: `read` fills its variables and fails at the end of a file whose last line has no LF). Gate fix 2026-11-26: the first text lost that entry.
 - **It opens `/etc/passwd` and no other file, and starts no program**: every word of it is a shell builtin. So
   nothing of § W8 applies to it, though it runs as root. It has no operand; one is `COAI-BAD operands`.
 - **It prints `COAI-USER <name> <uid>` for an entry only when ALL hold:** the name fits
@@ -353,7 +354,7 @@ What is past a cap is counted and said in the heading (S11), never read. A list'
 |---|---|---|
 | S1 | The window does not run on Windows | *WSL is read from a Windows window only* |
 | S2 | `wsl.exe` is not at its path | *wsl.exe was not found at “`<path>`”, so WSL on this PC cannot be read.* |
-| S3 | A list call failed | *The list of WSL distros could not be read: `<how>`.* — `WSL did not answer within 30 s`, `wsl.exe ended with exit <n>`, `its output could not be decoded`, `wsl.exe could not be started` |
+| S3 | A list call failed | *The list of WSL distros could not be read: `<how>`.* — for the running list, and for the running list read again before a `-d` call, *The list of running WSL distros could not be read: `<how>`.* — `WSL did not answer within 30 s`, `wsl.exe ended with exit <n>`, `its output could not be decoded`, `wsl.exe could not be started` |
 | S4 | A distro is not running | *not running, so not read* |
 | S5 | It left the running list after the round began | *stopped since the round began, so not read* |
 | S6 | The users call failed | *The Linux users of “`<distro>`” could not be read: `<how>`.* |
@@ -380,7 +381,7 @@ first. T20 to T26 are tests of the S2 spec's text and land with it.
 | E3S1-T4 | **A name that fails its class never reaches an argv**: a distro or a user with a leading `-`, a space, 100 characters, a letter outside ASCII, the empty text → the fixed refusal, which holds no part of the name; no spawn |
 | E3S1-T5 | **Root**: `-u root` with a mode word only for the place (distro, `root`, 0); `root` with UID 1000, another name with UID 0, UID 999 and UID 60 000 → refused; over 200 made-up places the `-u` word of every accounts argv is that place's user; `'--exec'` stands in one source file |
 | E3S1-T6 | The decoder: UTF-16LE as the launcher shows it, and UTF-8; CR LF, also after the last name; a UTF-8 BOM (dropped) and a UTF-16 one (`undecodable`); no output; an odd length, a U+0000 at an even place, a missing U+0000 → `undecodable`; a message line and a name with a space count in `ignored` |
-| E3S1-T7 | The running set is the names of BOTH answers; the running call with another exit code → empty; the list call with one → S3 and **no `-d` call** |
+| E3S1-T7 | The running set is the names of BOTH answers; the running call with another exit code, or one that does not decode → S3 (running wording), **no `-d` call**, no distro said to be not running, the cached readings kept with their dates; the list call with one → S3 and **no `-d` call** |
 | E3S1-T8 | **A distro that is not running gets no call**: no recorded argv holds `-d <its name>`; its line is S4 |
 | E3S1-T9 | **The re-read**: in the record, the spawn before every `-d` call is the running list, and between the two stands a door that answered `yes`; a distro that leaves the running list after the round began gets no call, S5, and no later re-read. Break-it: the re-read removed |
 | E3S1-T10 | The users script's pin: the constant, the pin line and the block of § W6 are one |

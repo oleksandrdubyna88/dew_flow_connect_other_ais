@@ -59,7 +59,7 @@ export const NOT_RUNNING_SAID = 'not running, so not read';
 export const LEFT_SAID = 'stopped since the round began, so not read';
 export const STRIKES_SAID = 'not read in this round: WSL did not answer twice.';
 
-const listFailedSaid = (how: string): string => `The list of WSL distros could not be read: ${how}.`;
+const listFailedSaid = (how: string, running: boolean): string => `The list of ${running ? 'running ' : ''}WSL distros could not be read: ${how}.`;
 
 const refusedHow = (run: Extract<WslRun, { readonly kind: 'refused' }>): string =>
   (run.end === 'timeout' ? 'WSL did not answer within 30 s' : run.end === 'not-started' ? 'wsl.exe could not be started' : run.refusal);
@@ -77,7 +77,7 @@ type NamesListing = { readonly kind: 'names'; readonly names: readonly string[];
 /** `said` is the whole sentence (S3, S2 or S1) the scope host shows. */
 type Listing = NamesListing | { readonly kind: 'failed'; readonly said: string } | { readonly kind: 'door'; readonly door: DoorAnswer };
 
-const failed = (how: string): Listing => ({ kind: 'failed', said: listFailedSaid(how) });
+const failed = (how: string, running: boolean): Listing => ({ kind: 'failed', said: listFailedSaid(how, running) });
 
 /** The refusals whose own sentence is the whole story: `wsl.exe` is not there (S2), or this is not a Windows window (S1). */
 const WHOLE: ReadonlySet<string> = new Set(['missing', 'platform']);
@@ -85,27 +85,24 @@ const WHOLE: ReadonlySet<string> = new Set(['missing', 'platform']);
 /** The door's answer of a refused run that was the door's, else nothing. */
 export const doorOf = (run: WslRun): DoorAnswer | undefined => (run.kind === 'refused' && run.end === 'door' ? run.door : undefined);
 
-const refusedListing = (run: Extract<WslRun, { readonly kind: 'refused' }>): Listing => {
+const refusedListing = (run: Extract<WslRun, { readonly kind: 'refused' }>, running: boolean): Listing => {
   const door = doorOf(run);
 
   if (WHOLE.has(run.end)) {
     return { kind: 'failed', said: run.refusal };
   }
 
-  return door === undefined ? failed(listHow(run)) : { kind: 'door', door };
+  return door === undefined ? failed(listHow(run), running) : { kind: 'door', door };
 };
 
-/** An answered list call: exit 0 and a decodable text; another exit is an EMPTY running list, and a failed list. */
-function answeredListing(run: Extract<WslRun, { readonly kind: 'answered' }>, emptyOnExit: boolean): Listing {
-  if (run.code !== 0) {
-    return emptyOnExit ? { kind: 'names', names: [], ignored: 0 } : failed(exitHow(run.code));
-  }
-  const got = wslNames(run.stdout);
+/** An answered list call: exit 0 and a decodable text. Another exit, or a text that does not decode, is a list that could not be read — for the running list too: it is NEVER "none running". */
+function answeredListing(run: Extract<WslRun, { readonly kind: 'answered' }>, running: boolean): Listing {
+  const got = run.code === 0 ? wslNames(run.stdout) : 'undecodable';
 
-  return got === 'undecodable' ? failed(exitHow(0)) : { kind: 'names', names: got.names, ignored: got.ignored };
+  return got === 'undecodable' ? failed(exitHow(run.code), running) : { kind: 'names', names: got.names, ignored: got.ignored };
 }
 
-const listingOf = (run: WslRun, emptyOnExit: boolean): Listing => (run.kind === 'refused' ? refusedListing(run) : answeredListing(run, emptyOnExit));
+const listingOf = (run: WslRun, running: boolean): Listing => (run.kind === 'refused' ? refusedListing(run, running) : answeredListing(run, running));
 
 // ───────────────── what a place's call came to ─────────────────
 
@@ -216,12 +213,12 @@ class Walk<S> {
   }
 
   private take(listed: NamesListing): void {
-    this.listed = true;
     this.names = listed.names.slice(0, MAX_DISTROS);
     this.set({ ignored: listed.ignored, moreDistros: Math.max(0, listed.names.length - MAX_DISTROS) });
   }
 
   private known(running: NamesListing): ReadonlySet<string> {
+    this.listed = true;
     const set = new Set(running.names.filter((name) => this.names.includes(name)));
     this.names.forEach((name) => this.distros.set(name, { running: set.has(name), users: undefined }));
 

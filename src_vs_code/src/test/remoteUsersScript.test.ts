@@ -14,7 +14,7 @@ import { ownedTemp } from './ownedTemp';
  */
 
 const SPEC = join(__dirname, '..', '..', '..', 'todo', 'PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E3_S1_spec.md');
-const PINNED = '7dc333a9d82e0e6b1a526e010630fdabf8c09c66523f1865528fc8863a980c1f';
+const PINNED = 'f3dc140c82526d128f5881def682a17fe074dfb336585230507a7471329e7d30';
 const sha256 = (text: string): string => createHash('sha256').update(text).digest('hex');
 const SH = (process.env['PATH'] ?? '').split(delimiter).map((dir) => join(dir, 'sh')).find((path) => existsSync(path));
 const NO_SH = SH === undefined ? 'no POSIX sh on this machine' : false;
@@ -33,7 +33,7 @@ function specBlock(spec: string): string {
 test('E3S1-T10: the sha256 of USERS_SCRIPT is the pin, the pin line of the spec says the same, and the spec\'s block IS the constant', () => {
   assert.equal(sha256(USERS_SCRIPT), PINNED, 'the text of USERS_SCRIPT changed without the pin');
   assert.equal(USERS_SCRIPT.split('\n').length - 1, 39, 'the text is 39 lines');
-  assert.equal(Buffer.byteLength(USERS_SCRIPT), 1088);
+  assert.equal(Buffer.byteLength(USERS_SCRIPT), 1106);
   assert.ok(USERS_SCRIPT.endsWith('\n'));
   assert.equal([...USERS_SCRIPT].every((char) => char.charCodeAt(0) < 128), true, 'ASCII only');
   assert.equal(USERS_SCRIPT.includes('`'), false, 'no backtick');
@@ -61,7 +61,7 @@ function run(script: string, operands: readonly string[] = [], env: NodeJS.Proce
 }
 
 /** A passwd file of the entries (each with a made home folder unless `home` is given as `none`), and the script's answer to it. */
-function answerFor(entries: readonly Entry[], operands: readonly string[] = []): readonly string[] {
+function answerFor(entries: readonly Entry[], operands: readonly string[] = [], finalLf = true): readonly string[] {
   const root = ownedTemp('users');
   const lines = entries.map((one, at) => {
     const home = one.home === 'none' ? join(root, 'missing', String(at)) : (one.home ?? join(root, 'home', String(at)));
@@ -72,7 +72,7 @@ function answerFor(entries: readonly Entry[], operands: readonly string[] = []):
     return `${one.name}:x:${one.uid}:${one.uid}::${home}:${one.shell ?? '/bin/bash'}`;
   });
   const file = join(root, 'passwd');
-  writeFileSync(file, `${lines.join('\n')}\n`);
+  writeFileSync(file, `${lines.join('\n')}${finalLf ? '\n' : ''}`);
 
   return run(withPasswd(file), operands).split('\n').filter((line) => line !== '');
 }
@@ -110,6 +110,13 @@ test('E3S1-T11: 17 users that count give 16 lines and COAI-MORE 1; an operand gi
   assert.equal(printed(lines).length, 16);
   assert.ok(lines.includes('COAI-MORE 1'));
   assert.deepEqual(answerFor([{ name: 'root', uid: '0' }], ['x']), ['COAI-USERS 1', 'COAI-BAD operands', 'COAI-USERS-END']);
+});
+
+test('E3S1-T11: the last entry of a passwd with NO trailing line end is read like the others', { skip: NO_SH }, () => {
+  const lines = answerFor([{ name: 'root', uid: '0' }, { name: 'alice', uid: '1000' }], [], false);
+  assert.deepEqual(printed(lines), ['COAI-USER root 0', 'COAI-USER alice 1000'], 'the last entry was lost');
+  assert.deepEqual(printed(answerFor([{ name: 'root', uid: '0' }], [], false)), ['COAI-USER root 0'], 'a one-entry file with no line end');
+  assert.deepEqual(printed(answerFor([{ name: 'root', uid: '0' }, { name: 'daemon', uid: '999' }], [], false)), ['COAI-USER root 0'], 'a last entry that fails a rule is still not printed');
 });
 
 test('E3S1-T11: a passwd the script cannot read is COAI-BAD passwd', { skip: NO_SH }, () => {

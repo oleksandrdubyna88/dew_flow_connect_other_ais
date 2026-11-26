@@ -294,7 +294,7 @@ open, no change yet). Each note as it was written against epoch 4, and how it st
 - **N10 — one bad line of a users reply refuses the whole reply.** **Accepted:** stricter than "gives no place
   for it", and it still gives none.
 - **N11 — `tookMs`** in the model and the hover. **Accepted:** display only; it is how R9a is read.
-- **N12 — the running list with another exit code counts as "none running"**, until H2 is recorded.
+- **N12 — the running list with another exit code is NOT "none running"** (changed 2026-11-26, the code review): it is "the list of running distros could not be read" for that round — no distro is called, the cached readings stay with their dates. Only a list that was read and leaves a distro out says *not running*.
   **Accepted:** the direction is "no call", never "call".
 
 **Open:** H1 to H5 of the S1 spec; the real `jq`, a real UID 0 and a real Claude Code against revision 2 (the

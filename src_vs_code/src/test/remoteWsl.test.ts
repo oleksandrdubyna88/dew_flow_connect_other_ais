@@ -308,13 +308,24 @@ test('E3S1-T7: the running set is the names of BOTH answers: a name only in the 
   assert.deepEqual(got.facts.distros.map((one) => `${one.distro}:${one.state}`), ['Ubuntu:read', 'Debian:not-running']);
 });
 
-test('E3S1-T7: the running call with another exit code gives an empty set; the list call with one is S3 and NO -d call', async () => {
+test('E3S1-T7: a running list that FAILS is "the list of running distros could not be read" — no distro is called, none is "not running"; only a list that was read and leaves a distro out says so', async () => {
+  const RUNNING_FAILED = 'The list of running WSL distros could not be read: wsl.exe ended with exit 1.';
   const w = world(['Ubuntu'], ['Ubuntu']);
   const base = w.answer;
   w.answer = (spawn) => (isRunningList(spawn.args) ? { code: 1, output: '', stderrTail: '' } : base(spawn));
   const got = await walk(w);
-  assert.deepEqual(got.facts.distros.map((one) => `${one.distro}:${one.state}`), ['Ubuntu:not-running']);
+  assert.equal(got.facts.failed, RUNNING_FAILED);
+  assert.deepEqual(got.facts.distros, [], 'no distro is said to be not running');
   assert.equal(w.spawns.some((one) => one.args.includes('-d')), false);
+  assert.equal(w.spawns.length, 2, 'the list and the running list, and nothing after them');
+  const garbled = world(['Ubuntu'], []);
+  garbled.answer = (spawn) => (isRunningList(spawn.args) ? { code: 0, output: 'a\u0000bu', stderrTail: '' } : base(spawn));
+  assert.equal((await walk(garbled)).facts.failed, 'The list of running WSL distros could not be read: its output could not be decoded.');
+  const read = world(['Ubuntu', 'Debian'], ['Ubuntu']);
+  assert.equal((await walk(read)).facts.distros.find((one) => one.distro === 'Debian')?.state, 'not-running', 'a list that was read and leaves Debian out says so');
+});
+
+test('E3S1-T7: the list call with another exit is S3 and NO -d call', async () => {
   const failed = world(['Ubuntu'], ['Ubuntu']);
   const original = failed.answer;
   failed.answer = (spawn) => (spawn.args.includes('--running') ? original(spawn) : { code: 3, output: '', stderrTail: '' });
@@ -375,6 +386,26 @@ test('E3S1-T9: a distro that leaves the running list after the round began gets 
   assert.equal(rereads, 4, 'no re-read after the distro was found gone');
   assert.deepEqual(got.facts.distros.find((one) => one.distro === 'Ubuntu'), { distro: 'Ubuntu', state: 'left', said: 'stopped since the round began, so not read', users: 0 });
   assert.equal(w.spawns.filter((one) => one.args.includes('-u')).length, 2, 'the users call and the first place only');
+});
+
+test('E3S1-T9: a re-read that FAILS ends the WSL part with no -d call after it and says the running list could not be read', async () => {
+  const w = world(['Ubuntu'], ['Ubuntu'], { Ubuntu: ['root 0', 'alice 1000'] });
+  let rereads = 0;
+  const base = w.answer;
+  w.answer = (spawn) => {
+    if (isRunningList(spawn.args)) {
+      rereads += 1;
+
+      return rereads >= 4 ? { code: 1, output: '', stderrTail: '' } : base(spawn);
+    }
+
+    return base(spawn);
+  };
+  const got = await walk(w);
+  assert.deepEqual(got.seen, ['wsl:Ubuntu/root:answered', 'wsl:Ubuntu/alice:refused']);
+  assert.equal(got.facts.failed, 'The list of running WSL distros could not be read: wsl.exe ended with exit 1.');
+  assert.equal(got.facts.distros.every((one) => one.state === 'read'), true, 'the distro is not said to be not running');
+  assert.equal(w.spawns.filter((one) => one.args.includes('--')).length, 1, 'no accounts call after the failed re-read');
 });
 
 // ───────────────── T14: the caps ─────────────────
