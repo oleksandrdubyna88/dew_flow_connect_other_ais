@@ -29,6 +29,39 @@ internal static partial class TestExecutableFailures
         return items;
     }
 
+    internal const string Tool = "mtp";
+
+    /// <summary>The run summary of the Microsoft Testing Platform form (<c>Test run summary: Failed!</c>, then <c>  total: 4</c>, <c>  failed: 2</c>, <c>  succeeded: 2</c>): every <c>failed</c> header is a name, every <c>passed</c> header of a detailed run is a passed name; null when the output has no mark of this tool.</summary>
+    internal static RunSummary? Summarize(string text, bool logCut)
+    {
+        var lines = text.Split('\n').Select(line => line.Length > FailureDigest.LongestLine ? string.Empty : line.TrimEnd()).ToList();
+        var at = lines.FindIndex(line => line.StartsWith("Test run summary:", StringComparison.Ordinal));
+        var failures = lines.Select(Header).Where(name => name.Length > 0).ToList();
+        if (at < 0 && failures.Count == 0)
+        {
+            return null;
+        }
+
+        var counters = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var line in at < 0 ? [] : lines.Skip(at + 1).TakeWhile(line => line.StartsWith("  ", StringComparison.Ordinal)))
+        {
+            if (DigestReading.Try(Counter(), line) is { } counter)
+            {
+                counters[counter.Groups["name"].Value] = DigestReading.Count(counter.Groups["n"].Value);
+            }
+        }
+
+        var passedNames = lines.Select(line => DigestReading.Try(PassedHeader(), line)).Where(match => match is not null).Select(match => match!.Groups["name"].Value).ToList();
+
+        return RunSummary.Make(Tool, counters.ContainsKey("total") && counters.ContainsKey("failed"), counters.GetValueOrDefault("total"), counters.GetValueOrDefault("failed"), counters.GetValueOrDefault("succeeded"), failures, passedNames, logCut, unnamed: false);
+    }
+
+    [GeneratedRegex(@"^\s+(?<name>total|failed|succeeded|skipped): (?<n>\d+)\s*$", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex Counter();
+
+    [GeneratedRegex(@"^passed (?<name>.+) \(\d[^()]*\)$", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex PassedHeader();
+
     /// <summary>The test's name when the line is a <c>failed …</c> header, or empty.</summary>
     private static string Header(string line)
     {
@@ -48,7 +81,7 @@ internal static partial class TestExecutableFailures
     private static DigestItem Block(string step, string name, IEnumerable<string> block)
     {
         var lines = block.Select(line => line.TrimEnd()).ToList();
-        var message = lines.TakeWhile(line => !IsStackFrame(line)).Select(line => line.Trim());
+        var message = lines.TakeWhile(line => !IsStackFrame(line)).Select(line => line.Trim()).Where(line => !line.StartsWith("from ", StringComparison.Ordinal));
         var (file, number) = Location(lines.Where(IsStackFrame));
 
         return new DigestItem(step, file, number, DigestText.Head(name, FailureDigest.FieldChars), DigestText.Head(string.Join('\n', message), FailureDigest.MessageChars));

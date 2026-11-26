@@ -196,7 +196,9 @@ internal sealed class CoderChecks(IRoleRun run, GitHistory git, CoderOsLayer lay
             return [];
         }
 
-        return FailureDigest.Of(step.Step, step.Adapter, ReadLog(step.LogPath), tree.Root).Items;
+        var runner = result.Toolchain?.Projects.FirstOrDefault(project => project.Id == step.Project || project.Detected?.Id == step.Project)?.Detected?.Fact("runner") ?? string.Empty;
+
+        return FailureDigest.Of(step.Step, step.Adapter, ReadLog(step.LogPath), tree.Root, runner, step.LogCut).Items;
     }
 
     private static string ReadLog(string path)

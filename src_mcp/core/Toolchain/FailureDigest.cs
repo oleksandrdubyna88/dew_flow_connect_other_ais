@@ -11,16 +11,38 @@ namespace CoaiMcp.Core.Toolchain;
 /// <param name="Line">The line in <paramref name="File"/>; 0 when there is none.</param>
 /// <param name="Code">The compiler's code (<c>CS0103</c>) for a build error; the test's full name for a failed test; empty for the raw fallback.</param>
 /// <param name="Message">What the output says, redacted of credential-like text and cut.</param>
-public sealed record DigestItem(string Step, string File, int Line, string Code, string Message);
+public sealed record DigestItem(string Step, string File, int Line, string Code, string Message)
+{
+    /// <summary>The fingerprint of the failure (E4 s4 t4; <see cref="DigestFingerprint"/>): the step, the file, the code and the message with digit runs and white space made equal, without the line number. Computed, never sent to the coder.</summary>
+    public string Fingerprint => DigestFingerprint.Of(this);
+}
 
 /// <summary>Which reader understood the output.</summary>
 public enum DigestKind
 {
-    /// <summary>MSBuild error lines (<c>file(line,col): error CS0103: message [project]</c>).</summary>
+    /// <summary>MSBuild error lines (<c>file(line,col): error CS0103: message [project]</c>), and the errors of a failed <c>dotnet restore</c> (<c>NU1101</c>).</summary>
     MsBuild,
 
-    /// <summary>The failed tests the test executable printed.</summary>
+    /// <summary>The failed tests the test executable printed (the Microsoft Testing Platform form).</summary>
     TestExecutable,
+
+    /// <summary>The VSTest console of <c>dotnet test</c>.</summary>
+    VsTest,
+
+    /// <summary>The error lines of <c>tsc</c>.</summary>
+    Tsc,
+
+    /// <summary>The error block of a failed <c>npm</c> command.</summary>
+    Npm,
+
+    /// <summary>The console of jest.</summary>
+    Jest,
+
+    /// <summary>The console of vitest.</summary>
+    Vitest,
+
+    /// <summary>The console of <c>node --test</c>.</summary>
+    NodeTest,
 
     /// <summary>No reader understood the output: the last lines of it.</summary>
     RawTail,
@@ -31,7 +53,11 @@ public enum DigestKind
 /// <param name="Found">How many failures the output held — more than <paramref name="Items"/> when the digest was cut.</param>
 /// <param name="Cut">Items were left out to keep the digest within its limits.</param>
 /// <param name="Kind">Which reader produced the items.</param>
-public sealed record FailureDigestResult(IReadOnlyList<DigestItem> Items, int Found, bool Cut, DigestKind Kind);
+public sealed record FailureDigestResult(IReadOnlyList<DigestItem> Items, int Found, bool Cut, DigestKind Kind)
+{
+    /// <summary>The run summary of a failed TEST step (E4 s4 t5): the tool's counts, the name of every failure and whether the list is complete; null for any other step and when no test reader understood the output. The re-run of section F reads it, never the digest.</summary>
+    public RunSummary? Summary { get; init; }
+}
 
 /// <summary>
 /// What a failed step goes back to the coder session as: <c>[{step, file, line, code, message}]</c> from the step's own machine-readable output (server.md § 10) — the MSBuild error lines of a failed
@@ -65,20 +91,61 @@ public static class FailureDigest
     internal const int LongestLine = 4096;
 
     /// <summary>The digest of <paramref name="output"/>, the log of a step that did not pass. <paramref name="treeRoot"/>, when given, is cut from the front of file names.</summary>
-    public static FailureDigestResult Of(CheckStep step, string adapter, string output, string treeRoot = "")
+    /// <param name="runner">The runner fact of the project (<c>mtp</c>, <c>vstest</c>, <c>jest</c>, <c>vitest</c>, <c>node-test</c>), or empty: a step of the toolchain file has none, and the adapter's readers are tried in one fixed order, the first that gives an item winning.</param>
+    /// <param name="logCut">The step's log was cut at its limit: a run summary is then never complete.</param>
+    public static FailureDigestResult Of(CheckStep step, string adapter, string output, string treeRoot = "", string runner = "", bool logCut = false)
     {
-        var name = step == CheckStep.Build ? "build" : "test";
-        var (kind, found) = Read(step, adapter, name, output.ReplaceLineEndings("\n"));
+        var name = step.Wire();
+        var text = output.ReplaceLineEndings("\n");
+        var (kind, found, summary) = Read(step, adapter, runner, name, text, logCut);
 
-        return Bounded(kind, [.. found.Select(item => item with { File = Relative(item.File, treeRoot) })]);
+        return Bounded(kind, [.. found.Select(item => item with { File = Relative(item.File, treeRoot) })]) with { Summary = summary };
     }
 
-    private static (DigestKind Kind, IReadOnlyList<DigestItem> Items) Read(CheckStep step, string adapter, string name, string text) => (adapter, step) switch
+    /// <summary>One reader of the family: what it is called in a digest, what it reads, and its run summary when it is a test reader.</summary>
+    private sealed record Reader(DigestKind Kind, string Runner, Func<string, string, List<DigestItem>> Read, Func<string, bool, RunSummary?>? Summarize);
+
+    private static readonly Reader MsBuild = new(DigestKind.MsBuild, "", MsBuildLines.Read, null);
+
+    private static readonly Reader Tsc = new(DigestKind.Tsc, "", TscLines.Read, null);
+
+    private static readonly Reader Npm = new(DigestKind.Npm, "", NpmErrors.Read, null);
+
+    private static readonly Reader Mtp = new(DigestKind.TestExecutable, "mtp", TestExecutableFailures.Read, TestExecutableFailures.Summarize);
+
+    private static readonly Reader VsTest = new(DigestKind.VsTest, "vstest", DotnetTestFailures.Read, DotnetTestFailures.Summarize);
+
+    private static readonly Reader Jest = new(DigestKind.Jest, "jest", JestFailures.Read, JestFailures.Summarize);
+
+    private static readonly Reader Vitest = new(DigestKind.Vitest, "vitest", VitestFailures.Read, VitestFailures.Summarize);
+
+    private static readonly Reader NodeTest = new(DigestKind.NodeTest, "node-test", NodeTestFailures.Read, NodeTestFailures.Summarize);
+
+    /// <summary>The readers of a step in the order they are tried: the runner fact puts its own reader first; a step of the file has no runner fact, so the adapter's readers run in one fixed order.</summary>
+    private static IEnumerable<Reader> Readers(CheckStep step, string adapter, string runner) => (adapter, step) switch
     {
-        ("dotnet", CheckStep.Build) when MsBuildLines.Read(name, text) is { Count: > 0 } errors => (DigestKind.MsBuild, errors),
-        ("dotnet", CheckStep.Test) when TestExecutableFailures.Read(name, text) is { Count: > 0 } failed => (DigestKind.TestExecutable, failed),
-        _ => (DigestKind.RawTail, [RawTail(name, text)]),
+        ("dotnet", CheckStep.Test) => Ordered(runner, [VsTest, Mtp, MsBuild]),
+        ("dotnet", CheckStep.Restore or CheckStep.Build) => [MsBuild],
+        ("node", CheckStep.Test) => Ordered(runner, [Jest, Vitest, NodeTest]),
+        ("node", CheckStep.Build or CheckStep.Typecheck) => [Tsc, Npm],
+        ("node", CheckStep.Restore) => [Npm],
+        _ => [],
     };
+
+    private static IEnumerable<Reader> Ordered(string runner, Reader[] all) => all.Where(reader => reader.Runner == runner).Concat(all.Where(reader => reader.Runner != runner));
+
+    private static (DigestKind Kind, IReadOnlyList<DigestItem> Items, RunSummary? Summary) Read(CheckStep step, string adapter, string runner, string name, string text, bool logCut)
+    {
+        foreach (var reader in Readers(step, adapter, runner))
+        {
+            if (reader.Read(name, text) is { Count: > 0 } items)
+            {
+                return (reader.Kind, items, step == CheckStep.Test ? reader.Summarize?.Invoke(text, logCut) : null);
+            }
+        }
+
+        return (DigestKind.RawTail, [RawTail(name, text)], step == CheckStep.Test ? Readers(step, adapter, runner).Select(reader => reader.Summarize?.Invoke(text, logCut)).FirstOrDefault(summary => summary is not null) : null);
+    }
 
     /// <summary>The items cut to <see cref="MaxItems"/>, then to <see cref="MaxBytes"/>: whole items from the end first, and for one item that alone is too big, its message.</summary>
     private static FailureDigestResult Bounded(DigestKind kind, List<DigestItem> all)

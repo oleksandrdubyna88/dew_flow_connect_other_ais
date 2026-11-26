@@ -48,9 +48,9 @@ internal static partial class MsBuildLines
     /// <summary>The tool named before <c> : error</c> is a file when it is a path or has an extension (<c>App.csproj</c>); <c>MSBUILD</c> and <c>CSC</c> are not.</summary>
     private static string FileOf(string tool) => tool.Contains('/') || tool.Contains('\\') || Path.HasExtension(tool) ? tool : string.Empty;
 
-    [GeneratedRegex(@"^(?<file>.+?)\((?<line>\d+)(?:,\d+)*\): error (?<code>[A-Za-z]{1,10}\d+): (?<message>.*?)(?: \[[^\]]+\])?\s*$", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 1000)]
+    [GeneratedRegex(@"^(?<file>.+?)\((?<line>\d+)(?:,\d+)*\): error (?<code>(?!TS\d)[A-Za-z]{1,10}\d+): (?<message>.*?)(?: \[[^\]]+\])?\s*$", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 1000)]
     private static partial Regex WithFile();
 
-    [GeneratedRegex(@"^(?:(?<tool>\S.*?) : )?error (?<code>[A-Za-z]{1,10}\d+): (?<message>.*?)(?: \[[^\]]+\])?\s*$", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 1000)]
+    [GeneratedRegex(@"^(?:(?<tool>\S.*?) : )?error (?<code>(?!TS\d)[A-Za-z]{1,10}\d+): (?<message>.*?)(?: \[[^\]]+\])?\s*$", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 1000)]
     private static partial Regex Bare();
 }
