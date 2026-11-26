@@ -20,3 +20,5 @@ dod:
     item: "F3 and F4: after the run coai compares the worktree with the turn's commit: a changed path that was not given, a new file git would add or a HEAD that moved puts the worktree back to the turn's commit through CoderRestore, the restore step runs again and the state is `refused` with the paths; a formatter that exits non-zero, runs over its time or cannot start gives the same reset and the state `failed`"
   - id: d4
     item: "F5: no formatter in the resolved toolchain is the state `not_configured` and no process starts; a format state never makes a round red or green and is never sent to the coder"
+  - id: d5
+    item: "F7 (re-review F2): the format step runs in a unit of its own (new home and temp); after it coai takes only the tracked changes of the given files into the format commit, then runs git clean -ffdx and requires an empty git status --porcelain --ignored before the checks of the round, and the restore step runs again; on a real fixture a formatter that rewrites an ignored file (a runner under node_modules) leaves nothing of it in the checks, and a clean that cannot be proven refuses the round with a fixed sentence"

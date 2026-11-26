@@ -14,9 +14,9 @@ files:
   - src_mcp/tests/AToolchainIsResolvedTests.cs
 dod:
   - id: d1
-    item: "a file at the base commit gives the source `file`, and detection decides nothing for a project that states a command; a project of the file that states NO command gets the adapter's defaults of its own folder at the base (source `file+defaults`), and a refusal of the detector there refuses the file"
+    item: "ONE precedence rule across the head's transitions (SPEC A1, re-review F1): the toolchain file of the HEAD wins — the base's file when the head left it alone, the head's file when it adds or changes it, and the head's detection when it deletes it; a file gives the source `file`, and detection decides nothing for a project that states a command; a project of the file that states NO command gets the adapter's defaults of its own folder at the base (source `file+defaults`), and a refusal of the detector there refuses the file"
   - id: d2
-    item: "no file at the base: detection at the base and at the head; a project only the head has is added with the defaults; the head's projects are what runs; a step (project and step name) that the base had and the head has not is REPORTED as lost with the line `the worktree removed <step> of <project>` and is never refused (owner decision 2026-11-26, SPEC A4)"
+    item: "no file at the head: detection at the base and at the head; a project only the head has is added with the defaults; the head's projects are what runs; a step (project and step name) that the base had and the head has not is REPORTED as lost with the line `the worktree removed <step> of <project>` and is never refused (owner decision 2026-11-26, SPEC A4)"
   - id: d3
     item: "a manifest of a stack that is known and not built (php, rust, python, java), at the base or at the head, is toolchain_refused and names the stack, the path and the cure; no manifest of any known stack is not_configured; one refused project refuses the repository; neither state is ever green and no step is planned"
   - id: d4

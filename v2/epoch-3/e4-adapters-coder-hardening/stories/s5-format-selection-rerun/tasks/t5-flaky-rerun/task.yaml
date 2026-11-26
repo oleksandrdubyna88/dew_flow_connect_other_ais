@@ -21,3 +21,5 @@ dod:
     item: "K11: on a real fixture a testFor whose filter matches no test gives a re-run in which no test ran: nothing is excused, the round is red and the coder gets the digest of the first run"
   - id: d4
     item: "K8: COAI_FLAKY_RERUNS is 0 or 1 (1 by default; another value is 1 with a note) and with 0 no re-run starts; the count of excused tests is a file in the job folder (a temporary file and a rename), so it holds across models"
+  - id: d5
+    item: "K13 (re-review F0): a re-run excuses an original failure only when the re-run ITSELF completes with exit 0, shows no new failure and has no execution error (a unit that could not start or be stopped, a timeout, a cut log, a tool crash); on a real fixture a re-run in which the named test passes but the step exits non-zero, or another test fails, or the unit times out, excuses nothing and the round stays red with the digest of the first run"

@@ -71,20 +71,29 @@ for each round.
 
 ### A1. The order
 
-1. **A file at the base commit wins.** `.coai/toolchain.yaml` at the base is read as today. Detection decides nothing for a project
-   that states a command.
-2. **No file at the base: detection at the base commit and at the head commit.** Both are read from the main repository's objects
+**One precedence rule for the toolchain file across the head's transitions** (re-review finding F1; it follows the owner's decision of 2026-11-26, A4): **the HEAD's state of `.coai/toolchain.yaml` wins.** The file is read at the base (to be compared) and at the head (to run), both from the main repository's objects.
+
+| Base → head | What runs | Reported (`ToolchainChange`, and the base's stated commands the head no longer states as lost or changed) |
+|---|---|---|
+| file → the same file (the coder did not touch it) | the file; detection decides nothing for a project that states a command | nothing |
+| no file → the head adds one | **the head's file** | `Added` |
+| file → the head changes it | **the head's file** | `Changed`; a stated command that was removed is `lost`, one that differs is a changed command (a test command is also in `changedTestCommands`) |
+| file → the head deletes it | **the head's detection** (the rule of item 2, no file) | `Removed`; every command the base's file stated is `lost` |
+| no file → no file | detection (item 2) | nothing |
+
+1. **A file at the head decides** (the base's file when the head left it alone). Detection decides nothing for a project that states a command.
+2. **No file at the head: detection at the base commit and at the head commit.** Both are read from the main repository's objects
    (`git ls-tree`, then the manifest blobs), never through the worktree's `.git` pointer and never from the working tree. The head
    is the commit coai made, so an untracked or ignored file changes nothing. The listing is one more method of the hardened git
    reader (`GitHistory`). E3's `GitWorkFolder` is not used for it: it is bounded to a plan folder of 2 000 entries.
-3. **A file the coder adds** is reported as today (`ToolchainChange.Added`) and does not run for that job.
+3. **A file the coder adds or changes runs** (it did not before the owner's decision of 2026-11-26) and is reported as a difference; a file it deletes hands the job to detection, and the report says which stated commands were lost. Nothing is refused for the transition itself.
 4. `COAI_TOOLCHAIN_DETECT=off` gives E2's answer: no file is `not_configured`. Default `on`.
 
 ### A2. The file
 
 - A project that states `build`, `test`, `restore`, `format` or `testFor` is run exactly as written: only its stated steps run.
   This repository's file reads to the same model as today.
-- A project that states NO command (`path` and `adapter` only) gets the adapter's defaults for its own folder, read at the base;
+- A project that states NO command (`path` and `adapter` only) gets the adapter's defaults for its own folder, read at the base and at the head;
   the both-trees rule of A4 holds for it. The source is then `file+defaults`.
 - New names of a project: `restore` (argv), `format` (argv; an item may hold `{file}`), `testFor` (argv; an item may hold `{file}`
   or `{stem}`), `testFiles` (a list of folder prefixes inside the project that hold test files). `testFor` needs `testFiles`.
@@ -162,7 +171,7 @@ base: detection decides nothing. **D6** a file project with no command: the defa
 documents only. **D8** a link, a submodule, an XML entity, a JSON 40 levels deep. **D9** each limit. **D10** this repository's own
 HEAD with detection forced, and with its file. **D11** `COAI_TOOLCHAIN_DETECT=off`. **D12** a head that replaces `scripts.test` with
 `echo passed` → **not refused**: the head's script runs, `definitionsChanged` is true and the changed test command is named. **D13** a head that adds a `VSTest` target, takes a test project out of the solution file or
-changes the runner in `global.json` → **not refused**: reported the same way. **D14** a new test file → run, and not reported as a definition (a plain source file); a new package reference or a new dependency changes a project file or `package.json` → run (it is restored from the internet), and reported as a changed definition file.
+changes the runner in `global.json` → **not refused**: reported the same way. **D15** the head ADDS \`.coai/toolchain.yaml\` → its steps run, \`ToolchainChange.Added\`. **D16** the head CHANGES it → the head's steps run, \`Changed\`, the changed test command is named. **D17** the head DELETES it → the head's detection runs, \`Removed\`, the base's stated commands are listed as lost (the same acceptance case for each transition is in s3 t3 d4). **D14** a new test file → run, and not reported as a definition (a plain source file); a new package reference or a new dependency changes a project file or `package.json` → run (it is restored from the internet), and reported as a changed definition file.
 
 ## B. The steps and the check boundary
 
@@ -232,10 +241,9 @@ After a turn's commit coai runs the formatter and commits the result as `style: 
    that are not a manifest or a lock file. More than 200 → no run, state `too-many-files`.
 2. **How a file name reaches the argv.** `{file}` is replaced in place by one item per file, each written `./<path>`. A name with a
    control character or a line break is left out. So a file named `--write-everything` reaches the tool as a file, not an option.
-3. **Where.** Inside `CheckBoundary`, with only a loopback device, 5 minutes at most, after the restore step (prettier lives in
-   `node_modules`). The restore step runs once in a round, before the format step; the build, the typecheck and the test then run
-   on the head coai made.
-4. **What it may change.** Only the files it was given. coai compares the worktree with the turn's commit afterwards: any other
+3. **Where.** Inside `CheckBoundary`, **in a unit of its own**, with only a loopback device, 5 minutes at most, after the restore step (prettier
+   lives in `node_modules`); the home and temp of the unit are new and empty (§J, the job's folders). The restore step runs before the format step.
+4. **What it may change.** Only the files it was given, and only TRACKED changes are taken from it (re-review finding F2): a formatter can change IGNORED files too — a runner under `node_modules` is the example — and `git status` does not show an ignored file. So after the format step coai takes only the tracked changes of the given files into the format commit, then runs `git clean -ffdx` and requires an empty `git status --porcelain --ignored` (the proof of §J's clean tree) **before the checks of the round**, so nothing ignored that the formatter touched survives into them; the restore step then runs again on the clean tree (the package caches of the job make it cheap), and the build, the typecheck and the test run on the head coai made. A clean that cannot be proven refuses the round with a fixed sentence. coai compares the worktree with the turn's commit afterwards: any other
    changed path, a new file git would add, or a HEAD that moved puts the worktree back to the turn's commit through `CoderRestore`,
    the restore step runs again, and the state is `refused` with the paths. A formatter that exits non-zero, runs over its time or
    cannot start gives the same reset and the state `failed`.
@@ -249,7 +257,7 @@ note}`.
 
 Scenarios: **F1** a badly formatted file → one format commit with that file only; a second run changes nothing. **F2** the planted
 option-like file name. **F3** a formatter that writes another file → reset, `refused`. **F4** a formatter that fails → reset,
-`failed`, the round goes on. **F5** no formatter → no process. **F6** a stale runner writes no format commit.
+`failed`, the round goes on. **F5** no formatter → no process. **F6** a stale runner writes no format commit. **F7** a formatter that rewrites an ignored file (a runner under `node_modules`) → the file is gone after the clean, the status is empty, the restore step brings back the base's runner, the format commit holds only the given files.
 
 ## E. Test selection
 
@@ -312,6 +320,7 @@ Only a failed FULL test step is re-run, once.
   complete, has the same total as the first run and zero failed. A re-run in which no test ran (the "no test ran" code, a total
   of 0, a filter that matched nothing), a name that matches twice, or a total that differs excuses nothing: the failure goes to
   the coder with the digest of the first run.
+- **The re-run must itself be clean** (re-review finding F0). A re-run excuses an original failure only when the re-run ITSELF completes with exit 0, shows no new failure and has no execution error (a unit that could not start or be stopped, a timeout, a cut log, a tool crash). Otherwise nothing is excused and the round stays red with the digest of the first run, even when the named test passed in it.
 - **Result.** An excused test is listed under `flaky` `{project, test, file, firstLog, rerun: narrowed | whole, proof: named |
   totals}`, leaves the digest, and one `coder-test-flaky` notice is raised for the job. When nothing is left the step counts as
   passed. Tests that fail again stay red with the digest of the re-run.
@@ -325,7 +334,7 @@ own file → no re-run. **K4** the raw tail → no re-run. **K5** a build failur
 first run of 301 seconds with no `testFor`. **K8** `COAI_FLAKY_RERUNS=0`. **K9** two named failures beside one the reader cannot
 name → no re-run. **K10** 41 failures with a digest of 40 items → no re-run; 6 failures → no re-run. **K11** a `testFor` filter
 that matches nothing → nothing excused, red. **K12** a name that matches two tests; a whole re-run whose total differs → nothing
-excused.
+excused. **K13** a re-run in which the named test passes but the step exits non-zero, shows a new failure or has an execution error → nothing excused, the round stays red.
 
 ## G. The no-progress stop
 
@@ -584,3 +593,12 @@ Two things changed the plan after the gate of section P. Both are plan changes: 
      epic gets a new plan round. When the measure shows that no vendor works behind a proxy, the line is met by that recorded
      result, no story is written, and accepted risk A2 of the judgement stays with the owner.
    - Until then: the agy and codex CLI processes have the whole network and the host's loopback (accepted risks A2 and C2).
+
+## R. After the plan re-review (2026-11-26, session c0112e7a, at 368f4cfd, verdict proceed): three accepted findings, one rejected
+
+These are plan changes; the plan is read again after the owner's whole-plan review. No code was written for them.
+
+1. **F0, accepted — the re-run must itself be clean** (section F, K13; s5 t5 d5). A re-run excuses an original failure only when it completes with exit 0, no new failure and no execution error.
+2. **F1, accepted — one precedence rule for the toolchain file across the head's transitions** (section A1, D15 to D17; s2 t5 d1 and d2, s3 t3 d2 and d4). The head's state wins: added → the head's file runs; changed → the head's file runs; deleted → the head's detection runs. Each is reported as a difference.
+3. **F2, accepted — the format step in its own unit, and the clean after it** (section D item 3 and 4, F7; s5 t1 d5). A formatter can change ignored files; only tracked changes of the given files are taken, then `git clean -ffdx` and an empty `status --ignored` before the checks, then restore again.
+4. **F3, rejected — "`dotnet test` on this repository".** The finding said the generic `dotnet test --project` form is wrong for this repository (PROJECT.md says the MTP executable, never `dotnet test`). Why it stays: that rule is for agents running this repository on the host; the product's detection uses `dotnet test --project <unit> --no-build -c Debug`, and it was MEASURED in story s1 (RESULTS_s1_dotnet.md, M3 and r17): in the check unit it gave exit 0, 2.7 seconds, 18 tests passed for `--filter-class CoaiMcp.Tests.AFailureDigestTests`. A repository that wants its own test command states `test` in `.coai/toolchain.yaml` (this repository's file does).
