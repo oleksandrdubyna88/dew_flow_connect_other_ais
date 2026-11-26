@@ -1,0 +1,114 @@
+{
+  "version": 1,
+  "comment": "The defaults coai uses for a repository that has no .coai/toolchain.yaml (epoch 3 E4, SPEC section A3). EMBEDDED in coai-mcp (src_mcp/core/Toolchain/ToolchainDefaults.cs): nothing reads this file from a repository or the data folder at run time. Every argv is started WITHOUT a shell. An argv item may hold only {jobs}, {unit} and, in a format step, {file}; no item is ever copied from a manifest. Every argv below is a command that story s1 saw work INSIDE the check unit of E2 (RESULTS_s1_dotnet.md, RESULTS_s1_node.md, RESULTS_s1_format.md); a step with the host network names the heading of the RESULTS file that measured why. There is no default testFor. A step that is null does not exist for the stack. presence names are recorded by name and never read; definitionFiles are read because a change of one is a change of the checks. php, rust, python and java are known and not built: their manifests are refused by name.",
+  "stacks": {
+    "dotnet": {
+      "built": true,
+      "manifests": ["*.slnx", "*.sln", "*.csproj", "*.fsproj", "*.vbproj"],
+      "definitionFiles": ["global.json", "*.props", "*.targets"],
+      "presence": [".editorconfig"],
+      "switches": {
+        "NO_COLOR": "1",
+        "DOTNET_NOLOGO": "1",
+        "DOTNET_CLI_TELEMETRY_OPTOUT": "1",
+        "MSBUILDDISABLENODEREUSE": "1"
+      },
+      "steps": {
+        "restore": {
+          "argv": ["dotnet", "restore", "{unit}"],
+          "network": "host",
+          "measuredIn": {
+            "file": "v2/epoch-3/e4-adapters-coder-hardening/RESULTS_s1_dotnet.md",
+            "heading": "M1 — restore on the host network, then build and test with only a loopback device"
+          }
+        },
+        "format": {
+          "argv": ["dotnet", "format", "whitespace", ".", "--folder", "--include", "{file}"],
+          "network": "none",
+          "needs": "an .editorconfig at the repository root",
+          "extensions": [".cs"],
+          "measuredIn": {
+            "file": "v2/epoch-3/e4-adapters-coder-hardening/RESULTS_s1_format.md",
+            "heading": "M7 — `dotnet format`"
+          }
+        },
+        "build": {
+          "argv": ["dotnet", "build", "{unit}", "-c", "Debug", "--no-restore", "-m:{jobs}"],
+          "network": "none"
+        },
+        "typecheck": null,
+        "test": {
+          "network": "none",
+          "byRunner": {
+            "vstest": ["dotnet", "test", "{unit}", "--no-build", "-c", "Debug"],
+            "mtp": ["dotnet", "test", "--project", "{unit}", "--no-build", "-c", "Debug"]
+          }
+        }
+      },
+      "noTestRan": {
+        "vstest": { "exitCodes": [], "markers": ["No test matches the given testcase filter"] },
+        "mtp": { "exitCodes": [8], "markers": ["Zero tests ran"] }
+      }
+    },
+    "node": {
+      "built": true,
+      "manifests": ["package.json"],
+      "presence": ["package-lock.json", "npm-shrinkwrap.json", "pnpm-lock.yaml", "yarn.lock", "bun.lock", "bun.lockb", "tsconfig.json", ".prettierrc*", "prettier.config.*"],
+      "switches": {
+        "NO_COLOR": "1",
+        "CI": "true"
+      },
+      "steps": {
+        "restore": {
+          "argv": ["npm", "ci", "--ignore-scripts"],
+          "network": "host",
+          "measuredIn": {
+            "file": "v2/epoch-3/e4-adapters-coder-hardening/RESULTS_s1_node.md",
+            "heading": "M4 — the commands, one row each (private network unless it says host)"
+          }
+        },
+        "format": {
+          "argv": ["npx", "--no-install", "prettier", "--write", "--ignore-unknown", "{file}"],
+          "network": "none",
+          "needs": "prettier as a devDependency and a prettier configuration",
+          "extensions": [".js", ".mjs", ".cjs", ".jsx", ".ts", ".tsx", ".json"],
+          "measuredIn": {
+            "file": "v2/epoch-3/e4-adapters-coder-hardening/RESULTS_s1_format.md",
+            "heading": "M8 — prettier through `npx --no-install`"
+          }
+        },
+        "build": {
+          "argv": ["npm", "run", "build"],
+          "network": "none",
+          "needs": "scripts.build"
+        },
+        "typecheck": {
+          "argv": ["npm", "run", "typecheck"],
+          "fallback": ["npx", "--no-install", "tsc", "--noEmit"],
+          "network": "none",
+          "needs": "scripts.typecheck, else tsconfig.json and the typescript package"
+        },
+        "test": {
+          "network": "none",
+          "byRunner": {
+            "jest": ["npm", "test"],
+            "vitest": ["npm", "test"],
+            "node-test": ["npm", "test"],
+            "unknown": ["npm", "test"]
+          },
+          "needs": "scripts.test that is not npm's placeholder"
+        }
+      },
+      "noTestRan": {
+        "jest": { "exitCodes": [], "markers": ["No tests found, exiting with code 1"] },
+        "vitest": { "exitCodes": [], "markers": ["No test files found, exiting with code 1"] },
+        "node-test": { "exitCodes": [], "markers": [], "note": "node:test counts a file with no test as one passing test and prints no marker: nothing says that no test ran" },
+        "unknown": { "exitCodes": [], "markers": [] }
+      }
+    },
+    "php": { "built": false, "manifests": ["composer.json"] },
+    "rust": { "built": false, "manifests": ["Cargo.toml"] },
+    "python": { "built": false, "manifests": ["pyproject.toml", "requirements.txt", "setup.py", "setup.cfg", "Pipfile"] },
+    "java": { "built": false, "manifests": ["pom.xml", "build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts"] }
+  }
+}

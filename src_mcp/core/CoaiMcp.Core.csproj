@@ -16,6 +16,9 @@
          from the same file. Both loaders are asserted against it. -->
     <EmbeddedResource Include="..\..\shared\builtin-roles.json" LogicalName="CoaiMcp.Core.builtin-roles.json" />
 
+    <!-- The defaults of the detected toolchains (epoch 3 E4): what a repository with no .coai/toolchain.yaml is checked with. Embedded for the reason above: a published binary runs where no shared/ folder exists, and nothing may read these argv from a repository or the data folder at run time. -->
+    <EmbeddedResource Include="..\..\shared\toolchains.json" LogicalName="CoaiMcp.Core.toolchains.json" />
+
     <!-- The credential word list, and the same argument one step harder. A published Native-AOT
          binary runs where no shared/ directory exists, so a redactor that READ this file would
          throw there — and because every notice write is best-effort and swallows its exceptions,
