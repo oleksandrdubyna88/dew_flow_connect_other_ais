@@ -35,6 +35,14 @@
   rule of plan changes also says that what a re-review changes is the baseline of the next epoch; whoever opens epoch 2
   decides which reading stands. The plan stays stopped: epoch 2 and its re-review record are not written here.)
   (What these four changed in E3: sections M and N of the same file.)
+- 1.12 · 2026-11-26 · reviewer · contract, dod — re-review round of epoch 3 E4 (session c0112e7a, proceed), finding F0: a re-run excuses a failure only when it exits 0 with no new failure and no execution error (E4 SPEC section F, K13, s5 t5 d5)
+- 1.13 · 2026-11-26 · reviewer · contract, dod — the same round, finding F1: one precedence rule for the toolchain file across the head's transitions: the head's state wins, an added and a changed file run the head's file, a deleted file runs the head's detection, and every transition is reported (E4 SPEC A1, D15 to D17, s2 t5, s3 t3 d4)
+- 1.14 · 2026-11-26 · reviewer · contract, dod — the same round, finding F2: the format step runs in its own unit; after it only the allowed tracked changes are taken, then a clean, an empty status --ignored and the restore again (E4 SPEC section D, F7, s5 t1 d5)
+  (Entries 1.12 to 1.14 are the three findings accepted in the re-review round of E4. They are folded into the E4 plan on the
+  branch feat/v2-ep3-e4-plan: commit 9941801b, the SPEC and the yaml files, and commit 2a4ef2ee, the bundle. That text is not
+  on this branch. One finding of that round, F3, about dotnet test on this repository, was rejected: it was measured in E4
+  s1; the reason is in section R of the E4 SPEC. As for 1.9 to 1.11, they are entries by the lead's order, and the plan
+  stays stopped.)
 
 ## Goal
 
