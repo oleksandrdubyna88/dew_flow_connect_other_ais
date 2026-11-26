@@ -458,7 +458,7 @@ public sealed class AScoutRunTests
 
         var answer = JsonDocument.Parse(await ServiceFor(world).StartAsync("scout", repo, "a.txt", "what is here?", null, null, null, TestContext.Current.CancellationToken)).RootElement;
 
-        answer.GetProperty("route").EnumerateArray().Select(entry => entry.GetString()).Should().Equal("claude/sonnet");
+        answer.GetProperty("route").EnumerateArray().Select(entry => entry.GetString()).Should().Equal("claude/sonnet", "claude/haiku", "codex/terra");
         var request = world.Store.ReadRequest(answer.GetProperty("jobId").GetString()!)!;
         (request.Role, request.Brief, request.TaskFile).Should().Be(("scout", "what is here?", "a.txt"));
     }
