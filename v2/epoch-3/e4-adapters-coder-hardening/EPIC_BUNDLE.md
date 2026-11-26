@@ -1,6 +1,6 @@
 # coai v2 — epoch 3, epic E4 (adapters dotnet + node, coder hardening) — epic plan for the gate (generated)
 
-Parent plan: v2/PLAN.md; architecture: v2/architecture/server.md (§10, §11, §12, §15, §16 row 9, §23); built on epoch-3 E2 (the coder, the toolchain file, the check boundary, the fix loop, the claude key pool) and, for story s6, on E3 (the vendor seam; the codex and agy coder). The full spec is SPEC.md in the same folder; its digest is below, before the YAML files. This is the plan AFTER the plan gate of 2026-11-25 (proceed, 5 findings accepted: SPEC section P) and after two later changes of 2026-11-25 (SPEC section Q): the answers of the owner to questions 1, 2, 4 and 5, and `doneWhen` line 8 from the security judgement of E3.
+Parent plan: v2/PLAN.md; architecture: v2/architecture/server.md (§10, §11, §12, §15, §16 row 9, §23); built on epoch-3 E2 (the coder, the toolchain file, the check boundary, the fix loop, the claude key pool) and, for story s6, on E3 (the vendor seam; the codex and agy coder). The full spec is SPEC.md in the same folder; its digest is below, before the YAML files. This is the plan AFTER the plan gate of 2026-11-25 (proceed, 5 findings accepted: SPEC section P) and after two later changes of 2026-11-25 (SPEC section Q): the answers of the owner to questions 1, 2, 4 and 5, and `doneWhen` line 8 from the security judgement of E3. **It also carries the owner's decision of 2026-11-26, which is a plan change** (SPEC A3, A4, D12, D13, decision 11 and plan-gate item 1 of section P, and the yaml of s2 t5, s3 story, s3 t3, t4, t5, t6 and s7 t2): the coder's head is no longer refused for what it changes — its own definitions run, and what it changed is reported.
 
 | Story | Tasks | Complexity sum | Depends on |
 |---|---|---|---|
@@ -34,7 +34,7 @@ excused test ran again and passed, and never excuses the job's own tests. (6) `n
 fingerprints after two fix turns in a row. (7) A `review_code` started by coai is E5's, not E4's (§23 said E4; there is no
 scheduler before E5). (8) Five step names run: restore, format, build, typecheck, test; lint, audit and coverage stay names of
 `skip`. (9) npm only; pnpm, yarn and bun are refused by name (the owner confirmed npm only, 2026-11-25). (10) The toolchain file gets `restore`, `format`,
-`testFor` and `testFiles`; `version` stays 1. (11) A detected check cannot be changed by the job it checks.
+`testFor` and `testFiles`; `version` stays 1. (11) ~~A detected check cannot be changed by the job it checks.~~ **Superseded by the owner's decision of 2026-11-26** ("Let's widen it so the coder is comfortable. Let it restore packages from the internet itself; no proxy or address lists"; on tests and helper scripts: "allow everything"): nothing the head changes is refused; the head's own definitions run and what it changed in them is reported (A4).
 
 **A. Where the checks come from.** One pure function, `ToolchainResolve`. A file at the base wins, and a project that states a
 command runs exactly what it states (this repository's file reads as today). A file project that states no command gets the
@@ -49,17 +49,17 @@ build`, `npm run typecheck` or `npx --no-install tsc --noEmit`, `npm test`. A sc
 `npm install`, never an install script, never a tool downloaded at check time. **Refused** (`toolchain_refused`, the sentence
 names the path and the cure "name the commands in `.coai/toolchain.yaml`"): a manifest of php, rust, python or java; two solution
 files in one folder; test projects of two runners; a `package.json` with no lock file, two, or a pnpm, yarn or bun one; a manifest
-that cannot be parsed; a limit passed. No manifest at all is `not_configured`. One refused project refuses the repository.
+that cannot be parsed; a limit passed. No manifest at all is `not_configured`. One refused project refuses the repository. A check definition of the base that differs at the head is NOT a refusal any more: it is reported (A4, owner decision 2026-11-26).
 
-**A4. Both trees, and the frozen check definition** (gate finding 1). A project only the head has is added and marked
-`definedByHead`. A step the base had and the head has not is refused. **The check definition of a project the base has must be
-the same at the head**: for node the whole `scripts` member of `package.json` and the name of the lock file; for .NET the test
-projects the solution names, the facts that choose the runner, the `test` member of `global.json`, and the names of every
-`Target`, `Import` and `UsingTask` element in the unit's project, `.props` and `.targets` files. A difference is
-`toolchain_refused` before any step (`the worktree changed scripts.test of <project>`); the cure is a commit of its own, or the
-file. A head that replaces `scripts.test` with `echo passed` is refused, never green. Not a definition, so allowed: a new or
-changed source or test file, a new package or project reference, a new dependency with its lock file. Stated limit: a project of
-the file states its own command; what that command reads in the tree is the head's, as in E2. Scenarios D1 to D14.
+**A4. Both trees; the head's definitions run and what it changed is reported** (rewritten by the owner's decision of 2026-11-26; it replaces gate finding 1 and decision 11).
+Detection runs on the base and on the head and **the head's projects are what runs**: a project only the head has is restored, built and tested with the defaults and marked `definedByHead`, so a package or a test project the coder adds is checked. A step the base
+had and the head has not is **reported as lost** (`the worktree removed <step> of <project>`), never refused; a manifest of an unbuilt stack at the head still refuses, because nothing can be run for it. The head's `.coai/toolchain.yaml` is the file that runs.
+**What is reported:** the envelope's top-level `definitionsChanged` and one-line `definitionSummary`; in `toolchain`: the counts of definition and configuration files and of symlinks or submodules the head changed, `lostSteps`, `changedDefinitions` (the members that
+differ: for node the `scripts` of the package and its workspace members and the name of the lock file; for .NET the test projects the solution names, the runner, the `test` member of `global.json`, the names of every `Target`, `Import` and `UsingTask` element, the raw test-fact elements)
+and `changedTestCommands`; `headTestFiles` {modified, added, deleted}; and `checks/round-<n>/changed-definitions.txt` in the job's record with the spelled paths. The lists of `shared/toolchains.json` are only the classifier of which changed paths are called a definition or configuration file.
+**The accepted risk:** a green check means the head's OWN definitions passed; the coder may have changed the base's tests or the commands that run them, and the envelope says when. **Kept, because they cost the coder nothing:** the tree equals the commit before every round (clean, no nested `.git`), a fresh
+home and temp per step with the package caches writable only in restore, the hardened git reads, no head value in a sentence; restore keeps the host network. A workspace member's test or typecheck script is planned as `npm test --workspace=./<member>` when the root has none; a test marker under a `Condition` is a
+marker. Scenarios D1 to D14 (**D12** a head that replaces `scripts.test` with `echo passed` is not refused: the script runs and the change is reported; **D13** the .NET forms are reported the same way; **D14** a new test file is a plain source file, a new package reference changes a project file and is restored and reported).
 
 **B. The steps and the boundary.** Order of a round: restore, format, build, typecheck, test. Every step of a coder job, the
 selected run and the re-run included, starts through `CheckBoundary.RunAsync` after E2's preflight. **The boundary is not
@@ -119,7 +119,7 @@ less than the last round of checks took. Money is not a cap in E4.
 
 **J. Security.** The boundary of E2, not widened; a property the unit lacks stops the measure task and needs a security judgement.
 What decides the commands is the file at the base or shipped templates filled with facts of manifests from git objects; no argv
-item is copied from a manifest, and a check definition cannot differ between base and head. Manifests are untrusted: XML with DTD
+item is copied from a manifest, and a changed check definition is REPORTED, not refused (owner decision 2026-11-26). Manifests are untrusted: XML with DTD
 prohibited, JSON depth limit, size limits, no link. No secret in an argv or a log. Tests never touch the real home. An effect is
 observed in a real unit, not asserted from an argv.
 
@@ -127,7 +127,7 @@ observed in a real unit, not asserted from an argv.
 the fake's verbs and both `Program.cs`. E4 edits those only in s6 and s7; s6 depends on `e3-roles-complete/s8-proof`. E4 never
 edits `CoderVendors`, `CoderUnit`, `CoderBoundary` or `BoundaryPreflight`. s1 to s5 touch none of them and can be built beside E3.
 
-**Order.** s1 (measure) → s2 (detection) → s3 (steps in the boundary, the frozen definition, the affected projects); s4 (readers,
+**Order.** s1 (measure) → s2 (detection) → s3 (steps in the boundary, the reported definition changes, the affected projects as information); s4 (readers,
 the run summary) after s1; s5 after s3 and s4; s6 after s5 and E3; s7 last.
 
 **Measure first (s1, no paid call).** M1 a build without restore and without network; M2 `dotnet test` for each runner; M3 the
@@ -137,7 +137,7 @@ line and whether it names a passed test.
 
 **Acceptance** (gate finding 4). The scenario of a detected project (no toolchain file) uses FULL runs only. The selected run has
 a scenario of its own, on a repository whose file at the base names `testFor`. A turn that replaces the test script with `echo
-passed` ends `toolchain-refused`.
+passed` runs that script and is reported (`definitionsChanged`); a repository with a `Cargo.toml` and no file still ends `toolchain-refused`.
 
 **Not in E4.** A `review_code` started by coai, parallel work (E5); php, rust, python, java (epoch 5 E3); lint, audit, coverage,
 PR and CI (epoch 5 E4); a spend cap; a private registry; pnpm, yarn, bun; native Windows and macOS; a run of the checks on the
@@ -363,7 +363,7 @@ dod:
 ```yaml
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: t5-resolve-both-trees
-title: "ToolchainResolve: the file at the base wins; else detection at the base and at the head, and a check the base had is never lost at the head"
+title: "ToolchainResolve: the file wins; else detection at the base and at the head, the head's projects run, and a check the base had and the head lost is reported (the owner, 2026-11-26)"
 kind: code
 complexity: 6
 dependsOn:
@@ -379,7 +379,7 @@ dod:
   - id: d1
     item: "a file at the base commit gives the source `file`, and detection decides nothing for a project that states a command; a project of the file that states NO command gets the adapter's defaults of its own folder at the base (source `file+defaults`), and a refusal of the detector there refuses the file"
   - id: d2
-    item: "no file at the base: detection at the base and at the head; a project only the head has is added with the defaults; a step (project and step name) that the base had and the head has not is toolchain_refused with the sentence `the worktree removed <step> of <project>`"
+    item: "no file at the base: detection at the base and at the head; a project only the head has is added with the defaults; the head's projects are what runs; a step (project and step name) that the base had and the head has not is REPORTED as lost with the line `the worktree removed <step> of <project>` and is never refused (owner decision 2026-11-26, SPEC A4)"
   - id: d3
     item: "a manifest of a stack that is known and not built (php, rust, python, java), at the base or at the head, is toolchain_refused and names the stack, the path and the cure; no manifest of any known stack is not_configured; one refused project refuses the repository; neither state is ever green and no step is planned"
   - id: d4
@@ -412,7 +412,7 @@ dod:
 ```yaml
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: s3-steps-in-boundary
-title: "The steps of a resolved toolchain run inside the E2 check boundary: restore, build, typecheck and test, each with its network state; the toolchain file gets four names; a detected check cannot be changed by the job it checks; which projects a diff reaches"
+title: "The steps of a resolved toolchain run inside the E2 check boundary: restore, build, typecheck and test, each with its network state; the toolchain file gets four names; the head's own definitions run and what the head changed in them is reported, never refused (owner decision 2026-11-26); which projects a diff reaches (information only)"
 dependsOn:
   - s2-detection
 ```
@@ -476,7 +476,7 @@ dod:
 ```yaml
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: t3-checks-at-base-resolve
-title: "ChecksAtBase resolves through ToolchainResolve: the file at the base, or the manifests of the base and of the head, all read from the main repository; a coder still cannot change its own checks"
+title: "ChecksAtBase resolves through ToolchainResolve: the file at the base, or the manifests of the base and of the head, all read from the main repository; the head's own definitions run and what the coder changed is reported (owner decision 2026-11-26)"
 kind: security
 complexity: 5
 dependsOn:
@@ -493,7 +493,7 @@ dod:
   - id: d1
     item: "T1: the checks of a coder job on a fixture repository with no file run the detected steps in real units and end green, for a node project and for a dotnet unit; with a file the steps are the file's, and every existing test of ChecksAtBase passes unchanged"
   - id: d2
-    item: "D3: a head commit that deletes the test script, the lock file or a test project is toolchain_refused and no step runs; a head commit that adds .coai/toolchain.yaml is reported as today (ToolchainChange.Added) and the detected steps run, not the new file"
+    item: "D3: a head commit that deletes the test script or a test project loses that step, the loss is reported (`the worktree removed <step> of <project>`) and the head's other steps run; a head that deletes the lock file, adds a manifest of an unbuilt stack or breaks the toolchain file cannot be run and is refused for that reason only; a head commit that adds or changes .coai/toolchain.yaml is reported (ToolchainChange.Added or Changed) and the HEAD's file is the file that runs"
   - id: d3
     item: "the head is read as the COMMIT coai made, from the main repository's objects: an untracked or ignored manifest in the worktree changes nothing; T5: the rule that the worktree and HEAD are the same after the checks holds for the restore step (a restore that leaves a file git would add is tree_changed, never green)"
 ```
@@ -514,7 +514,7 @@ files:
   - src_mcp/tests/ACoderEnvelopeNamesItsToolchainTests.cs
 dod:
   - id: d1
-    item: "result.json has `toolchain` {source: file | file+defaults | detected, projects: [{path, adapter, facts, steps}], notes, changedBetweenBaseAndHead}; each entry of `checks` has the step name (restore, build, typecheck, test), network and workingFolder beside the fields of E2"
+    item: "result.json has `toolchain` {source: file | file+defaults | detected, projects: [{path, adapter, facts, steps}], notes, changedBetweenBaseAndHead, definitionsChanged, definitionSummary, changedDefinitionFiles, changedLinksOrSubmodules, lostSteps, changedDefinitions, changedTestCommands}; the envelope has the flag `definitionsChanged`, the one-line `definitionSummary` and `headTestFiles` {modified, added, deleted}; each entry of `checks` has the step name (restore, build, typecheck, test), network and workingFolder beside the fields of E2"
   - id: d2
     item: "every field of E2 keeps its name and its meaning (a test reads a result of this task with the field list of E2 and finds the same values); role_status returns the same JSON that result.json holds"
 ```
@@ -523,7 +523,7 @@ dod:
 ```yaml
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: t5-check-definitions-frozen
-title: "A coder cannot change what a detected check runs: the check definition of a project is compared between the base and the head, and a difference refuses the job"
+title: "The head's own check definitions run, and what the head changed in the check definition of a project the base has is REPORTED, never refused (owner decision 2026-11-26; the task id keeps its first name)"
 kind: security
 complexity: 6
 dependsOn: []
@@ -534,19 +534,22 @@ files:
   - src_mcp/core/Toolchain/NodeDetector.cs
   - src_mcp/core/Toolchain/DotnetDetector.cs
   - src_mcp/core/Toolchain/ToolchainResolve.cs
+  - src_mcp/core/Toolchain/FrozenDefinitions.cs
+  - src_mcp/core/Toolchain/DefinitionReport.cs
   - shared/toolchains.json
-  - src_mcp/tests/ACoderCannotChangeADetectedCheckTests.cs
+  - src_mcp/tests/AChangedCheckDefinitionIsReportedTests.cs
+  - src_mcp/tests/AHeadsChangesAreReportedTests.cs
 dod:
   - id: d1
-    item: "the check definition of a detected or defaulted node project is the whole `scripts` member of its package.json (every script a step runs, its pre and post scripts and the scripts it calls by name are in it) and the name of its lock file; of a dotnet unit it is the test projects its solution file names, the facts that make each a test project and choose its runner, the `test` member of global.json, and the names of every Target, Import and UsingTask element in the unit's project files and in the .props and .targets files that apply to it"
+    item: "the check definition of a detected or defaulted node project is the whole `scripts` member of its package.json (every script a step runs, its pre and post scripts and the scripts it calls by name are in it) and the name of its lock file; of a dotnet unit it is the test projects its solution file names, the facts that make each a test project and choose its runner, the `test` member of global.json, and the names of every Target, Import and UsingTask element in the unit's project files and in the .props and .targets files that apply to it; this is what is COMPARED between the base and the head, to be reported"
   - id: d2
-    item: "D12: for a project the base has, a definition that differs at the head is toolchain_refused before any step; the sentence names the project and the member (`the worktree changed scripts.test of <project>`) and the cure (land the change in a commit of its own, or name the commands in .coai/toolchain.yaml); a head that replaces `scripts.test` with `echo passed` gives that refusal, zero planned steps and never green"
+    item: "D12: for a project the base has, a definition that differs at the head is REPORTED, not refused: the head's own definitions run, the line `the worktree changed scripts.test of <project>` is in the envelope's `toolchain.changedDefinitions` and in `changedTestCommands`, `definitionsChanged` is true, and a head that replaces `scripts.test` with `echo passed` runs that script; a green check then means the head's own definitions passed, and the envelope says so"
   - id: d3
-    item: "D13: the same for a dotnet unit: a head that adds a Target named VSTest, Test or Build to a test project or to Directory.Build.targets, takes a test project out of the solution file, or changes the runner in global.json is refused"
+    item: "D13: the same for a dotnet unit: a head that adds a Target named VSTest, Test or Build to a test project or to Directory.Build.targets, takes a test project out of the solution file, or changes the runner is reported the same way (a head whose changes leave nothing that can be run, such as an MTP project without the runner setting, is refused for that reason only)"
   - id: d4
-    item: "D14: what is not a definition is not refused: a new or changed source or test file, a new PackageReference, ProjectReference or PackageVersion, a new dependency in package.json with its lock file; a project only the head has runs with its own definition and the answer marks it `definedByHead`"
+    item: "D14: a new or changed source or test file is not reported as a definition (a count of test files modified, added and deleted is in `headTestFiles`); a new PackageReference, ProjectReference or dependency changes a project file or package.json and is reported as a changed definition file, and is restored and built; a project only the head has runs with its own definition and the answer marks it `definedByHead`"
   - id: d5
-    item: "the .props, .targets and global.json files are manifest names of toolchains.json and are read by the listing of s2 t2 with its limits and its XML rule; the compare is pure, and what differs is in the answer (`changedBetweenBaseAndHead`)"
+    item: "the report: `definitionsChanged`, a one-line `definitionSummary`, `changedDefinitionFiles`, `changedLinksOrSubmodules`, `lostSteps`, `changedDefinitions`, `changedTestCommands`, and in the job's record `checks/round-<n>/changed-definitions.txt` with the spelled paths; the lists of shared/toolchains.json are only the classifier of which changed paths are called a definition or configuration file; the compare is pure; no value of the head is echoed in a sentence"
 ```
 
 ## v2/epoch-3/e4-adapters-coder-hardening/stories/s3-steps-in-boundary/tasks/t6-affected-projects/task.yaml
@@ -575,6 +578,8 @@ dod:
     item: "inside an affected dotnet unit the test step names only the test projects that reach a changed project through the reverse ProjectReference graph of the head, with a project the head removed counted as changed; a changed solution file, global.json, nuget.config, or any .props or .targets file makes every test project of the unit affected"
   - id: d5
     item: "S2 and S11: impact unknown runs EVERY project in full: a changed path outside every project folder (a root configuration, a shared folder, documents), a reference that cannot be resolved, a project file that cannot be read; a selection never selects nothing, and the round records each unit that was left out and the reason"
+  - id: d6
+    item: "owner decision 2026-11-26 (M13 of the security verify): the selection is INFORMATION ONLY in this version: every detected unit runs, whatever the selection would have left out, and the envelope's `toolchain.selection` says `applied: false` and lists what would have been left out"
 ```
 
 ## v2/epoch-3/e4-adapters-coder-hardening/stories/s4-digest-readers/story.yaml
@@ -1015,7 +1020,7 @@ dod:
   - id: d2
     item: "a scenario of its own for the selected run: a dotnet fixture repository whose file AT THE BASE names testFiles and testFor: red in the selected run and no full run, one fix turn, the selected run green, then the full run green; the steps are the file's and detection decides nothing"
   - id: d3
-    item: "D12 end to end: a turn that replaces the test script of the node fixture with `echo passed` ends failed with the stop toolchain-refused, zero steps and no green; a repository with a Cargo.toml and no file ends the same way; a repository with no manifest ends with not-configured"
+    item: "D12 end to end: a turn that replaces the test script of the node fixture with `echo passed` is NOT refused: the head's script runs, the envelope says `definitionsChanged: true` and names the changed test command (owner decision 2026-11-26); a repository with a Cargo.toml and no file ends failed with the stop toolchain-refused, zero steps and no green (nothing can be run for it); a repository with no manifest ends with not-configured"
   - id: d4
     item: "the MCP client is killed while the full run is going: a new client reads the same job to its end, green, with the generation unchanged and no lost notice; review_code on coder/<jobId> is accepted through the plan the branch inherits (E2 s5); nothing outside the worktree changed, and every step record names the unit boundary"
 ```
