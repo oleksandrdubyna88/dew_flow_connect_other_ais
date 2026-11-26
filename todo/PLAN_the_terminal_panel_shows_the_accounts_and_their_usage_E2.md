@@ -618,6 +618,8 @@ dead code while `ACCOUNTS_READING` is `off` (`remoteAccountsHost.ts:140`).
   nothing was read. Choose “Save now” — the first row of CoAI: hosts read over ssh."* (this document's § 5, E2.S1,
   *T8 and T9, taken up*, follows it).
 
+**Applied, 2026-11-26** — by the spec's author, in the commit that adds this line: B1 and F1–F7 are in the spec's text, with N1–N4 and N8 folded in. Where the code or a fix asked for more than the texts above, the spec says so and lists it for this document in its rows X13–X16: F1's allowance also covers the one `KEY` line of `remoteHostsSaid.ts` that W10 is built from (X13); B1 brings the disk read `lockNow` with one export of `chatStoreLock.ts`, `why: 'busy'` for a withdrawal, an order in `saveWaiting` and one start-again sentence in § P6, step 9, with break-it R33 (X14–X16). The caller checks these against this list before S1's code.
+
 **NOTE — no change needed before code; each is for the spec's author or the caller to weigh.**
 
 - N1. The restart at `STAMP_MAX` removes every withdrawal file, so after it a stale `refused.json` with an older,
