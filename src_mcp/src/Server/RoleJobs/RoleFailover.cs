@@ -73,8 +73,8 @@ internal static class RoleAnswers
     }
 }
 
-/// <summary>The session an attempt's answer came from: the model, the handle its first turn reported (empty when the vendor named none) and the key the session runs on (<see cref="RoleKey.KeyId"/>; empty for a launch with no key) — every later turn of the session uses the SAME key.</summary>
-internal sealed record RoleSession(ModelRef Model, string Handle, string KeyId = "", Server.Keys.ClaudeKeySecret? Secret = null);
+/// <summary>The session an attempt's answer came from: the model, the handle its first turn reported (empty when the vendor named none) and the key the session runs on (<see cref="RoleKey.KeyId"/>; empty for a launch with no key) — every later turn of the session uses the SAME key — and the CLI release the session ran with (a record, never a condition).</summary>
+internal sealed record RoleSession(ModelRef Model, string Handle, string KeyId = "", Server.Keys.ClaudeKeySecret? Secret = null, string CliVersion = "");
 
 /// <summary>What a role made of an attempt AFTER the model's first valid answer (<see cref="RoleFailover.Follow"/>): the job's end, or a stop of the same model that goes on to the next one.</summary>
 internal abstract record RoleFollowed
@@ -455,7 +455,7 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
     /// </summary>
     private async Task<Ended> FollowedAsync(ModelRef model, AttemptRun attempt, CancellationToken ct)
     {
-        var session = new RoleSession(model, attempt.FirstHandle, attempt.KeyId, attempt.Secret);
+        var session = new RoleSession(model, attempt.FirstHandle, attempt.KeyId, attempt.Secret, attempt.CliVersion);
         Session = session;
         RoleFollowed followed;
         try
@@ -495,7 +495,7 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
 
         if (stop is null)
         {
-            Session = new RoleSession(model, attempt.FirstHandle, attempt.KeyId, attempt.Secret);
+            Session = new RoleSession(model, attempt.FirstHandle, attempt.KeyId, attempt.Secret, attempt.CliVersion);
         }
 
         return stop is null ? new Ended.Answer(result) : new Ended.Stop(stop);
@@ -668,6 +668,8 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
             TokensIn = attempt.Total.TokensIn,
             TokensOut = attempt.Total.TokensOut,
             KeyId = attempt.KeyId,
+            CliVersion = attempt.CliVersion,
+            LastMeasuredVersion = Coder is null ? string.Empty : Vendors.LastMeasured(model.Vendor),
         });
 
     /// <summary>One ledger line for the launch of one turn — never for a preparation that refused before anything started. A cumulative vendor's report is cut to this turn's share. Never throws.</summary>
@@ -737,8 +739,16 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
         /// <summary>The cumulative vendor's counter as the last launch reported it: what the next report is measured against.</summary>
         public ConsultationBilled CounterBefore { get; private set; } = new();
 
+        /// <summary>The CLI release the last launch of the attempt reported (empty until one did) — a record, never a condition.</summary>
+        public string CliVersion { get; private set; } = string.Empty;
+
         public void Add(RoleLaunched launched)
         {
+            if ((launched.CliVersion.Length > 0 ? launched.CliVersion : launched.Launch?.CliVersion) is { Length: > 0 } installed)
+            {
+                CliVersion = installed;
+            }
+
             var reported = launched.Launch?.Usage ?? Usage.None;
             Total = ConsultationUsage.OfTwoLaunches(launched.Runtime.UsageIsCumulative, Total, reported);
             if (ConsultationUsage.CarriesACounter(reported) && launched.Runtime.UsageIsCumulative)

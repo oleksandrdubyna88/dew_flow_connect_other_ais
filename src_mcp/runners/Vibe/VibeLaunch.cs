@@ -233,10 +233,14 @@ public static class VibeLaunch
         }
 
         var after = VibeHome.Refusal(home, manifest, host.SignIn.Admitted);
+        if (after.Length > 0)
+        {
+            return HomeVerdict.Refuse(after);
+        }
 
-        return after.Length > 0
-            ? HomeVerdict.Refuse(after)
-            : Verdict(manifest, home, version.Version, host.Platform, host.SignIn.Admitted) with { CliVersion = Named(version.Version), SignInNote = signInNote };
+        var verdict = Verdict(manifest, home, version.Version, host.Platform, host.SignIn.Admitted);
+
+        return verdict with { CliVersion = version.Version.Length > 0 ? Named(version.Version) : "vibe unknown", SignInNote = signInNote, Warning = Joined(verdict.Warning, version.Note) };
     }
 
     private static LaunchTurn Given(IDisposable turn, HomeVerdict inside)
@@ -282,9 +286,10 @@ public static class VibeLaunch
             var asked = await launcher.RunAsync(request with { Arguments = ["--version"], StdIn = string.Empty, Timeout = VersionTimeout }, ct);
             var version = VersionIn(asked.StdOut);
 
-            return asked.ExitCode == 0 && version.Length > 0
-                ? new VersionAnswer(version, string.Empty)
-                : new VersionAnswer(string.Empty, NoVersion(request.Executable, asked));
+            // A release is a RECORD, never a condition (owner decision of 2026-11-26): an answer that exits 0 and prints no release coai can read goes on, recorded as unknown, with a warning. A `--version` that FAILS is a CLI that does not run, and says so.
+            return asked.ExitCode != 0
+                ? new VersionAnswer(string.Empty, NoVersion(request.Executable, asked))
+                : version.Length > 0 ? new VersionAnswer(version, string.Empty) : new VersionAnswer(string.Empty, string.Empty, Note: $"`{request.Executable} --version` printed no release coai can read, so the release is recorded as unknown and the plugin files of this Vibe are admitted by name only");
         }
         catch (Win32Exception e)
         {
@@ -293,7 +298,7 @@ public static class VibeLaunch
     }
 
     /// <summary>What `--version` came to: the release, or a refusal — and whether that refusal is a CLI that is not there.</summary>
-    private sealed record VersionAnswer(string Version, string Refusal, bool CliMissing = false);
+    private sealed record VersionAnswer(string Version, string Refusal, bool CliMissing = false, string Note = "");
 
     /// <summary>
     /// `--version` STARTED and answered no release (G2): the CLI is installed, so this is not a missing CLI — and the sentence

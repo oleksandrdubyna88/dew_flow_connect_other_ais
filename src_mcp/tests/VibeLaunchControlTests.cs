@@ -160,7 +160,7 @@ public sealed class VibeLaunchControlTests : IDisposable
     }
 
     [Fact]
-    public async Task AVersionThatStartedButPrintedNoRelease_IsTheLaunchChecksOwn_AndTheSentenceCarriesBothCures()
+    public async Task AVersionThatStartedButPrintedNoRelease_GoesOn_RecordedAsUnknown_WithAWarning_BecauseNoReleaseStopsAnything()
     {
         var vibe = new FakeVibe { VersionPrints = "no version here" };
         var invocation = Invocation();
@@ -168,7 +168,9 @@ public sealed class VibeLaunchControlTests : IDisposable
         using var turn = await VibeLaunch.TakeAsync(VibeHost.Of(HostKind.Windows), invocation.Request, ExportOf(invocation.Request), vibe, VibePathBudget.None, TestContext.Current.CancellationToken);
 
         turn.CliMissing.Should().BeFalse("a CLI that started is installed");
-        turn.Refusal.Should().Contain("uv tool install --force mistral-vibe").And.Contain("this coai is older than that Vibe");
+        turn.Refusal.Should().BeEmpty("a release is a record, never a condition (owner decision of 2026-11-26)");
+        turn.Warning.Should().Contain("printed no release coai can read").And.Contain("recorded as unknown");
+        turn.CliVersion.Should().Be("vibe unknown");
     }
 
     [Theory]

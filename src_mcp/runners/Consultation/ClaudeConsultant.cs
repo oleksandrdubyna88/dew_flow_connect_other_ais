@@ -105,8 +105,8 @@ public sealed class ClaudeConsultant(IReviewerRuntime inner, string vendor = "cl
 
     /// <summary>
     /// A coder's write launch, prepared: the job and the worktree and the handle checked first (a refusal that asks nothing of the CLI), then the installed claude asked its
-    /// <c>--version</c> and <c>--help</c> (<see cref="ClaudeWriteCapability"/>) — and refused with the cure when it is below 2.1.330 or lacks a flag of the measured set, never launched
-    /// with a weaker boundary. The release is on the result (<see cref="ConsultantPreparation.Ready.CliVersion"/>).
+    /// <c>--version</c> and <c>--help</c> (<see cref="ClaudeWriteCapability"/>) — and refused with the cure when it lacks a flag of the measured set, never launched
+    /// with a weaker boundary. The release itself is a record, never a condition. The release is on the result (<see cref="ConsultantPreparation.Ready.CliVersion"/>).
     /// </summary>
     private async Task<ConsultantPreparation> PrepareCoderAsync(ConsultantLaunch launch, LaunchConfinement.Coder coder, IProcessLauncher launcher, CancellationToken ct)
     {

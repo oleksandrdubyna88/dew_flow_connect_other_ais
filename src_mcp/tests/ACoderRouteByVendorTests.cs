@@ -41,7 +41,7 @@ public sealed class ACoderRouteByVendorTests
     [Fact]
     public void D1_TheRoute_KeepsTheShippedVendors_AndDropsTheOthers_WithTheReasonInTheWhy()
     {
-        var set = Set("ship", true, "ship", false);
+        var set = Set("ship", true, "refuse", false);
 
         var narrowed = CoderRoute.Narrow(Routed(Sonnet, Terra, Argon), vendors: set).Should().BeOfType<RouteResult.Routed>().Subject;
 
@@ -52,7 +52,7 @@ public sealed class ACoderRouteByVendorTests
     [Fact]
     public void D1_ARouteWithNoShippedVendor_IsRefused_AndNamesWhereTheListsAreWritten()
     {
-        var narrowed = CoderRoute.Narrow(Routed(Terra, Argon), vendors: Set("ship", false, "refuse", true));
+        var narrowed = CoderRoute.Narrow(Routed(Terra, Argon), vendors: Set("refuse", false, "refuse", true));
 
         var said = narrowed.Should().BeOfType<RouteResult.Refused>().Subject.Reason;
         said.Should().Contain("COAI_ROLES_MODELS").And.Contain("shipped coder vendors are claude").And.Contain("codex/terra").And.NotContain("claude only");
@@ -61,9 +61,9 @@ public sealed class ACoderRouteByVendorTests
     [Fact]
     public void D1_AModelTheCallerNamed_OnAVendorThatIsNotShipped_IsRefusedWithASentenceThatNamesTheVendor()
     {
-        var said = CoderRoute.Narrow(Routed(Terra, Sonnet), "terra", Set("ship", false, "ship", false)).Should().BeOfType<RouteResult.Refused>().Subject.Reason;
+        var said = CoderRoute.Narrow(Routed(Terra, Sonnet), "terra", Set("refuse", true, "ship", false)).Should().BeOfType<RouteResult.Refused>().Subject.Reason;
 
-        said.Should().StartWith("the coder cannot run terra on codex: ").And.Contain("no release").And.NotContain("claude only");
+        said.Should().StartWith("the coder cannot run terra on codex: ").And.Contain("the verdict for 'codex' is refuse").And.NotContain("claude only");
         CoderRoute.Narrow(Routed(Terra, Sonnet), "terra", Set("ship", true, "ship", false)).Should().BeOfType<RouteResult.Routed>().Which.Models.Should().Equal(Terra, Sonnet);
     }
 
@@ -74,7 +74,7 @@ public sealed class ACoderRouteByVendorTests
     [InlineData("ship", true, "refuse", true, "claude,codex")]
     [InlineData("refuse", true, "ship", true, "claude,agy")]
     [InlineData("refuse", false, "refuse", false, "claude")]
-    [InlineData("ship", false, "ship", false, "claude")]
+    [InlineData("ship", false, "ship", false, "claude,codex,agy")]
     public void D2_EachCombination_OfShipAndRefuse_ForTwoVendors_RoutesExactlyTheShippedVendors(string codex, bool codexReleased, string agy, bool agyReleased, string expected)
     {
         var narrowed = CoderRoute.Narrow(Routed(Sonnet, Opus, Terra, Argon), vendors: Set(codex, codexReleased, agy, agyReleased)).Should().BeOfType<RouteResult.Routed>().Subject;

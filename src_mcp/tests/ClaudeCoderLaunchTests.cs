@@ -309,21 +309,21 @@ public sealed class ClaudeCoderLaunchTests
         Claude().Build(ready.Launch).Request.Arguments.Should().Equal(Measured(Tree(Job)));
     }
 
-    [Fact]
-    public async Task AClaudeBelowTheFloor_IsRefusedWithTheCure_AndNothingIsStarted()
+    [Theory]
+    [InlineData("2.1.329 (Claude Code)\n", "2.1.329")]
+    [InlineData("9.0.0 (Claude Code)\n", "9.0.0")]
+    [InlineData("a banner and no release\n", "unknown")]
+    public async Task AClaudeOfAnyRelease_IsLaunchable_AndTheInstalledReleaseIsRecorded_NoReleaseStopsAnything(string printed, string recorded)
     {
         var launcher = new WatchedLauncher(new ProcessLauncher(), request => request.Arguments switch
         {
-            ["--version"] => Printed("2.1.329 (Claude Code)\n"),
+            ["--version"] => Printed(printed),
             _ => AnAcceptableClaude(request),
         });
 
         var prepared = await Claude().PrepareAsync(Launch(Coder()), launcher, TestContext.Current.CancellationToken);
 
-        var failure = prepared.Should().BeOfType<ConsultantPreparation.Refused>().Subject.Failure.Should().BeOfType<ConsultFailure.VendorRefused>().Subject;
-        failure.Said.Should().Contain("2.1.329").And.Contain("2.1.330");
-        failure.Cure.Should().Contain("update claude");
-        launcher.Requests.Should().NotContain(r => r.Arguments.Contains("-p"));
+        prepared.Should().BeOfType<ConsultantPreparation.Ready>().Which.CliVersion.Should().Be(recorded, "the release goes into the job's record beside the last measured one; it decides nothing");
     }
 
     [Fact]

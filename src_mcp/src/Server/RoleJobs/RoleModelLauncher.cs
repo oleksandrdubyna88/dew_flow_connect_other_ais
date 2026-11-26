@@ -22,6 +22,9 @@ internal sealed record RoleLaunched(ReviewerLaunch? Launch, ConsultFailure? Refu
 {
     /// <summary>The ids of OTHER pool keys whose exact text was found in what the launch printed (the pattern of a setup-token, whoever's it is): each is exposed too, and the job ends <c>key-in-output</c>.</summary>
     public IReadOnlyList<string> ExposedIds { get; init; } = [];
+
+    /// <summary>The CLI release the preparation of the launch read (its own <c>--version</c>); empty when none was asked or none read. A RECORD of the attempt, never a condition.</summary>
+    public string CliVersion { get; init; } = string.Empty;
 }
 
 /// <summary>
@@ -121,7 +124,7 @@ internal sealed partial class RoleModelLauncher(Func<string, string?> settings, 
             return new RoleLaunched(scrubbed.Launch, null, runtime, WithoutCredential(invocation), scrubbed.Launch.Process is { } process ? runtime.ReadHandle(process) : string.Empty, KeyId: keyId, KeyExposed: scrubbed.OwnFound || inHome) { ExposedIds = scrubbed.OtherIds };
         }
 
-        return await LaunchCoderAsync(runtime, invocation, pooled?.Secret, keyId, outputDir, (Vendors.Resolve(model.Vendor) as CoderVendorResolution.Launchable)?.Vendor ?? CoderVendors.Claude, ct);
+        return (await LaunchCoderAsync(runtime, invocation, pooled?.Secret, keyId, outputDir, (Vendors.Resolve(model.Vendor) as CoderVendorResolution.Launchable)?.Vendor ?? CoderVendors.Claude, ct)) with { CliVersion = ((ConsultantPreparation.Ready)prepared).CliVersion };
     }
 
     /// <summary>The folders a CLI with its own home expects to find (<c>HOME</c>, the four <c>XDG_*</c> folders, the CLI's own configuration folder), made before the launch so a CLI that does not create them still starts.</summary>

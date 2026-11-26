@@ -206,27 +206,36 @@ public sealed class ACoderVendorSeamTests
     // ---------- d3: the table ----------
 
     [Fact]
-    public void D3_TheShippedTable_HoldsTheVerdictShipAndNoReleaseForCodexAndAgy_AndSoShipsNeither()
+    public void D3_TheShippedTable_HoldsTheVerdictShipAndNoReleaseForCodexAndAgy_AndAReleaseIsARecordNotACondition()
     {
         var table = CoderBoundaryTable.Shipped;
 
         table.Vendors.Select(row => row.Id).Should().Equal("codex", "agy");
-        table.Vendors.Should().OnlyContain(row => row.Verdict == "ship" && row.Releases.Count == 0 && !row.Ships);
-        table.ShippedVendors.Should().Equal("claude");
-        CoderVendors.Shipped.Launchable.Should().Equal("claude");
+        table.Vendors.Should().OnlyContain(row => row.Verdict == "ship" && row.Releases.Count == 0 && row.Ships && row.LastMeasured == null, "a vendor ships by its verdict alone (owner decision of 2026-11-26): the list of measured releases is history");
+        table.ShippedVendors.Should().Equal("claude", "codex", "agy");
+        CoderVendors.Shipped.Launchable.Should().Equal(["claude"], "the table ships them; what launches them is a TYPE of its own (s5, s6), and none exists yet");
     }
 
     [Theory]
     [InlineData("codex")]
     [InlineData("agy")]
-    public void D3_AVendorWithNoRelease_IsRefusedWithASentenceThatNamesTheShippedVendors(string vendor)
+    public void D3_AVendorThatShipsButHasNoTypeYet_IsRefusedForThatReason_NotForALackOfARelease(string vendor)
     {
-        var said = CoderBoundaryTable.Shipped.WhyNot(vendor);
+        CoderBoundaryTable.Shipped.WhyNot(vendor).Should().BeEmpty("the table says nothing against it");
+        var said = CoderVendors.Shipped.Resolve(vendor).Should().BeOfType<CoderVendorResolution.Refused>().Subject.Sentence;
 
-        said.Should().Contain($"'{vendor}'").And.Contain("no release").And.Contain("shipped are claude").And.Contain("COAI_ROLES_MODELS");
-        CoderVendors.Shipped.Resolve(vendor).Should().BeOfType<CoderVendorResolution.Refused>().Which.Sentence.Should().Be(said);
+        said.Should().Contain($"no launch built for '{vendor}'").And.Contain("shipped are claude").And.NotContain("release");
         CoderBoundaryTable.Shipped.WhyNot("claude").Should().BeEmpty();
         CoderBoundaryTable.Shipped.WhyNot("gemini-cli").Should().Contain("has no row");
+    }
+
+    [Fact]
+    public void D3_AVendorWhoseVerdictIsRefuse_IsRefusedWhateverItsReleases_AndAShippedOneWhateverItsReleaseIs()
+    {
+        var refused = CoderBoundaryTable.Parse(Json("refuse", OneRelease));
+        refused.WhyNot("probe").Should().Contain("the verdict for 'probe' is refuse");
+        CoderBoundaryTable.Parse(Json("ship", "[]")).WhyNot("probe").Should().BeEmpty("no release is measured, and none is needed");
+        CoderBoundaryTable.Parse(Json("ship", OneRelease)).Row("probe")!.LastMeasured!.Release.Should().Be("1.0.0", "the last measured release is what a job's record names beside the installed one");
     }
 
     [Fact]
@@ -471,7 +480,7 @@ public sealed class ACoderVendorSeamTests
     // ---------- d5: built for every combination of verdicts ----------
 
     [Theory]
-    [InlineData("ship", false, false)]
+    [InlineData("ship", false, true)]
     [InlineData("ship", true, true)]
     [InlineData("refuse", false, false)]
     [InlineData("refuse", true, false)]

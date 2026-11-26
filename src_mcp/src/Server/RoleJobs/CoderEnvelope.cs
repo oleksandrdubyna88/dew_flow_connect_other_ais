@@ -20,6 +20,30 @@ internal sealed record CoderPromptRecord(string Id, string Sha256)
     }
 }
 
+/// <summary>
+/// The CLI release a job's coder ran with, beside the one measured last (owner decision of 2026-11-26): the vendor, the release the CLI's own <c>--version</c> named (empty when none was read), and the last measured release of that vendor (empty when none was). A record for a person to see how far apart
+/// the two are; no release ever refuses or stops a job.
+/// </summary>
+internal sealed record CoderCliRecord(string Vendor, string Installed, string LastMeasured)
+{
+    /// <summary>No CLI was launched (a job that ended before any model).</summary>
+    public static CoderCliRecord None { get; } = new(string.Empty, string.Empty, string.Empty);
+
+    public void Write(Utf8JsonWriter json)
+    {
+        if (Installed.Length == 0 && LastMeasured.Length == 0)
+        {
+            return;
+        }
+
+        json.WriteStartObject("cli");
+        json.WriteString("vendor", Vendor);
+        json.WriteString("installed", Installed);
+        json.WriteString("lastMeasured", LastMeasured);
+        json.WriteEndObject();
+    }
+}
+
 /// <summary>One path of the coder's change, as <c>git diff --name-status</c> says it: <c>A</c> added, <c>M</c> modified, <c>D</c> deleted, <c>T</c> type changed.</summary>
 internal sealed record CoderFileChange(string Status, string Path);
 
@@ -45,6 +69,9 @@ internal sealed record CoderEnvelope(string JobId, string BaseSha, string HeadSh
 
     /// <summary>The prompt id and the sha256 of the rendered turn-0 prompt of the model that answered (SPEC C7 item 7): never its text.</summary>
     public CoderPromptRecord Prompt { get; init; } = CoderPromptRecord.None;
+
+    /// <summary>The CLI release of the model that produced the result, beside the last measured one. Written as <c>cli</c> when there is one.</summary>
+    public CoderCliRecord Cli { get; init; } = CoderCliRecord.None;
 
     public string ToJson()
     {
@@ -73,6 +100,7 @@ internal sealed record CoderEnvelope(string JobId, string BaseSha, string HeadSh
             Checks?.Write(json);
             Instructions.Write(json);
             Prompt.Write(json);
+            Cli.Write(json);
             json.WriteEndObject();
         }
 

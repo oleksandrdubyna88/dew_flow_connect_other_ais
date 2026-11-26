@@ -121,7 +121,7 @@ internal sealed class CoderWork : IRoleWork
             Ladder = Ladder,
             Coder = confinement,
             OsLayer = layer,
-            Follow = (answered, token) => FollowAsync(run, git, prepared, site, loop, judge.Accepted, new CoderFixSession(answered.Model, answered.Handle, confinement, answered.KeyId, answered.Secret), ++answers, layer, cap, note, instructions, sent.GetValueOrDefault(RoleRoute.Format(answered.Model)) ?? CoderPromptRecord.None, token),
+            Follow = (answered, token) => FollowAsync(run, git, prepared, site, loop, judge.Accepted, new CoderFixSession(answered.Model, answered.Handle, confinement, answered.KeyId, answered.Secret), ++answers, layer, cap, note, instructions, sent.GetValueOrDefault(RoleRoute.Format(answered.Model)) ?? CoderPromptRecord.None, new CoderCliRecord(answered.Model.Vendor, answered.CliVersion, Vendors.LastMeasured(answered.Model.Vendor)), token),
             Restore = token => CoderRestore.RestoreAsync(git, prepared.Tree, loop.LastCommit, token),
             // A job that leaves a vendor for another deletes what that vendor kept in the job's home before the next unit starts (epoch 3 E3 s8 t1).
             VendorLeft = left => Vendors.Resolve(left) is CoderVendorResolution.Launchable found ? layer.LeaveVendor(found.Vendor) : string.Empty,
@@ -202,21 +202,21 @@ internal sealed class CoderWork : IRoleWork
     /// crash is the attempt's stop: the job goes on with the next model (<see cref="RoleFollowed.FailsOver"/>), after the worktree is put back to the last coai commit.
     /// </summary>
     /// <param name="answers">How many models have answered turn 0 so far, this one included: the second and later turn 0 commits say which attempt made them.</param>
-    private async Task<RoleFollowed> FollowAsync(IRoleRun run, GitHistory git, Prepared prepared, CoderTaskSite site, CoderFixLoop loop, CoderReport? report, CoderFixSession session, int answers, CoderOsLayer layer, int cap, string note, CoderInstructionsRecord instructions, CoderPromptRecord prompt, CancellationToken ct)
+    private async Task<RoleFollowed> FollowAsync(IRoleRun run, GitHistory git, Prepared prepared, CoderTaskSite site, CoderFixLoop loop, CoderReport? report, CoderFixSession session, int answers, CoderOsLayer layer, int cap, string note, CoderInstructionsRecord instructions, CoderPromptRecord prompt, CoderCliRecord cli, CancellationToken ct)
     {
         var message = answers == 1 ? CoderCommits.Message(run.Request.JobId, site.Id) : CoderCommits.AttemptMessage(run.Request.JobId, site.Id, answers);
         var ended = await loop.RunAsync(report, message, session, ct);
 
         return ended switch
         {
-            CoderLoopEnd.Done done => new RoleFollowed.Ended(await EnvelopeAsync(run, git, prepared, layer, done, new CoderChecksReport(done.Rounds, cap, note), instructions, prompt, ct)),
+            CoderLoopEnd.Done done => new RoleFollowed.Ended(await EnvelopeAsync(run, git, prepared, layer, done, new CoderChecksReport(done.Rounds, cap, note), instructions, prompt, cli, ct)),
             CoderLoopEnd.FailOver failOver => new RoleFollowed.FailsOver(failOver.Why),
             _ => new RoleFollowed.Ended(((CoderLoopEnd.Halted)ended).Outcome),
         };
     }
 
     /// <summary>The loop ended with something to show: list the files from git, compare the generation again, and make the envelope — a success when it is green, a failure carrying the same envelope when it is not.</summary>
-    private async Task<RoleWorkOutcome> EnvelopeAsync(IRoleRun run, GitHistory git, Prepared prepared, CoderOsLayer layer, CoderLoopEnd.Done end, CoderChecksReport checks, CoderInstructionsRecord instructions, CoderPromptRecord prompt, CancellationToken ct)
+    private async Task<RoleWorkOutcome> EnvelopeAsync(IRoleRun run, GitHistory git, Prepared prepared, CoderOsLayer layer, CoderLoopEnd.Done end, CoderChecksReport checks, CoderInstructionsRecord instructions, CoderPromptRecord prompt, CoderCliRecord cli, CancellationToken ct)
     {
         var changes = end.Head == prepared.BaseSha ? [] : await CoderCommits.ChangesAsync(git, prepared.Tree, prepared.BaseSha, end.Head, ct);
         if (changes is null)
@@ -230,7 +230,7 @@ internal sealed class CoderWork : IRoleWork
             return new RoleWorkOutcome.Stopped();
         }
 
-        var json = new CoderEnvelope(run.Request.JobId, prepared.BaseSha, end.Head, prepared.Branch, end.Report is not null, end.FixTurns, changes, end.Report, layer.Evidence, checks) { Instructions = instructions, Prompt = prompt }.ToJson();
+        var json = new CoderEnvelope(run.Request.JobId, prepared.BaseSha, end.Head, prepared.Branch, end.Report is not null, end.FixTurns, changes, end.Report, layer.Evidence, checks) { Instructions = instructions, Prompt = prompt, Cli = cli }.ToJson();
 
         return end.Stop.Length == 0 ? new RoleWorkOutcome.Succeeded(json) : new RoleWorkOutcome.Failed(end.Stop, end.Reason, json);
     }

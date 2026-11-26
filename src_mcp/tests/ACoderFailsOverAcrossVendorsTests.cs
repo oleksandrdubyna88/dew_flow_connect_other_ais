@@ -38,13 +38,13 @@ public sealed class ACoderFailsOverAcrossVendorsTests
     /// <summary>What a vendor's verdict is in a table of a test.</summary>
     public enum Verdict
     {
-        /// <summary>Verdict ship and one measured release.</summary>
+        /// <summary>Verdict ship and one measured release (a record).</summary>
         Ship,
 
         /// <summary>Verdict refuse.</summary>
         Refuse,
 
-        /// <summary>Verdict ship and NO measured release (the table of the product today): counts as refused.</summary>
+        /// <summary>Verdict ship and NO measured release (the table of the product today): ships all the same, a release is a record and never a condition (owner decision of 2026-11-26).</summary>
         ShipUnmeasured,
     }
 
@@ -80,7 +80,7 @@ public sealed class ACoderFailsOverAcrossVendorsTests
     private static CoderVendorSet Set(Verdict codex, Verdict agy, CrossVendor? codexVendor = null, CrossVendor? agyVendor = null) =>
         CoderVendorSet.Of(CoderBoundaryTable.Parse($$"""{ "version": 1, "judgement": "j.md", "shared": [], "vendors": [ {{Row("codex", codex)}}, {{Row("agy", agy)}} ] }"""), codexVendor ?? new CrossVendor("codex"), agyVendor ?? new CrossVendor("agy"));
 
-    private static bool Ships(Verdict verdict) => verdict == Verdict.Ship;
+    private static bool Ships(Verdict verdict) => verdict != Verdict.Refuse;
 
     /// <summary>The vendors that are launched, in route order, for the verdicts.</summary>
     private static string[] Expected(Verdict codex, Verdict agy) => ["claude", .. Ships(codex) ? new[] { "codex" } : [], .. Ships(agy) ? new[] { "agy" } : []];
@@ -364,7 +364,7 @@ public sealed class ACoderFailsOverAcrossVendorsTests
     }
 
     [Fact]
-    public async Task D2_TheProductsOwnTable_ShipsNoMeasuredRelease_SoAModelNamedOnCodexOrAgyIsRefused()
+    public async Task D2_TheProductsOwnTable_ShipsCodexAndAgyByVerdict_YetNothingLaunchesThemUntilTheyHaveATypeOfTheirOwn()
     {
         await using var rig = await CoderRig.CreateAsync(needsLayer: false);
         var service = ServiceFor(rig, CoderVendors.Shipped);
@@ -373,13 +373,13 @@ public sealed class ACoderFailsOverAcrossVendorsTests
         {
             var named = Parse(await service.StartAsync(RoleDescriptors.Coder, rig.Repo, CoderRig.TaskFile, null, model, null, null, null, TestContext.Current.CancellationToken));
 
-            named.GetProperty("error").GetString().Should().StartWith($"the coder cannot run {model} on {vendor}: ").And.Contain("no release");
+            named.GetProperty("error").GetString().Should().StartWith($"the coder cannot run {model} on {vendor}: ").And.Contain($"no launch built for '{vendor}'").And.NotContain("release", "the refusal is the lack of a type, never the lack of a measured release");
         }
 
         rig.World.Store.JobIds().Should().BeEmpty();
         CoderVendors.Shipped.Launchable.Should().Equal("claude");
-        CoderVendors.Shipped.Table.Row("codex")!.Releases.Should().BeEmpty("the table of the product holds no measured release of codex");
-        CoderVendors.Shipped.Table.Row("agy")!.Releases.Should().BeEmpty("the table of the product holds no measured release of agy");
+        CoderVendors.Shipped.Table.Row("codex")!.Releases.Should().BeEmpty("the table of the product holds no measured release of codex, and needs none");
+        CoderVendors.Shipped.Table.Row("agy")!.Releases.Should().BeEmpty("the table of the product holds no measured release of agy, and needs none");
     }
 
     private static string CoderList => """{"coder":[{"model":"sonnet","vendor":"claude"},{"model":"opus","vendor":"claude"},{"model":"terra","vendor":"codex"},{"model":"gemini-4-argon-medium","vendor":"agy"}]}""";
@@ -488,6 +488,43 @@ public sealed class ACoderFailsOverAcrossVendorsTests
         }
 
         return list;
+    }
+
+    // ---------- the installed release of a CLI is a record, never a condition (owner decision of 2026-11-26; SPEC V6) ----------
+
+    [Theory]
+    [InlineData("9.9.9 (Claude Code)\n", "9.9.9")]
+    [InlineData("2.1.1 (Claude Code)\n", "2.1.1")]
+    [InlineData("a banner that names no release\n", "unknown")]
+    public async Task AnInstalledReleaseOtherThanTheMeasuredOne_RunsTheJob_AndTheEnvelopeAndTheAttemptNameBothReleases(string printed, string recorded)
+    {
+        await using var rig = await CoderRig.CreateAsync();
+        Environment.SetEnvironmentVariable("FAKECLI_VERSION_STDOUT", printed);
+        rig.Says("sonnet", Writes(CoderRig.Green, Claude1));
+        var job = rig.NewJob();
+
+        var (_, ended) = await rig.RunAsync(job);
+
+        ended.State.Should().Be(RoleJobStates.Succeeded, ended.Reason);
+        var cli = rig.Envelope(job).GetProperty("cli");
+        (cli.GetProperty("vendor").GetString(), cli.GetProperty("installed").GetString(), cli.GetProperty("lastMeasured").GetString()).Should().Be(("claude", recorded, "2.1.330"));
+        (ended.Attempts[0].CliVersion, ended.Attempts[0].LastMeasuredVersion).Should().Be((recorded, "2.1.330"));
+    }
+
+    [Fact]
+    public async Task AVendorOfTheTable_RecordsItsInstalledReleaseBesideTheLastOneTheTableHolds_AndLaunchesOnAnyOther()
+    {
+        var set = Set(Verdict.Ship, Verdict.Refuse);
+        await using var rig = await RigAsync(set);
+        Environment.SetEnvironmentVariable("FAKECLI_VERSION_STDOUT", "7.7.7 (Claude Code)\n");
+        var job = rig.NewJob(route: ["codex/terra"]);
+        rig.Says("terra", Writes(CoderRig.Green, CodexLast));
+
+        var (_, ended) = await rig.RunAsync(job);
+
+        ended.State.Should().Be(RoleJobStates.Succeeded, ended.Reason);
+        var cli = rig.Envelope(job).GetProperty("cli");
+        (cli.GetProperty("vendor").GetString(), cli.GetProperty("installed").GetString(), cli.GetProperty("lastMeasured").GetString()).Should().Be(("codex", "7.7.7", "1.0.0"));
     }
 
     [Fact]

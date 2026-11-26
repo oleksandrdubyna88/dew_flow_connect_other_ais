@@ -33,8 +33,14 @@ public sealed record CoderVendorRow(string Id, string Verdict, string Results, I
     /// <summary>The verdict word that never does.</summary>
     public const string Refuse = "refuse";
 
-    /// <summary>Whether this vendor's coder may be launched: the verdict is <see cref="Ship"/> AND at least one release was measured. A verdict with no release is not a launch: "asked for" is not "held".</summary>
-    public bool Ships => Verdict == Ship && Releases.Count > 0;
+    /// <summary>
+    /// Whether this vendor's coder may be launched: the verdict is <see cref="Ship"/> and nothing else. The releases are a RECORD — "measured on X, with this sha256, under these headings" — and never a gate (owner decision of 2026-11-26): a CLI release that is not in the list, newer
+    /// or older, runs, and the job records the installed release beside <see cref="LastMeasured"/>.
+    /// </summary>
+    public bool Ships => Verdict == Ship;
+
+    /// <summary>The release measured last (the last of the list), or null when none was measured yet: what a job's record names beside the release that is installed.</summary>
+    public CoderRelease? LastMeasured => Releases.Count > 0 ? Releases[^1] : null;
 }
 
 /// <summary>
@@ -42,9 +48,9 @@ public sealed record CoderVendorRow(string Id, string Verdict, string Results, I
 /// </summary>
 /// <remarks>
 /// <para><b>One place decides.</b> Nothing else in the product says that codex or agy is shipped or refused; <see cref="CoderVendorSet"/> reads this table and
-/// <c>ACoderVendorSeamTests</c> scans the sources for a second place. It starts with the verdict <c>ship</c> and NO release for both vendors, so both are refused by data until the commit of s5 t6 or s6 t7 adds one.</para>
+/// <c>ACoderVendorSeamTests</c> scans the sources for a second place. It starts with the verdict <c>ship</c> and NO release for both vendors; they are launched by the verdict alone as soon as a vendor TYPE for them exists (s5, s6), and a release the commit of s5 t6 or s6 t7 adds is a record, never a condition.</para>
 /// <para><b>It fails CLOSED.</b> A file that does not parse, a verdict that is neither word, a class that is not one of the four, a release with a blank field or a sha256 that is not 64 hex characters is a broken build: the first use throws, and the test that loads it is a red suite.</para>
-/// <para>claude is not in it: claude keeps the floor of <c>ClaudeWriteCapability</c> and is always launchable.</para>
+/// <para>claude is not in it: claude is always launchable, whatever release is installed (<c>ClaudeWriteCapability</c> records it).</para>
 /// </remarks>
 public sealed partial record CoderBoundaryTable(string Judgement, IReadOnlyList<CoderProperty> Shared, IReadOnlyList<CoderVendorRow> Vendors)
 {
@@ -67,7 +73,7 @@ public sealed partial record CoderBoundaryTable(string Judgement, IReadOnlyList<
     public IReadOnlyList<string> ShippedVendors => [Claude, .. Vendors.Where(row => row.Ships).Select(row => row.Id)];
 
     /// <summary>
-    /// Why a coder is not launched on <paramref name="vendor"/>, with what to do — empty when it may be. The sentence names the shipped vendors, and says which of the three things is true: the table has no row, the verdict is refuse, or no release was measured.
+    /// Why a coder is not launched on <paramref name="vendor"/>, with what to do — empty when it may be. The sentence names the shipped vendors, and says which of the two things is true: the table has no row, or the verdict is refuse. A release that was never measured is not one of them.
     /// </summary>
     public string WhyNot(string vendor)
     {
@@ -79,7 +85,6 @@ public sealed partial record CoderBoundaryTable(string Judgement, IReadOnlyList<
         var reason = Row(vendor) switch
         {
             null => $"the table of coder boundaries has no row for '{vendor}'",
-            { Verdict: CoderVendorRow.Ship } => $"the verdict for '{vendor}' is ship, but no release of its CLI was measured yet",
             _ => $"the verdict for '{vendor}' is refuse",
         };
 
