@@ -1,0 +1,9 @@
+Running tests from /work/c/coai-coder-m1/src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.dll (net10.0|x64)
+/work/c/coai-coder-m1/src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.dll (net10.0|x64) passed (1s 787ms)
+
+Test run summary: Passed!
+  total: 18
+  failed: 0
+  succeeded: 18
+  skipped: 0
+  duration: 2s 040ms

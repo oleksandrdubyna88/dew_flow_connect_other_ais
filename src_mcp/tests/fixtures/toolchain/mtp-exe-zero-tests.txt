@@ -4,4 +4,4 @@ Test run summary: Zero tests ran - /work/c/coai-coder-m1/src_mcp/tests/bin/Debug
   failed: 0
   succeeded: 0
   skipped: 0
-  duration: 1s 539ms
+  duration: 1s 321ms

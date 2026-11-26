@@ -18,7 +18,7 @@ The stand-in of the real home is a folder of the harness: for the .NET runs it h
 
 | Proposal of the SPEC | Seen |
 |---|---|
-| `dotnet restore {unit}` on the host network | holds: 11.2 s for this repository's whole solution, cold, 988 MB into the job's `NUGET_PACKAGES` |
+| `dotnet restore {unit}` on the host network | holds: 9.1 s (11.2 s in an earlier recording) for this repository's whole solution, cold, 988 MB into the job's `NUGET_PACKAGES` |
 | `dotnet build {unit} -c Debug --no-restore -m:{jobs}` with NO network ("none when s1 measured it so") | **holds**: exit 0 with only `lo` (M1) |
 | `dotnet test {unit} --no-build -c Debug`, "in the form s1 measured for the runner" | holds for VSTest only; **MTP needs `--project`/`--solution` and a `global.json` that opts in** — see the table below |
 | the MTP console is read like this repository's | the summary block is the same shape as this repository's executable (`total / failed / succeeded / skipped / duration`), the lines above it are not |
@@ -27,16 +27,16 @@ The stand-in of the real home is a folder of the harness: for the .NET runs it h
 
 | Row | Command (cwd) | Network | Exit | Time |
 |---|---|---|---|---|
-| r01 | `dotnet restore dew_flow_connect_other_ais.slnx` (`.`) | host | 0 | 11.2 s |
-| r02 | `dotnet build dew_flow_connect_other_ais.slnx -c Debug --no-restore -m:4` (`.`) | **none** | **0** | 75.9 s (39.7 s in the first recording; the box was shared with another stream's suite — the time is not a property of the command) |
-| r03 | the same build WITHOUT `--no-restore` (`.`) — a control | none | 0 | 13.6 s |
+| r01 | `dotnet restore dew_flow_connect_other_ais.slnx` (`.`) | host | 0 | 9.1 s |
+| r02 | `dotnet build dew_flow_connect_other_ais.slnx -c Debug --no-restore -m:4` (`.`) | **none** | **0** | 38.8 s (39.7 s and 75.9 s in two earlier recordings; the box was shared with other streams' suites — the time is not a property of the command) |
+| r03 | the same build WITHOUT `--no-restore` (`.`) — a control | none | 0 | 9.7 s |
 | s1 | `dotnet restore` of a VSTest project, an MTP project, an MTP project without the runner setting | host | 0 | 3.0 s, 2.8 s, 1.3 s |
 | s2 | `dotnet build -c Debug --no-restore` of the same three | none | 0, 0, 0 | 3.9 s, 5.8 s, 7.2 s |
 | s1 bad | `dotnet restore` of a project that references a package that does not exist | host | 1 | 1.5 s |
 
 - **M1 answer: `dotnet build --no-restore` passes with a loopback device only, after a restore on the host network, on this repository.** `NU1900` (the audit of the package sources) belongs to the restore; the build step of a detected .NET project has no
   need of the network. This is a different answer from E2's, where the file's build command is `dotnet build` WITH a restore (E2 run A: 30 × `NU1900`, 8 s).
-- **The control (r03) is NOT a repeat of E2's run A**: a build with a restore, on a private network, passed here in 13.6 s because the host-network restore before it had made the restore a no-op (no audit when nothing is restored). A file project whose build command
+- **The control (r03) is NOT a repeat of E2's run A**: a build with a restore, on a private network, passed here in 9.7 s (13.6 s earlier) because the host-network restore before it had made the restore a no-op (no audit when nothing is restored). A file project whose build command
   restores still needs the host network when its restore has not run before; this was not re-measured, and E2's number stands for it.
 - The restore error is `error NU1101: Unable to find package … No packages exist with this id in source(s): /usr/lib/dotnet/library-packs, nuget.org`, one line per package, then `Failed to restore <project> (in N ms).` (fixture `dotnet-restore-error.txt`).
 - `git status` after the build: only `bin/` and `obj/` folders, all ignored (`!!`); nothing git would add. After the restore of the scratch projects, `obj/` of the project with a failed restore was also ignored.
@@ -92,6 +92,8 @@ The executable of this repository is an MTP executable of xunit.v3 (`./src_mcp/t
   - MTP in `dotnet test`: `Test run summary: Failed!` (no dll on that line, unlike the executable run directly) and the same five count lines; passed names with `--output Detailed`: `passed <FQN> (Nms)` followed by an indented `  from <dll> (net10.0|x64)` line for every test, passed or failed (fixture `dotnet-mtp-global-detailed.txt`).
 - The TRX logger of VSTest (`--logger "trx;LogFileName=/tmp/scratch.trx" --results-directory /tmp/trx`) wrote its files into the unit's own `/tmp`: a report file is possible with no new bind, but decision 3 of the SPEC (read the console) stands, and no reader of it was built.
 
+- **`dotnet test --project` on THIS repository (r17), new in the last recording:** `dotnet test --project src_mcp/tests/CoaiMcp.Tests.csproj --no-build -c Debug --filter-class CoaiMcp.Tests.AFailureDigestTests` in the unit: **exit 0, 2.7 s, 18 tests passed**, the MTP console of the table above (fixture `dotnet-test-project-form-this-repository.txt`). The instructions of this repository (`.agents/PROJECT.md`) say `dotnet test` never works here ("no VSTest host; it aborts"): inside the unit, with SDK 10.0.114 and the root `global.json` opting in to MTP, it does work for this project with a class filter. Not measured: the whole suite through `dotnet test` (8 minutes), and the other three test projects.
+
 ## Surprises (what the plan did not predict)
 
 1. **MTP's `dotnet test` has no positional project.** The SPEC's default `dotnet test {unit} --no-build -c Debug` works for VSTest and is refused for MTP; MTP wants `--project <path>` or `--solution <path>`, and works only when `global.json` at the working folder or above opts in. A detected unit with MTP test
@@ -99,7 +101,7 @@ The executable of this repository is an MTP executable of xunit.v3 (`./src_mcp/t
 2. **A VSTest project under a `global.json` that opts in to MTP fails in `dotnet test`** with a clear sentence (exit 1) — a unit with both kinds of project is a refusal for the detector, as the SPEC says for "two runners", and the cause can be read from the text.
 3. **The SDK follows the working folder.** In a folder with no `global.json` above it the unit ran SDK 11.0.100, not 10.0.114: the answer of `dotnet --version` is a fact of the working folder, and the MTP/VSTest decision with it.
 4. **VSTest says "no test matched" with exit 0.** Only MTP (and this repository's executable) has a code for it (8). "Zero tests are not green" must read the text for VSTest.
-5. The restore of a whole solution on an empty NuGet folder took 11 s, so a cold restore is not the cost; the cost is the build (40 to 76 s), which varies with the other work on the box.
+5. The restore of a whole solution on an empty NuGet folder took 9 to 11 s, so a cold restore is not the cost; the cost is the build (40 to 76 s), which varies with the other work on the box.
 
 ## What this does not settle
 

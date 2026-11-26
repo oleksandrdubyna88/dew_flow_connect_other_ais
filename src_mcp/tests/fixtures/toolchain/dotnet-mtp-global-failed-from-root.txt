@@ -1,5 +1,5 @@
 MSBUILD : error MSB1001: Unknown switch.
-    Full command line: '/usr/lib/dotnet/sdk/11.0.100/MSBuild -maxcpucount --verbosity:m -tlp:default=auto --property:VSTestNoBuild=true --property:VSTestNoLogo=true --property:Configuration=Debug --property:NuGetInteractive=false --property:VSTestArtifactsProcessingMode=collect --property:VSTestSessionCorrelationId=3067606_7b7f056e-8d82-4ae1-9151-2d27de12f8f7 --target:VSTest --nologo -nodereuse:false --project mtp-global/Scratch.Mtp.csproj'
+    Full command line: '/usr/lib/dotnet/sdk/11.0.100/MSBuild -maxcpucount --verbosity:m -tlp:default=auto --property:VSTestNoBuild=true --property:VSTestNoLogo=true --property:Configuration=Debug --property:NuGetInteractive=false --property:VSTestArtifactsProcessingMode=collect --property:VSTestSessionCorrelationId=104143_ce2e6723-f3c5-44bb-8269-eb6f6db2d1b2 --target:VSTest --nologo -nodereuse:false --project mtp-global/Scratch.Mtp.csproj'
   Switches appended by response files:
 Switch: --project
 

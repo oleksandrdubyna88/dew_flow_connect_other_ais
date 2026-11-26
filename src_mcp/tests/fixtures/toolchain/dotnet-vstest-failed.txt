@@ -3,7 +3,7 @@ VSTest version 18.0.2 (x64)
 
 Starting test execution, please wait...
 A total of 1 test files matched the specified pattern.
-  Failed Scratch.SampleTests.FailsOnTheValue [4 ms]
+  Failed Scratch.SampleTests.FailsOnTheValue [3 ms]
   Error Message:
    Assert.Equal() Failure: Values differ
 Expected: 3
@@ -23,5 +23,5 @@ Actual:   2
 Failed!  - Failed:     2, Passed:     2, Skipped:     0, Total:     4, Duration: 37 ms - Scratch.Vs.dll (net10.0)
 
 [stderr]
-[xUnit.net 00:00:00.20]     Scratch.SampleTests.FailsOnTheValue [FAIL]
-[xUnit.net 00:00:00.21]     Scratch.SampleTests.FailsByThrowing [FAIL]
+[xUnit.net 00:00:00.18]     Scratch.SampleTests.FailsOnTheValue [FAIL]
+[xUnit.net 00:00:00.19]     Scratch.SampleTests.FailsByThrowing [FAIL]

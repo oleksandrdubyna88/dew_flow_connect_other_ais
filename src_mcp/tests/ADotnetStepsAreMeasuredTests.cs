@@ -143,6 +143,8 @@ public sealed class ADotnetStepsAreMeasuredTests
             await bed.StepAsync("r13-exe-filter-matches-nothing", host: false, [exe, "--filter-class", "CoaiMcp.Tests.NoSuchClassAnywhere"]);
             await bed.StepAsync("r14-exe-list-tests-one-class", host: false, [exe, "--list-tests", "--filter-class", "CoaiMcp.Tests.AFailureDigestTests"]);
             await bed.StepAsync("r15-exe-help", host: false, [exe, "--help"]);
+            // The form the detector would use for this repository (an MTP project of a solution whose global.json opts in), narrowed to one class so that it takes seconds: the instructions of this repository say `dotnet test` does not work here, and nothing had measured it.
+            await bed.StepAsync("r17-dotnet-test-project-form-this-repository", host: false, ["dotnet", "test", "--project", "src_mcp/tests/CoaiMcp.Tests.csproj", "--no-build", "-c", "Debug", "--filter-class", "CoaiMcp.Tests.AFailureDigestTests"], timeout: TimeSpan.FromMinutes(5));
             await bed.StepAsync("r16-exe-two-classes-minimum-expected", host: false, [exe, "--minimum-expected-tests", "1000", "--filter-class", "CoaiMcp.Tests.AFailureDigestTests"]);
         }
 
