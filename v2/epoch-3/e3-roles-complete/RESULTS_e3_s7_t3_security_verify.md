@@ -189,3 +189,131 @@ The paragraph "The instruction step (epoch 3 E3 s7 t3; SPEC C9)" is true to the 
 5. Missing: a task file name that is not plain also ends `instructions-failed`; the envelope of a failed step has a seventh member, `stderrTail`; "more than 64 KiB" is also said for a cut stderr and a held pipe (S6); "a U+FFFD in the text" is right and narrower than the plan's "not UTF-8" (S5).
 6. Missing: the text is not searched for a secret (M1) and the paragraph does not say that this commit sends nothing to a model (the block is s7 t2).
 7. The size line (334 KB, 33 rules, 32 KiB a read) is right (P2).
+
+
+---
+
+# Pass 2 — the fixes of t3 (`c905ed1d`), C1 after the E2 merge (`43652fdc`) and t5 (`f5033a58`), the K2 row, and the `${NAME}` question (2026-11-26)
+
+Judge: Fable (security judgement role). Read-only for product code: no edit, no build, no test run, no model call.
+Branch `feat/v2-ep3-e3-roles` at `893382a3`. Every path and line below is at `893382a3` (`git show 893382a3:<path>`); the working files were not read, another coder works in them.
+
+Read: the diffs of `c905ed1d` and `f5033a58`; `src_mcp/src/Server/RoleJobs/{CoderInstructions,CoderJobFolders,RoleJobIds}.cs`; `src_mcp/runners/Toolchain/{CheckBoundary,BoundaryPreflight,BoundaryUnit,BoundaryJob,CoderUnit}.cs`;
+`src_mcp/runners/Detach/DetachedLauncher.cs`; `src_mcp/core/Toolchain/{ToolchainParse,ToolchainFile}.cs`; `src_mcp/core/Work/StrictYamlReader.cs`;
+`src_mcp/tests/{ACoderInstructionStepTests,ACheckUnitHidesTheCoderFolderTests,ACheckBoundaryPreflightTests,BoundaryBed}.cs`; the t5 task file; K2 in `v2/spikes/RESULTS_codex_agy_write_boundary_judgement.md`.
+
+Run by the judge: three `systemd-run --user` units with made-up arguments (P4 below; `--collect`, none is left, no file was made). No test was run by the judge, and no run record that holds the new tests was found, so every "holds" about a test below is by reading.
+Not read: any key file. Of the user manager's environment only two COUNTS of names were taken; no value was read or printed.
+
+## P2.1 Verdict
+
+**t3: READY.** M1, M2 and M3 of the first pass are fixed as asked, and the two d1 gaps, the step's own network state and the base-and-clean check are in.
+**C1: met for claude.** The E2 follow-ups are ancestors of `893382a3`, the step's unit is the one property list, and a test on a real unit shows the step does not see its job's coder folder. Still open, as the story's todo says: the sign-in files of codex and agy.
+
+**Must-change in this pass: 3 (M4, M5, M6).** None is a regression of the t3 fix commit.
+
+| # | What | Where | From |
+|---|---|---|---|
+| M4 | The user manager replaces `${NAME}` and a whole-word `$NAME` in EVERY argument of every unit. Job values are on that line: a toolchain argv, the task's file names, the paths | `BoundaryUnit.cs:170-183`, `:163` | E2 s2; item 4 of this pass |
+| M5 | The K2 row answers "ok" without looking when it has no stand-in: when the job folder is its own cover, which is the one layout where another job's folder is NOT covered, and when the stand-in could not be made | `CheckBoundary.cs:136-155`, `BoundaryPreflight.cs:174` | t5 |
+| M6 | A refusal of the YAML reader repeats 40 characters of the file's line, and M2's new sentence carries every refusal into the job's reason | `StrictYamlReader.cs:275`, `ToolchainFile.cs:31`, `CoderInstructions.cs:110` | E2's reader, reached by M2 |
+
+## P2.2 What was measured
+
+| # | Question | Answer |
+|---|---|---|
+| P4 | systemd 259.5, a unit started as the product starts one (`systemd-run --user --wait --pipe --collect --quiet -- <program> <arguments>`), six made-up arguments naming a variable the user manager has (`XDG_RUNTIME_DIR`, which is no secret) and one it has not. The script printed only "literal" with the length, "changed" or "empty", never a value | `${NAME}` alone: **replaced**. `$NAME` as a whole argument: **replaced**. `pre${NAME}post`: **replaced**. `pre$NAME`: literal. `$$NAME`: one dollar removed (17 characters became 16). `${NO_SUCH_NAME}`: an **empty** argument |
+| P5 | The same through `/usr/bin/env -i PATH=… <program>`, as a step is started | The same: the arguments are replaced before `env` runs |
+| P6 | The same with `--expand-environment=no` | All six **literal**, lengths unchanged |
+| P7 | The user manager's environment on this machine | 12 names; 0 with `token`, `secret`, `api_key`, `password` or a `_key` ending in the name |
+
+## P2.3 Must-change
+
+**M4. A job value on a unit's command line is rewritten by the user manager from its own environment.**
+
+- Where: `BoundaryUnit.Wrap` (`BoundaryUnit.cs:170-183`) builds the `systemd-run` argument list for every unit of this family, a check, a preflight and a coder's, and passes no `--expand-environment=no` and escapes no `$`.
+  `BoundaryUnit.cs:163` puts the step's argv after `/usr/bin/env -i`. `DetachedLauncher.cs:32-33`, `:39-47` is the same for the runner's unit.
+- What is on that line: every argv item of the toolchain file for a check step; the instruction step's `argv` and `perFile` with the task's file names in them (`CoderInstructions.cs:140`; a name with `$` passes `IsPlainPath`);
+  the preflight's arguments, which are paths and the job id (`BoundaryPreflight.cs:250`, `:257`); the `env` assignments `HOME=<path>` and the others. `IsPlain` (`BoundaryJob.cs`) refuses a space, a colon, a backslash and a control character, not `$`, `{` or `}`. The reader refuses no `$` in an argv.
+- So the answer to "can a job value reach the systemd command line": yes, all of them do, and the manager reads them (P4, P5). The `shift 9` is right for what it was made for, the script's own text (no script spells `${`; grep). It does nothing for the arguments.
+- Scenario 1, a road around `env -i`. A machine whose session puts the login environment into the user manager (`systemctl --user import-environment`, `dbus-update-activation-environment --systemd --all`; usual for a graphical session) and a person who exports a token in the profile.
+  A toolchain file at the base with the item `${GITHUB_TOKEN}` (or the whole word `$GITHUB_TOKEN`) in a build argv: the build step, which has the host network, is started with the token's VALUE as an argument and can send it.
+  In the instruction step the value is printed into the prompt of every vendor when it is not one of the shapes M1 knows. The same through a task whose `files` holds `${NAME}`.
+  `/proc/<manager>/environ` is refused to a unit (P3 of the E2 verify), so this is the only road to those values; the `clean-environment` row and the remark "and nothing else" (`BoundaryUnit.cs`, `Environment`) do not see it. Not on this machine today (P7).
+- Scenario 2, the declared command is not the command run. An item `sh -c 'for f in ${FILES}; do …'`, a `${VERSION}` meant for the program itself, a path with `${…}`: each is replaced, an unset name by nothing (P4). The step's record and the envelope show the argv as written.
+  A check can pass having run something else than the base declared.
+- Smallest fix: `"--expand-environment=no"` in `Wrap`, beside `--wait --pipe`, and in `DetachedLauncher.UnitPrefix`. Measured: P6. It needs systemd 254; an older client refuses the option, the unit does not start and the preflight refuses the job, which is the closed side, so the sentence of that refusal should name the version.
+  For an older manager the other way is to write every `$` of the inner arguments as `$$` in `Wrap` (P4 shows the pair is taken back to one); it must then be shown on a real unit that the scripts still read their `$1`.
+  One test on a real unit: a step whose argv holds `${XDG_RUNTIME_DIR}`, `$XDG_RUNTIME_DIR` and `${NO_SUCH_NAME}` gets the three texts as written; and one preflight row beside `clean-environment`, with its degrade (the option dropped) in the theory.
+- Not measured: whether a `-p` property value is read for `%` or `$` the same way. The paths that go there are refused only for the four characters above.
+
+**M5. `other-job-folder-hidden` says "ok" where nothing was observed.**
+
+- Where: `CheckBoundary.PlantAnotherJob` returns an empty string when `job.JobCover == job.JobRoot` (`CheckBoundary.cs:138-141`) and when the folder or the canary could not be made (`:151-154`).
+  The row then prints `ok "the job folder itself is the cover, so no other job's folder lies beside it inside the unit"` (`BoundaryPreflight.cs:174`). The test `K2_AJobFolderThatIsItsOwnCover_…` asserts that "ok".
+- The sentence is not true. `JobCover` is the job folder itself exactly when the folder that holds the job folders cannot be covered (`BoundaryJob.cs:94-103`: it is the root, or holds or is the worktree, the main checkout or the coder root, or a temp folder).
+  Then the tmpfs lies over this job's folder only, and the holding folder is in the unit as the host has it, read-only: every other job's folder is beside it. It is hidden only when it happens to lie under `/home`, `/root`, `/mnt` or `/run/user`.
+- Scenario: `COAI_CODER_JOBS` and the coder root are one folder outside those four (`/srv/coai`; the retention code allows one folder for both). Every check unit of every job reads `/srv/coai/<other job>/coder/home`: transcripts, CLI config and, after s7 t6, the sign-in COPY of a codex or agy job.
+  The build step has the host network. K2 is the row made for this, and it is green. The second case: a stand-in that could not be written (a full disk, a file or a dangling link at the name) is also "ok", with the first case's sentence.
+  This is the shape S2 of the E2 verify named for K1, which now says "bad … nothing was observed" for an empty name (`BoundaryPreflight.cs:164`).
+- Smallest fix: plant the stand-in ALWAYS, in the real holding folder (`Path.GetDirectoryName(job.JobRoot)`, not `JobCover`), and ask always; a stand-in that could not be made is the row `bad "no stand-in could be made, so nothing was observed"`.
+  Under a hidden folder the row is then "ok" by observation, in both cover cases. In the one-folder layout outside the hidden folders it is "bad" and the job is refused before any check, which is what d3 of t5 says ("a wrong answer refuses the job").
+  If the lead wants that layout to run, it is an accepted risk with its own id and a record that says so, not an "ok" row. Tests: the own-cover bed with another job's folder beside it outside the temp folder goes red; a name that cannot be made goes red.
+  `research/module_runners.md:4471` ("are not there, wherever `COAI_CODER_JOBS` puts them") is true only after this.
+
+**M6. A YAML refusal repeats the line, and the job's reason now carries it.**
+
+- Where: `StrictYamlReader.cs:275`: `expected 'key: value', found '{Shorten(text)}'`, 40 characters of the line (`:559`). `ToolchainFile.cs:31` puts the message into the refusal; `CoderInstructions.cs:110` (M2's sentence) puts every refusal into the reason of the job, unredacted.
+- Scenario: an argv item of the toolchain file written without its dash, or any line that is only a value: a line that is a 40-character token is repeated whole. It goes to `job.json` and to the answer the main AI reads, which is a vendor.
+  `37c899e6` ("the toolchain file's refusals never echo a typed value") covers the parser's faults and not the reader's. It was reachable before through the check note; M2 made it the first thing a job says.
+- Smallest fix, at the one consumer that must not repeat: in `ToolchainFile.FromText` the reader's message goes through `Redaction.SafeText` (the product's passes) or, simpler and closer to E2's rule, the toolchain file's refusal says the line number and the code and not the text.
+  One row in the theory of `D1_…NeverRepeats…`: a file with a bare token line.
+
+## P2.4 Should
+
+- **S13. A stand-in left by a kill is never removed, and the comment says it is.** `RemoveAnotherJob` runs in a `finally` (`CheckBoundary.cs:126-129`); a killed runner, a power loss or a WSL restart leaves `<coder-jobs>/coai-preflight-other-<job id>`.
+  `CoderJobFolders.RemoveOf` removes two names, `<id>` and `<id>.mounts` (`:41-50`), and searches nothing, so "the retention of the folder takes it with the job" (`CheckBoundary.cs:168`) is not what the code does. Add the third name to `RemoveOf` and correct the comment. Harmless content (one fixed sentence); it is litter, and this family counts leftovers.
+- **S14. The stand-in is made through whatever is at its name.** `Directory.CreateDirectory` and `File.WriteAllText` (`:145-147`) follow a link: a link at that name would get `canary.txt` written into its target. Only a process outside every unit can put one there (no unit can write the holding folder), so it is hygiene: make a fresh folder, refuse an existing name, mode 0700.
+- **S15. The C1 test shows the effect, not the property.** `C1_OnARealUnit_TheStep_CannotSeeTheCodersFolder…` has the canary on the host as its control and no red (the cover dropped). The property is shown red by E2's K1 tests and t5's K2 tests on the same list, so this is enough for C1; say in the test which tests hold the mechanism.
+- **S16. C1, the part that is still open.** `BoundaryUnit.SignInHidden` hides claude's `.claude/.credentials.json` at its real path and nothing of codex or agy. Before s7 t6 and before either vendor ships: their sign-in files at their real paths, with a row; and the copy made after the step or under the cover. The todo records it.
+- **S17.** The envelope of a file refused for another reason says `declared: false` (`CoderInstructions.cs:110`: `InstructionFaults.Count > 0`) while the reason says "not known". Leave the member out there, or give it a third value.
+- **S18.** `IsControlButNotSpacing` (`:195`) lets U+0080 to U+009F pass (U+009B is a control sequence introducer for some terminals). Add the range.
+- **S19.** `D1_AnInstructionFileOfTheRepository_IsNeverReadByCoai…` asserts `declared: false` only; assert too that `ran-by-agents-md` is not in the worktree.
+- **S20. By reading, not measured, and not of these commits:** a claude coder's unit binds the whole coder root read-only (`CoderUnit.cs:56`) and covers `JobCover` (`:60`). In the one-folder layout of M5 the coder root holds the other jobs' folders, so a claude coder reads them even under `/home`. To be looked at with M5.
+- **Open from the first pass, recorded in the story's todo:** S2 (path sockets, measured P1), S5, S6, S7, S8, S11, S12.
+
+## P2.5 Confirmed safe
+
+The t3 fixes (by reading the code and the tests):
+
+- **M1.** `Why` searches the whole stdout with `Redaction.FirstSecretClass` after the size, U+FFFD and control arms and before the tree arm (`CoderInstructions.cs:182-191`). A hit is `instructions-failed`, the reason names the class only, and `Keep` is not reached, so nothing is on disk and `Ran` is not made.
+  The search reads the same characters the text has, because a control character is refused one arm earlier (`:188`, `:195`). The test asserts zero launches and the token absent from the reason, the result, the log and every file of the job's record folder.
+  The lead's decision (refuse, no redaction, prose with a credential NAME refuses the job) is recorded in the todo. It is the product's own rule for text that goes to a hosted model.
+- **M2.** Every `ToolchainRead.Refused` ends `toolchain-refused` before the worktree is looked at and before any unit (`:108-111`). The test covers a flow list in `argv` and a fault in another key, zero launches each; the E2 test that expected a turn 0 now asserts none.
+- **M3.** The fault says the item's place and length (`ToolchainParse.cs:269`); the test holds a credential with the placeholder in it out of `Sentence` and `InstructionFaults`. With the E2 merge `Shown` and `KeyShown` say kind and length for the other faults of the key.
+- **The d1 gaps.** `minItems: 1` beside the `$ref` (`shared/toolchain.schema.json:48`) with a line in the equality test; a source scan of the three files and a run with an `AGENTS.md` that orders a command.
+- **The step's own network.** `StepNetwork` is a constant, none (`:96`); the admission asks `CheckNetwork.Private` (`:130`); nothing of the test step's choice is read any more.
+- **At the base and clean.** `before.Head != baseSha || before.Status.Length > 0` ends the job (`:125`). The base is a full 40-character id by `CoderWorktree.cs:120`, so the two are compared like with like. The state is read before the admission, so the preflight's own marker files are not in it.
+
+C1 after the merge:
+
+- `0dc0f94c`, `35e6f584`, `964f037a`, `424cf25f`, `37c899e6` are ancestors of `893382a3`.
+- The step's unit is `CheckBoundary.RunAsync` over `BoundaryUnit.Properties`: the read-only tmpfs over `JobCover` with only the check folders bound (`BoundaryUnit.cs:82-86`), the key folder and keys file inaccessible at their real paths, claude's sign-in file inaccessible, the job folder refused when it is not its own real path (`CheckBoundary.cs`, `JobRootOnDiskProblem`).
+  There is no second list. The step is admitted by the same preflight, so K1 and K2 are asked before it runs.
+- On a real unit (the rig skips with no user manager) the step prints `hidden-coder-folder` and `does-not-list-coder-folder` while a stand-in sign-in copy lies in `<job>/coder/home` on the host. Before turn 0 no unit of the job can write the coder's home any more.
+
+The K2 stand-in (item 3), apart from M5, S13 and S14:
+
+- **Where and what.** `<holding folder>/coai-preflight-other-<job id>` with one file of one fixed sentence; default modes; made before each preflight unit and removed after it, for each network state in turn.
+- **The name cannot be a job's.** A job id is `r`, 14 digits, `-`, 8 hex characters (`RoleJobIds.cs`, 24 characters); the stand-in's name is 45 characters, over the 40 a job id may have, and it is neither `<id>` nor `<id>.mounts`. So it is never another job's folder, and no retention of any job removes or enters it. The job id in it is checked before any path is made (`BoundaryJob.Problem`).
+- **Can a running job see it.** Not when the holding folder is the cover: both kinds of unit put the tmpfs over it (`BoundaryUnit.cs:84`, `CoderUnit.cs:60`), and a unit started earlier keeps its own empty view. When the job folder is its own cover nothing is planted (that is M5's gap, not a leak: there is nothing in the stand-in).
+- **Can a running job make it mean something.** No unit of this family can write the holding folder: it is under the tmpfs, or hidden, or read-only by `ProtectSystem=strict`. So no step and no coder can make, replace, link or remove the stand-in, turn the row green or red, or aim the delete somewhere. The delete is of one name built from a checked job id.
+- **Races.** Two jobs have two names. One job asks its network states one after the other, and its admissions (the step, then each round of checks) one after the other. The unit is asked after and stopped before the stand-in is removed.
+- **Crash.** Return, refusal, exception and cancel all pass the `finally`. A kill does not (S13).
+
+The `shift 9` (item 4), apart from M4:
+
+- `Command` always passes ten arguments before the mounts, the tenth empty when there is no stand-in, and an empty argument stays an argument. `Header` reads `$1` to `$7` and `CheckHeader` `$8` and `$9` before the shift; every row after it uses names. The `$1` to `$3` of `row()` are the function's own.
+  `SubmodulesRow(1)` shifts past the stand-in to the mounts; the coder's script is unchanged (`SubmodulesRow(4)`). No script spells `${` (grep of `BoundaryPreflight.cs`), so the manager changes nothing in the script's text.
+- A row the script did not print is a row that did not hold (`BoundaryPreflight.Parse`), so a script that died at the shift refuses the job.
+- With `--expand-environment=no` every shape of P4 arrives as written (P6), so M4's fix needs no change of any script.
