@@ -167,11 +167,11 @@ internal static class BoundaryPreflight
         """;
 
     /// <summary>
-    /// K1 asked once more and K2: the canary the preflight planted in a stand-in folder of ANOTHER job (<c>$10</c>, empty when the folder that holds the job folders cannot be covered and the job folder itself is the cover — then no other job's folder lies inside it) must not be
+    /// K1 asked once more and K2: the canary the preflight planted in a stand-in folder of ANOTHER job (<c>$10</c>, always made in the folder that really holds the job folders; EMPTY only when none could be made, which is a bad row: nothing was observed) must not be
     /// visible, listable or readable from a check's unit, and the folder beside it must not take a write.
     /// </summary>
     private const string OtherJobRow = """
-        if [ -z "$otherjob" ]; then row other-job-folder-hidden ok "the job folder itself is the cover, so no other job's folder lies beside it inside the unit"
+        if [ -z "$otherjob" ]; then row other-job-folder-hidden bad "no stand-in for another job's folder could be made, so nothing was observed"
         elif [ -e "$otherjob" ] || ls -A "$otherjob" >/dev/null 2>&1 || cat "$otherjob/canary.txt" >/dev/null 2>&1 || { true > "$otherjob/$probe"; } 2>/dev/null; then rm -f "$otherjob/$probe" 2>/dev/null; row other-job-folder-hidden bad "a stand-in folder of another job is visible, readable or writable from inside the check's unit"
         else row other-job-folder-hidden ok "a stand-in folder of another job cannot be seen, read or written from inside the check's unit"; fi
         """;

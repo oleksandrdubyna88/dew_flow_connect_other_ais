@@ -412,6 +412,23 @@ public sealed class ACoderInstructionStepRunTests
         rig.Launches(job).Should().BeEmpty();
     }
 
+    [Fact]
+    public async Task D3_ARefusalThatNamesAKeyShapedLikeACredential_IsNeverRepeatedInTheReasonOfTheJob()
+    {
+        // The reader names a key it does not know when its shape is plain; a key spelled like a vendor token would then go to job.json and to the answer the main AI (a vendor) reads (security verify, pass 2, M6).
+        const string Token = "sk-abcdefghijklmnopqrstuvwxyz";
+        await using var rig = await CoderRig.CreateAsync(toolchain: CoderRig.DefaultToolchain() + $"{Token}: 1\n");
+        rig.Says("sonnet", Green());
+        var job = rig.NewJob();
+
+        var (_, ended) = await rig.RunAsync(job);
+
+        (ended.State, ended.Stop).Should().Be((RoleJobStates.Failed, "toolchain-refused"), ended.Reason);
+        ended.Reason.Should().Contain("is not a key").And.NotContain(Token).And.NotContain("sk-abcdefgh");
+        rig.World.Store.FolderOf(job.JobId)!.ReadResult().Should().NotContain(Token);
+        rig.Launches(job).Should().BeEmpty();
+    }
+
     // ---------- d5: this repository ----------
 
     [Fact]

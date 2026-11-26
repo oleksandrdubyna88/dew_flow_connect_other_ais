@@ -35,18 +35,86 @@ public sealed class ACheckUnitHidesTheCoderFolderTests
         Directory.GetFileSystemEntries(bed.Job.JobCover).Select(Path.GetFileName).Should().NotContain(name => name!.StartsWith("coai-preflight-other-", StringComparison.Ordinal), "the stand-in is removed when the preflight ends");
     }
 
+    /// <summary>Takes the property that binds the job's temp folder at <c>/tmp</c> (and its <c>-p</c>) out of every unit: what the unit then shows of a folder under the temp folder is what it would show of a folder outside <c>/tmp</c> and <c>/home</c>.</summary>
+    private static Func<IReadOnlyList<string>, IReadOnlyList<string>> WithoutTheTempBind(BoundaryBed bed) => arguments =>
+    {
+        var bind = $"BindPaths={bed.Job.TempFolder}:{BoundaryUnit.UnitTemp}";
+        var kept = new List<string>();
+        for (var i = 0; i < arguments.Count; i++)
+        {
+            if (arguments[i] == "-p" && i + 1 < arguments.Count && arguments[i + 1] == bind)
+            {
+                i++;
+
+                continue;
+            }
+
+            kept.Add(arguments[i]);
+        }
+
+        return kept;
+    };
+
+    private static string StandIn(BoundaryJob job) => Path.Combine(Path.GetDirectoryName(job.JobRoot)!, $"coai-preflight-other-{job.JobId}");
+
     [Fact]
-    public async Task K2_AJobFolderThatIsItsOwnCover_HasNoOtherJobBesideIt_AndTheRowSaysSo()
+    public async Task K2_AJobFolderThatIsItsOwnCover_IsAskedToo_TheStandInIsPlantedInTheRealHoldingFolder_AndTheRowSaysWhatWasObserved()
     {
         NeedAUserManager();
         await using var bed = await BoundaryBed.CreateAsync();
         bed.Job.JobCover.Should().Be(bed.Job.JobRoot);
+        var seen = new List<bool>();
+        var degrade = new Func<IReadOnlyList<string>, IReadOnlyList<string>>(arguments =>
+        {
+            seen.Add(File.Exists(Path.Combine(StandIn(bed.Job), "canary.txt")));
+
+            return arguments;
+        });
+
+        var admission = await bed.Boundary(degrade).AdmitAsync(bed.Job, [CheckNetwork.Private], TestContext.Current.CancellationToken);
+
+        var row = admission.Should().BeOfType<BoundaryAdmission.Admitted>(admission.ToString()).Subject.Records.Single().Value.Preflight.Single(one => one.Item == BoundaryPreflight.OtherJobFolderHidden);
+        row.Held.Should().BeTrue(row.Detail);
+        row.Detail.Should().Contain("cannot be seen", "the row looked: an own cover is not 'nothing to look for'").And.NotContain("itself is the cover");
+        seen.Should().Contain(true, "the stand-in was in the holding folder, beside the job folder, when the unit was started");
+        Directory.Exists(StandIn(bed.Job)).Should().BeFalse("and it is gone when the preflight ends");
+    }
+
+    [Fact]
+    public async Task K2_WhenTheJobsFolderAndTheCoderRootAreOneFolder_AndTheUnitShowsIt_TheRowGoesRed_AndTheJobIsRefused()
+    {
+        NeedAUserManager();
+        await using var bed = await BoundaryBed.CreateAsync();
+        // COAI_CODER_JOBS and the coder root are ONE folder: the job folder lies beside the worktrees, so the holding folder cannot be covered and the job folder is its own cover.
+        bed.UseJobRoot(Path.Combine(bed.Job.CoderRoot, "job-x"));
+        bed.Job.JobCover.Should().Be(bed.Job.JobRoot);
+        Path.GetDirectoryName(bed.Job.JobRoot).Should().Be(bed.Job.CoderRoot);
+
+        var real = await bed.Boundary().AdmitAsync(bed.Job, [CheckNetwork.Private], TestContext.Current.CancellationToken);
+        real.Should().BeOfType<BoundaryAdmission.Admitted>(real.ToString()).Subject.Records.Single().Value.Preflight.Single(one => one.Item == BoundaryPreflight.OtherJobFolderHidden).Held.Should().BeTrue("under the temp folder the unit does not show the holding folder");
+
+        // The unit shows the holding folder (the temp bind is taken away: what a folder outside /tmp, /home and the like looks like): another job's folder is beside this one.
+        var shows = await bed.Boundary(WithoutTheTempBind(bed)).AdmitAsync(bed.Job, [CheckNetwork.Private], TestContext.Current.CancellationToken);
+
+        var refused = shows.Should().BeOfType<BoundaryAdmission.Refused>(shows.ToString()).Subject;
+        refused.Record.Preflight.Should().Contain(one => one.Item == BoundaryPreflight.OtherJobFolderHidden, refused.Sentence);
+        refused.Record.Preflight.Single(one => one.Item == BoundaryPreflight.OtherJobFolderHidden).Held.Should().BeFalse("a job folder that is its own cover leaves every other job's folder in the unit: the row asks, and says no");
+    }
+
+    [Fact]
+    public async Task K2_AStandInThatCannotBeMade_IsABadRow_NeverAnOkOne()
+    {
+        NeedAUserManager();
+        await using var bed = await BoundaryBed.CreateAsync();
+        await File.WriteAllTextAsync(StandIn(bed.Job), "a file where the stand-in belongs\n", TestContext.Current.CancellationToken);
 
         var admission = await bed.Boundary().AdmitAsync(bed.Job, [CheckNetwork.Private], TestContext.Current.CancellationToken);
 
-        var row = admission.Should().BeOfType<BoundaryAdmission.Admitted>(admission.ToString()).Subject.Records.Single().Value.Preflight.Single(one => one.Item == BoundaryPreflight.OtherJobFolderHidden);
-        row.Held.Should().BeTrue();
-        row.Detail.Should().Contain("itself is the cover");
+        var refused = admission.Should().BeOfType<BoundaryAdmission.Refused>(admission.ToString()).Subject;
+        var row = refused.Record.Preflight.Single(one => one.Item == BoundaryPreflight.OtherJobFolderHidden);
+        row.Held.Should().BeFalse();
+        row.Detail.Should().Contain("nothing was observed");
+        File.Exists(StandIn(bed.Job)).Should().BeTrue("a file that is not the stand-in is not deleted");
     }
 
     [Theory]

@@ -107,7 +107,7 @@ internal sealed class CoderInstructions(IRoleRun run, GitHistory git, CoderOsLay
         // Every refusal of the file at the base ends the job here, before any launch (security verify M2): a file the reader refuses for ANY reason can hide the key, so "no step declared" is never concluded from it.
         if (read is ToolchainRead.Refused refused)
         {
-            return new CoderInstructionsOutcome.Failed("toolchain-refused", $"{ToolchainTables.FilePath} at the base commit is refused, so whether it declares an instruction step is not known and no model was launched: {refused.Sentence}", new CoderInstructionsRecord(refused.InstructionFaults.Count > 0, [], 0, 0, string.Empty, 0, []));
+            return new CoderInstructionsOutcome.Failed("toolchain-refused", $"{ToolchainTables.FilePath} at the base commit is refused, so whether it declares an instruction step is not known and no model was launched: {Redaction.SafeText(refused.Sentence, Redaction.TitleLimit)}", new CoderInstructionsRecord(refused.InstructionFaults.Count > 0, [], 0, 0, string.Empty, 0, []));
         }
 
         if (read is not ToolchainRead.Configured { Toolchain.Instructions: { Declared: true } step })
