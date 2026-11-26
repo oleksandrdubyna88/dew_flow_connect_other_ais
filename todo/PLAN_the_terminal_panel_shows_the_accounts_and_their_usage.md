@@ -594,8 +594,8 @@ from a distro is ever an operand as it is; a distro's and a user's name are argu
 
 ### 5. What is still to be measured
 
-Each needs the owner's go for its exact commands. **W9, W6 and W7 have the owner's go (2026-11-26); W8 has none
-yet.** **W-numbers here are measurements** (the S1 spec uses W-numbers for its sentences). **Run 2026-11-26:** W7
+Each needs the owner's go for its exact commands. **W9, W6 and W7 have the owner's go (2026-11-26); W8 had none and ran
+with W7; the owner was told.** **W-numbers here are measurements** (the S1 spec uses W-numbers for its sentences). **Run 2026-11-26:** W7
 passed (it started Claude Code's own `rg` and `ps` call; no hook, MCP server or plugin of the person),
 W6 → every round (retirement seen), W8 recorded:
 [RESULTS § 13](../research/RESULTS_accounts_and_usage_on_a_vm.md); **W9:**
@@ -1013,7 +1013,7 @@ What is kept, reworked and retired of it: *Re-review for epoch 3*, above.
 | # | What is run | Pass |
 |---|---|---|
 | R1 | The icon | It sits beside *Ask other AI* and opens ONE tab; a second press shows the same tab; Ctrl+F finds a host; with no `Creds:` terminal the tab says so |
-| R14 | **The permission.** The profile holds a person's "yes", the automatic rows of 2.0.901 and one *Not this host*; the owner's terminals are open | Before the permission: **0** ssh logins on any host in 20 minutes (the VMs' ssh logs). The question is asked once. After *Allow reading*: the first login within 60 s; and when the toolbar says the round has ended — one host at a time, up to 30 s each — exactly 1 login on each host that is not refused and 0 on the refused one. A chat door pressed before the permission, on the host with the "yes": the question, and 0 logins. A terminal of a new host, opened later: read in the next round, no question. *Withdraw*: 0 logins in 20 minutes, by the round or by a chat door, also after a reload |
+| R14 | **The permission.** The profile holds a person's "yes", the automatic rows of 2.0.901 and one *Not this host*; the owner's terminals are open | Before the permission: **0** ssh logins on any host in 20 minutes (the VMs' ssh logs). The question is asked once. After *Allow reading*: the first login within 60 s; and when the toolbar says the round has ended — one host at a time, up to 30 s each — exactly 1 login on each host that is not refused, plus R2's one usage login for each Claude account, and 0 on the refused one. A chat door pressed before the permission, on the host with the "yes": the question, and 0 logins. A terminal of a new host, opened later: read in the next round, no question. *Withdraw*: 0 logins in 20 minutes, by the round or by a chat door, also after a reload |
 | R15 | **The table.** At least 3 hosts, one of them with a Codex record | For each host the owner reads, without help: the host, its tools, each account, the two windows with "% left" and the reset. The Codex figure equals the record on that VM. A Claude account says why its usage is not read. **The tab stays open 12 minutes untouched: the age of each read grows and matches the clock time beside it.** A hover shows the exact time. A narrow tab stacks the fields. **Entry 4.1:** *Group by* is switched to *Claude account*, to *User* and back to *Server*: each shows every host and account, and an account on 2 hosts has its usage once, both hosts under it. A sort by "% left" with a dash present: the dash is last, both ways. Each grouping stays readable in a narrow tab |
 | R5 | A host that cannot be reached | Its failure in full under its heading within 30 s; the other hosts are read in that round |
 | R6 | Stopping | Every `Creds:` terminal closed: 0 logins in the next 20 minutes. *Stop the round*: 0 logins in 20 minutes, also after a reload; started again, a round follows within 60 s |
@@ -1068,7 +1068,7 @@ What is kept, reworked and retired of it: *Re-review for epoch 3*, above.
 
 | # | What is run | Pass |
 |---|---|---|
-| R7 | Two hours, at least 12 rounds, on a VM AND in a distro, each WITH live Claude Code, Codex or agy sessions | **Gate. 0** live sessions that ask to sign in again, lose their settings or MCP servers, or stop or restart. The time and size of the agy program before and after: recorded |
+| R7 | At least two hours and until 12 rounds have ended, on a VM AND in a distro, each WITH live Claude Code, Codex or agy sessions | **Gate. 0** live sessions that ask to sign in again, lose their settings or MCP servers, or stop or restart. The time and size of the agy program before and after: recorded |
 | R12 | **Two windows.** (a) *Not this host* in window A while B's round runs. (b) *Not this host* in A; A is closed at once; B goes on for three rounds and is made to write `globalState`; both are reloaded. (c) The same with *Stop the round*. (d) The same with *Withdraw the permission*, and then a chat door is pressed in B | **Gate.** (a) At most 1 login to that host after the press, 0 from then on. (b) 0 logins to that host from the press on. (c) and (d) 0 logins to any host from the press on. In each the folder is read back and holds the change. A lost "no", Stop or withdrawal fails the gate: the build is not released, and the cure is a change of this plan |
 | R10 | Which places lack `jq` | A table: `jq` there or not, the manager word, root or `sudo` without a password. A place without `jq` shows the fixed command; after the owner runs it, the next round reads the accounts. The count is the input of E6 |
 | W8 | A start of `agy` (§ 5) | A record |
