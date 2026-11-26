@@ -440,6 +440,42 @@ public sealed class ACoderFailsOverAcrossVendorsTests
     }
 
     [Fact]
+    public async Task S21_AVendorThatNeverGotAsFarAsItsFolders_FailsOver_NotCoderBoundary()
+    {
+        var set = Set(Verdict.Ship, Verdict.Ship);
+        await using var rig = await RigAsync(set);
+        // The first vendor's CLI is not there: nothing of it was ever made in the job's home, and the job goes on to the next vendor.
+        rig.Rig.Setting("COAI_ROLE_CODEX_CLI", Path.Combine(rig.Root, "no-such-cli"));
+        var job = rig.NewJob(route: ["codex/terra", $"agy/{Argon}"]);
+        rig.Says(Argon, Writes(CoderRig.Green, AgyLast, []));
+
+        var (_, ended) = await rig.RunAsync(job);
+
+        ended.State.Should().Be(RoleJobStates.Succeeded, ended.Reason);
+        rig.Launches(job).Select(ModelOf).Should().Equal(Argon);
+        rig.Rig.SwitchLines().Should().ContainSingle();
+    }
+
+    [Fact]
+    public void S21_ACopyOrAFolderThatIsAbsent_IsNothingToDelete_ButALinkOrAnotherTypeIsNeverTakenForAbsent()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "a symbolic link needs a privilege on Windows");
+        using var home = TempDir.For("coai-copy-home-");
+        using var outside = TempDir.For("coai-copy-outside-");
+        CoderSignInCopy.Remove(home.Path, Path.Combine(home.Path, ".codex", "auth.json")).Should().BeEmpty("the folder was never made");
+        Directory.CreateDirectory(Path.Combine(home.Path, ".agy"));
+        CoderSignInCopy.Remove(home.Path, Path.Combine(home.Path, ".agy", "auth.json")).Should().BeEmpty("the folder is there and the copy is not");
+
+        Directory.CreateSymbolicLink(Path.Combine(home.Path, ".dangling"), Path.Combine(outside.Path, "not-there"));
+        CoderSignInCopy.Remove(home.Path, Path.Combine(home.Path, ".dangling", "auth.json")).Should().NotBeEmpty("a link at the folder's place is not an absent folder, even when it leads nowhere");
+
+        Directory.CreateDirectory(Path.Combine(home.Path, ".inner", "auth.json"));
+        CoderSignInCopy.Remove(home.Path, Path.Combine(home.Path, ".inner", "auth.json")).Should().NotBeEmpty("a folder where the copy belongs is another type, not an absent file");
+        File.WriteAllText(Path.Combine(home.Path, "plain"), "x");
+        CoderSignInCopy.Remove(home.Path, Path.Combine(home.Path, "plain", "auth.json")).Should().NotBeEmpty("a file where the folder belongs is another type, not an absent folder");
+    }
+
+    [Fact]
     public void D3_TheDeletionOfACopy_NeverFollowsALinkOutOfTheJobsHome()
     {
         using var home = TempDir.For("coai-copy-home-");

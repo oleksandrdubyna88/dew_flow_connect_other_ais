@@ -194,6 +194,20 @@ internal static class CoderSignInCopy
             return $"the sign-in copy at '{copy}' is not in a folder";
         }
 
+        // A folder that is not there at all: the vendor never got as far as making it (its CLI was missing, its probe refused), so there is nothing of its to delete (security verify pass 3, S21). Only a MISSING entry is this: a link (even a dangling one) or a file of
+        // another type at the folder's place goes on to the checks below, and RealPath.Resolve answers OK for a path whose last names are missing, so it cannot be the one to say "absent".
+        try
+        {
+            if (Runners.Files.RealPath.Lstat(folder).Kind == Runners.Files.EntryKind.Missing)
+            {
+                return string.Empty;
+            }
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return $"the folder of the sign-in copy at '{copy}' could not be looked at, so the copy was not deleted: {e.Message}";
+        }
+
         var realHome = Runners.Files.RealPath.Resolve(home);
         var realFolder = Runners.Files.RealPath.Resolve(folder);
         if (!realHome.Ok)
@@ -214,8 +228,19 @@ internal static class CoderSignInCopy
         }
 
         var target = Path.Combine(realFolder.Path, Path.GetFileName(copy));
+        if (Runners.Files.RealPath.Lstat(realFolder.Path).Kind != Runners.Files.EntryKind.Directory)
+        {
+            return $"what stands where the folder of the sign-in copy at '{copy}' belongs is not a folder, so the copy was not deleted";
+        }
+
         try
         {
+            if (Runners.Files.RealPath.Lstat(target).Kind == Runners.Files.EntryKind.Missing)
+            {
+                // The folder is there and the copy is not: nothing to delete.
+                return string.Empty;
+            }
+
             if (Directory.Exists(target) && Runners.Files.RealPath.Lstat(target) == Runners.Files.Entry.Directory)
             {
                 return $"a folder stands where the sign-in copy at '{copy}' belongs, so it was not deleted as a file";

@@ -70,7 +70,7 @@ public sealed class AToolchainFileTests
     {
         var sentence = RefusedBy(OneProject(string.Empty) + extra);
 
-        sentence.Should().Contain($"line 5: a key of {length} characters is not a key of toolchain").And.Contain("(the keys are version, projects, skip, timeouts)");
+        sentence.Should().Contain($"line 5: a key of {length} characters is not a key of toolchain").And.Contain("(the keys are version, projects, skip, timeouts, instructions)");
         sentence.Should().NotContain("secuirty").And.NotContain("skipp", "a typed key is never spelled: a short word is the shape of a secret too");
     }
 

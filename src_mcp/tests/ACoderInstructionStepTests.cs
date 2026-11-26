@@ -61,7 +61,7 @@ public sealed class ACoderInstructionStepTests
     }
 
     [Theory]
-    [InlineData("instructions:\n  argv:\n    - node\n  shell: true\n", "'shell' is not a key of instructions")]
+    [InlineData("instructions:\n  argv:\n    - node\n  shell: true\n", "a key of 5 characters is not a key of instructions")]
     [InlineData("instructions:\n  argv: []\n", "'argv' of instructions is empty")]
     [InlineData("instructions:\n  perFile:\n    - x\n", "the key 'argv' is missing from instructions")]
     [InlineData("instructions:\n  argv:\n    - node\n    - \"{file}\"\n", "{file}")]
