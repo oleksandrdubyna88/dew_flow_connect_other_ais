@@ -2,7 +2,7 @@ import { oneAtATime } from './oneAtATime';
 import {
   AccountsCall, AccountsState, Memory, ROUND_GAP_MS, RoundResult, RoundSeams, STATE_KEY, StateChange, StateCommitted, StopDoor, TimerAction, Trigger, accountsHosts, accountsStateOf, armFor, callableHosts,
   droppedLine, eligibleOf, isStopped, liveOnly, memoryAfter, nextAfterRound, openStarts, permissionEdge, refreshAnswer, refusedHosts, runRound, settleRound, standingsBump, startTheRound,
-  startsAfterAllow, stateMerge, stopTheRound, timerFor, unreadHost, withRefusals,
+  roundOrder, startsAfterAllow, stateMerge, stopTheRound, timerFor, unreadHost, withRefusals,
 } from './remoteAccountsRound';
 import type { HostStanding } from './remoteHosts';
 import type { DoorAnswer } from './remotePermission';
@@ -65,6 +65,13 @@ export interface DriverWorld {
   readonly canBeShown: () => void;
 }
 
+/** Where a round in flight is: the place being called, its place in the round's order (from 1) and how many places the round calls. */
+export interface RoundProgress {
+  readonly host: string;
+  readonly index: number;
+  readonly total: number;
+}
+
 /** What the last round ended with: its end, the places it called and the ones that answered with a reading. */
 export interface RoundSummary {
   readonly endedMs: number;
@@ -84,6 +91,8 @@ export class AccountsDriver {
   private timer: unknown;
   private armed = false;
   private running = false;
+  private progressNow: RoundProgress | undefined;
+  private order: readonly string[] = [];
   /** A Start came while a round ran: its refresh runs when that round ends. */
   private startPending = false;
   private disposed = false;
@@ -107,7 +116,7 @@ export class AccountsDriver {
       live: w.live,
       stopped: () => this.stoppedNow(),
       may: (host) => w.may(host),
-      call: (host, mode, digest) => w.call(host, mode, digest),
+      call: (host, mode, digest) => { this.reaching(host); return w.call(host, mode, digest); },
       parse: w.parse,
       now: w.now,
       landed: (memory, host) => { this.landedFrom(memory, host); },
@@ -124,6 +133,20 @@ export class AccountsDriver {
 
   isRunning(): boolean {
     return this.running;
+  }
+
+  /** Where the round in flight is, or nothing when none runs or it calls no place. */
+  progress(): RoundProgress | undefined {
+    return this.running ? this.progressNow : undefined;
+  }
+
+  /** A call to a place begins: when it is a new place of the round, the tab is told where the round is. */
+  private reaching(host: string): void {
+    const index = this.order.indexOf(host) + 1;
+    if (index > 0 && this.progressNow?.host !== host) {
+      this.progressNow = { host, index, total: this.order.length };
+      this.world.landed(undefined);
+    }
   }
 
   summary(): RoundSummary | undefined {
@@ -236,6 +259,8 @@ export class AccountsDriver {
     mine.ran = true;
     this.running = true;
     this.roundGeneration = this.generation;
+    this.order = roundOrder(callableHosts(this.world.live()), this.round);
+    this.progressNow = this.order.length === 0 ? undefined : { host: this.order[0] ?? '', index: 1, total: this.order.length };
     this.world.landed(undefined);
     try {
       return await settleRound(
@@ -246,6 +271,7 @@ export class AccountsDriver {
       );
     } finally {
       this.running = false;
+      this.progressNow = undefined;
       this.world.landed(undefined);
     }
   }

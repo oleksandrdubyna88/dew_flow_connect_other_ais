@@ -61,8 +61,6 @@ export async function theAccountsRoundRunsOnlyUnderThePermission(): Promise<void
       assert.equal(await accounts.runRoundNow(trigger), undefined, `a ${trigger} round ran with no permission`);
     }
     assert.ok((await vscode.commands.getCommands(true)).includes('coai.terminalAccounts'), 'coai.terminalAccounts is not a registered command');
-    await vscode.commands.executeCommand('coai.terminalAccounts');
-    await vscode.commands.executeCommand('workbench.action.closeQuickOpen');
     assert.deepEqual(calls, [], 'a host was called with no permission');
     assert.deepEqual([...accounts.memoryHosts()], [], 'the round remembered a host with no permission');
     assert.equal(await accounts.armed(), false, 'with an eligible terminal open the timer would be armed with no permission');
@@ -72,6 +70,46 @@ export async function theAccountsRoundRunsOnlyUnderThePermission(): Promise<void
     await until(() => accounts.memoryHosts().length === 2, 'the round did not remember its two hosts');
 
     assert.deepEqual([...calls].sort(), [`${HOST_A} no-claude-usage`, `${HOST_B} no-claude-usage`], 'the first round did not call each host once, and none else (wsl is never called)');
+  } finally {
+    for (const one of terminals) {
+      one.dispose();
+    }
+    await putBack(accounts, sessions, before);
+  }
+}
+
+/**
+ * E2S3-H1 of the accounts plan (E2.S3): the icon opens ONE tab and a second press shows the same one; with the call replaced through the test door
+ * and the permission given through the keeper, two terminals of two hosts are one call each, and the model the tab holds has both blocks. The permission
+ * is given BEFORE the press so the icon asks no question here (a modal has nobody to answer it); the first-press question is `askPermissionFirst`'s own test.
+ * The profile is put back as it was found. CI's real-editor job runs it.
+ */
+export async function theIconOpensOneTabAndItsModelHoldsBothHosts(): Promise<void> {
+  const { accounts, sessions } = await doorsOf();
+  const before = await sessions.stored();
+  const calls: string[] = [];
+  accounts.replaceCall(async (host, mode): Promise<RemoteRun> => {
+    calls.push(`${host} ${mode}`);
+
+    return { kind: 'answered', code: 0, stdout: '' };
+  });
+  const names = [`Creds: ${HOST_A} / s1`, `Creds: ${HOST_B} / s1`];
+  const terminals = names.map((name) => vscode.window.createTerminal({ name }));
+  try {
+    await until(() => names.every((name) => vscode.window.terminals.some((one) => one.name === name)), 'the two terminals did not open');
+    assert.equal(accounts.tabOpen(), false, 'a tab was open before the icon was pressed');
+    assert.equal((await sessions.allow()).kind, 'given', 'the permission was not given through the keeper');
+    await until(() => calls.length >= 2, 'the Allow did not start a round');
+    await until(() => accounts.memoryHosts().length === 2, 'the round did not remember its two hosts');
+
+    await vscode.commands.executeCommand('coai.terminalAccounts');
+    await until(() => accounts.tabOpen(), 'the icon did not open the tab');
+    await vscode.commands.executeCommand('coai.terminalAccounts');
+    await until(() => (accounts.lastModel()?.blocks.length ?? 0) === 2, 'the tab does not hold both hosts');
+
+    assert.deepEqual(accounts.lastModel()?.blocks.map((block) => block.host), [HOST_A, HOST_B], 'the blocks of the model are not the two hosts, in code-unit order');
+    assert.deepEqual([...calls].sort(), [`${HOST_A} no-claude-usage`, `${HOST_B} no-claude-usage`], 'each host was not called exactly once');
+    assert.equal(vscode.window.tabGroups.all.flatMap((group) => group.tabs).filter((tab) => tab.label === 'AI accounts and usage').length, 1, 'a second press opened a second tab');
   } finally {
     for (const one of terminals) {
       one.dispose();

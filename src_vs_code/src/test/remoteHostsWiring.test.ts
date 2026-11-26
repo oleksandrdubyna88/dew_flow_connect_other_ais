@@ -65,9 +65,11 @@ test('E2S1-T9 (the scan): one reader of the grant and of the withdrawal files, o
   assert.equal(countIn(host, /keeper\.allow\(/gu), 2, 'companion: the binding of permissionAsker and testDoorOf are the two callers');
   assert.deepEqual(filesWith(/\bnotifyAndAsk\([^)]*read-accounts-permission|code: 'read-accounts-permission'/u), ['remoteSessionHost.ts']);
   // a tick and the keeper never ask: no seam of either holds a way to raise the question
-  for (const file of ['remoteAccountsRound.ts', 'remoteAccountsDriver.ts', 'remoteAccountsHost.ts', 'remoteKeeper.ts', 'remoteKeeperDoor.ts']) {
+  for (const file of ['remoteAccountsRound.ts', 'remoteAccountsDriver.ts', 'remoteKeeper.ts', 'remoteKeeperDoor.ts']) {
     assert.ok(!/\braise\b|askPermission|permissionAsker/u.test(sourceOf(file)), `${file} can reach the question`);
   }
+  // the tab's host reaches the question only by a person's press (E2.S3): never the asker itself, and never a raise of its own
+  assert.ok(!/\braise\b|permissionAsker/u.test(sourceOf('remoteAccountsHost.ts')), 'the accounts host builds or raises the question itself');
 });
 
 test('E2S1-T14 (the host): the one question is the modal of W14 with its two buttons, and the retired per-host question is in no source file and no census', () => {
@@ -81,19 +83,15 @@ test('E2S1-T14 (the host): the one question is the modal of W14 with its two but
   assert.ok(!census.codes.includes('read-remote-session') && census.codes.includes('read-accounts-permission') && census.codes.includes('accounts-permission-not-kept'));
 });
 
-test('E2S1-T17 (the scan): the setting is gone — the key\'s text is in W10\'s constant and the five help files, and nobody reads it', () => {
-  const where = [...filesWith(/terminalAccountsAllowNewHosts/u)].sort();
-  assert.deepEqual(where, ['helpContent.ts', 'helpDe.ts', 'helpEs.ts', 'helpRu.ts', 'helpUk.ts', 'remoteHostsSaid.ts'], 'the key is named in a file the spec does not allow, or one it allows is missing');
-  const said = sourceOf('remoteHostsSaid.ts');
-  assert.equal(countIn(said, /terminalAccountsAllowNewHosts/gu), 1, 'the constant KEY is more than one line');
-  assert.equal(countIn(said, /\$\{KEY\}/gu), 2, 'companion: W10\'s two sentences are the only users of KEY');
-  assert.equal(countIn(said, /const KEY = 'coai\.terminalAccountsAllowNewHosts'/gu), 1, 'the constant KEY is not the one line');
+test('E2S1-T17 (the scan): the setting is gone — the key’s text is in no source file at all, and nobody reads it', () => {
+  assert.deepEqual([...filesWith(/terminalAccountsAllowNewHosts/u)], [], 'the key is named in a source file: the help, W10 and the bridge lines are gone');
   assert.deepEqual(filesWith(/getConfiguration\([^)]*\)[^;]*terminalAccounts|ALLOW_NEW_HOSTS_KEY|allowNewHostsFrom|allowsNewHosts|ignoredLayerFor/u), [], 'a source still reads the setting');
+  assert.deepEqual(filesWith(/\$\{KEY\}|const KEY = /u).filter((file) => file === 'remoteHostsSaid.ts'), [], 'the constant KEY of W10 is still there');
 });
 
 test('E2S1-T18 (the scan): retired code stays gone', () => {
   assert.deepEqual(filesWith(/\bAUTOMATIC_ALLOW\b|\bautoCounts\b|\bAutomaticAllow\b/u), [], 'the automatic allow is still named');
-  assert.deepEqual([...filesWith(/\ballowNew\b/u)].sort(), ['remoteAccountsHost.ts', 'remoteAccountsRows.ts'], 'allowNew is outside the bridge lines that S3 and S2 delete');
+  assert.deepEqual([...filesWith(/\ballowNew\b/u)], [], 'allowNew is still named: the bridge lines went with the QuickPick');
   assert.ok(/how: 'auto'|how === 'auto'|how !== 'auto'/u.test(sourceOf('remoteHosts.ts')), 'the parser no longer reads how: auto, so a list that holds one would be damaged');
 });
 
@@ -161,8 +159,7 @@ test('E2S1-T14/T15: every word W1 to W18 equals the text of the spec', () => {
   assert.deepEqual(HOSTS_SAID.permissionRow({ given: U }), { label: 'Withdraw the permission', description: `given ${U}: every host of your Creds terminals is read, but the ones you refused` });
   assert.deepEqual(HOSTS_SAID.permissionRow('waiting'), { label: 'Save now', description: 'a “Not this host”, a stop or a withdrawal is not saved yet on this side, so nothing is read' });
   assert.deepEqual(HOSTS_SAID.permissionRow('damaged'), { label: 'The list or the file of hosts cannot be read', description: 'nothing is read. Choose a host below and answer for it: that repairs it. If no host is listed, open a “Creds: <host> / <session>” terminal and run this again.' });
-  // W10 stays until its row is deleted (X7)
-  assert.ok(HOSTS_SAID.ignoredWorkspace.includes('only your own user settings count') && HOSTS_SAID.ignoredFolder.includes('A folder of this workspace'));
+  assert.ok(!("ignoredWorkspace" in HOSTS_SAID) && !("ignoredFolder" in HOSTS_SAID), "W10 is deleted with its row");
 });
 
 test('E2S1-T15: the buttons of the change question, by state — each only where it does something, no "Read", and the change each sends', () => {
