@@ -23,18 +23,28 @@ export const LINES: readonly string[] = [
   `Current week (Fable): 49% used ${DOT} resets Nov 22, 2:59am (UTC)`,
 ];
 
-/** The reply of § A2.5 as lines (the Claude account of the measured host, made anonymous). */
-export const GOOD_LINES: readonly string[] = [
-  'COAI-JQ found',
+/** The Claude account lines of the measured host, made anonymous: the lines the digest is made of are the first four. */
+export const ACCOUNT_LINES: readonly string[] = [
   'COAI-VENDOR claude found',
   ':email someone@example.com',
   ':org Example Org',
   ':plan team',
-  ':version 2.1.326',
+];
+
+/** The Claude usage lines of a reply to the usage mode (E3.S2, § R2.7). */
+export const USAGE_READ_LINES: readonly string[] = [
   'COAI-USAGE claude read',
   ':turns 0',
   ...LINES.map((line) => `:line ${line}`),
   ':unmatched 0',
+];
+
+/** The FIRST mode's reply (§ A2.5, revision 2): the three parts, Claude's usage `skipped`. */
+export const GOOD_LINES: readonly string[] = [
+  'COAI-JQ found',
+  ...ACCOUNT_LINES,
+  ':version 2.1.326',
+  'COAI-USAGE claude skipped',
   'COAI-VENDOR codex found',
   ':sign-in-file present',
   ':plan prolite',
@@ -50,7 +60,11 @@ export const GOOD_LINES: readonly string[] = [
 /** `GOOD` is asserted ONCE (in the reply test) to be read, so each negative row changes one thing of a reply the parser accepts. */
 export const GOOD = frame(...GOOD_LINES);
 
-/** A reply of the mode `claude-usage` whose Claude usage holds exactly these `:line` texts; the two other vendors are absent. */
+/** The reply of the usage mode (`claude-usage`): the Claude part and nothing else. */
+export const USAGE_GOOD_LINES: readonly string[] = ['COAI-JQ found', ...ACCOUNT_LINES, ':version 2.1.326', ...USAGE_READ_LINES];
+export const USAGE_GOOD = frame(...USAGE_GOOD_LINES);
+
+/** A reply of the mode `claude-usage` whose Claude usage holds exactly these `:line` texts; there is no other part (§ R2.7). */
 export const claudeLines = (texts: readonly string[], turns = 0, unmatched = 0): string => frame(
   'COAI-JQ found',
   'COAI-VENDOR claude found',
@@ -58,8 +72,6 @@ export const claudeLines = (texts: readonly string[], turns = 0, unmatched = 0):
   `:turns ${turns}`,
   ...texts.map((text) => `:line ${text}`),
   `:unmatched ${unmatched}`,
-  'COAI-VENDOR codex absent',
-  'COAI-VENDOR agy absent',
 );
 
 /** A reply whose Codex part holds these data lines under `COAI-USAGE codex read`; Claude and agy are absent. */
@@ -76,10 +88,19 @@ export const codexLines = (...data: readonly string[]): string => frame(
 export const FILE_TIME = 1794938000;
 export const RECORD_TIME = '2026-11-17T19:32:36.474Z';
 
+/** The `claude-only` arm of an answer to the usage mode, or a failure that says what it was instead. */
+export function claudeOnlyOf(answer: AccountsRead): Extract<AccountsRead, { kind: 'claude-only' }> {
+  if (answer.kind !== 'claude-only') {
+    throw new Error(`the answer is not claude-only: ${answer.kind === 'unreadable' ? answer.why : answer.kind}`);
+  }
+
+  return answer;
+}
+
 /** The `read` arm of an answer, or a failure that says what it was instead. */
 export function readOf(answer: AccountsRead): Extract<AccountsRead, { kind: 'read' }> {
   if (answer.kind !== 'read') {
-    throw new Error(`the answer is unreadable: ${answer.why}`);
+    throw new Error(`the answer is not read: ${answer.kind === 'unreadable' ? answer.why : answer.kind}`);
   }
 
   return answer;

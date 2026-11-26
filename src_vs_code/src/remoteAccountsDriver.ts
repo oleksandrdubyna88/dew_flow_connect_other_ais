@@ -107,7 +107,7 @@ export class AccountsDriver {
       live: w.live,
       stopped: () => this.stoppedNow(),
       may: (host) => w.may(host),
-      call: (host, mode) => w.call(host, mode),
+      call: (host, mode, digest) => w.call(host, mode, digest),
       parse: w.parse,
       now: w.now,
       landed: (memory, host) => { this.landedFrom(memory, host); },

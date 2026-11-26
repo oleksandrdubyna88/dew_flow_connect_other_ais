@@ -167,7 +167,8 @@ test('A3-T15: an account that changed is read in the same round, once', async ()
   const result = await roundOf(w, memoryOf(['a', remembered('a', 'x@example.test')], ['b', remembered('b', 'x@example.test')]));
 
   assert.ok(w.calls.filter((call) => call.host === 'b').length <= 2, 'a host was called three times in a round');
-  assert.deepEqual(callsOf(w), ['a N', 'a U', 'b N', 'b U', 'c N'], 'a new account\'s usage was a round late');
+  // E3.S2: the second call of `b` named another account (Z) than its first reply (Y), so nothing is counted for either, and `c`, which holds Z, asks for its own usage
+  assert.deepEqual(callsOf(w), ['a N', 'a U', 'b N', 'b U', 'c N', 'c U'], 'a new account\'s usage was a round late, or the usage of another account was counted');
   const kept = result.memory.get('b')?.reading;
   assert.ok(kept !== undefined, 'b has no reading');
   assert.equal(foundOf(kept.read).email, 'z@example.test', 'the second call\'s reading was not kept');

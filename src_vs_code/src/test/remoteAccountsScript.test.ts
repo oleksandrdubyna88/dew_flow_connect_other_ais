@@ -5,9 +5,9 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import test from 'node:test';
 import {
-  ACCOUNTS_CEILING_SECONDS, ACCOUNTS_LINES_MAX, ACCOUNTS_LINE_BYTES_MAX, ACCOUNTS_MODES, ACCOUNTS_PROTOCOL, ACCOUNTS_READ_SECONDS,
-  ACCOUNTS_REPLY_BYTES_MAX, ACCOUNTS_SCRIPT, ACCOUNTS_SECONDS, ACCOUNTS_TOOLS, ACCOUNT_JSON_MAX, CODEX_FILES_MAX, CODEX_TAIL_MAX,
-  MANAGER_WORDS, USAGE_JSON_MAX, USAGE_LINES_MAX, isAccountsMode,
+  ACCOUNTS_CEILING_SECONDS, ACCOUNTS_CONNECT_SECONDS, ACCOUNTS_DIGEST, ACCOUNTS_KILL_SECONDS, ACCOUNTS_LINES_MAX, ACCOUNTS_LINE_BYTES_MAX, ACCOUNTS_MODES,
+  ACCOUNTS_PATH, ACCOUNTS_PROTOCOL, ACCOUNTS_READ_SECONDS, ACCOUNTS_REPLY_BYTES_MAX, ACCOUNTS_SCRIPT, ACCOUNTS_SECONDS, ACCOUNTS_TOOLS, ACCOUNT_JSON_MAX,
+  CODEX_FILES_MAX, CODEX_TAIL_MAX, MANAGER_WORDS, USAGE_JSON_MAX, USAGE_LINES_MAX, isAccountsDigest, isAccountsMode, worstSeconds,
 } from '../remoteAccountsScript';
 import { SSH_OPTIONS } from '../remoteSsh';
 
@@ -21,11 +21,11 @@ import { SSH_OPTIONS } from '../remoteSsh';
  * stopped matching would be red here and not pass for ever.</p>
  */
 
-/** The sha256 of `ACCOUNTS_SCRIPT`, as pinned by the spec's procedure (§ A2.3). A later change of the text moves the block, the pin and this literal in one commit. */
-const PINNED = 'e42bae875254ba509d2be0ed0c1cc079999e08d1be0f82bfb2edb35ac55d8ebd';
+/** The sha256 of `ACCOUNTS_SCRIPT`, as pinned by the E3.S2 spec (§ R2.3). A later change of the text moves the block, the pin and this literal in one commit. */
+const PINNED = '3159e39df42ad88d3240c4f64b4098b54fb345828d9e8089eadb53ff8497e9b9';
 
 const HERE = join(__dirname, '..', '..');
-const SPEC_NAME = 'PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E1_S2_spec.md';
+const SPEC_NAME = 'PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E3_S2_spec.md';
 
 /** The spec, from `todo/` or from `research/` once it is promoted: found in both, or in neither, is a failure. */
 function specText(): string {
@@ -35,10 +35,10 @@ function specText(): string {
   return readFileSync(places[0] as string, 'utf8');
 }
 
-/** The first `sh` block after the heading that starts `## A2.3`, with its last line end, as the spec's own step 0 takes it. */
+/** The first `sh` block after the heading that starts `## R2.3`, with its last line end, as the spec's own pin takes it. */
 function specBlock(spec: string): string {
-  const heading = spec.indexOf('\n## A2.3');
-  assert.ok(heading >= 0, 'the spec has no heading that starts "## A2.3"');
+  const heading = spec.indexOf('\n## R2.3');
+  assert.ok(heading >= 0, 'the spec has no heading that starts "## R2.3"');
   const open = spec.indexOf('```sh\n', heading);
   assert.ok(open >= 0, 'no sh block after the heading');
   const start = open + '```sh\n'.length;
@@ -57,14 +57,17 @@ function firstDifference(left: string, right: string): string {
 
 const sha256 = (text: string): string => createHash('sha256').update(text).digest('hex');
 
-test('A2-T2: the sha256 of ACCOUNTS_SCRIPT is the pinned value, and the text is 222 lines of ASCII ending with LF', () => {
+test('E3S2-T1: the sha256 of ACCOUNTS_SCRIPT is the pinned value, and the text is 342 lines of ASCII ending with LF', () => {
   assert.match(PINNED, /^[0-9a-f]{64}$/u, 'the test still holds a pin that is not a sha256');
   assert.equal(sha256(ACCOUNTS_SCRIPT), PINNED, 'the text of ACCOUNTS_SCRIPT changed without the pin');
-  assert.equal(ACCOUNTS_SCRIPT.split('\n').length - 1, 222, 'the text is 222 lines');
+  assert.equal(ACCOUNTS_SCRIPT.split('\n').length - 1, 342, 'the text is 342 lines');
+  assert.equal(Buffer.byteLength(ACCOUNTS_SCRIPT), 11_379, 'the text is 11 379 bytes');
+  assert.equal(count(ACCOUNTS_SCRIPT, '${'), 12, 'the text holds ${ 12 times');
+  assert.equal(count(ACCOUNTS_SCRIPT, '\\'), 70, 'the text holds 70 backslashes');
   assert.ok(ACCOUNTS_SCRIPT.endsWith('\n'), 'the text ends with a line end');
 });
 
-test('A2-T2: the spec has the same pin on its own line, and its sh block IS the constant', () => {
+test('E3S2-T1: the spec has the same pin on its own line, and its sh block IS the constant', () => {
   const spec = specText();
   const pin = /^Pinned sha256: (.*)$/mu.exec(spec);
   assert.ok(pin !== null, 'the spec has no line "Pinned sha256:"');
@@ -75,15 +78,16 @@ test('A2-T2: the spec has the same pin on its own line, and its sh block IS the 
   assert.equal(block === ACCOUNTS_SCRIPT, true, `the spec and the constant differ at ${firstDifference(block, ACCOUNTS_SCRIPT)}`);
 });
 
-test('A2-T2 companions: a difference of one space is named by its line, and a hash of another text differs', () => {
+test('E3S2-T1 companions: a difference of one byte is named by its line, and a hash of another text differs', () => {
   assert.match(firstDifference('a\nb c\nd', 'a\nb  c\nd'), /^line 2: /u);
   assert.notEqual(sha256(`${ACCOUNTS_SCRIPT} `), sha256(ACCOUNTS_SCRIPT));
-  assert.equal(specBlock('x\n## A2.3 — t\n```sh\nline one\nline two\n```\nmore').endsWith('line two\n'), true);
+  assert.notEqual(sha256(ACCOUNTS_SCRIPT.replace('unset IFS', 'unset  IFS')), PINNED, 'one byte more does not move the hash');
+  assert.equal(specBlock('x\n## R2.3 — t\n```sh\nline one\nline two\n```\nmore').endsWith('line two\n'), true);
 });
 
 // ───────────────── A2-T3 (the TypeScript half): the modes ─────────────────
 
-test('A2-T3: the modes are two words by a closed list, and the script holds the case line built from the same list', () => {
+test('E3S2-T4 (text): the modes are two words by a closed list, and the script holds the case rows and the digest rule', () => {
   assert.deepEqual([...ACCOUNTS_MODES], ['claude-usage', 'no-claude-usage']);
   for (const word of ACCOUNTS_MODES) {
     assert.equal(isAccountsMode(word), true, word);
@@ -91,8 +95,17 @@ test('A2-T3: the modes are two words by a closed list, and the script holds the 
   for (const word of ['', 'usage', 'Claude-usage', 'claude-usage ', 'claude-usage;id', 'constructor']) {
     assert.equal(isAccountsMode(word), false, JSON.stringify(word));
   }
-  const caseLine = `    ${ACCOUNTS_MODES.map((mode) => `1:${mode}`).join('|')}) ;;`;
-  assert.equal(ACCOUNTS_SCRIPT.split('\n').filter((line) => line === caseLine).length, 1, `the script has no line ${JSON.stringify(caseLine)}`);
+  const rows = ['    1:no-claude-usage) want= ;;', '    2:claude-usage)'];
+  assert.deepEqual(ACCOUNTS_MODES.map((mode) => rows.some((row) => row.includes(`:${mode})`))), [true, true], 'a mode has no case row');
+  for (const row of rows) {
+    assert.equal(ACCOUNTS_SCRIPT.split('\n').filter((line) => line === row).length, 1, `the script has no line ${JSON.stringify(row)}`);
+  }
+  assert.ok(ACCOUNTS_SCRIPT.includes('[ "${#want}" -eq 64 ] || { printf \'COAI-BAD operands\\n\'; return 0; }'), 'the digest is not held to 64 characters');
+  assert.deepEqual(['0'.repeat(64), 'a'.repeat(64), 'f0'.repeat(32)].map(isAccountsDigest), [true, true, true]);
+  for (const word of ['', '0'.repeat(63), '0'.repeat(65), 'A'.repeat(64), `${'0'.repeat(63)} `, `${'0'.repeat(63)}g`, 'someone@example.com']) {
+    assert.equal(isAccountsDigest(word), false, JSON.stringify(word));
+  }
+  assert.equal(ACCOUNTS_DIGEST.source, '^[0-9a-f]{64}$');
   assert.ok(ACCOUNTS_SCRIPT.includes('case $#:${1-} in\n'), 'the script does not count the operands with the case');
 });
 
@@ -169,7 +182,7 @@ const VENDOR_RULES: readonly Rule[] = [
 
 const COMPANION_RULES: readonly Rule[] = [
   ['</dev/null 2>/dev/null is there once', (t) => count(t, '</dev/null 2>/dev/null') !== 1],
-  ['|| return 0 is there seven times', (t) => count(t, '|| return 0') !== 7],
+  ['|| return 0 is there twelve times', (t) => count(t, '|| return 0') !== 12],
   ['the first set is set -f, and each set +f has a set -f two lines after it', (t) => {
     const lines = linesOf(t);
     const first = lines.find((line) => /^\s*set /u.test(line));
@@ -213,7 +226,7 @@ const MUTATIONS: readonly (readonly [string, string, (text: string) => string])[
   ['auth.json and the agy token are named once each, as the argument of coai_sign_in', 'auth.json opened', (t) => t.replace('  unset IFS\n', '  unset IFS\n  : "$HOME/.codex/auth.json"\n')],
   ['no jq program holds a word that prints a whole value, a key list or the environment', 'tojson', (t) => t.replace('(.rl.primary | win)', '(.rl.primary | tojson)')],
   ['</dev/null 2>/dev/null is there once', 'a second pair', (t) => t.replace('  unset IFS\n', '  unset IFS\n  : </dev/null 2>/dev/null\n')],
-  ['|| return 0 is there seven times', 'an eighth', (t) => t.replace('  unset IFS\n', '  unset IFS\n  : || return 0\n')],
+  ['|| return 0 is there twelve times', 'a thirteenth', (t) => t.replace('  unset IFS\n', '  unset IFS\n  : || return 0\n')],
   ['the first set is set -f, and each set +f has a set -f two lines after it', 'a set +f left open', (t) => t.replaceAll('    set -f\n    while', '    :\n    while')],
 ];
 
@@ -253,7 +266,8 @@ test('A2-T26: the vendor commands and the readers carry the numbers of the const
     ['the usage reader (jq)', `timeout -k 1 ${r.usage} jq -n -r "$jq_usage"`],
     ['the agy reader', `timeout -k 1 ${r.agy} sed`],
     ['the Codex list', `timeout -k 1 ${r.codexList} ls`],
-    ['the Codex file time', `timeout -k 1 ${r.codexTime} stat`],
+    ['the Codex file time', `timeout -k 1 ${r.codexTime} "$st" -c %Y`],
+    ['the digest reader', `timeout -k 1 ${r.digest} sha256sum`],
     ['the Codex file read', `timeout -k 1 ${r.codexFile} tail`],
     ['the Codex record reader', `timeout -k 1 ${r.codexRecord} jq -n -R`],
   ] as const) {
@@ -283,10 +297,10 @@ test('A2-T26: the byte caps, the line caps and the protocol are the constants', 
 test('A2-T26: no ls, stat or Codex tail runs without a timeout, and each reader\'s limit is at least its command\'s', () => {
   const t = ACCOUNTS_SCRIPT;
   assert.equal(count(t, 'ls -tr'), 1);
-  assert.equal(count(t, 'stat -c'), 1);
+  assert.equal(count(t, '"$st" -c %Y'), 1);
   assert.equal(matches(t, new RegExp(`tail -c ${CODEX_TAIL_MAX} <`, 'gu')), 1);
-  for (const word of ['ls -tr', 'stat -c', `tail -c ${CODEX_TAIL_MAX} <`]) {
-    assert.ok(new RegExp(`timeout -k 1 \\d+ ${word}`, 'u').test(t), `${word} does not follow a timeout -k 1 <n>`);
+  for (const word of ['ls -tr', '"$st" -c %Y', `tail -c ${CODEX_TAIL_MAX} <`]) {
+    assert.ok(new RegExp(`timeout -k 1 \\d+ ${word.replaceAll('$', '\\$')}`, 'u').test(t), `${word} does not follow a timeout -k 1 <n>`);
   }
   const s = ACCOUNTS_SECONDS;
   const r = ACCOUNTS_READ_SECONDS;
@@ -302,25 +316,45 @@ const connectSeconds = (): number => {
   return Number(word?.split('=')[1]);
 };
 
-test('A2-T26: the readers\' limits and ssh\'s connect are under the runner\'s ceiling — the sum is said', () => {
+test('E3S2-T12 (T46, the sum): worstSeconds of each mode is the table of § R2.5 plus the connect time, and at most the ceiling minus 2 s', () => {
   const r = ACCOUNTS_READ_SECONDS;
-  const steps = r.account + r.version + r.usage + r.agy + r.codexList + r.codexTime + Math.max(r.codexRecord, CODEX_FILES_MAX * r.codexFile);
-  const withConnect = steps + connectSeconds();
-  assert.equal(steps, 24, 'the readers\' limits sum to 24 s (§ A2.3, the time table)');
   assert.equal(connectSeconds(), 5);
-  assert.ok(withConnect < ACCOUNTS_CEILING_SECONDS, `the readers' limits (${steps} s) and ssh's connect (${connectSeconds()} s) are ${withConnect} s, over the ceiling of ${ACCOUNTS_CEILING_SECONDS} s`);
+  assert.equal(ACCOUNTS_CONNECT_SECONDS, connectSeconds(), 'the connect seconds are the ConnectTimeout of SSH_OPTIONS');
+  assert.equal(ACCOUNTS_CEILING_SECONDS, 30);
+  assert.deepEqual({ ...ACCOUNTS_KILL_SECONDS }, { version: 1, agy: 1 });
+  for (const mode of ACCOUNTS_MODES) {
+    assert.equal(worstSeconds(mode), 17 + ACCOUNTS_CONNECT_SECONDS, `${mode}: the table of § R2.5 says 17 s and then the connect`);
+    assert.ok(worstSeconds(mode) <= ACCOUNTS_CEILING_SECONDS - 2, `${mode}: ${worstSeconds(mode)} s is over the ceiling of ${ACCOUNTS_CEILING_SECONDS} s minus 2 s`);
+  }
+  // the first mode, step by step, as the table says it: account 4; version 2 + 1; the Codex files 1 + 1 + 3; agy 4 + 1
+  assert.equal(r.account + r.version + ACCOUNTS_KILL_SECONDS.version + r.codexList + r.codexTime + Math.max(r.codexRecord, CODEX_FILES_MAX * r.codexFile) + r.agy + ACCOUNTS_KILL_SECONDS.agy, 17);
+  // the usage mode: account 4; version 2 + 1; the digest 1; usage 9
+  assert.equal(r.account + r.version + ACCOUNTS_KILL_SECONDS.version + r.digest + r.usage, 17);
   const s = ACCOUNTS_SECONDS;
   const vendor = s.account + s.version + s.usage + s.agy + 4 + connectSeconds();
   assert.ok(vendor < ACCOUNTS_CEILING_SECONDS, `the four limits, one KILL second each and the connect are ${vendor} s`);
-  assert.equal(ACCOUNTS_CEILING_SECONDS, 30);
 });
 
-test('A2-T26: each tool of ACCOUNTS_TOOLS is in the for-tool line and no other is; the manager words and paths are in the text in order', () => {
-  const line = ACCOUNTS_SCRIPT.split('\n').find((one) => one.trimStart().startsWith('for tool in '));
-  assert.equal(line, `  for tool in ${ACCOUNTS_TOOLS.join(' ')}; do`);
+test('A2-T26 / E3S2-T3: each tool of ACCOUNTS_TOOLS is in the text and no other is; the PATH line is ACCOUNTS_PATH; the manager words and paths are in the text in order', () => {
+  const [first, ...others] = ACCOUNTS_TOOLS;
+  assert.equal(first, 'id', 'id is the first tool and is checked by its own line');
+  assert.equal(count(ACCOUNTS_SCRIPT, 'command -v id >/dev/null || { printf \'COAI-BAD tool\\n\'; return 0; }'), 1);
+  const lines = ACCOUNTS_SCRIPT.split('\n');
+  assert.ok(lines.includes(`  tools='${others.join(' ')}'`), 'the tools line does not list ACCOUNTS_TOOLS after id');
+  assert.ok(lines.includes('  [ "$mode" != claude-usage ] || tools="$tools sha256sum"'), 'sha256sum is not checked in the usage mode');
+  const setLines = lines.filter((one) => one.trimStart().startsWith('PATH='));
+  assert.ok(setLines.includes(`  PATH=${ACCOUNTS_PATH}`), 'the PATH line is not ACCOUNTS_PATH');
+  assert.equal(setLines.filter((one) => /^\s*PATH=\//u.test(one)).length, 1, 'more than one fixed PATH line');
+  assert.ok(setLines.every((one) => one === `  PATH=${ACCOUNTS_PATH}` || /^ +PATH=\$HOME\/\.local\/bin(?::\$PATH)?$/u.test(one)), 'a PATH line adds something that is not the home folder');
+  const entries = ACCOUNTS_PATH.split(':');
+  assert.equal(entries.length, 6);
+  for (const entry of entries) {
+    assert.ok(/^\/[a-z]/u.test(entry) && !/^\/(?:tmp|home|mnt)(?:\/|$)/u.test(entry) && !entry.includes('//') && !entry.endsWith('/'), `PATH entry ${JSON.stringify(entry)} is not a fixed system folder`);
+  }
+  assert.ok(ACCOUNTS_SCRIPT.includes('    *:*) printf \'COAI-BAD home\\n\'; return 0 ;;\n    /*) ;;'), 'the *:* row of the HOME check is not before /*');
   const manager = managerLines(ACCOUNTS_SCRIPT);
   const printed = manager.flatMap((one) => /printf '([a-z-]+)'/u.exec(one)?.[1] ?? []);
   assert.deepEqual(printed, MANAGER_WORDS, 'MANAGER_WORDS are not the words coai_manager prints, in that order');
-  const paths = manager.flatMap((one) => /\[ -x (\S+) \]/u.exec(one)?.[1] ?? []);
-  assert.deepEqual(paths, ['/usr/bin/apt-get', '/usr/bin/dnf', '/usr/bin/yum', '/sbin/apk'], 'the four absolute paths, in the order apt-get, dnf, yum, apk');
+  const folders = manager.flatMap((one) => /\[ -x (\S+) \]/u.exec(one)?.[1] ?? []);
+  assert.deepEqual(folders, ['/usr/bin/apt-get', '/usr/bin/dnf', '/usr/bin/yum', '/sbin/apk'], 'the four absolute paths, in the order apt-get, dnf, yum, apk');
 });

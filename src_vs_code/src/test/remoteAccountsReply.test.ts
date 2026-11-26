@@ -8,7 +8,9 @@ import {
 } from '../remoteAccountsReply';
 import { AccountsMode } from '../remoteAccountsScript';
 import { sourceOf } from './sourceReading';
-import { FILE_TIME, GOOD, GOOD_LINES, LINES, NOW, RECORD_TIME, frame, ok, readOf } from './accountsFrames';
+import {
+  ACCOUNT_LINES, FILE_TIME, GOOD, GOOD_LINES, LINES, NOW, RECORD_TIME, USAGE_GOOD, USAGE_GOOD_LINES, USAGE_READ_LINES, claudeOnlyOf, frame, ok, readOf,
+} from './accountsFrames';
 
 /**
  * The accounts parser (E1.S2, spec § A2.11.4): the closed vocabulary, each fault by its own word, no secret-shaped value, absent is
@@ -16,7 +18,8 @@ import { FILE_TIME, GOOD, GOOD_LINES, LINES, NOW, RECORD_TIME, frame, ok, readOf
  * changes one thing of a reply the parser accepts.
  */
 
-const MODE: AccountsMode = 'claude-usage';
+const MODE: AccountsMode = 'no-claude-usage';
+const USAGE_MODE: AccountsMode = 'claude-usage';
 const run = (stdout: string, mode: AccountsMode = MODE): AccountsRead => readAccounts(ok(stdout), mode, NOW);
 const text = (...lines: readonly string[]): string => frame(...lines);
 
@@ -34,11 +37,20 @@ test('A2-T15: GOOD is read — Claude found with three windows, Codex read, agy 
   const answer = readOf(run(GOOD));
   assert.equal(answer.claude.state, 'found');
   const usage = answer.claude.state === 'found' ? answer.claude.usage : undefined;
-  assert.equal(usage?.state, 'read');
-  assert.equal(usage?.state === 'read' && usage.windows.length, 3);
+  assert.equal(usage?.state, 'skipped');
   assert.equal(answer.codex.state === 'found' && answer.codex.usage.state, 'read');
   assert.equal(answer.agy.state, 'found');
   assert.equal(answer.jqMissing, undefined);
+});
+
+test('A2-T15 / E3S2-T16: USAGE_GOOD is read by the usage mode — Claude found with three windows, and nothing else', () => {
+  const answer = claudeOnlyOf(run(USAGE_GOOD, USAGE_MODE));
+  assert.equal(answer.claude.state, 'found');
+  const usage = answer.claude.state === 'found' ? answer.claude.usage : undefined;
+  assert.equal(usage?.state, 'read');
+  assert.equal(usage?.state === 'read' && usage.windows.length, 3);
+  assert.equal(answer.jqMissing, undefined);
+  assert.deepEqual(Object.keys(answer).sort(), ['claude', 'jqMissing', 'kind']);
 });
 
 // ───────────────── the frame built from the grammar: every marker, every key ─────────────────
@@ -54,6 +66,7 @@ const SAMPLE: Readonly<Record<string, string>> = {
   'sign-in-file': 'present',
   window: '14 10080 1795518850',
   'as-of': `${RECORD_TIME} ${FILE_TIME}`,
+  path: '/home/a/.local/bin',
 };
 
 const TEXT_KEYS = ['email', 'org', 'plan', 'version', 'line'];
@@ -66,12 +79,14 @@ const sampleOf = (key: string): string => {
 };
 
 interface Parts { jq: readonly string[]; claude: readonly string[]; codex: readonly string[]; agy: readonly string[] }
-const DEFAULT: Parts = { jq: GOOD_LINES.slice(0, 1), claude: GOOD_LINES.slice(1, 12), codex: GOOD_LINES.slice(12, 18), agy: GOOD_LINES.slice(18) };
+const DEFAULT: Parts = { jq: GOOD_LINES.slice(0, 1), claude: GOOD_LINES.slice(1, 7), codex: GOOD_LINES.slice(7, 13), agy: GOOD_LINES.slice(13) };
 const USAGE_AFTER: Readonly<Record<string, readonly string[]>> = {
-  claude: GOOD_LINES.slice(6, 12),
-  codex: GOOD_LINES.slice(15, 18),
+  claude: ['COAI-USAGE claude skipped'],
+  codex: GOOD_LINES.slice(10, 13),
   agy: ['COAI-USAGE agy none'],
 };
+/** The rows of the usage mode: a reply with the Claude part and nothing else. */
+const USAGE_ROWS = ['COAI-USAGE claude read', 'COAI-USAGE claude failed timeout', 'COAI-USAGE claude failed error', 'COAI-USAGE claude skipped account-changed'];
 const FOUND_DATA: Readonly<Record<string, readonly string[]>> = { claude: [], codex: [':sign-in-file present'], agy: [':sign-in-file present'] };
 
 const frameOf = (parts: Parts): string => text(...parts.jq, ...parts.claude, ...parts.codex, ...parts.agy);
@@ -85,7 +100,10 @@ function placed(row: string, data: readonly string[]): { readonly parts: Parts; 
     return { parts: { ...DEFAULT, jq: [row], claude: missing ? ['COAI-VENDOR claude absent'] : DEFAULT.claude, codex: missing ? ['COAI-VENDOR codex absent'] : DEFAULT.codex }, mode: MODE };
   }
   if (kind === 'COAI-BAD') {
-    return { parts: { jq: [row], claude: [], codex: [], agy: [] }, mode: MODE };
+    return { parts: { jq: [row, ...data], claude: [], codex: [], agy: [] }, mode: MODE };
+  }
+  if (USAGE_ROWS.includes(row)) {
+    return { parts: { ...DEFAULT, claude: [...GOOD_LINES.slice(1, 6), row, ...data], codex: [], agy: [] }, mode: USAGE_MODE };
   }
   const block = kind === 'COAI-VENDOR'
     ? [row, ...data, ...(state === 'found' ? USAGE_AFTER[vendor] ?? [] : [])]
@@ -94,21 +112,21 @@ function placed(row: string, data: readonly string[]): { readonly parts: Parts; 
   // A vendor that could not run `jq` goes with a `COAI-JQ missing` line, and then the other vendor of the two that need it is absent.
   const noJq = row.endsWith('no-jq') ? { jq: ['COAI-JQ missing apt-get'], claude: ['COAI-VENDOR claude absent'], codex: ['COAI-VENDOR codex absent'] } : {};
 
-  return { parts: { ...DEFAULT, ...noJq, [vendor]: block }, mode: row === 'COAI-USAGE claude skipped' ? 'no-claude-usage' : MODE };
+  return { parts: { ...DEFAULT, ...noJq, [vendor]: block }, mode: MODE };
 }
 
 const rows = Object.keys(ACCOUNTS_GRAMMAR);
 
 test('A2-T15 derived: every marker the grammar knows, in its place, with its required keys, is read', () => {
-  assert.ok(rows.length >= 30, `the grammar has ${rows.length} rows`);
+  assert.ok(rows.length >= 34, `the grammar has ${rows.length} rows`);
   for (const row of rows) {
-    const { parts, mode } = placed(row, row.startsWith('COAI-BAD') ? [] : required(row));
+    const { parts, mode } = placed(row, required(row));
     const answer = run(frameOf(parts), mode);
     if (row.startsWith('COAI-BAD')) {
       assert.equal(answer.kind, 'unreadable', row);
-      assert.ok(answer.kind === 'unreadable' && ['operands', 'home', 'folder', 'tool'].includes(answer.why), row);
+      assert.ok(answer.kind === 'unreadable' && ['operands', 'home', 'folder', 'tool', 'unsafe'].includes(answer.why), row);
     } else {
-      assert.equal(answer.kind, 'read', `${row}: ${JSON.stringify(answer)}`);
+      assert.equal(answer.kind, mode === USAGE_MODE ? 'claude-only' : 'read', `${row}: ${JSON.stringify(answer)}`);
     }
   }
 });
@@ -120,10 +138,11 @@ test('A2-T15 derived: every key of every marker, alone, is read', () => {
       keys += 1;
       const data = [...required(row).filter((line) => !line.startsWith(`:${key} `)), `:${key} ${sampleOf(key)}`];
       const { parts, mode } = placed(row, data);
-      assert.equal(run(frameOf(parts), mode).kind, 'read', `${row} ${key}`);
+      const answer = run(frameOf(parts), mode);
+      assert.equal(answer.kind, row.startsWith('COAI-BAD') ? 'unreadable' : mode === USAGE_MODE ? 'claude-only' : 'read', `${row} ${key}: ${JSON.stringify(answer)}`);
     }
   }
-  assert.ok(keys >= 13, `the grammar has ${keys} keys in all`);
+  assert.ok(keys >= 16, `the grammar has ${keys} keys in all`);
 });
 
 test('A2-T15: each fault by its own word', () => {
@@ -132,7 +151,7 @@ test('A2-T15: each fault by its own word', () => {
   unreadableWith(run(GOOD.replace('COAI-ACCOUNTS 1\n', '')), 'no-sentinel', 'no begin line');
   unreadableWith(run(GOOD.replace('COAI-ACCOUNTS 1\n', 'COAI-ACCOUNTS 2\n')), 'version', 'another version');
   unreadableWith(run(GOOD.replace('COAI-ACCOUNTS-END\n', '')), 'cut', 'no end line');
-  unreadableWith(run(text(...GOOD_LINES, ...Array.from({ length: 45 }, () => ':org x'))), 'too-many', 'a 65th line');
+  unreadableWith(run(text(...GOOD_LINES, ...Array.from({ length: 48 }, () => ':org x'))), 'too-many', 'a 65th line');
   unreadableWith(run(text(...GOOD_LINES.slice(0, 4), `:org ${'é'.repeat(254)}`, ...GOOD_LINES.slice(4))), 'too-long', '513 bytes made of 259 characters');
   assert.equal(run(text(...GOOD_LINES.slice(0, 3), `:org ${'é'.repeat(253)}`, ...GOOD_LINES.slice(4))).kind, 'read', '511 bytes are read');
   unreadableWith(run(text(...GOOD_LINES, 'hello')), 'line', 'a line that is neither');
@@ -141,13 +160,18 @@ test('A2-T15: each fault by its own word', () => {
   unreadableWith(run(text(...swap('COAI-VENDOR agy found', 'COAI-VENDOR claude maybe'))), 'marker', 'a word the marker does not take');
   unreadableWith(run(text(...swap('COAI-VENDOR agy found', 'COAI-VENDOR gemini found'))), 'marker', 'an unknown vendor');
   unreadableWith(run(text(...swap(':org Example Org', ':token x'))), 'key', 'an unknown key');
-  unreadableWith(run(text(...swap(':turns 0', ':email x'))), 'key', ':email under a usage marker');
+  const swapUsage = (from: string, to: string): readonly string[] => USAGE_GOOD_LINES.map((line) => (line === from ? to : line));
+  unreadableWith(run(text(...swapUsage(':turns 0', ':email x')), USAGE_MODE), 'key', ':email under a usage marker');
   unreadableWith(run(text(...swap(':org Example Org', ':email x'))), 'key', ':email twice');
-  unreadableWith(run(text(...GOOD_LINES.slice(0, 10), ...Array.from({ length: 6 }, () => `:line ${LINES[0]}`), ...GOOD_LINES.slice(10))), 'key', 'nine :line');
-  for (const [from, to] of [[':turns 0', ':turns x'], [':turns 0', ':turns 1234567'], [':unmatched 0', ':unmatched -1'], [':sign-in-file present', ':sign-in-file maybe'],
+  const at = USAGE_GOOD_LINES.indexOf(`:line ${LINES[0]}`);
+  unreadableWith(run(text(...USAGE_GOOD_LINES.slice(0, at), ...Array.from({ length: 6 }, () => `:line ${LINES[0]}`), ...USAGE_GOOD_LINES.slice(at)), USAGE_MODE), 'key', 'nine :line');
+  for (const [from, to] of [[':sign-in-file present', ':sign-in-file maybe'],
     [':window 14 10080 1795518850', ':window 1 2'], [':as-of 2026-11-17T19:32:36.474Z 1794938000', ':as-of 1'], [':as-of 2026-11-17T19:32:36.474Z 1794938000', ':as-of - soon']] as const) {
-    const lines = GOOD_LINES.map((line) => (line === from || (from === ':sign-in-file present' && line === from) ? to : line));
+    const lines = GOOD_LINES.map((line) => (line === from ? to : line));
     unreadableWith(run(text(...lines)), 'value', to);
+  }
+  for (const [from, to] of [[':turns 0', ':turns x'], [':turns 0', ':turns 1234567'], [':unmatched 0', ':unmatched -1']] as const) {
+    unreadableWith(run(text(...swapUsage(from, to)), USAGE_MODE), 'value', to);
   }
 });
 
@@ -203,11 +227,12 @@ test('A2-T16: the marker-token test — no token in any value of any marker reac
         assert.equal(consoleCalls(() => { answer = run(frameOf(parts), mode); }), 0, `${row} ${key}: the parser wrote to the console`);
         assert.ok(answer !== undefined && !leaks(answer), `${row} ${key}: a token is in the typed result`);
         if (TEXT_KEYS.includes(key)) {
-          const side = readOf(answer as AccountsRead)[vendorOf(row)];
-          assert.deepEqual(side, { state: 'unreadable', why: 'credential-shape' }, `${row} ${key}: the vendor is unreadable`);
+          const got = answer as AccountsRead;
+          const sides = got.kind === 'claude-only' ? { claude: got.claude } : readOf(got);
+          assert.deepEqual((sides as Record<string, unknown>)[vendorOf(row)], { state: 'unreadable', why: 'credential-shape' }, `${row} ${key}: the vendor is unreadable`);
           for (const other of ['claude', 'codex', 'agy'] as const) {
-            if (other !== vendorOf(row)) {
-              assert.deepEqual(readOf(answer as AccountsRead)[other], goodRead()[other], `${row} ${key}: the ${other} side must stand`);
+            if (other !== vendorOf(row) && other in sides) {
+              assert.deepEqual((sides as Record<string, unknown>)[other], goodRead()[other], `${row} ${key}: the ${other} side must stand`);
             }
           }
         } else {
@@ -263,6 +288,14 @@ test('A2-T16: the values are plain — controls out, $( broken, the length cut',
   assert.equal(orgOf('Team $(zap)'), 'Team $ (zap)');
   assert.equal(orgOf('ab '.repeat(100))?.length, 200);
   unreadableWith(run(text(...GOOD_LINES.slice(0, 3), `:org ${'a b '.repeat(2500)}`, ...GOOD_LINES.slice(4))), 'too-long', 'a value of 10 KB');
+  const pathOf = (value: string): string | null | undefined => {
+    const answer = run(text('COAI-JQ found', 'COAI-VENDOR claude unsafe', `:path ${value}`, ...GOOD_LINES.slice(7)));
+    const claude = readOf(answer).claude;
+
+    return claude.state === 'unsafe' ? claude.path : undefined;
+  };
+  assert.equal(pathOf('/home/a/.local/bin'), '/home/a/.local/bin');
+  assert.equal(pathOf('-'), null);
 });
 
 test('A2-T16: percents 101, -1, 1e3 and NaN in a :window are not known, and the window is kept', () => {
@@ -301,12 +334,12 @@ test('A2-T17: each number of GOOD taken out is null, and no field of the result 
     ['no :window', without((line) => line.startsWith(':window '))],
     ['- for used', without((line) => line.startsWith(':window '), ':window - 10080 1795518850')],
     ['- for reset', without((line) => line.startsWith(':window '), ':window 14 10080 -')],
-    ['no reset zone', without((line) => line.startsWith(':line Current session'), `:line Current session: 56% used · resets Nov 19, 3pm`)],
+    ['no reset zone', run(text(...USAGE_GOOD_LINES.flatMap((line) => (line.startsWith(':line Current session') ? [`:line Current session: 56% used · resets Nov 19, 3pm`] : [line]))), USAGE_MODE)],
     ['no :as-of time', without((line) => line.startsWith(':as-of '), ':as-of - -')],
     ['no :version', without((line) => line === ':version 2.1.326')],
   ];
   for (const [name, answer] of variants) {
-    const answered = readOf(answer);
+    const answered = answer.kind === 'claude-only' ? answer : readOf(answer);
     assert.deepEqual(numbers(answered).filter(([, value]) => value === 0), [], `${name}: a field of the result is 0`);
   }
   const used = readOf(variants[1]?.[1] as AccountsRead).codex;
@@ -317,7 +350,7 @@ test('A2-T17: each number of GOOD taken out is null, and no field of the result 
   assert.ok(asOf.state === 'found' && asOf.usage.state === 'read' && asOf.usage.asOf === null);
   const version = readOf(variants[5]?.[1] as AccountsRead).claude;
   assert.ok(version.state === 'found' && version.version === null);
-  const zone = readOf(variants[3]?.[1] as AccountsRead).claude;
+  const zone = claudeOnlyOf(variants[3]?.[1] as AccountsRead).claude;
   assert.ok(zone.state === 'found' && zone.usage.state === 'read' && zone.usage.windows.length === 2 && zone.usage.unmatched === 1);
 });
 
@@ -377,10 +410,11 @@ test('A2-T17: the parser files hold no ?? 0, no || 0 and no 100 -, and the scan 
 
 // ───────────────── A2-T20: one arm for each outcome, and the parser never throws ─────────────────
 
-const swapJq = (jq: string, claude: readonly string[], codex: readonly string[]): string => text(jq, ...claude, ...codex, ...GOOD_LINES.slice(18));
+const swapJq = (jq: string, claude: readonly string[], codex: readonly string[]): string => text(jq, ...claude, ...codex, ...GOOD_LINES.slice(13));
 
 test('A2-T20: one frame for each outcome, all different, no key holds undefined, four absent-like values differ', () => {
-  const claudeUsage = (...lines: readonly string[]): readonly string[] => ['COAI-VENDOR claude found', 'COAI-USAGE claude ' + lines[0], ...lines.slice(1)];
+  // The usage mode's replies hold the Claude part and nothing else (E3.S2, § R2.7).
+  const claudeUsage = (...lines: readonly string[]): AccountsRead => run(text('COAI-JQ found', ...ACCOUNT_LINES, 'COAI-USAGE claude ' + lines[0], ...lines.slice(1)), USAGE_MODE);
   const outcomes: Readonly<Record<string, AccountsRead>> = {
     'claude absent': run(swapJq('COAI-JQ found', ['COAI-VENDOR claude absent'], DEFAULT.codex)),
     'claude signed-out': run(swapJq('COAI-JQ found', ['COAI-VENDOR claude signed-out'], DEFAULT.codex)),
@@ -388,35 +422,43 @@ test('A2-T20: one frame for each outcome, all different, no key holds undefined,
     'claude unreadable auth': run(swapJq('COAI-JQ found', ['COAI-VENDOR claude unreadable auth'], DEFAULT.codex)),
     'claude unreadable timeout': run(swapJq('COAI-JQ found', ['COAI-VENDOR claude unreadable timeout'], DEFAULT.codex)),
     'claude unreadable credential-shape': run(swapJq('COAI-JQ found', [...DEFAULT.claude.slice(0, 1), `:email ${TOKENS[1]}`, ...DEFAULT.claude.slice(5)], DEFAULT.codex)),
-    'claude found, usage read': run(GOOD),
+    'claude found, usage read': run(USAGE_GOOD, USAGE_MODE),
     'claude found, usage skipped': run(swapJq('COAI-JQ found', ['COAI-VENDOR claude found', 'COAI-USAGE claude skipped'], DEFAULT.codex), 'no-claude-usage'),
-    'claude found, usage failed timeout': run(swapJq('COAI-JQ found', claudeUsage('failed timeout'), DEFAULT.codex)),
-    'claude found, usage failed error': run(swapJq('COAI-JQ found', claudeUsage('failed error'), DEFAULT.codex)),
-    'claude found, usage failed format': run(swapJq('COAI-JQ found', claudeUsage('read', ':turns 0', ':unmatched 0'), DEFAULT.codex)),
-    'claude found, usage failed model-call': run(swapJq('COAI-JQ found', claudeUsage('read', ':turns 2', `:line ${LINES[0]}`, ':unmatched 0'), DEFAULT.codex)),
+    'claude found, usage skipped account-changed': claudeUsage('skipped account-changed'),
+    'claude found, usage failed timeout': claudeUsage('failed timeout'),
+    'claude found, usage failed error': claudeUsage('failed error'),
+    'claude found, usage failed format': claudeUsage('read', ':turns 0', ':unmatched 0'),
+    'claude found, usage failed model-call': claudeUsage('read', ':turns 2', `:line ${LINES[0]}`, ':unmatched 0'),
+    'claude unsafe': run(swapJq('COAI-JQ found', ['COAI-VENDOR claude unsafe', ':path /home/a/.local/bin'], DEFAULT.codex)),
+    'claude unsafe, no path': run(swapJq('COAI-JQ found', ['COAI-VENDOR claude unsafe', ':path -'], DEFAULT.codex)),
+    'agy unsafe': run(text(...GOOD_LINES.slice(0, 13), 'COAI-VENDOR agy unsafe', ':path /root/.local/bin')),
     'codex absent': run(swapJq('COAI-JQ found', DEFAULT.claude, ['COAI-VENDOR codex absent'])),
     'codex unreadable no-jq': run(swapJq('COAI-JQ missing yum', ['COAI-VENDOR claude absent'], ['COAI-VENDOR codex unreadable no-jq'])),
     'codex unreadable credential-shape': run(swapJq('COAI-JQ found', DEFAULT.claude, ['COAI-VENDOR codex found', ':sign-in-file present', `:plan ${TOKENS[1]}`, ...USAGE_AFTER.codex as readonly string[]])),
     'codex failed no-sessions': run(swapJq('COAI-JQ found', DEFAULT.claude, ['COAI-VENDOR codex found', ':sign-in-file present', 'COAI-USAGE codex failed no-sessions'])),
     'codex failed none': run(swapJq('COAI-JQ found', DEFAULT.claude, ['COAI-VENDOR codex found', ':sign-in-file present', 'COAI-USAGE codex failed none'])),
     'codex failed error': run(swapJq('COAI-JQ found', DEFAULT.claude, ['COAI-VENDOR codex found', ':sign-in-file absent', 'COAI-USAGE codex failed error'])),
-    'agy absent': run(text(...GOOD_LINES.slice(0, 18), 'COAI-VENDOR agy absent')),
-    'agy unreadable credential-shape': run(text(...GOOD_LINES.slice(0, 18), 'COAI-VENDOR agy found', `:version ${TOKENS[1]}`, ':sign-in-file present', 'COAI-USAGE agy none')),
+    'agy absent': run(text(...GOOD_LINES.slice(0, 13), 'COAI-VENDOR agy absent')),
+    'agy unreadable credential-shape': run(text(...GOOD_LINES.slice(0, 13), 'COAI-VENDOR agy found', `:version ${TOKENS[1]}`, ':sign-in-file present', 'COAI-USAGE agy none')),
   };
   const seen = new Map<string, string>();
   for (const [name, answer] of Object.entries(outcomes)) {
-    assert.equal(answer.kind, 'read', `${name}: ${JSON.stringify(answer)}`);
+    assert.ok(answer.kind === 'read' || answer.kind === 'claude-only', `${name}: ${JSON.stringify(answer)}`);
     const json = JSON.stringify(answer);
     const clash = seen.get(json);
     assert.equal(clash, undefined, `${name} and ${clash ?? ''} are the same value as JSON`);
     seen.set(json, name);
-    const arms = answer.kind === 'read' ? [answer.claude, answer.codex, answer.agy] : [];
+    const arms = answer.kind === 'read' ? [answer.claude, answer.codex, answer.agy] : answer.kind === 'claude-only' ? [answer.claude] : [];
     for (const arm of arms) {
       assert.ok(!hasUndefined(arm), `${name}: an arm holds a key whose value is undefined`);
     }
   }
   const claudeOf = (name: string): unknown => (outcomes[name] as Extract<AccountsRead, { kind: 'read' }>).claude;
   assert.equal(JSON.stringify(claudeOf('claude found, usage skipped')).includes('"usage":{"state":"skipped"}'), true);
+  assert.equal(JSON.stringify(claudeOf('claude found, usage skipped account-changed')).includes('"usage":{"state":"skipped","why":"account-changed"}'), true);
+  assert.deepEqual(claudeOf('claude unsafe'), { state: 'unsafe', path: '/home/a/.local/bin' });
+  assert.deepEqual(claudeOf('claude unsafe, no path'), { state: 'unsafe', path: null });
+  assert.deepEqual((outcomes['agy unsafe'] as Extract<AccountsRead, { kind: 'read' }>).agy, { state: 'unsafe', path: '/root/.local/bin' });
   const kinds = new Set([
     JSON.stringify({ state: 'no-source' }),
     JSON.stringify({ state: 'skipped' }),
@@ -458,7 +500,7 @@ test('A2-T20: the parser never throws — 1000 inputs from the seeded generator'
       return text(...Array.from({ length: 10000 }, pickLine));
     })();
     const answer = readAccounts({ code: n % 7 === 0 ? -1 : 0, stdout: body }, n % 2 === 0 ? 'claude-usage' : 'no-claude-usage', NOW);
-    assert.ok(answer.kind === 'read' || answer.kind === 'unreadable');
+    assert.ok(answer.kind === 'read' || answer.kind === 'unreadable' || answer.kind === 'claude-only');
     if (answer.kind === 'unreadable') {
       assert.ok(known.has(answer.why), `${answer.why} is not a key of ACCOUNTS_UNREADABLE_SAID`);
     }
@@ -472,22 +514,92 @@ test('A2-T20: the parser never throws — 1000 inputs from the seeded generator'
 
 // ───────────────── A2-T27: the mode and the COAI-JQ line ─────────────────
 
-test('A2-T27: the reply is held to the mode', () => {
-  unreadableWith(run(GOOD, 'no-claude-usage'), 'shape', 'a usage reading for no-claude-usage');
-  const skipped = GOOD_LINES.flatMap((line) => (line === 'COAI-USAGE claude read' ? ['COAI-USAGE claude skipped'] : (/^:(turns|line|unmatched) /u.test(line) && !line.startsWith(':sign') ? [] : [line])));
-  const skippedFrame = text(...skipped);
-  unreadableWith(run(skippedFrame, 'claude-usage'), 'shape', 'skipped for claude-usage');
-  const read = readOf(run(skippedFrame, 'no-claude-usage'));
-  assert.ok(read.claude.state === 'found' && read.claude.usage.state === 'skipped');
+test('E3S2-T15: the parser by mode — the reply is held to the mode that was SENT', () => {
+  unreadableWith(run(GOOD, USAGE_MODE), 'shape', 'a first-mode reply sent as claude-usage');
+  unreadableWith(run(USAGE_GOOD, 'no-claude-usage'), 'shape', 'a usage reply sent as no-claude-usage');
+  // a usage reply with a Codex or an agy record
+  unreadableWith(run(text(...USAGE_GOOD_LINES, ...DEFAULT.codex), USAGE_MODE), 'shape', 'a usage reply with a Codex record');
+  unreadableWith(run(text(...USAGE_GOOD_LINES, ...DEFAULT.agy), USAGE_MODE), 'shape', 'a usage reply with an agy record');
+  unreadableWith(run(text(...USAGE_GOOD_LINES, 'COAI-VENDOR codex absent', 'COAI-VENDOR agy absent'), USAGE_MODE), 'shape', 'a usage reply with absent Codex and agy records');
+  // a plain `skipped` in the usage mode, and `skipped account-changed` in the first mode
+  const plainSkipped = ['COAI-JQ found', ...ACCOUNT_LINES, 'COAI-USAGE claude skipped'];
+  unreadableWith(run(text(...plainSkipped), USAGE_MODE), 'shape', 'skipped for claude-usage');
+  assert.equal(readOf(run(text(...plainSkipped, ...DEFAULT.codex, ...DEFAULT.agy))).claude.state, 'found');
+  const changed = ['COAI-JQ found', ...ACCOUNT_LINES, 'COAI-USAGE claude skipped account-changed'];
+  unreadableWith(run(text(...changed, ...DEFAULT.codex, ...DEFAULT.agy)), 'shape', 'skipped account-changed for no-claude-usage');
+  assert.equal(claudeOnlyOf(run(text(...changed), USAGE_MODE)).claude.state, 'found');
+  // the usage mode, a usage reply whose part is missing a key
+  unreadableWith(run(text(...USAGE_GOOD_LINES.filter((line) => !line.startsWith(':turns '))), USAGE_MODE), 'shape', 'a required key missing: no :turns');
+});
+
+test('E3S2-T16: claude-only for each legal usage reply, and `read` is never answered for the usage mode', () => {
+  const legal: readonly (readonly string[])[] = [
+    ['COAI-JQ found', ...ACCOUNT_LINES, ':version 2.1.326', ...USAGE_READ_LINES],
+    ['COAI-JQ found', ...ACCOUNT_LINES, 'COAI-USAGE claude failed timeout'],
+    ['COAI-JQ found', ...ACCOUNT_LINES, 'COAI-USAGE claude failed error'],
+    ['COAI-JQ found', ...ACCOUNT_LINES, 'COAI-USAGE claude skipped account-changed'],
+    ['COAI-JQ found', 'COAI-VENDOR claude absent'],
+    ['COAI-JQ found', 'COAI-VENDOR claude signed-out'],
+    ['COAI-JQ found', 'COAI-VENDOR claude unreadable auth'],
+    ['COAI-JQ found', 'COAI-VENDOR claude unreadable timeout'],
+    ['COAI-JQ found', 'COAI-VENDOR claude unsafe', ':path /root/.local/bin'],
+    ['COAI-JQ missing apt-get', 'COAI-VENDOR claude absent'],
+    ['COAI-JQ missing yum', 'COAI-VENDOR claude unreadable no-jq'],
+  ];
+  for (const lines of legal) {
+    const answer = run(text(...lines), USAGE_MODE);
+    assert.equal(answer.kind, 'claude-only', `${lines.join(' | ')}: ${JSON.stringify(answer)}`);
+    assert.equal(answer.kind === 'claude-only' && answer.jqMissing, lines[0]?.startsWith('COAI-JQ missing') ? lines[0].split(' ')[2] : undefined);
+    // the same frame in the first mode is never `claude-only`
+    assert.notEqual(run(text(...lines), 'no-claude-usage').kind, 'claude-only');
+  }
+  // a reply to the first mode is `read` and never `claude-only`
+  assert.equal(run(GOOD, 'no-claude-usage').kind, 'read');
+  // COAI-BAD is unreadable in both modes, by its own word
+  for (const mode of ['no-claude-usage', 'claude-usage'] as const) {
+    assert.deepEqual(run(text('COAI-BAD tool'), mode), { kind: 'unreadable', why: 'tool' });
+  }
+});
+
+test('E3S2-T14: the grammar\'s four rows — `unsafe` with a closed `path` in three places, and `skipped account-changed`', () => {
+  for (const row of ['COAI-BAD unsafe', 'COAI-VENDOR claude unsafe', 'COAI-VENDOR agy unsafe']) {
+    assert.deepEqual(Object.keys(ACCOUNTS_GRAMMAR[row] ?? {}), ['path'], row);
+  }
+  assert.deepEqual(ACCOUNTS_GRAMMAR['COAI-USAGE claude skipped account-changed'], {});
+  const bad = (path: string | undefined): AccountsRead => run(text('COAI-BAD unsafe', ...(path === undefined ? [] : [`:path ${path}`])));
+  // a legal path and the dash
+  assert.deepEqual(bad('/home/a/.local/bin'), { kind: 'unreadable', why: 'unsafe', path: '/home/a/.local/bin' });
+  assert.deepEqual(bad('-'), { kind: 'unreadable', why: 'unsafe', path: null });
+  reached.add('unsafe');
+  // a path with a space, of 201 characters, not absolute, with a character outside the class → `value`
+  for (const path of ['/a b', `/${'a'.repeat(200)}`, 'relative/path', '/a;b', '/aé', '/a$(x)', '']) {
+    unreadableWith(bad(path), 'value', JSON.stringify(path));
+  }
+  const longest = `/${'abcd/'.repeat(39)}abcd`;
+  assert.equal(longest.length, 200);
+  assert.deepEqual(bad(longest), { kind: 'unreadable', why: 'unsafe', path: longest }, '200 characters fit');
+  // no path, and a path twice
+  unreadableWith(run(text('COAI-BAD unsafe')), 'shape', 'no path');
+  unreadableWith(run(text('COAI-BAD unsafe', ':path /a', ':path /b')), 'key', 'two paths');
+  // `unsafe` in the three places gives the three typed results
+  const claude = readOf(run(text('COAI-JQ found', 'COAI-VENDOR claude unsafe', ':path /root/.local/bin', ...DEFAULT.codex, ...DEFAULT.agy))).claude;
+  assert.deepEqual(claude, { state: 'unsafe', path: '/root/.local/bin' });
+  const agy = readOf(run(text(...GOOD_LINES.slice(0, 13), 'COAI-VENDOR agy unsafe', ':path -'))).agy;
+  assert.deepEqual(agy, { state: 'unsafe', path: null });
+  // a path in the shape of a credential is not shown, and the vendor stays unsafe
+  const shaped = readOf(run(text('COAI-JQ found', 'COAI-VENDOR claude unsafe', `:path /${'M4RK'.repeat(10)}`, ...DEFAULT.codex, ...DEFAULT.agy))).claude;
+  assert.deepEqual(shaped, { state: 'unsafe', path: null });
+  // the words of the table
+  assert.ok(Object.keys(ACCOUNTS_UNREADABLE_SAID).includes('unsafe'));
 });
 
 test('A2-T27: the COAI-JQ line and the vendors agree', () => {
   const missingFound = GOOD_LINES.map((line) => (line === 'COAI-JQ found' ? 'COAI-JQ missing apt-get' : line));
   unreadableWith(run(text(...missingFound)), 'shape', 'jq missing with Claude found');
-  const foundNoJq = ['COAI-JQ found', 'COAI-VENDOR claude unreadable no-jq', ...GOOD_LINES.slice(12)];
+  const foundNoJq = ['COAI-JQ found', 'COAI-VENDOR claude unreadable no-jq', ...GOOD_LINES.slice(7)];
   unreadableWith(run(text(...foundNoJq)), 'shape', 'jq found with unreadable no-jq');
   for (const word of ['dnf', 'none']) {
-    const lines = [`COAI-JQ missing ${word}`, 'COAI-VENDOR claude unreadable no-jq', 'COAI-VENDOR codex absent', ...GOOD_LINES.slice(18)];
+    const lines = [`COAI-JQ missing ${word}`, 'COAI-VENDOR claude unreadable no-jq', 'COAI-VENDOR codex absent', ...GOOD_LINES.slice(13)];
     const answer = readOf(run(text(...lines)));
     assert.equal(answer.jqMissing, word);
     assert.deepEqual(answer.claude, { state: 'unreadable', why: 'no-jq' });
@@ -508,7 +620,6 @@ test('A2-T27: the arrangement — order, a missing or a doubled vendor, the USAG
     ['no COAI-JQ', [...claude, ...codex, ...agy]],
     ['two COAI-JQ', [...jq, ...jq, ...claude, ...codex, ...agy]],
     ['a USAGE of another vendor after a found one', [...jq, ...claude.slice(0, 5), 'COAI-USAGE codex failed none', ...codex, ...agy]],
-    ['a required key missing: no :turns', [...jq, ...claude.filter((line) => !line.startsWith(':turns ')), ...codex, ...agy]],
     ['a required key missing: no sign-in-file', [...jq, ...claude, ...codex.filter((line) => !line.startsWith(':sign-in-file ')), ...agy]],
   ];
   for (const [name, lines] of shapes) {
@@ -519,7 +630,7 @@ test('A2-T27: the arrangement — order, a missing or a doubled vendor, the USAG
 test('A2-T27: COAI-BAD is the only record of its frame, by its own word', () => {
   for (const word of ['tool', 'operands', 'home', 'folder']) {
     unreadableWith(run(text(`COAI-BAD ${word}`)), word, word);
-    unreadableWith(run(text(`COAI-BAD ${word}`, ...GOOD_LINES.slice(18))), 'shape', `${word} with a vendor after it`);
+    unreadableWith(run(text(`COAI-BAD ${word}`, ...GOOD_LINES.slice(13))), 'shape', `${word} with a vendor after it`);
   }
   unreadableWith(run(text('COAI-BAD nope')), 'marker', 'an unknown word');
 });

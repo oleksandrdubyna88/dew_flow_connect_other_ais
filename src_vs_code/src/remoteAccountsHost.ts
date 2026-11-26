@@ -103,7 +103,7 @@ class AccountsWindow implements TerminalAccounts {
   private worldOf(): DriverWorld {
     const write = defaultRemoteSeams().log;
     const gate = logGate(write);
-    const real: AccountsCall = (host, mode) => runAccounts(host, mode, ACCOUNTS_LIMITS, { ...defaultRemoteSeams(), log: gate.seamFor(host) });
+    const real: AccountsCall = (host, mode, digest) => runAccounts(host, mode, digest, ACCOUNTS_LIMITS, { ...defaultRemoteSeams(), log: gate.seamFor(host) });
 
     return {
       test: this.test,
@@ -111,8 +111,8 @@ class AccountsWindow implements TerminalAccounts {
       permitted: async () => typeof (await this.sessions.permission()) === 'object',
       may: (host) => this.sessions.may('round', host),
       standings: () => this.sessions.hostStandings(),
-      call: async (host, mode) => {
-        const run = await callFor(this.test, real, this.replaced)(host, mode);
+      call: async (host, mode, digest) => {
+        const run = await callFor(this.test, real, this.replaced)(host, mode, digest);
         if (run.kind === 'answered') {
           gate.answered(host);
         }

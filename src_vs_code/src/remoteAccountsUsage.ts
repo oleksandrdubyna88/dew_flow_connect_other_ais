@@ -19,6 +19,8 @@ export interface ClaudeWindow {
 export type ClaudeUsage =
   | { readonly state: 'read'; readonly windows: readonly ClaudeWindow[]; readonly unmatched: number }
   | { readonly state: 'skipped' }
+  /** The usage call named an account whose lines were not the first reply's (E3.S2, § R2.7): the script did not start the usage command. */
+  | { readonly state: 'skipped'; readonly why: 'account-changed' }
   | { readonly state: 'failed'; readonly why: 'timeout' | 'error' | 'format' | 'model-call' };
 
 export interface CodexWindow {

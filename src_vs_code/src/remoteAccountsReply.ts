@@ -32,10 +32,14 @@ export type { ManagerWord } from './remoteAccountsScript';
 export type AccountsUnreadable =
   | 'exit' | 'no-sentinel' | 'version' | 'cut' | 'too-many' | 'too-long'
   | 'line' | 'marker' | 'key' | 'value' | 'shape'
-  | 'operands' | 'home' | 'folder' | 'tool';
+  | 'operands' | 'home' | 'folder' | 'tool' | 'unsafe';
+
+/** A program that another user can write, refused before its start as UID 0 (§ R2.6): the path that failed the check, or `null` when it is not shown. */
+export interface UnsafeSide { readonly state: 'unsafe'; readonly path: string | null }
 
 export type ClaudeSide =
   | { readonly state: 'absent' }
+  | UnsafeSide
   | { readonly state: 'signed-out' }
   | { readonly state: 'unreadable'; readonly why: 'no-jq' | 'auth' | 'timeout' | 'credential-shape' }
   | {
@@ -52,11 +56,16 @@ export type CodexSide =
 
 export type AgySide =
   | { readonly state: 'absent' }
+  | UnsafeSide
   | { readonly state: 'unreadable'; readonly why: 'credential-shape' }
   | { readonly state: 'found'; readonly version: string | null; readonly signInFile: boolean; readonly usage: { readonly state: 'no-source' } };
 
 export type AccountsRead =
-  | { readonly kind: 'unreadable'; readonly why: AccountsUnreadable }
+  | { readonly kind: 'unreadable'; readonly why: Exclude<AccountsUnreadable, 'unsafe'> }
+  /** `COAI-BAD unsafe`: a tool of the place is writable by another user, as UID 0 (§ R2.6). */
+  | { readonly kind: 'unreadable'; readonly why: 'unsafe'; readonly path: string | null }
+  /** The reply to the usage mode: the Claude part and nothing else (§ R2.7). Never `read`. */
+  | { readonly kind: 'claude-only'; readonly claude: ClaudeSide; readonly jqMissing: ManagerWord | undefined }
   | {
     readonly kind: 'read'; readonly claude: ClaudeSide; readonly codex: CodexSide; readonly agy: AgySide;
     /** The manager word whenever the VM said `jq` is missing, also on a host where no vendor needs it. */
@@ -79,7 +88,8 @@ export const ACCOUNTS_UNREADABLE_SAID: Readonly<Record<AccountsUnreadable, strin
   operands: 'the remote script refused what it was asked',
   home: 'the remote account has no home folder',
   folder: 'the remote script could not go to the folder /',
-  tool: 'a tool the read needs (timeout, tail, ls, sed or grep) is not on the PATH of an ssh command there',
+  tool: 'a tool the read needs (id, timeout, tail, ls, sed, grep or sha256sum) is not in a system folder there',
+  unsafe: 'a program the read needs is writable by another user',
 };
 
 // ───────────────── the value rules that need no vendor: plain text and the credential net ─────────────────
@@ -120,6 +130,7 @@ const MAYBE: Count = [0, 1];
 const NONE: Readonly<Record<string, Count>> = {};
 
 const BAD_WORDS = ['operands', 'home', 'folder', 'tool'] as const;
+const ONE_PATH: Readonly<Record<string, Count>> = { path: ONCE };
 
 /** A row for each word of a marker: the marker's whole line, and the keys its data lines may hold. */
 const wordRows = (head: string, words: readonly string[], keys: Readonly<Record<string, Count>> = NONE): readonly (readonly [string, Readonly<Record<string, Count>>])[] => words.map((word) => [`${head} ${word}`, keys]);
@@ -131,28 +142,34 @@ const wordRows = (head: string, words: readonly string[], keys: Readonly<Record<
  */
 export const ACCOUNTS_GRAMMAR: Readonly<Record<string, Readonly<Record<string, Count>>>> = Object.fromEntries([
   ...wordRows('COAI-BAD', BAD_WORDS),
+  ['COAI-BAD unsafe', ONE_PATH],
   ['COAI-JQ found', NONE],
   ...wordRows('COAI-JQ missing', MANAGER_WORDS),
   ['COAI-VENDOR claude found', { version: MAYBE, email: MAYBE, org: MAYBE, plan: MAYBE }],
   ...wordRows('COAI-VENDOR claude', ['absent', 'signed-out', 'unreadable no-jq', 'unreadable auth', 'unreadable timeout']),
+  ['COAI-VENDOR claude unsafe', ONE_PATH],
   ['COAI-USAGE claude read', { turns: ONCE, line: [0, USAGE_LINES_MAX], unmatched: ONCE }],
-  ...wordRows('COAI-USAGE claude', ['skipped', 'failed timeout', 'failed error']),
+  ...wordRows('COAI-USAGE claude', ['skipped', 'skipped account-changed', 'failed timeout', 'failed error']),
   ['COAI-VENDOR codex found', { 'sign-in-file': ONCE, plan: MAYBE }],
   ...wordRows('COAI-VENDOR codex', ['absent', 'unreadable no-jq']),
   ['COAI-USAGE codex read', { window: [0, 2], 'as-of': ONCE }],
   ...wordRows('COAI-USAGE codex', ['failed no-sessions', 'failed none', 'failed error']),
   ['COAI-VENDOR agy found', { version: MAYBE, 'sign-in-file': ONCE }],
   ['COAI-VENDOR agy absent', NONE],
+  ['COAI-VENDOR agy unsafe', ONE_PATH],
   ['COAI-USAGE agy none', NONE],
 ]);
 
 /** The keys whose values are in a closed form (§ A2.5): the others are text, and `plainValue` and the credential net judge them. */
 const DIGITS = /^\d{1,6}$/u;
 const TIME_WORD = /^(?:\d+|-|no-stat)$/u;
+/** A path the script printed: the dash, or an absolute path of at most 200 characters of `[A-Za-z0-9._/@+-]` (§ R2.6). */
+const PATH_WORD = /^(?:-|\/[A-Za-z0-9._/@+-]{0,199})$/u;
 const CLOSED: Readonly<Record<string, (value: string) => boolean>> = {
   turns: (value) => DIGITS.test(value),
   unmatched: (value) => DIGITS.test(value),
   'sign-in-file': (value) => value === 'present' || value === 'absent',
+  path: (value) => PATH_WORD.test(value),
   window: (value) => value.split(' ').length === 3,
   'as-of': (value) => value.split(' ').length >= 2 && TIME_WORD.test(value.slice(value.lastIndexOf(' ') + 1)),
 };
@@ -246,20 +263,37 @@ function grammarFault(recs: readonly Rec[]): Fault {
   return recs.some((rec) => rec.data.some((one) => !Object.hasOwn(rowOf(rec), one.key) || valuesOf(rec, one.key).length > (rowOf(rec)[one.key] as Count)[1])) ? 'key' : undefined;
 }
 
+/** `COAI-BAD unsafe` holds its `path` once, and in the closed form: no path is `shape`, one that is not closed is `value`. */
+function unsafeFault(bad: Rec): Fault {
+  const path = valuesOf(bad, 'path')[0];
+  if (path === undefined) {
+    return 'shape';
+  }
+
+  return CLOSED['path']?.(path) === true ? 'unsafe' : 'value';
+}
+
 /** Rule 6: a `COAI-BAD <word>` is the only record, and then the answer is unreadable with that word; beside any other record it is `shape`. */
 function badFault(recs: readonly Rec[]): Fault {
   const bad = recs.find((rec) => rec.head.startsWith('COAI-BAD '));
   if (bad === undefined) {
     return undefined;
   }
+  if (recs.length !== 1) {
+    return 'shape';
+  }
 
-  return recs.length === 1 ? bad.head.slice('COAI-BAD '.length) as AccountsUnreadable : 'shape';
+  return bad.head === 'COAI-BAD unsafe' ? unsafeFault(bad) : bad.head.slice('COAI-BAD '.length) as AccountsUnreadable;
 }
 
-const ARRANGEMENT = new RegExp([
-  '^COAI-JQ [^\\n]+',
-  ...['claude', 'codex', 'agy'].map((name) => `(?:COAI-VENDOR ${name} found\\nCOAI-USAGE ${name} [^\\n]+|COAI-VENDOR ${name} (?!found)[^\\n]+)`),
-].join('\\n') + '$', 'u');
+/** One vendor's records: `found` and the `COAI-USAGE` line that follows it, or any other state alone. */
+const vendorPart = (name: string): string => `(?:COAI-VENDOR ${name} found\\nCOAI-USAGE ${name} [^\\n]+|COAI-VENDOR ${name} (?!found)[^\\n]+)`;
+
+/** The arrangement by the mode that was SENT (§ R2.7): the first mode prints the three parts, the usage mode the Claude part and NOTHING else. */
+const ARRANGEMENT: Readonly<Record<AccountsMode, RegExp>> = {
+  'no-claude-usage': new RegExp(['^COAI-JQ [^\\n]+', ...['claude', 'codex', 'agy'].map(vendorPart)].join('\\n') + '$', 'u'),
+  'claude-usage': new RegExp(['^COAI-JQ [^\\n]+', vendorPart('claude')].join('\\n') + '$', 'u'),
+};
 
 /** The state words of a vendor's `COAI-VENDOR` line: `found`, `absent`, `unreadable no-jq`, … */
 function stateOf(recs: readonly Rec[], name: string): string {
@@ -270,12 +304,15 @@ function stateOf(recs: readonly Rec[], name: string): string {
 
 const keysMissing = (recs: readonly Rec[]): boolean => recs.some((rec) => Object.entries(rowOf(rec)).some(([key, [min]]) => valuesOf(rec, key).length < min));
 
-/** `COAI-JQ missing` goes only with `absent` or `unreadable no-jq` for Claude and for Codex, and `COAI-JQ found` never with `no-jq`. */
+/**
+ * `COAI-JQ missing` goes only with `absent`, `unsafe` (refused before `jq` is asked for) or `unreadable no-jq` for Claude and for Codex, and `COAI-JQ found` never with
+ * `no-jq`. A vendor that the reply does not hold (the usage mode has no Codex) says nothing.
+ */
 function jqMismatch(recs: readonly Rec[]): boolean {
   const missing = (recs[0] as Rec).head.startsWith('COAI-JQ missing ');
-  const states = [stateOf(recs, 'claude'), stateOf(recs, 'codex')];
+  const states = [stateOf(recs, 'claude'), stateOf(recs, 'codex')].filter((state) => state !== '');
 
-  return missing ? states.some((state) => state !== 'absent' && state !== 'unreadable no-jq') : states.some((state) => state === 'unreadable no-jq');
+  return missing ? states.some((state) => state !== 'absent' && state !== 'unsafe' && state !== 'unreadable no-jq') : states.some((state) => state === 'unreadable no-jq');
 }
 
 /** For `no-claude-usage` a found Claude has `skipped`; for `claude-usage` it never has. */
@@ -285,10 +322,11 @@ function modeMismatch(recs: readonly Rec[], mode: AccountsMode): boolean {
   return stateOf(recs, 'claude') === 'found' && skipped !== (mode === 'no-claude-usage');
 }
 
-const outOfOrder = (recs: readonly Rec[]): boolean => !ARRANGEMENT.test(recs.map((rec) => rec.head).join('\n'));
+/** The arrangement by the mode that was sent: what comes after the `COAI-JQ` line is the first mode's three parts or the usage mode's one. The fault is `shape`. */
+const modeFault = (recs: readonly Rec[], mode: AccountsMode): Fault => (ARRANGEMENT[mode].test(recs.map((rec) => rec.head).join('\n')) ? undefined : 'shape');
 
 /** What breaks the arrangement, in order: a later check may rely on an earlier one (it reads the first record and the vendors' lines). */
-const SHAPE_BREAKS: readonly ((recs: readonly Rec[], mode: AccountsMode) => boolean)[] = [outOfOrder, keysMissing, jqMismatch, modeMismatch];
+const SHAPE_BREAKS: readonly ((recs: readonly Rec[], mode: AccountsMode) => boolean)[] = [keysMissing, jqMismatch, modeMismatch];
 
 /** Rule 7: the arrangement, the keys that must be there, `COAI-JQ` against the vendors, the mode. */
 const shapeFault = (recs: readonly Rec[], mode: AccountsMode): Fault => (SHAPE_BREAKS.some((breaks) => breaks(recs, mode)) ? 'shape' : undefined);
@@ -298,7 +336,7 @@ function valueFault(recs: readonly Rec[]): Fault {
   return recs.some((rec) => rec.data.some((one) => !(CLOSED[one.key]?.(one.value) ?? true))) ? 'value' : undefined;
 }
 
-const CHECKS: readonly ((recs: readonly Rec[], mode: AccountsMode) => Fault)[] = [grammarFault, badFault, shapeFault, valueFault];
+const CHECKS: readonly ((recs: readonly Rec[], mode: AccountsMode) => Fault)[] = [grammarFault, badFault, modeFault, shapeFault, valueFault];
 
 function firstFault(recs: readonly Rec[], mode: AccountsMode): Fault {
   for (const check of CHECKS) {
@@ -339,6 +377,7 @@ const plainValues = (rec: Rec, key: string): readonly string[] => valuesOf(rec, 
 
 const CLAUDE_USAGE_FLAT: Readonly<Record<string, ClaudeUsage>> = {
   skipped: { state: 'skipped' },
+  'skipped account-changed': { state: 'skipped', why: 'account-changed' },
   'failed timeout': { state: 'failed', why: 'timeout' },
   'failed error': { state: 'failed', why: 'error' },
 };
@@ -357,7 +396,19 @@ const CLAUDE_FLAT: Readonly<Record<string, ClaudeSide>> = {
   'unreadable timeout': { state: 'unreadable', why: 'timeout' },
 };
 
+/** A path the script printed, as text: `-` and a path in the shape of a credential are not shown. */
+function pathOf(value: string): string | null {
+  const plain = plainValue(value);
+
+  return plain === '-' || credentialShaped(plain) ? null : plain;
+}
+
+const unsafeOf = (rec: Rec): UnsafeSide => ({ state: 'unsafe', path: pathOf(valueOf(rec, 'path')) });
+
 function claudeOf(part: Part, nowMs: number): ClaudeSide {
+  if (part.vendor.head.endsWith(' unsafe')) {
+    return unsafeOf(part.vendor);
+  }
   const flat = CLAUDE_FLAT[wordsAfter(part.vendor, 'COAI-VENDOR claude ')];
   if (flat !== undefined) {
     return flat;
@@ -408,6 +459,9 @@ function agyOf(part: Part): AgySide {
   if (part.vendor.head.endsWith(' absent')) {
     return { state: 'absent' };
   }
+  if (part.vendor.head.endsWith(' unsafe')) {
+    return unsafeOf(part.vendor);
+  }
 
   return credentialIn(part) ? { state: 'unreadable', why: 'credential-shape' } : {
     state: 'found',
@@ -431,16 +485,25 @@ const jqMissingOf = (recs: readonly Rec[]): ManagerWord | undefined => {
 export function readAccounts(run: { readonly code: number; readonly stdout: string }, mode: AccountsMode, nowMs: number): AccountsRead {
   const got = linesOf(run);
   if ('why' in got) {
-    return { kind: 'unreadable', why: got.why };
+    return { kind: 'unreadable', why: got.why as Exclude<AccountsUnreadable, 'unsafe'> };
   }
   const recs = recordsOf(got.lines);
   const why = firstFault(recs, mode);
 
-  return why === undefined ? {
-    kind: 'read',
-    claude: claudeOf(partOf(recs, 'claude'), nowMs),
-    codex: codexOf(partOf(recs, 'codex'), nowMs),
-    agy: agyOf(partOf(recs, 'agy')),
-    jqMissing: jqMissingOf(recs),
-  } : { kind: 'unreadable', why };
+  return why === undefined ? readOfRecords(recs, mode, nowMs) : unreadableOf(why, recs);
+}
+
+/** `unsafe` is the one fault that carries data: the path of the first record, which the checks have shown to be there and closed. */
+function unreadableOf(why: AccountsUnreadable, recs: readonly Rec[]): AccountsRead {
+  return why === 'unsafe' ? { kind: 'unreadable', why, path: pathOf(valueOf(recs[0] as Rec, 'path')) } : { kind: 'unreadable', why };
+}
+
+/** The typed result of a reply the rules passed: the usage mode has the Claude part only (`claude-only`), the first mode the three parts (`read`). */
+function readOfRecords(recs: readonly Rec[], mode: AccountsMode, nowMs: number): AccountsRead {
+  const claude = claudeOf(partOf(recs, 'claude'), nowMs);
+  if (mode === 'claude-usage') {
+    return { kind: 'claude-only', claude, jqMissing: jqMissingOf(recs) };
+  }
+
+  return { kind: 'read', claude, codex: codexOf(partOf(recs, 'codex'), nowMs), agy: agyOf(partOf(recs, 'agy')), jqMissing: jqMissingOf(recs) };
 }

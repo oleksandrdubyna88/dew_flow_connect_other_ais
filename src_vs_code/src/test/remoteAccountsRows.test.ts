@@ -4,7 +4,7 @@ import test from 'node:test';
 import { ACCOUNTS_UNREADABLE_SAID, ACCOUNTS_SECONDS, MANAGER_WORDS, readAccounts } from '../remoteAccountsReply';
 import type { AccountsRead, ClaudeUsage, CodexUsage } from '../remoteAccountsReply';
 import type { HostMemory, Memory } from '../remoteAccountsRound';
-import { INSTALL_JQ, NO_MANAGER_SAID, USAGE_OFF_SAID, accountsRows, forList } from '../remoteAccountsRows';
+import { INSTALL_JQ, NO_MANAGER_SAID, USAGE_NOT_ASKED_SAID, accountsRows, forList } from '../remoteAccountsRows';
 import type { AccountsView, Row } from '../remoteAccountsRows';
 import { HOSTS_SAID } from '../remoteHostsSaid';
 import { dayOf } from '../remoteHosts';
@@ -437,8 +437,8 @@ test('A4-T11: a group whose usage nobody read says why — never a row of dashes
   const memory = memoryOf(['hA', seen(reading({ claude: claude() }), 1)]);
   const [row] = usageRows(rowsOf({ memory, hosts: ['hA'] }));
 
-  assert.equal(row?.label, USAGE_OFF_SAID);
-  assert.ok(/usage not read/u.test(USAGE_OFF_SAID) && !/^[\s—·%\d]*$/u.test(USAGE_OFF_SAID), 'the sentence of a group nobody read is not words');
+  assert.equal(row?.label, USAGE_NOT_ASKED_SAID);
+  assert.ok(/usage not read/u.test(USAGE_NOT_ASKED_SAID) && !/^[\s—·%\d]*$/u.test(USAGE_NOT_ASKED_SAID), 'the sentence of a group nobody read is not words');
   for (const each of usageRows(rowsOf({ memory: memoryOf(['hA', seen(reading({ codex: { state: 'unreadable', why: 'credential-shape' } }), 1)]), hosts: ['hA'] }))) {
     assert.ok(/[a-z]{6}/u.test(each.label), `a row of dashes with no reason: ${each.label}`);
   }

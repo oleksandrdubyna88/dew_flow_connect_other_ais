@@ -1,8 +1,8 @@
 import { byCodeUnit } from './codeUnitOrder';
 import { ACCOUNTS_SECONDS, ACCOUNTS_UNREADABLE_SAID, plainValue } from './remoteAccountsReply';
 import type { AccountsRead, ManagerWord } from './remoteAccountsReply';
-import { NO_MANAGER_SAID, USAGE_OFF_SAID, forList } from './remoteAccountsRows';
-import type { HostMemory, Memory } from './remoteAccountsRound';
+import { NO_MANAGER_SAID, forList, unreadableClause, unsafeSaid } from './remoteAccountsRows';
+import type { HostMemory, Memory, UsageMiss } from './remoteAccountsRound';
 import type { HostStanding } from './remoteHosts';
 import { HOSTS_SAID } from './remoteHostsSaid';
 import type { Permission } from './remotePermission';
@@ -200,10 +200,29 @@ const versionText = (version: string | null): string => forList(version ?? NOT_K
 
 const planOf = (plan: string | null): string | null => (plan === null ? null : forList(plan, NAME_MAX));
 
-const usageFailedSaid = (found: Found): string => {
+/** The three sentences that span the window cells when the usage call of the round did not come to figures (§ R2.8), and the one for a reply that names no account lines. */
+const usageMissSaid = (miss: UsageMiss): string => (MISS_SAID[miss.why] as (one: UsageMiss) => string)(miss);
+
+const MISS_SAID: Readonly<Record<UsageMiss['why'], (miss: never) => string>> = {
+  'call-failed': (miss: Extract<UsageMiss, { why: 'call-failed' }>) => `Usage not read: the usage call failed — ${forList(miss.sentence, SENTENCE_MAX)}`,
+  unreadable: (miss: Extract<UsageMiss, { why: 'unreadable' }>) => `Usage not read: the usage reply could not be read (${ACCOUNTS_UNREADABLE_SAID[miss.word]})`,
+  'account-changed': () => 'Usage not read: the account changed between the two reads',
+  'no-account-lines': () => 'Usage not read: this reply names no account lines',
+};
+
+const BLOCKED_SAID = 'Usage not read: the usage command went wrong on this host, so CoAI stopped asking it';
+const NOT_ASKED_SAID = 'Usage not read: it was not asked for in this round';
+
+/** What a place's memory says of its usage call: the miss, and whether the host is blocked at a version. */
+interface UsageContext {
+  readonly miss: UsageMiss | undefined;
+  readonly blocked: boolean;
+}
+
+const usageFailedSaid = (found: Found, context: UsageContext): string => {
   const { usage } = found;
   if (usage.state !== 'failed') {
-    return USAGE_OFF_SAID.charAt(0).toUpperCase() + USAGE_OFF_SAID.slice(1);
+    return context.miss !== undefined ? usageMissSaid(context.miss) : context.blocked ? BLOCKED_SAID : NOT_ASKED_SAID;
   }
   const version = `Claude Code ${versionText(found.version)}`;
   const said: Readonly<Record<typeof usage.why, string>> = {
@@ -215,6 +234,8 @@ const usageFailedSaid = (found: Found): string => {
 
   return `Usage unavailable: ${said[usage.why]}`;
 };
+
+const usageContextOf = (memory: HostMemory): UsageContext => ({ miss: memory.usageMiss, blocked: memory.usageBlockedAt !== undefined });
 
 type Shell = Omit<ToolRow, 'version' | 'account' | 'span'>;
 
@@ -242,6 +263,9 @@ const claudeFoundRow = (shell: Shell, found: Found): ToolRow =>
 
 /** `no-jq` is the heading's: the host says `jq` is missing, and this tool has no row of its own. */
 function claudeSideRow(shell: Shell, claude: Exclude<Reading['claude'], { state: 'absent' | 'found' }>): ToolRow | undefined {
+  if (claude.state === 'unsafe') {
+    return sentenceRow(shell, unsafeSaid(claude.path));
+  }
   const said = CLAUDE_SIDE_SAID[claude.state === 'signed-out' ? 'signed-out' : claude.why];
 
   return said === undefined ? undefined : sentenceRow(shell, said);
@@ -271,7 +295,7 @@ function claudeFigures(found: Found): Figures | undefined {
   };
 }
 
-interface Seen {
+interface Seen extends UsageContext {
   readonly host: string;
   readonly read: Reading;
   readonly at: number;
@@ -284,7 +308,7 @@ interface Shared {
   readonly span: string;
 }
 
-interface Member {
+interface Member extends UsageContext {
   readonly host: string;
   readonly found: Found;
   readonly at: number;
@@ -300,27 +324,27 @@ function sharedAccount(members: readonly Member[]): Shared {
   return {
     places: [...new Set(members.map((one) => one.host))],
     figures: withNumbers === undefined ? undefined : claudeFigures(withNumbers.found),
-    span: usageFailedSaid(source.found),
+    span: usageFailedSaid(source.found, source),
   };
 }
 
 function sharedOf(seen: readonly Seen[]): ReadonlyMap<string, Shared> {
-  const members = seen.flatMap((one) => (one.read.claude.state === 'found' ? [{ host: one.host, found: one.read.claude, at: one.at }] : []));
+  const members = seen.flatMap((one): readonly Member[] => (one.read.claude.state === 'found' ? [{ host: one.host, found: one.read.claude, at: one.at, miss: one.miss, blocked: one.blocked }] : []));
   const keys = new Set(members.flatMap((one) => accountKeyOf(one.found) ?? []));
 
   return new Map([...keys].map((key) => [key, sharedAccount(members.filter((one) => accountKeyOf(one.found) === key))]));
 }
 
 /** An account that is not known has only its own place's reading. */
-const withOwn = (row: ToolRow, found: Found): ToolRow => {
+const withOwn = (row: ToolRow, found: Found, context: UsageContext): ToolRow => {
   const figures = claudeFigures(found);
 
-  return { ...row, ...figures, span: figures === undefined ? usageFailedSaid(found) : null };
+  return { ...row, ...figures, span: figures === undefined ? usageFailedSaid(found, context) : null };
 };
 
-function withShared(row: ToolRow, found: Found, shared: Shared | undefined): ToolRow {
+function withShared(row: ToolRow, found: Found, shared: Shared | undefined, context: UsageContext): ToolRow {
   if (shared === undefined) {
-    return withOwn(row, found);
+    return withOwn(row, found, context);
   }
 
   return { ...row, ...shared.figures, span: shared.figures === undefined ? shared.span : null, sharedAcross: shared.places.length > 1 ? shared.places.length : null };
@@ -367,6 +391,10 @@ function agyRow(place: string, agy: Reading['agy'], readAt: number): ToolRow | u
   }
   const shell = base(place, 'agy', readAt);
 
+  if (agy.state === 'unsafe') {
+    return sentenceRow(shell, unsafeSaid(agy.path));
+  }
+
   return agy.state === 'unreadable' ? sentenceRow(shell, NOT_SHOWN_SAID) : { ...shell, version: versionText(agy.version), account: { text: AGY_ACCOUNT_SAID, plan: null }, span: AGY_USAGE_SAID };
 }
 
@@ -382,7 +410,7 @@ const reasoned = (row: ToolRow): ToolRow => (noFigure(row) && row.span === null 
 function rowsOf(shown: string, seen: Seen, shared: ReadonlyMap<string, Shared>): readonly ToolRow[] {
   const { read, at } = seen;
   const claude = claudeRow(shown, read.claude, at);
-  const withFigures = claude === undefined || read.claude.state !== 'found' ? claude : withShared(claude, read.claude, shared.get(claude.accountKey ?? ''));
+  const withFigures = claude === undefined || read.claude.state !== 'found' ? claude : withShared(claude, read.claude, shared.get(claude.accountKey ?? ''), seen);
 
   return [withFigures, codexRow(shown, read.codex, at), agyRow(shown, read.agy, at)].flatMap((one) => (one === undefined ? [] : [reasoned(one)]));
 }
@@ -422,7 +450,7 @@ const failureSaid = (failure: NonNullable<HostMemory['failure']>): string => {
 };
 
 const unreadableHead = (host: string, unreadable: NonNullable<HostMemory['unreadable']>): Head =>
-  headOf('failed', unreadable.atMs, `The AI accounts on “${forList(host, SENTENCE_MAX)}” could not be read: ${ACCOUNTS_UNREADABLE_SAID[unreadable.why]}.`);
+  headOf('failed', unreadable.atMs, `The AI accounts on “${forList(host, SENTENCE_MAX)}” could not be read: ${unreadableClause(unreadable)}.`);
 
 function readHead(reading: NonNullable<HostMemory['reading']>): Head {
   const word = reading.read.jqMissing;
@@ -457,7 +485,7 @@ const olderAtOf = (head: Head, reading: HostMemory['reading']): number | null =>
 
 function readBlock(shown: string, memory: HostMemory, head: Head, shared: ReadonlyMap<string, Shared>): Block {
   const { reading } = memory;
-  const rows = reading === undefined ? [] : rowsOf(shown, { host: shown, read: reading.read, at: reading.atMs }, shared);
+  const rows = reading === undefined ? [] : rowsOf(shown, { host: shown, read: reading.read, at: reading.atMs, ...usageContextOf(memory) }, shared);
   const olderAt = olderAtOf(head, reading);
 
   return { host: shown, head, rows, olderAt, line: head.kind === 'read' && rows.length === 0 ? NO_TOOL_SAID : null, noClaude: noClaudeOf(head, rows, olderAt), canRefuse: true, canReadAgain: false };
@@ -499,7 +527,7 @@ export function tableModel(input: TableInput): TableModel {
   const seen = hosts.flatMap((host) => {
     const reading = input.memory.get(host)?.reading;
 
-    return reading === undefined ? [] : [{ host, read: reading.read, at: reading.atMs }];
+    return reading === undefined ? [] : [{ host, read: reading.read, at: reading.atMs, ...usageContextOf(input.memory.get(host) ?? {}) }];
   });
   const shared = sharedOf(seen);
 

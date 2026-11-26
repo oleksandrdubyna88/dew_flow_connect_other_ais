@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { MANAGER_WORDS } from '../remoteAccountsReply';
 import type { ManagerWord } from '../remoteAccountsReply';
-import { INSTALL_JQ, USAGE_OFF_SAID } from '../remoteAccountsRows';
+import { INSTALL_JQ } from '../remoteAccountsRows';
 import { NO_TERMINAL_SAID, WSL_ELSEWHERE_SAID, WSL_WINDOWS_SAID, blockOf, changedBlocks, tableModel } from '../remoteAccountsTable';
 import type { Block, TableModel } from '../remoteAccountsTable';
 import { HOSTS_SAID } from '../remoteHostsSaid';
@@ -239,7 +239,7 @@ test('E2S2-T7: every reason spans the two cells with its own sentence, and no to
   );
   const model = tableModel(inputOf({ hosts: ['off', 'fmt', 'out', 'cdx', 'cred'], memory }));
 
-  assert.equal(blockFor(model, 'off').rows[0]?.span, USAGE_OFF_SAID.charAt(0).toUpperCase() + USAGE_OFF_SAID.slice(1));
+  assert.equal(blockFor(model, 'off').rows[0]?.span, 'Usage not read: it was not asked for in this round');
   assert.match(blockFor(model, 'fmt').rows[0]?.span ?? '', /^Usage unavailable: Claude Code 2\.1\.5 printed no usage line this version understands$/u);
   assert.equal(blockFor(model, 'fmt').rows[1]?.span, 'agy states no usage');
   assert.equal(blockFor(model, 'out').rows[0]?.span, 'signed out');

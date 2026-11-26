@@ -45,8 +45,15 @@ export const INSTALL_JQ: Readonly<Record<ManagerWord, string | undefined>> = {
 
 export const NO_MANAGER_SAID = 'Install `jq` on this host. CoAI found none of apt-get, dnf, yum and apk there.';
 
-/** What a group says when nobody read its usage, and no host failed to: in this build CoAI does not ask Claude Code for usage (the policy is `off`). */
-export const USAGE_OFF_SAID = 'usage not read: CoAI does not ask Claude Code for usage in this build';
+/** The clause that says why a whole answer could not be read: the closed sentence of its word, and for `unsafe` the path that failed the check, when it is shown. */
+export const unreadableClause = (unreadable: { readonly why: keyof typeof ACCOUNTS_UNREADABLE_SAID; readonly path?: string | null }): string =>
+  (unreadable.why === 'unsafe' && typeof unreadable.path === 'string' ? `${forList(unreadable.path, SENTENCE_MAX)} is writable by another user` : ACCOUNTS_UNREADABLE_SAID[unreadable.why]);
+
+/** What a group says when nobody read its usage, and no host failed to: the round did not ask for it (a block, or an account that another place read). */
+export const USAGE_NOT_ASKED_SAID = 'usage not read: it was not asked for in this round';
+
+/** The sentence of a program that another user can write, refused before its start as UID 0 (E3.S2, § R2.6, § R2.7). */
+export const unsafeSaid = (path: string | null): string => (path === null ? 'not read: a program there is writable by another user' : `not read: ${forList(path, SENTENCE_MAX)} is writable by another user`);
 
 const AGY_SAID = 'agy states no usage, and its account is not read';
 const NOT_SHOWN_SAID = 'not shown: a value in the answer looked like a credential';
@@ -168,7 +175,7 @@ function usageFailure(one: ClaudeSeen): string | undefined {
 const notReadSaid = (members: readonly ClaudeSeen[]): string => {
   const failed = newestOf(members.filter((one) => usageFailure(one) !== undefined));
 
-  return (failed === undefined ? undefined : usageFailure(failed)) ?? USAGE_OFF_SAID;
+  return (failed === undefined ? undefined : usageFailure(failed)) ?? USAGE_NOT_ASKED_SAID;
 };
 
 const laterFailed = (members: readonly ClaudeSeen[]): string => members.filter((one) => one.failed).map((one) => ` · the later read of ${one.host} failed`).join('');
@@ -206,6 +213,9 @@ const claudeSideWord = (claude: Reading['claude']): string | undefined =>
   (claude.state === 'signed-out' ? 'signed-out' : claude.state === 'unreadable' ? claude.why : undefined);
 
 const claudeSideSaid = (claude: Reading['claude']): string | undefined => {
+  if (claude.state === 'unsafe') {
+    return unsafeSaid(claude.path);
+  }
   const word = claudeSideWord(claude);
 
   return word === undefined ? undefined : CLAUDE_SIDE_SAID[word];
@@ -266,8 +276,13 @@ function codexRows(one: Seen, nowMs: number): readonly Row[] {
 
 function agyRows(one: Seen, nowMs: number): readonly Row[] {
   const { agy } = one.read;
-  if (agy.state === 'absent') {
-    return [];
+
+  return agy.state === 'absent' ? [] : agyFoundRows(one, agy, nowMs);
+}
+
+function agyFoundRows(one: Seen, agy: Exclude<Reading['agy'], { state: 'absent' }>, nowMs: number): readonly Row[] {
+  if (agy.state === 'unsafe') {
+    return [separator(`Antigravity · ${one.host}`), usageRow(unsafeSaid(agy.path), '', readAge(one.atMs, nowMs))];
   }
   if (agy.state === 'unreadable') {
     return [separator(`Antigravity · ${one.host}`), usageRow(NOT_SHOWN_SAID, '', readAge(one.atMs, nowMs))];
@@ -357,7 +372,7 @@ function jqSaid(word: ManagerWord | undefined): Said | undefined {
 /** What went wrong with the last answer of a host, in order: an answer that could not be read, a read that failed, `jq` missing. */
 function problem(host: string, memory: HostMemory, nowMs: number): Said | undefined {
   if (memory.unreadable !== undefined) {
-    return said(`The AI accounts on “${host}” could not be read: ${ACCOUNTS_UNREADABLE_SAID[memory.unreadable.why]}.`);
+    return said(`The AI accounts on “${host}” could not be read: ${unreadableClause(memory.unreadable)}.`);
   }
   if (memory.failure !== undefined) {
     return said(failedSaid(memory.failure, nowMs));
