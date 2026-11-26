@@ -115,10 +115,58 @@ public sealed class CheckBoundary(IProcessLauncher launcher, BoundaryHost host)
     private async Task<IReadOnlyList<PreflightRow>> PreflightAsync(BoundaryJob job, CheckNetwork network, string program, CancellationToken ct)
     {
         var unit = BoundaryUnit.UnitName(job, network == CheckNetwork.Private ? "pre-none" : "pre-host");
-        var command = BoundaryPreflight.Command(job, host, network, program);
-        var started = await StartAsync(job, unit, network, PreflightBudget, new Dictionary<string, string?>(), command, ct);
+        var other = PlantAnotherJob(job);
+        try
+        {
+            var command = BoundaryPreflight.Command(job, host, network, program, other);
+            var started = await StartAsync(job, unit, network, PreflightBudget, new Dictionary<string, string?>(), command, ct);
 
-        return BoundaryPreflight.Rows(started, started.Problem.Length == 0 && await _units.EnsureGoneAsync(unit), BoundaryPreflight.ItemsFor(job));
+            return BoundaryPreflight.Rows(started, started.Problem.Length == 0 && await _units.EnsureGoneAsync(unit), BoundaryPreflight.ItemsFor(job));
+        }
+        finally
+        {
+            RemoveAnotherJob(other);
+        }
+    }
+
+    /// <summary>
+    /// A stand-in for another job's folder, made beside the job's own inside the folder that holds the job folders (<see cref="BoundaryJob.JobCover"/>) — a folder with a canary file, which a unit of THIS job must not see (E3 s7 t5, K2). Empty when the job folder is its own cover:
+    /// there is no holding folder to plant it in, and nothing of another job lies inside what the unit sees. A folder that cannot be made is empty too, and the row then says so as it says it for the first case.
+    /// </summary>
+    private static string PlantAnotherJob(BoundaryJob job)
+    {
+        if (job.JobCover == job.JobRoot)
+        {
+            return string.Empty;
+        }
+
+        try
+        {
+            var folder = Path.Combine(job.JobCover, $"coai-preflight-other-{job.JobId}");
+            Directory.CreateDirectory(folder);
+            File.WriteAllText(Path.Combine(folder, "canary.txt"), "a stand-in for another job's coder home\n");
+
+            return folder;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return string.Empty;
+        }
+    }
+
+    private static void RemoveAnotherJob(string folder)
+    {
+        try
+        {
+            if (folder.Length > 0 && Directory.Exists(folder))
+            {
+                Files.GitScratch.DeleteEvenIfReadOnly(folder);
+            }
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // A stand-in the preflight could not remove is left under its own name, in the folder of the job folders; the retention of the folder takes it with the job.
+        }
     }
 
     /// <summary>Runs one step inside its unit: the program with the argv, <c>env -i</c> and the allow-list set inside, the deadline and the cancel honoured, and the unit asked after and stopped if it is still there.</summary>

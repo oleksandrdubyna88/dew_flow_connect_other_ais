@@ -33,7 +33,7 @@ public sealed class ACheckBoundaryPreflightTests
         var admitted = admission.Should().BeOfType<BoundaryAdmission.Admitted>(admission.ToString()).Subject;
         var record = admitted.Records.Should().ContainSingle().Which.Value;
         record.Boundary.Should().Be(BoundaryRecord.UnitBoundary);
-        record.Preflight.Select(row => row.Item).Should().Equal(["user-manager", "worktree-write", "main-readonly", "git-readonly", "no-user-manager-inside", "windows-exe", "home-is-the-jobs", "tmp-is-the-jobs", "coder-folder-hidden", "keys-folder-hidden", "sign-in-not-in-unit", "network-state", "no-sockets-no-interop", "clean-environment"]);
+        record.Preflight.Select(row => row.Item).Should().Equal(["user-manager", "worktree-write", "main-readonly", "git-readonly", "no-user-manager-inside", "windows-exe", "home-is-the-jobs", "tmp-is-the-jobs", "coder-folder-hidden", "other-job-folder-hidden", "keys-folder-hidden", "sign-in-not-in-unit", "network-state", "no-sockets-no-interop", "clean-environment"]);
         record.Preflight.Should().OnlyContain(row => row.Held, string.Join("; ", record.Preflight.Where(row => !row.Held).Select(row => $"{row.Item}: {row.Detail}")));
         record.Preflight.Should().OnlyContain(row => row.Detail.Length > 0);
         File.Exists(Path.Combine(bed.Worktree, ".coai-preflight.exe")).Should().BeFalse("the Windows program's copy is removed when the preflight ends");
