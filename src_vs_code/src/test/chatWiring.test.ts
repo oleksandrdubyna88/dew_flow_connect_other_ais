@@ -545,11 +545,11 @@ test('A4-T16: the commands that open no chat are offered from the terminal title
     const next = handler.source.indexOf('registerCommand(', handler.at + 20);
     assert.ok(!handler.source.slice(handler.at, next === -1 ? handler.source.length : next).includes('noteChatDoor('), command + ' records itself as a door although it opens no chat');
   }
-  // What the registration calls is scanned too: the command's handler is one line that opens the list, and a recorder inside openList would not be seen above.
+  // What the registration calls is scanned too: the command's handler is one line that opens the tab, and a recorder inside openTab would not be seen above.
   const hostSource = read(join('src', 'remoteAccountsHost.ts'));
-  const opening = hostSource.indexOf('function openList(');
-  assert.notStrictEqual(opening, -1, 'the scan does not find openList, so it looked at nothing');
-  assert.ok(!hostSource.slice(opening, hostSource.indexOf('\n}', opening)).includes('noteChatDoor('), 'openList records a door although the accounts list opens no chat');
+  const opening = hostSource.indexOf('function openTab(');
+  assert.notStrictEqual(opening, -1, 'the scan does not find openTab, so it looked at nothing');
+  assert.ok(!hostSource.slice(opening, hostSource.indexOf('\n}', opening)).includes('noteChatDoor('), 'openTab records a door although the accounts tab opens no chat');
   assert.ok(!hostSource.includes('noteChatDoor('), 'the accounts host records a door somewhere');
   assert.ok(doors.includes('coai.askFromTerminal'), 'the census lost the terminal door, so the filter above may be hiding everything');
   assert.ok(OPENS_NO_CHAT.every((one) => !ACTS_INSIDE_A_CHAT.includes(one)), 'a command is on both lists');

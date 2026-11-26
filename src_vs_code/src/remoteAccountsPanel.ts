@@ -82,7 +82,7 @@ export class AccountsPanel {
   }
 
   /** The whole model again: the permission, the Stop or a refusal changed. */
-  update(model: TableModel): void {
+  replaceModel(model: TableModel): void {
     this.model = model;
     this.push({ type: 'model', model });
   }

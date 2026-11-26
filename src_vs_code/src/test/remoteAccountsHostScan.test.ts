@@ -24,15 +24,6 @@ test('A3-T24 (host): nothing of a reading is stored by the host', () => {
   assert.ok(!/\bconsole\./u.test(host), 'the host writes to the console: its log goes through the one default seam');
 });
 
-test('A4-T14 (F4): the list clears its "ran less than a minute ago" mark only after the items are set, so an overtaken draw keeps it', () => {
-  const draw = bodyOf(host, '  private async draw(');
-  const cleared = draw.indexOf('this.floor = false');
-  const items = draw.indexOf('this.pick.items =');
-  assert.ok(cleared > 0, 'the scan does not find where the mark is cleared');
-  assert.ok(items >= 0, 'the scan does not find where the items are set, so the order below would compare with -1');
-  assert.ok(cleared > items, 'the mark is cleared before the items are set');
-});
-
 test('A4-T14 (F5): the Stop fires the redraw only after the Stop is written', () => {
   const stop = bodyOf(driver, '  async stop(');
   const written = stop.indexOf('await stopTheRound(');
@@ -101,4 +92,35 @@ test('A3-T37 (host): a window that is disposed starts no timer and no round, and
   assert.match(methodOf(driver, '  private apply('), /if \(this\.disposed \|\| action\.kind === 'none'\) \{\s*return;/u, 'apply sets a timer after dispose');
   assert.match(methodOf(driver, ' runNow(trigger: Trigger)'), /this\.disposed/u, 'runNow starts a round after dispose');
   assert.equal(count('dispose(): void { clearTimeout(this.timer); }', /this\.disposed = true/gu), 0, 'companion: the scan tells a dispose that does not mark the window');
+});
+
+// ───────────────── E2.S3: the tab's wiring (the host halves of E2S3-T10, T11, T12 and T13) ─────────────────
+
+const panel = sourceOf('remoteAccountsPanel.ts');
+
+test('E2S3-T11 (host): one panel for the window; it is released on dispose, is searchable, keeps no serializer and reads no file', () => {
+  assert.equal(count(host, /new AccountsPanel\(/gu), 1, 'the host builds more than one tab');
+  assert.equal(count(panel, /createWebviewPanel\(/gu), 1);
+  assert.equal(count(panel, /onDidDispose\(/gu), 1, 'the tab is not released when it is closed');
+  assert.match(panel, /enableFindWidget:\s*true/u, 'the tab has no find bar');
+  assert.match(panel, /localResourceRoots:\s*\[\]/u, 'the tab may read local files');
+  assert.ok(!/registerWebviewPanelSerializer/u.test(panel + host), 'a serializer would restore a tab that draws a model this window does not have yet');
+  assert.equal(count(host, /new vscode\.EventEmitter/gu), 1, 'companion: the host still owns its one emitter, so the scan read the right file');
+});
+
+test('E2S3-T12 (host): the icon opens the tab and asks the one question through askPermissionFirst, never through askPermission', () => {
+  const open = bodyOf(host, 'async function openTab(');
+  assert.ok(open.indexOf('accounts.openTab()') >= 0 && open.indexOf('askPermissionFirst()') > open.indexOf('accounts.openTab()'), 'the tab is not opened before the question, or the question is not the first-press one');
+  assert.equal(count(host, /askPermissionFirst\(/gu), 1);
+  assert.equal(count(host, /\.askPermission\(\)/gu), 1, 'askPermission( is called from more than the tab\'s own Allow');
+  assert.match(host, /askPermission:\s*\(\)\s*=>\s*this\.sessions\.askPermission\(\)/u, 'the tab\'s Allow does not call askPermission');
+  assert.match(host, /withdraw:\s*\(\)\s*=>\s*this\.sessions\.withdraw\(\)/u, 'the tab\'s Withdraw does not call withdraw');
+  assert.match(host, /registerCommand\('coai\.terminalAccounts'/u, 'the icon\'s command is not registered by name');
+});
+
+test('E2S3-T10 (host): a command of the tab reaches the doors only through runAccountsCommand, and the only grant it can ask for is the question', () => {
+  assert.equal(count(host, /runAccountsCommand\(/gu), 1);
+  assert.ok(!/keeper\.allow\(|\.allow\(\)/u.test(host), 'the host writes a grant by itself');
+  assert.equal(count(host, /commitHost\(/gu), 1, 'the host writes the refusals list from more than the one *Not this host*');
+  assert.match(host, /commitHost\(\{\s*kind:\s*'person',\s*host,\s*answer:\s*'no'\s*\}\)/u, 'the one commit is not a person\'s "no"');
 });

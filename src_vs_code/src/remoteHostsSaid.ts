@@ -16,12 +16,6 @@ const WHY: Readonly<Record<UnkeptWhy, string>> = {
   elsewhere: 'another window of this side could not save it',
 };
 
-/**
- * The key of the retired setting, which W10's two sentences are built from until W10 is deleted with `ignoredRows` (X7, X13 of the stories document).
- * No code reads the setting; the commit that deletes W10 deletes this line too.
- */
-const KEY = 'coai.terminalAccountsAllowNewHosts';
-
 /** The three choices of the change question, by their buttons (§ P10). */
 export const BUTTON_SAID: Readonly<Record<HostButton, string>> = {
   'not-this-host': '“Not this host” stops every ssh call of CoAI to this host, from the accounts round and from the chat doors.',
@@ -111,9 +105,6 @@ export const HOSTS_SAID = {
   cureTorn: 'A note that could not be read was removed. It may have held a “Not this host” or a stop, so the accounts round is now stopped: look through CoAI: hosts read over ssh, then start the round.',
   cureWithdrawal: '“Save now” writes it at once. Until then only this window and the shared state hold it: keep this window open, and check that the extension’s storage folder can be written.',
   cureWithdrawalBusy: '“Save now” takes the hosts file over from a window that hangs and checks your withdrawal. Keep this window open until then.',
-  /** W10: the ignored layer (deleted with `ignoredRows`, by the story that deletes its last caller). */
-  ignoredWorkspace: `This workspace sets \`${KEY}\`. It is ignored: only your own user settings count.`,
-  ignoredFolder: `A folder of this workspace sets \`${KEY}\`. It is ignored: only your own user settings count.`,
   /** W11: a host's row over a damaged list or file. */
   rowDamagedList: 'the list of hosts cannot be read, so this host is not read. Choose “Not this host” or “Read this host again” for it: that repairs the list.',
   rowDamagedFile: 'the file of refused hosts cannot be read, so this host is not read. Choose “Not this host” or “Read this host again” for it: that repairs the file, leaves the round stopped and leaves no permission.',
