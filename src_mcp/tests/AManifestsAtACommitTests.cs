@@ -230,6 +230,41 @@ public sealed class AManifestsAtACommitTests : IAsyncLifetime
         read.Should().BeOfType<ManifestRead.Refused>().Which.Sentence.Should().Contain("33554432").And.Contain(".coai/toolchain.yaml");
     }
 
+    // ---- S1 of the s2 security verify: the reads that decide the checks are hardened like the coder-tree reads ----
+
+    [Fact]
+    public async Task AReplaceRef_CannotTurnAReadAtTheBaseIntoAReadOfTheHead()
+    {
+        await StageAsync("package.json", "{\"scripts\":{\"test\":\"jest\"}}\n");
+        await _repo.CommitAsync("base");
+        var baseSha = await _repo.HeadAsync();
+        await StageAsync("package.json", "{\"scripts\":{\"test\":\"echo passed\"}}\n");
+        await _repo.CommitAsync("head");
+        var headSha = await _repo.HeadAsync();
+        await _repo.GitAsync("replace", baseSha, headSha);
+
+        var plain = new GitHistory(_launcher);
+        var control = await plain.BlobAsync(_repo.Path, (await plain.TreeAtAsync(_repo.Path, baseSha, 1_000_000)).Out.Split(' ', StringSplitOptions.RemoveEmptyEntries)[2]);
+        var read = await Reader.ReadAsync(_repo.Path, baseSha, ToolchainDefaults.Current);
+
+        control.Out.Should().Contain("echo passed", "the plain reader follows the replace ref: that is the attack");
+        Found(read).Files.Single().Text.Should().Contain("jest").And.NotContain("echo passed");
+    }
+
+    [Fact]
+    public void TheHardenedEnvironment_RemovesTheNamesThatMoveGit_AndTurnsLazyFetchOff()
+    {
+        var environment = GitHistory.HardenedEnvironment;
+
+        environment["GIT_NO_LAZY_FETCH"].Should().Be("1");
+        foreach (var name in new[] { "GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES" })
+        {
+            environment.Should().ContainKey(name).WhoseValue.Should().BeNull();
+        }
+
+        new GitHistory(_launcher).ForChecks().Hardened.Should().BeTrue();
+    }
+
     // ---- d3: a commit that is not there, a git that does not answer, a bad path ----
 
     [Fact]

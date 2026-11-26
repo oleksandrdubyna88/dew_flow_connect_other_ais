@@ -13,8 +13,11 @@ namespace CoaiMcp.Runners.Toolchain;
 /// refusal and is never read; a submodule is never entered and is named; every limit is a refusal with the number and the limit, never a cut list; a git that does not answer, and a commit that is not there, are refusals, never an empty set — an empty set is "this commit has no manifest", which is an answer that
 /// leads to <c>not_configured</c>, and must never be what a failure looks like.</para>
 /// </remarks>
-public sealed class ManifestsAtCommit(GitHistory git)
+public sealed class ManifestsAtCommit(GitHistory history)
 {
+    /// <summary>The reads that decide the checks are the hardened ones (<see cref="GitHistory.Hardened"/>), whatever the caller handed in.</summary>
+    private readonly GitHistory git = history.ForChecks();
+
     /// <summary>The listing's ceiling in characters: the stream holds characters, a listing is ASCII except in paths, so 32 MiB of bytes is at most that many characters.</summary>
     private const int ListingChars = (int)ManifestLimits.MaxListingBytes + 1;
 

@@ -19,7 +19,7 @@ internal static class CoderGit
     private static readonly string[] AllowedBeforeTheVerb = ["--no-optional-locks", "--literal-pathspecs"];
 
     /// <summary>The names git reads to decide which repository, index and objects it works on. Taken out of the environment of every coder-tree command.</summary>
-    private static readonly string[] Moving =
+    internal static readonly string[] Moving =
         ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES"];
 
     /// <summary>The environment changes: each name in <see cref="Moving"/> removed.</summary>

@@ -53,6 +53,18 @@ public sealed partial class GitHistory(IProcessLauncher launcher)
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(30);
 
     /// <summary>
+    /// True for the reads that DECIDE the checks of a coder job (the toolchain file at the base, the manifests of a commit; epoch 3 E4, S1 of the s2 security verify): git then runs with <c>--no-replace-objects</c> (one ref under <c>refs/replace/</c> would turn a read "at the base" into a read of
+    /// the head), <c>GIT_NO_LAZY_FETCH=1</c> (a missing object in a promisor repository would run the program of its remote), and without the names that move git (<c>GIT_DIR</c>, <c>GIT_WORK_TREE</c>…) — the hardening <see cref="CoderGit"/> gives the coder-tree commands, applied to the reads of the main repository.
+    /// </summary>
+    public bool Hardened { get; init; }
+
+    /// <summary>The same reads, hardened for the checks (<see cref="Hardened"/>).</summary>
+    public GitHistory ForChecks() => Hardened ? this : new GitHistory(launcher) { Hardened = true };
+
+    /// <summary>The environment changes of a hardened read: the names that move git removed, lazy fetching off.</summary>
+    internal static IReadOnlyDictionary<string, string?> HardenedEnvironment { get; } = CoderGit.Moving.ToDictionary(name => name, string? (_) => null, StringComparer.Ordinal).Concat([new KeyValuePair<string, string?>("GIT_NO_LAZY_FETCH", "1")]).ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+
+    /// <summary>
     /// A git object id and nothing else — never something git could read as a flag.
     /// </summary>
     /// <remarks>
@@ -359,8 +371,11 @@ public sealed partial class GitHistory(IProcessLauncher launcher)
 
     private async Task<GitAnswer> RunAsync(string repoPath, string[] args, CancellationToken ct, int? maxChars = null)
     {
-        var result = await launcher.RunAsync(
-            maxChars is { } ceiling ? new ProcessRequest("git", args, repoPath) { Timeout = Budget, MaxOutputChars = ceiling } : new ProcessRequest("git", args, repoPath) { Timeout = Budget }, ct);
+        string[] argv = Hardened ? ["--no-replace-objects", .. args] : args;
+        var request = new ProcessRequest("git", argv, repoPath) { Timeout = Budget };
+        request = maxChars is { } ceiling ? request with { MaxOutputChars = ceiling } : request;
+        request = Hardened ? request with { Environment = HardenedEnvironment } : request;
+        var result = await launcher.RunAsync(request, ct);
 
         // A timeout or a cancellation is not an answer about the repository — it is us having learned
         // nothing, and the caller must record `failed` rather than a skip.
