@@ -22,7 +22,7 @@ internal static class CoderLaunches
         "this runtime has no coder launch: a write launch is built only by a vendor that has a coder type, and launched only on a vendor that shared/coder-boundary-releases.json ships";
 
     /// <summary>What a person can do about <see cref="NoCoderLaunch"/>.</summary>
-    public const string NoCoderLaunchCure = "set the coder's model to a model of a shipped coder vendor (claude, or a vendor the table of coder boundaries ships) in ConnectOtherAIs";
+    public const string NoCoderLaunchCure = "set the coder's model to a model of a launchable coder vendor (claude, or a vendor whose row of the table of coder boundaries has the verdict ship and the mark launchable on) in ConnectOtherAIs";
 
     /// <summary>The refusal every runtime but claude answers a coder launch with, before anything is launched.</summary>
     public static ConsultantPreparation.Refused NoCoder { get; } = new(new ConsultFailure.VendorRefused(NoCoderLaunch, NoCoderLaunchCure));

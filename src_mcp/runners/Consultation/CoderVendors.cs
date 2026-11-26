@@ -219,11 +219,11 @@ internal sealed record CoderVendorSet(CoderBoundaryTable Table, IReadOnlyList<IC
         var found = Implemented.FirstOrDefault(candidate => candidate.Id == vendor);
         if (found is null)
         {
-            return new CoderVendorResolution.Refused($"the coder has no launch built for '{vendor}' in this version; the coder vendors that are shipped are {string.Join(", ", Table.ShippedVendors)} — set the coder's model to a model of one that has (COAI_ROLES_MODELS names the lists)");
+            return new CoderVendorResolution.Refused($"the coder has no launch built for '{vendor}' in this version; the coder vendors that are launchable are {string.Join(", ", Table.LaunchableVendors)} — set the coder's model to a model of one that has (COAI_ROLES_MODELS names the lists)");
         }
 
         return found.PromptId.Length == 0
-            ? new CoderVendorResolution.Refused($"'{vendor}' has no coder prompt of its own, and a vendor is never given another vendor's prompt; the coder vendors that are shipped are {string.Join(", ", Table.ShippedVendors.Where(shipped => shipped != vendor))}")
+            ? new CoderVendorResolution.Refused($"'{vendor}' has no coder prompt of its own, and a vendor is never given another vendor's prompt; the coder vendors that are launchable are {string.Join(", ", Table.LaunchableVendors.Where(shipped => shipped != vendor))}")
             : new CoderVendorResolution.Launchable(found);
     }
 
@@ -233,8 +233,8 @@ internal sealed record CoderVendorSet(CoderBoundaryTable Table, IReadOnlyList<IC
     public string LastMeasured(string vendor) =>
         vendor == CoderBoundaryTable.Claude ? ClaudeWriteCapability.LastMeasuredRelease : Table.Row(vendor)?.LastMeasured?.Release ?? string.Empty;
 
-    /// <summary>The vendors that may be launched now: those of <see cref="CoderBoundaryTable.ShippedVendors"/> that also resolve.</summary>
-    public IReadOnlyList<string> Launchable => [.. Table.ShippedVendors.Where(vendor => Resolve(vendor) is CoderVendorResolution.Launchable)];
+    /// <summary>The vendors that may be launched now: those of <see cref="CoderBoundaryTable.LaunchableVendors"/> that also resolve.</summary>
+    public IReadOnlyList<string> Launchable => [.. Table.LaunchableVendors.Where(vendor => Resolve(vendor) is CoderVendorResolution.Launchable)];
 }
 
 /// <summary>What <see cref="CoderVendorSet.Resolve"/> found.</summary>

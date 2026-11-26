@@ -44,8 +44,11 @@ public sealed class ACoderFailsOverAcrossVendorsTests
         /// <summary>Verdict refuse.</summary>
         Refuse,
 
-        /// <summary>Verdict ship and NO measured release (the table of the product today): ships all the same, a release is a record and never a condition (owner decision of 2026-11-26).</summary>
+        /// <summary>Verdict ship, the mark launchable on and NO history of measures: ships all the same — the history is a record and never a condition (owner decision of 2026-11-26).</summary>
         ShipUnmeasured,
+
+        /// <summary>Verdict ship and the mark launchable OFF (the table of the product today for codex and agy): not launchable.</summary>
+        ShipNotLaunchable,
     }
 
     private static readonly ModelRef Sonnet = new("sonnet", "claude");
@@ -72,15 +75,20 @@ public sealed class ACoderFailsOverAcrossVendorsTests
         { Verdict.ShipUnmeasured, Verdict.Ship },
         { Verdict.Ship, Verdict.ShipUnmeasured },
         { Verdict.ShipUnmeasured, Verdict.ShipUnmeasured },
+        { Verdict.ShipNotLaunchable, Verdict.Ship },
+        { Verdict.Ship, Verdict.ShipNotLaunchable },
+        { Verdict.ShipNotLaunchable, Verdict.ShipNotLaunchable },
     };
 
+    private const string OneMeasure = "\"measured\": [ { \"release\": \"1.0.0\", \"resultsHeading\": \"H\", \"judgementHeading\": \"J\", \"programs\": [ { \"file\": \"x\", \"sha256\": \"0000000000000000000000000000000000000000000000000000000000000000\" } ] } ]";
+
     private static string Row(string id, Verdict verdict) =>
-        $$"""{ "id": "{{id}}", "verdict": "{{(verdict == Verdict.Refuse ? "refuse" : "ship")}}", "results": "r.md", "releases": {{(verdict == Verdict.Ship ? """[ { "release": "1.0.0", "resultsHeading": "H", "judgementHeading": "J", "sha256": "0000000000000000000000000000000000000000000000000000000000000000" } ]""" : "[]")}}, "properties": [], "pending": [] }""";
+        $$"""{ "id": "{{id}}", "verdict": "{{(verdict == Verdict.Refuse ? "refuse" : "ship")}}", "launchable": {{(Ships(verdict) ? "true" : "false")}}, "results": "r.md", {{(verdict == Verdict.Ship ? OneMeasure : "\"measured\": []")}}, "properties": [], "pending": [] }""";
 
     private static CoderVendorSet Set(Verdict codex, Verdict agy, CrossVendor? codexVendor = null, CrossVendor? agyVendor = null) =>
         CoderVendorSet.Of(CoderBoundaryTable.Parse($$"""{ "version": 1, "judgement": "j.md", "shared": [], "vendors": [ {{Row("codex", codex)}}, {{Row("agy", agy)}} ] }"""), codexVendor ?? new CrossVendor("codex"), agyVendor ?? new CrossVendor("agy"));
 
-    private static bool Ships(Verdict verdict) => verdict != Verdict.Refuse;
+    private static bool Ships(Verdict verdict) => verdict is Verdict.Ship or Verdict.ShipUnmeasured;
 
     /// <summary>The vendors that are launched, in route order, for the verdicts.</summary>
     private static string[] Expected(Verdict codex, Verdict agy) => ["claude", .. Ships(codex) ? new[] { "codex" } : [], .. Ships(agy) ? new[] { "agy" } : []];
@@ -364,7 +372,7 @@ public sealed class ACoderFailsOverAcrossVendorsTests
     }
 
     [Fact]
-    public async Task D2_TheProductsOwnTable_ShipsCodexAndAgyByVerdict_YetNothingLaunchesThemUntilTheyHaveATypeOfTheirOwn()
+    public async Task D2_TheProductsOwnTable_HoldsTheVerdictShipAndTheMarkLaunchableOffForCodexAndAgy_SoNothingLaunchesThem()
     {
         await using var rig = await CoderRig.CreateAsync(needsLayer: false);
         var service = ServiceFor(rig, CoderVendors.Shipped);
@@ -373,13 +381,12 @@ public sealed class ACoderFailsOverAcrossVendorsTests
         {
             var named = Parse(await service.StartAsync(RoleDescriptors.Coder, rig.Repo, CoderRig.TaskFile, null, model, null, null, null, TestContext.Current.CancellationToken));
 
-            named.GetProperty("error").GetString().Should().StartWith($"the coder cannot run {model} on {vendor}: ").And.Contain($"no launch built for '{vendor}'").And.NotContain("release", "the refusal is the lack of a type, never the lack of a measured release");
+            named.GetProperty("error").GetString().Should().StartWith($"the coder cannot run {model} on {vendor}: ").And.Contain("not launchable yet").And.NotContain("release", "the refusal is the mark launchable, which is off, never a missing release");
         }
 
         rig.World.Store.JobIds().Should().BeEmpty();
         CoderVendors.Shipped.Launchable.Should().Equal("claude");
-        CoderVendors.Shipped.Table.Row("codex")!.Releases.Should().BeEmpty("the table of the product holds no measured release of codex, and needs none");
-        CoderVendors.Shipped.Table.Row("agy")!.Releases.Should().BeEmpty("the table of the product holds no measured release of agy, and needs none");
+        CoderVendors.Shipped.Table.Vendors.Should().OnlyContain(row => row.Verdict == "ship" && !row.Launchable && row.Measured.Count == 1, "both marks are off, and the history of each measure is there and decides nothing");
     }
 
     private static string CoderList => """{"coder":[{"model":"sonnet","vendor":"claude"},{"model":"opus","vendor":"claude"},{"model":"terra","vendor":"codex"},{"model":"gemini-4-argon-medium","vendor":"agy"}]}""";

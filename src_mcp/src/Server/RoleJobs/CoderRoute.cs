@@ -36,16 +36,16 @@ internal static class CoderRoute
         if (kept.Count == 0)
         {
             return new RouteResult.Refused(
-                $"the coder's route has no model on a vendor that is shipped for the coder ({string.Join(", ", RoleRoute.Format(dropped))}); the shipped coder vendors are {string.Join(", ", shipped)}: "
+                $"the coder's route has no model on a vendor that is launchable for the coder ({string.Join(", ", RoleRoute.Format(dropped))}); the launchable coder vendors are {string.Join(", ", shipped)}: "
                 + $"put a model of one of them into the '{RoleRouter.CoderRole}' list (and the '{RoleRouter.ImportantRole}' list for an important task) in {RoleRouter.ModelsSetting}, and into the complexity bands in {RoleRouter.BandsSetting}");
         }
 
         return dropped.Count == 0
             ? routed
-            : new RouteResult.Routed(kept, $"{routed.Why}; dropped because the coder is not shipped for their vendor (shipped: {string.Join(", ", shipped)}): {string.Join(", ", RoleRoute.Format(dropped))}");
+            : new RouteResult.Routed(kept, $"{routed.Why}; dropped because the coder is not launchable for their vendor (launchable: {string.Join(", ", shipped)}): {string.Join(", ", RoleRoute.Format(dropped))}");
     }
 
-    private static string WhyNot(CoderVendorSet set, ModelRef model) => set.Resolve(Vendor(model)) is CoderVendorResolution.Refused refusal ? refusal.Sentence : "its vendor is not shipped";
+    private static string WhyNot(CoderVendorSet set, ModelRef model) => set.Resolve(Vendor(model)) is CoderVendorResolution.Refused refusal ? refusal.Sentence : "its vendor is not launchable";
 
     private static string Vendor(ModelRef model) => model.Vendor.ToLowerInvariant();
 

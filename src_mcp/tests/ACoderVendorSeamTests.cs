@@ -31,16 +31,16 @@ public sealed class ACoderVendorSeamTests
 
     private static readonly CoderProgram Program = new("/usr/bin/true", string.Empty, string.Empty);
 
-    private static string Json(string verdict, string releases = "[]") =>
+    private static string Json(string verdict, string measured = "[]", bool launchable = true) =>
         $$"""
         { "version": 1, "judgement": "j.md",
           "shared": [ { "id": "U1", "class": "pre" } ],
-          "vendors": [ { "id": "probe", "verdict": "{{verdict}}", "results": "r.md", "releases": {{releases}}, "properties": [ { "id": "PR-1", "class": "launch" } ], "pending": [] } ] }
+          "vendors": [ { "id": "probe", "verdict": "{{verdict}}", "launchable": {{(launchable ? "true" : "false")}}, "results": "r.md", "measured": {{measured}}, "properties": [ { "id": "PR-1", "class": "launch" } ], "pending": [] } ] }
         """;
 
-    private const string OneRelease = """[ { "release": "1.0.0", "resultsHeading": "H", "judgementHeading": "J", "sha256": "0000000000000000000000000000000000000000000000000000000000000000", "stream": { "mode": "x" } } ]""";
+    private const string OneRelease = """[ { "release": "1.0.0", "measuredOn": "a day", "what": "history", "resultsHeading": "H", "judgementHeading": "J", "programs": [ { "file": "probe", "sha256": "0000000000000000000000000000000000000000000000000000000000000000" } ] } ]""";
 
-    private static CoderVendorSet SetWith(string verdict, string releases, ICoderVendor? vendor = null) => CoderVendorSet.Of(CoderBoundaryTable.Parse(Json(verdict, releases)), vendor ?? new SeamProbeVendor());
+    private static CoderVendorSet SetWith(string verdict, string measured, ICoderVendor? vendor = null, bool launchable = true) => CoderVendorSet.Of(CoderBoundaryTable.Parse(Json(verdict, measured, launchable)), vendor ?? new SeamProbeVendor());
 
     // ---------- d1: claude is what it was ----------
 
@@ -206,36 +206,50 @@ public sealed class ACoderVendorSeamTests
     // ---------- d3: the table ----------
 
     [Fact]
-    public void D3_TheShippedTable_HoldsTheVerdictShipAndNoReleaseForCodexAndAgy_AndAReleaseIsARecordNotACondition()
+    public void D3_TheShippedTable_HoldsTheVerdictShipTheMarkLaunchableOffAndTheHistoryOfOneMeasureForCodexAndAgy_AndSoLaunchesNeither()
     {
         var table = CoderBoundaryTable.Shipped;
 
         table.Vendors.Select(row => row.Id).Should().Equal("codex", "agy");
-        table.Vendors.Should().OnlyContain(row => row.Verdict == "ship" && row.Releases.Count == 0 && row.Ships && row.LastMeasured == null, "a vendor ships by its verdict alone (owner decision of 2026-11-26): the list of measured releases is history");
-        table.ShippedVendors.Should().Equal("claude", "codex", "agy");
-        CoderVendors.Shipped.Launchable.Should().Equal(["claude"], "the table ships them; what launches them is a TYPE of its own (s5, s6), and none exists yet");
+        table.Vendors.Should().OnlyContain(row => row.Verdict == "ship" && !row.Launchable && !row.Ships && row.Measured.Count == 1, "the owner's condition of 2026-11-26: the verdict is ship, the history of the measure is there, and the mark is OFF until the commit of s5 t5 (codex) or s8 t6 (agy)");
+        table.LaunchableVendors.Should().Equal("claude");
+        CoderVendors.Shipped.Launchable.Should().Equal(["claude"]);
     }
 
     [Theory]
     [InlineData("codex")]
     [InlineData("agy")]
-    public void D3_AVendorThatShipsButHasNoTypeYet_IsRefusedForThatReason_NotForALackOfARelease(string vendor)
+    public void D3_AVendorWhoseMarkIsOff_IsRefusedWithASentenceThatNamesTheLaunchableVendors_AndNeverForItsHistoryOrItsRelease(string vendor)
     {
-        CoderBoundaryTable.Shipped.WhyNot(vendor).Should().BeEmpty("the table says nothing against it");
-        var said = CoderVendors.Shipped.Resolve(vendor).Should().BeOfType<CoderVendorResolution.Refused>().Subject.Sentence;
+        var said = CoderBoundaryTable.Shipped.WhyNot(vendor);
 
-        said.Should().Contain($"no launch built for '{vendor}'").And.Contain("shipped are claude").And.NotContain("release");
+        said.Should().Contain($"'{vendor}'").And.Contain("not launchable yet").And.Contain("launchable are claude").And.NotContain("release");
+        CoderVendors.Shipped.Resolve(vendor).Should().BeOfType<CoderVendorResolution.Refused>().Which.Sentence.Should().Be(said);
         CoderBoundaryTable.Shipped.WhyNot("claude").Should().BeEmpty();
         CoderBoundaryTable.Shipped.WhyNot("gemini-cli").Should().Contain("has no row");
     }
 
     [Fact]
-    public void D3_AVendorWhoseVerdictIsRefuse_IsRefusedWhateverItsReleases_AndAShippedOneWhateverItsReleaseIs()
+    public void D3_AVendorIsLaunchableOnlyWhenTheVerdictIsShipAndTheMarkIsOn_WhateverItsHistoryHolds()
     {
-        var refused = CoderBoundaryTable.Parse(Json("refuse", OneRelease));
-        refused.WhyNot("probe").Should().Contain("the verdict for 'probe' is refuse");
-        CoderBoundaryTable.Parse(Json("ship", "[]")).WhyNot("probe").Should().BeEmpty("no release is measured, and none is needed");
-        CoderBoundaryTable.Parse(Json("ship", OneRelease)).Row("probe")!.LastMeasured!.Release.Should().Be("1.0.0", "the last measured release is what a job's record names beside the installed one");
+        foreach (var (verdict, measured, mark, launches) in new[] { ("ship", OneRelease, true, true), ("ship", "[]", true, true), ("ship", OneRelease, false, false), ("ship", "[]", false, false), ("refuse", OneRelease, true, false), ("refuse", "[]", true, false) })
+        {
+            var table = CoderBoundaryTable.Parse(Json(verdict, measured, mark));
+
+            table.Row("probe")!.Ships.Should().Be(launches, $"verdict {verdict}, mark {mark}, history {(measured == "[]" ? "none" : "one")}");
+            table.LaunchableVendors.Should().Equal(launches ? ["claude", "probe"] : ["claude"]);
+        }
+
+        CoderBoundaryTable.Parse(Json("ship", "[]", launchable: false)).WhyNot("probe").Should().Contain("not launchable yet");
+        CoderBoundaryTable.Parse(Json("ship", OneRelease)).Row("probe")!.LastMeasured!.Release.Should().Be("1.0.0", "the last measure is what a job's record names beside the installed release");
+    }
+
+    [Fact]
+    public void D3_TheMarkLaunchable_IsOffInTheProductsTable_AndOnlyTheCommitsOfS5T5AndS8T6MayTurnItOn()
+    {
+        var text = File.ReadAllText(Path.Combine(Repo(), "shared", "coder-boundary-releases.json"));
+
+        System.Text.RegularExpressions.Regex.Matches(text, "\"launchable\":\\s*(true|false)").Select(match => match.Groups[1].Value).Should().Equal("false", "false");
     }
 
     [Fact]
@@ -253,8 +267,8 @@ public sealed class ACoderVendorSeamTests
         var table = CoderBoundaryTable.Parse(Json("ship", OneRelease));
 
         table.Row("probe")!.Ships.Should().BeTrue();
-        table.ShippedVendors.Should().Equal("claude", "probe");
-        table.Row("probe")!.Releases.Single().Should().BeEquivalentTo(new CoderRelease("1.0.0", "H", "J", new string('0', 64), new Dictionary<string, string> { ["mode"] = "x" }));
+        table.LaunchableVendors.Should().Equal("claude", "probe");
+        table.Row("probe")!.Measured.Single().Should().BeEquivalentTo(new CoderMeasure("1.0.0", "a day", "history", "H", "J", [], [new CoderProgramRecord("probe", new string('0', 64))]));
         table.PropertiesOf("probe").Select(property => property.Id).Should().Equal("U1", "PR-1");
     }
 
@@ -263,7 +277,7 @@ public sealed class ACoderVendorSeamTests
     [InlineData("""{ "version": 1, "judgement": "j", "shared": [ { "id": "U1", "class": "sometimes" } ], "vendors": [] }""", "class")]
     [InlineData("""{ "version": 1, "judgement": "j", "shared": [], "vendors": [ { "id": "claude", "verdict": "ship", "results": "r" } ] }""", "claude is never in the table")]
     [InlineData("""{ "version": 1, "judgement": "j", "shared": [], "vendors": [ { "id": "x", "verdict": "maybe", "results": "r" } ] }""", "verdict")]
-    [InlineData("""{ "version": 1, "judgement": "j", "shared": [], "vendors": [ { "id": "x", "verdict": "ship", "results": "r", "releases": [ { "release": "1", "resultsHeading": "h", "judgementHeading": "j", "sha256": "abc" } ] } ] }""", "sha256")]
+    [InlineData("""{ "version": 1, "judgement": "j", "shared": [], "vendors": [ { "id": "x", "verdict": "ship", "results": "r", "measured": [ { "release": "1", "resultsHeading": "h", "judgementHeading": "j", "programs": [ { "file": "f", "sha256": "abc" } ] } ] } ] }""", "sha256")]
     [InlineData("""{ "version": 1, "judgement": "j", "shared": [ { "id": "U1", "class": "pre" }, { "id": "U1", "class": "pre" } ], "vendors": [] }""", "twice")]
     public void D3_ATableThatIsNotWellFormed_FailsClosed(string json, string saying)
     {
@@ -273,7 +287,7 @@ public sealed class ACoderVendorSeamTests
     }
 
     /// <summary>What reads the table, as source: a read of its file, a load of it, a row type or the list of shipped vendors.</summary>
-    private static readonly Regex ReadsTheTable = new(@"(ReadAllText|ReadAllLines|OpenRead|GetManifestResourceStream)\([^\n]*coder-boundary-releases|CoderBoundaryTable\.(Shipped|Parse)|CoderVendorRow|\.ShippedVendors\b", RegexOptions.CultureInvariant);
+    private static readonly Regex ReadsTheTable = new(@"(ReadAllText|ReadAllLines|OpenRead|GetManifestResourceStream)\([^\n]*coder-boundary-releases|CoderBoundaryTable\.(Shipped|Parse)|CoderVendorRow|\.LaunchableVendors\b", RegexOptions.CultureInvariant);
 
     /// <summary>What states a verdict, as source: a verdict word as a string literal.</summary>
     private static readonly Regex StatesAVerdict = new("\"(ship|refuse)\"", RegexOptions.CultureInvariant);
@@ -309,7 +323,7 @@ public sealed class ACoderVendorSeamTests
             Decides(NoComments(File.ReadAllText(Path.Combine(Repo(), "src_mcp", "runners", "Consultation", one)))).Should().BeTrue($"the scan finds {one}");
         }
 
-        foreach (var second in new[] { "var row = CoderBoundaryTable.Shipped;", "var text = File.ReadAllText(\"shared/coder-boundary-releases.json\");", "var x = CoderBoundaryTable.Parse(text);", "CoderVendorRow row;", "var n = table.ShippedVendors;", "if (vendor == \"codex\" && verdict == \"ship\") { }" })
+        foreach (var second in new[] { "var row = CoderBoundaryTable.Shipped;", "var text = File.ReadAllText(\"shared/coder-boundary-releases.json\");", "var x = CoderBoundaryTable.Parse(text);", "CoderVendorRow row;", "var n = table.LaunchableVendors;", "if (vendor == \"codex\" && verdict == \"ship\") { }" })
         {
             Decides(second).Should().BeTrue(second);
         }
@@ -375,10 +389,10 @@ public sealed class ACoderVendorSeamTests
                 problems.Add($"the verdict of {row.Id} is {row.Verdict} and the judgement says '{JudgementVerdict(judgement, row.Id)}'");
             }
 
-            foreach (var release in row.Releases)
+            foreach (var measure in row.Measured)
             {
                 var results = resultsOf(row.Id);
-                problems.AddRange(ReleaseProblems(row.Id, release, results, judgement));
+                problems.AddRange(MeasureProblems(row.Id, measure, results, judgement));
             }
 
             problems.AddRange(row.Pending.Where(id => !ids.ContainsKey(id)).Select(id => $"the pending id {id} is not listed by the judgement"));
@@ -387,26 +401,34 @@ public sealed class ACoderVendorSeamTests
         return problems;
     }
 
-    private static IEnumerable<string> ReleaseProblems(string vendor, CoderRelease release, string results, string judgement)
+    /// <summary>What is wrong between one record of the history and the two documents: a results heading that is not there, a program sha256 that is under none of the record's results headings, a judgement heading that is not there or that does not name the release.</summary>
+    private static IEnumerable<string> MeasureProblems(string vendor, CoderMeasure measure, string results, string judgement)
     {
-        var heard = Section(results, release.ResultsHeading);
+        var heard = Section(results, measure.ResultsHeading);
         if (heard.Length == 0)
         {
-            yield return $"{vendor} {release.Release}: the results heading '{release.ResultsHeading}' is not there";
-        }
-        else if (!heard.Contains(release.Sha256, StringComparison.OrdinalIgnoreCase))
-        {
-            yield return $"{vendor} {release.Release}: the sha256 is not under the results heading";
+            yield return $"{vendor} {measure.Release}: the results heading '{measure.ResultsHeading}' is not there";
         }
 
-        var judged = Section(judgement, release.JudgementHeading);
+        var later = measure.LaterResultsHeadings.Select(heading => Section(results, heading)).ToList();
+        foreach (var heading in measure.LaterResultsHeadings.Where(heading => Section(results, heading).Length == 0))
+        {
+            yield return $"{vendor} {measure.Release}: the later results heading '{heading}' is not there";
+        }
+
+        foreach (var program in measure.Programs.Where(program => heard.Length > 0 && !new[] { heard }.Concat(later).Any(text => text.Contains(program.Sha256, StringComparison.OrdinalIgnoreCase))))
+        {
+            yield return $"{vendor} {measure.Release}: the sha256 of {program.File} is not under a results heading of the record";
+        }
+
+        var judged = Section(judgement, measure.JudgementHeading);
         if (judged.Length == 0)
         {
-            yield return $"{vendor} {release.Release}: the judgement heading '{release.JudgementHeading}' is not there";
+            yield return $"{vendor} {measure.Release}: the judgement heading '{measure.JudgementHeading}' is not there";
         }
-        else if (!string.Join('\n', judged.Split('\n').Skip(1)).Contains(release.Release, StringComparison.Ordinal))
+        else if (!string.Join('\n', judged.Split('\n').Skip(1)).Contains(measure.Release.Replace("codex-cli ", string.Empty, StringComparison.Ordinal), StringComparison.Ordinal))
         {
-            yield return $"{vendor} {release.Release}: the judgement section does not name the release";
+            yield return $"{vendor} {measure.Release}: the judgement section does not name the release";
         }
     }
 
@@ -440,7 +462,7 @@ public sealed class ACoderVendorSeamTests
     private static string Results(string sha) => $"# Results\n## Measure of 1.0.0\nthe program {sha}\n## Next\n";
 
     private static CoderBoundaryTable TableOf(string verdict = "ship", string heading = "Measure of 1.0.0", string judging = "Judgement of 1.0.0", string sha = null!) =>
-        CoderBoundaryTable.Parse(Json(verdict, $$"""[ { "release": "1.0.0", "resultsHeading": "{{heading}}", "judgementHeading": "{{judging}}", "sha256": "{{sha ?? new string('a', 64)}}" } ]"""));
+        CoderBoundaryTable.Parse(Json(verdict, $$"""[ { "release": "1.0.0", "resultsHeading": "{{heading}}", "judgementHeading": "{{judging}}", "programs": [ { "file": "probe", "sha256": "{{sha ?? new string('a', 64)}}" } ] } ]"""));
 
     [Fact]
     public void D4_ATableThatMatchesTheDocuments_HasNoProblem()
@@ -484,9 +506,9 @@ public sealed class ACoderVendorSeamTests
     [InlineData("ship", true, true)]
     [InlineData("refuse", false, false)]
     [InlineData("refuse", true, false)]
-    public void D5_TheSeamIsBuiltForEveryCombination_AndARefusedVendorIsNeverLaunchable(string verdict, bool released, bool launchable)
+    public void D5_TheSeamIsBuiltForEveryCombination_AndARefusedVendorIsNeverLaunchable(string verdict, bool measured, bool launchable)
     {
-        var set = SetWith(verdict, released ? OneRelease : "[]");
+        var set = SetWith(verdict, measured ? OneRelease : "[]");
 
         (set.Resolve("probe") is CoderVendorResolution.Launchable).Should().Be(launchable);
         set.Launchable.Should().Equal(launchable ? ["claude", "probe"] : ["claude"]);

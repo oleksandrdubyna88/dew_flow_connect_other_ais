@@ -300,7 +300,7 @@ public sealed class ACoderTaskCheckTests
 
         var answer = Parse(await StartWith(world, repo, TaskOf(complexity: 4), model: "gpt-5.5"));
 
-        Error(answer).Should().StartWith("the coder cannot run gpt-5.5 on codex: ").And.Contain("shipped are claude").And.NotContain("claude only", "the caller asked for that model: it is refused, never swapped for another one");
+        Error(answer).Should().StartWith("the coder cannot run gpt-5.5 on codex: ").And.Contain("launchable are claude").And.NotContain("claude only", "the caller asked for that model: it is refused, never swapped for another one");
         NoJobFolder(world);
     }
 

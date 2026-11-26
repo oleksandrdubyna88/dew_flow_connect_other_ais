@@ -34,7 +34,7 @@ public sealed class ACoderFixLoopThroughTheSeamTests
     private static CoderVendorSet Set() => CoderVendorSet.Of(CoderBoundaryTable.Parse("""
         { "version": 1, "judgement": "j.md", "shared": [],
           "vendors": [ { "id": "codex", "verdict": "ship", "results": "r.md",
-            "releases": [ { "release": "1.0.0", "resultsHeading": "H", "judgementHeading": "J", "sha256": "0000000000000000000000000000000000000000000000000000000000000000" } ],
+            "launchable": true, "measured": [ { "release": "1.0.0", "resultsHeading": "H", "judgementHeading": "J", "programs": [ { "file": "x", "sha256": "0000000000000000000000000000000000000000000000000000000000000000" } ] } ],
             "properties": [], "pending": [] } ] }
         """), new SeamVendor());
 
