@@ -21,7 +21,7 @@ public sealed class ChecksAtBase(GitHistory git, CheckRunner runner)
     /// The checks of a coder job, the one road for it: the <c>.git</c> pointer of the worktree is compared with what coai wrote down BEFORE anything runs and again AFTER, the base toolchain is read from the MAIN repository
     /// (never through the worktree's pointer), and every step runs inside the OS boundary — this runner must have one, or the job is refused. A pointer that changed after the checks makes the run <see cref="CheckState.Failed"/> whatever the steps said.
     /// </summary>
-    public async Task<CheckResult> RunCoderJobAsync(IWorkFolder tree, string baseSha, BoundaryJob job, string logFolder, int jobs, CancellationToken ct = default)
+    public async Task<CheckResult> RunCoderJobAsync(IWorkFolder tree, string baseSha, BoundaryJob job, string logFolder, int jobs, CancellationToken ct = default, Action<StepRecord>? stepFinished = null)
     {
         var before = job.Tree.Verify();
         if (before.Length > 0)
@@ -29,7 +29,7 @@ public sealed class ChecksAtBase(GitHistory git, CheckRunner runner)
             return new CheckResult(CheckState.BoundaryRefused, [], $"{before} Nothing was run.");
         }
 
-        var result = await RunAsync(tree, baseSha, new CheckRequest(job.Tree.Root, logFolder, jobs) { Job = job }, ct);
+        var result = await RunAsync(tree, baseSha, new CheckRequest(job.Tree.Root, logFolder, jobs) { Job = job, StepFinished = stepFinished }, ct);
         var after = job.Tree.Verify();
 
         return after.Length == 0 ? result : result with { State = CheckState.Failed, Note = $"{after} The result of the checks is not trusted. {result.Note}" };

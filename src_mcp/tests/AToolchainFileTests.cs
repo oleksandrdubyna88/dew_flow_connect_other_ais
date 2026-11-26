@@ -64,23 +64,30 @@ public sealed class AToolchainFileTests
     }
 
     [Theory]
-    [InlineData("secuirty: true\n", "secuirty")]
-    [InlineData("skipp:\n  - audit\n", "skipp")]
-    public void AnUnknownKey_AtTheTop_IsRefused_NamingTheKey(string extra, string key)
+    [InlineData("secuirty: true\n", 8)]
+    [InlineData("skipp:\n  - audit\n", 5)]
+    public void AnUnknownKey_AtTheTop_IsRefused_NamingItsLineAndLength_NotItsText(string extra, int length)
     {
-        RefusedBy(OneProject(string.Empty) + extra).Should().Contain($"'{key}'");
+        var sentence = RefusedBy(OneProject(string.Empty) + extra);
+
+        sentence.Should().Contain($"line 5: a key of {length} characters is not a key of toolchain").And.Contain("(the keys are version, projects, skip, timeouts)");
+        sentence.Should().NotContain("secuirty").And.NotContain("skipp", "a typed key is never spelled: a short word is the shape of a secret too");
     }
 
     [Fact]
-    public void AnUnknownKey_InAProject_IsRefused_NamingTheKey()
+    public void AnUnknownKey_InAProject_IsRefused_NamingItsLineAndLength_AndTheLegalKeys()
     {
-        RefusedBy(OneProject("    buidl:\n      - dotnet\n")).Should().Contain("'buidl'");
+        var sentence = RefusedBy(OneProject("    buidl:\n      - dotnet\n"));
+
+        sentence.Should().Contain("line 5: a key of 5 characters is not a key of project 1").And.Contain("(the keys are path, adapter, build, test, memoryMb)").And.NotContain("buidl");
     }
 
     [Fact]
-    public void AnUnknownKey_InTimeouts_IsRefused_NamingTheKey()
+    public void AnUnknownKey_InTimeouts_IsRefused_NamingItsLineAndLength_AndTheLegalKeys()
     {
-        RefusedBy(OneProject(string.Empty) + "timeouts:\n  lint: 5m\n").Should().Contain("'lint'");
+        var sentence = RefusedBy(OneProject(string.Empty) + "timeouts:\n  lint: 5m\n");
+
+        sentence.Should().Contain("line 6: a key of 4 characters is not a key of timeouts (the keys are build, test)").And.NotContain("lint");
     }
 
     public static TheoryData<string, string> ArgvsThatAreNotListsOfStrings => new()
@@ -273,32 +280,19 @@ public sealed class AToolchainFileTests
     [Theory]
     [InlineData("{0}: x\n")]
     [InlineData("timeouts:\n  {0}: 5m\n")]
-    public void ATokenShapedKey_IsRefused_AndNeverEchoed_WhileARealLookingOneIsNamed(string template)
+    public void AnUnknownKey_IsNeverEchoed_WhateverItsShape_OnlyItsLineAndLengthAreSaid(string template)
     {
         string Put(string key) => OneProject(template.Replace("{0}", key, StringComparison.Ordinal));
 
-        var token = Read(Put(Pasted)).Should().BeOfType<ToolchainRead.Refused>().Subject;
-        var named = Read(Put("buidl")).Should().BeOfType<ToolchainRead.Refused>().Subject;
+        // A token pasted as a key, and a short word that has the shape of a real key AND of a secret (a password typed where a key goes).
+        foreach (var typed in new[] { Pasted, "MySecretToken123", "buidl" })
+        {
+            var refused = Read(Put(typed)).Should().BeOfType<ToolchainRead.Refused>(typed.Length.ToString()).Subject;
 
-        token.Sentence.Should().NotContain(Pasted, "a key is typed by a person too: a token pasted where a key goes is not echoed");
-        token.Sentence.Should().Contain($"a key of {Pasted.Length} characters");
-        named.Sentence.Should().Contain("'buidl'", "a name of the shape of a real key is spelled, so a typo is found");
-    }
-
-    /// <summary>The security verify's M6: the reader's own refusals repeated 40 characters of the line (a bare value line, a ':' in a plain value, text after a quote, a duplicate key). Each is the line number and a fixed sentence now.</summary>
-    [Theory]
-    [InlineData("{0}\n")]
-    [InlineData("a: {0}: x\n")]
-    [InlineData("a: \"x\" {0}\n")]
-    [InlineData("{0}: 1\n{0}: 2\n")]
-    [InlineData("a: \"\\{0}\"\n")]
-    public void AYamlFaultOfTheReader_NeverRepeatsTheText_OnlyItsLineAndAFixedSentence(string tail)
-    {
-        var refused = Read(OneProject(tail.Replace("{0}", Pasted, StringComparison.Ordinal))).Should().BeOfType<ToolchainRead.Refused>(tail).Subject;
-
-        refused.Sentence.Should().NotContain(Pasted).And.NotContain(Part, "not even a part of the line is repeated");
-        refused.Faults.Should().NotContain(fault => fault.Contains(Part, StringComparison.Ordinal));
-        refused.Sentence.Should().Contain(" line ").And.Contain("yaml-", "the line and the fault code are what is said");
+            refused.Sentence.Should().NotContain(typed, "a key is typed by a person too, and a refusal is printed and recorded");
+            refused.Faults.Should().NotContain(fault => fault.Contains(typed, StringComparison.Ordinal));
+            refused.Sentence.Should().Contain($"a key of {typed.Length} characters is not a key of");
+        }
     }
 
     [Fact]
@@ -327,7 +321,7 @@ public sealed class AToolchainFileTests
         var refused = Read("version: 3\nprojects:\n  - path: /abs\n    adapter: cobol\n    buidl: x\n").Should().BeOfType<ToolchainRead.Refused>().Subject;
 
         refused.Faults.Should().HaveCountGreaterThanOrEqualTo(4);
-        refused.Sentence.Should().Contain("'version'").And.Contain("'path'").And.Contain("'adapter'").And.Contain("'buidl'");
+        refused.Sentence.Should().Contain("'version'").And.Contain("'path'").And.Contain("'adapter'").And.Contain("line 5: a key of 5 characters is not a key of project 1");
     }
 
     [Fact]

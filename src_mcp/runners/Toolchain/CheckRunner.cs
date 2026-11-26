@@ -16,6 +16,12 @@ public sealed record CheckRequest(string Tree, string LogFolder, int Jobs)
     /// Set for a CODER job: its steps then run inside the OS boundary (<see cref="CheckBoundary"/>) or the run is refused — there is no coder road without it. Absent for a tree that is not a coder's (the recorded run on a clean clone).
     /// </summary>
     public BoundaryJob? Job { get; init; }
+
+    /// <summary>
+    /// Called with each step's record the moment the step has ended, before the next step is started — also for the step that failed. A caller that keeps a record of each step (the coder's unit records) writes it here, so a cancel or a hang in a LATER step
+    /// does not lose the records of the steps that already ran.
+    /// </summary>
+    public Action<StepRecord>? StepFinished { get; init; }
 }
 
 /// <summary>
@@ -79,6 +85,7 @@ public sealed class CheckRunner(IProcessLauncher launcher, CheckBoundary? bounda
                 ? await RunBoundedStepAsync(step, number, request, bounded.Admitted, ct)
                 : await RunStepAsync(step, number, request, ct);
             done.Add(record);
+            request.StepFinished?.Invoke(record);
             if (!record.Passed)
             {
                 return new CheckResult(CheckState.Failed, done, $"{Describe(record)}; the steps after it were not run");
@@ -163,14 +170,14 @@ public sealed class CheckRunner(IProcessLauncher launcher, CheckBoundary? bounda
             var empty = new ProcessResult(StepRecord.NotStartedExitCode, string.Empty, string.Empty, TimedOut: false);
             await CheckLog.WriteAsync(log, empty, $"[coai: the process could not be started: {e.Message}]\n");
 
-            return new StepRecord(step.Project.Path, step.Step, argv, Started: false, StepRecord.NotStartedExitCode, TimedOut: false, clock.Elapsed, log, LogCut: false) { Adapter = step.Project.Adapter };
+            return new StepRecord(step.Project.Path, step.Step, argv, Started: false, StepRecord.NotStartedExitCode, TimedOut: false, clock.Elapsed, log, LogCut: false) { Adapter = step.Project.Adapter, Number = number };
         }
 
         ct.ThrowIfCancellationRequested();
         var trailer = result.TimedOut ? $"\n[coai: the step ran over its timeout of {step.Timeout} and its whole process tree was killed]\n" : string.Empty;
         var cut = await CheckLog.WriteAsync(log, result, trailer);
 
-        return new StepRecord(step.Project.Path, step.Step, argv, Started: true, result.ExitCode, result.TimedOut, clock.Elapsed, log, cut) { Adapter = step.Project.Adapter };
+        return new StepRecord(step.Project.Path, step.Step, argv, Started: true, result.ExitCode, result.TimedOut, clock.Elapsed, log, cut) { Adapter = step.Project.Adapter, Number = number };
     }
 
     /// <summary>
@@ -190,7 +197,7 @@ public sealed class CheckRunner(IProcessLauncher launcher, CheckBoundary? bounda
             var empty = new ProcessResult(StepRecord.NotStartedExitCode, string.Empty, string.Empty, TimedOut: false);
             await CheckLog.WriteAsync(log, empty, $"[coai: the process could not be started: {started.Problem}]\n");
 
-            return new StepRecord(step.Project.Path, step.Step, argv, Started: false, StepRecord.NotStartedExitCode, TimedOut: false, clock.Elapsed, log, LogCut: false) { Adapter = step.Project.Adapter };
+            return new StepRecord(step.Project.Path, step.Step, argv, Started: false, StepRecord.NotStartedExitCode, TimedOut: false, clock.Elapsed, log, LogCut: false) { Adapter = step.Project.Adapter, Number = number };
         }
 
         ct.ThrowIfCancellationRequested();
@@ -198,7 +205,7 @@ public sealed class CheckRunner(IProcessLauncher launcher, CheckBoundary? bounda
         var survived = !run.Gone;
         var exit = survived ? StepRecord.UnitSurvivedExitCode : run.Result.ExitCode;
 
-        return new StepRecord(step.Project.Path, step.Step, argv, Started: run.Result.ExitCode != StepRecord.NotStartedExitCode, exit, run.Result.TimedOut, clock.Elapsed, log, cut) { Boundary = run.Record, Adapter = step.Project.Adapter };
+        return new StepRecord(step.Project.Path, step.Step, argv, Started: run.Result.ExitCode != StepRecord.NotStartedExitCode, exit, run.Result.TimedOut, clock.Elapsed, log, cut) { Boundary = run.Record, Adapter = step.Project.Adapter, Number = number };
     }
 
     private sealed record StartedStep(BoundaryRun? Run, string Problem);

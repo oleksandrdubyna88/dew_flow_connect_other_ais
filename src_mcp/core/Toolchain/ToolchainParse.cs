@@ -53,11 +53,11 @@ internal sealed partial class ToolchainParse
         }
     }
 
-    /// <summary>A key a person typed, for a sentence: spelled only when it has the shape of a real key (a short name); anything else — a token pasted as a key — is described by its length.</summary>
-    private static string KeyShown(string key) => KeyShape().IsMatch(key) ? $"'{key}'" : $"a key of {key.Length} characters";
-
-    [GeneratedRegex("^[A-Za-z][A-Za-z0-9_-]{0,31}$", RegexOptions.CultureInvariant)]
-    private static partial Regex KeyShape();
+    /// <summary>
+    /// A key a person typed, for a sentence: its length and never its text. A short word is the shape of a real key AND of a secret (<c>MySecretToken123</c>), so no shape makes a typed key safe to spell; the line number says where it is and the list of the legal keys
+    /// beside it says what was meant.
+    /// </summary>
+    private static string KeyShown(string key) => $"a key of {key.Length} characters";
 
     /// <summary>
     /// What a node is, for a sentence: its kind, and for a string its length — NEVER its text. A person may paste anything into this file, a token included, and a refusal is printed and recorded; only the keys of the file (names the person chose for the structure)

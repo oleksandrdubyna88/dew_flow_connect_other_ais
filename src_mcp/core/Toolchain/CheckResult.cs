@@ -68,6 +68,9 @@ public sealed record StepRecord(
     /// <summary>The exit code recorded for a step whose unit could not be stopped when the step ended: a process of the step may still be running, so the step never passes.</summary>
     public const int UnitSurvivedExitCode = -2;
 
+    /// <summary>The step's number in its run, from 1, as the code that planned the run assigned it — the one the log's file name, the step's unit (<c>s&lt;n&gt;</c>) and its record carry. 0 for a record that was not made by the check runner.</summary>
+    public int Number { get; init; }
+
     /// <summary>What the step ran inside: the boundary, its properties and the network state. <see cref="BoundaryRecord.None"/> for a run that was not a coder job's.</summary>
     public BoundaryRecord Boundary { get; init; } = BoundaryRecord.None;
 
