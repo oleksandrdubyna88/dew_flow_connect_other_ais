@@ -37,6 +37,12 @@ internal static class RoleStopWords
     /// The exact text of the launch's claude pool key was found in what the launch printed, or in the files a coder changed (epoch 3 E2 s7): the key is dead (exposed), nothing is committed, and the job ends — another model would meet the same worktree and the same transcript.
     /// </summary>
     public const string KeyInOutput = "key-in-output";
+
+    /// <summary>
+    /// A coder job whose base declares an instruction step (<c>.coai/toolchain.yaml</c>, key <c>instructions</c>; SPEC C9) and that step could not run to a clean end — a non-zero exit, a run past its time, more than 64 KiB, bytes that are not UTF-8, a changed tree, a unit that
+    /// would not start (epoch 3 E3 s7 t3). It ends the job BEFORE any model is launched: a coder's own stop, no failover, never green, nothing cut.
+    /// </summary>
+    public const string InstructionsFailed = "instructions-failed";
 }
 
 /// <summary>

@@ -50,6 +50,17 @@ public sealed class ChecksAtBase(GitHistory git, CheckRunner runner)
         return result with { ToolchainChange = change, Note = result.Note + Reported(change, baseSha) };
     }
 
+    /// <summary>
+    /// The toolchain file AT THE BASE COMMIT of the main repository, as the reader reads it — the one reading for everything that is declared there, the checks and the instruction step (epoch 3 E3 s7 t3). A base commit that is not there or a file git could not hand over is a
+    /// refusal with the trouble named, never "no file".
+    /// </summary>
+    public async Task<ToolchainRead> ToolchainAtBaseAsync(string repository, string baseSha, CancellationToken ct = default)
+    {
+        var atBase = await ReadAtBaseAsync(repository, baseSha, ct);
+
+        return atBase.Trouble.Length > 0 ? new ToolchainRead.Refused([atBase.Trouble]) : ToolchainFile.Read(atBase.File);
+    }
+
     private sealed record BaseFile(WorkFile File, string Trouble);
 
     private async Task<BaseFile> ReadAtBaseAsync(string repository, string baseSha, CancellationToken ct)

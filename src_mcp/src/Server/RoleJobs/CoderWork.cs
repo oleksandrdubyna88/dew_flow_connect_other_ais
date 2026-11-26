@@ -79,6 +79,19 @@ internal sealed class CoderWork : IRoleWork
 
         // ONE loop for the whole job: the fix turns used and the rounds run are the job's, whichever models take part.
         var loop = new CoderFixLoop(run, git, layer, prepared.Tree, prepared.BaseSha, site, started) { Cap = cap, AttemptTimeout = AttemptTimeout, Boundary = Boundary };
+        // The instruction step (epoch 3 E3 s7 t3; SPEC C9): a command the base commit declares, run ONCE here, before any model is launched. A declared step that cannot run ends the job: no half instruction, no launch.
+        var instructed = await new CoderInstructions(run, git, layer, prepared.Tree, prepared.BaseSha, site).RunAsync(ct);
+        if (instructed is CoderInstructionsOutcome.Cancelled)
+        {
+            return new RoleWorkOutcome.Stopped();
+        }
+
+        if (instructed is CoderInstructionsOutcome.Failed unrun)
+        {
+            return new RoleWorkOutcome.Failed(unrun.Stop, unrun.Reason, new CoderEnvelope(run.Request.JobId, prepared.BaseSha, prepared.BaseSha, prepared.Branch, false, 0, [], null) { Instructions = unrun.Record }.ToJson());
+        }
+
+        var instructions = instructed is CoderInstructionsOutcome.Ran ran ? ran.Record : CoderInstructionsRecord.NotDeclared;
         var answers = 0;
         RoleFailover? failover = null;
         var judge = new CoderJudge(site.DodIds, () => failover!.RepairTurnsUsed);
@@ -90,7 +103,7 @@ internal sealed class CoderWork : IRoleWork
             Ladder = Ladder,
             Coder = confinement,
             OsLayer = layer,
-            Follow = (answered, token) => FollowAsync(run, git, prepared, site, loop, judge.Accepted, new CoderFixSession(answered.Model, answered.Handle, confinement, answered.KeyId, answered.Secret), ++answers, layer, cap, note, token),
+            Follow = (answered, token) => FollowAsync(run, git, prepared, site, loop, judge.Accepted, new CoderFixSession(answered.Model, answered.Handle, confinement, answered.KeyId, answered.Secret), ++answers, layer, cap, note, instructions, token),
             Restore = token => CoderRestore.RestoreAsync(git, prepared.Tree, loop.LastCommit, token),
         };
 
@@ -158,21 +171,21 @@ internal sealed class CoderWork : IRoleWork
     /// crash is the attempt's stop: the job goes on with the next model (<see cref="RoleFollowed.FailsOver"/>), after the worktree is put back to the last coai commit.
     /// </summary>
     /// <param name="answers">How many models have answered turn 0 so far, this one included: the second and later turn 0 commits say which attempt made them.</param>
-    private async Task<RoleFollowed> FollowAsync(IRoleRun run, GitHistory git, Prepared prepared, CoderTaskSite site, CoderFixLoop loop, CoderReport? report, CoderFixSession session, int answers, CoderOsLayer layer, int cap, string note, CancellationToken ct)
+    private async Task<RoleFollowed> FollowAsync(IRoleRun run, GitHistory git, Prepared prepared, CoderTaskSite site, CoderFixLoop loop, CoderReport? report, CoderFixSession session, int answers, CoderOsLayer layer, int cap, string note, CoderInstructionsRecord instructions, CancellationToken ct)
     {
         var message = answers == 1 ? CoderCommits.Message(run.Request.JobId, site.Id) : CoderCommits.AttemptMessage(run.Request.JobId, site.Id, answers);
         var ended = await loop.RunAsync(report, message, session, ct);
 
         return ended switch
         {
-            CoderLoopEnd.Done done => new RoleFollowed.Ended(await EnvelopeAsync(run, git, prepared, layer, done, new CoderChecksReport(done.Rounds, cap, note), ct)),
+            CoderLoopEnd.Done done => new RoleFollowed.Ended(await EnvelopeAsync(run, git, prepared, layer, done, new CoderChecksReport(done.Rounds, cap, note), instructions, ct)),
             CoderLoopEnd.FailOver failOver => new RoleFollowed.FailsOver(failOver.Why),
             _ => new RoleFollowed.Ended(((CoderLoopEnd.Halted)ended).Outcome),
         };
     }
 
     /// <summary>The loop ended with something to show: list the files from git, compare the generation again, and make the envelope — a success when it is green, a failure carrying the same envelope when it is not.</summary>
-    private async Task<RoleWorkOutcome> EnvelopeAsync(IRoleRun run, GitHistory git, Prepared prepared, CoderOsLayer layer, CoderLoopEnd.Done end, CoderChecksReport checks, CancellationToken ct)
+    private async Task<RoleWorkOutcome> EnvelopeAsync(IRoleRun run, GitHistory git, Prepared prepared, CoderOsLayer layer, CoderLoopEnd.Done end, CoderChecksReport checks, CoderInstructionsRecord instructions, CancellationToken ct)
     {
         var changes = end.Head == prepared.BaseSha ? [] : await CoderCommits.ChangesAsync(git, prepared.Tree, prepared.BaseSha, end.Head, ct);
         if (changes is null)
@@ -186,7 +199,7 @@ internal sealed class CoderWork : IRoleWork
             return new RoleWorkOutcome.Stopped();
         }
 
-        var json = new CoderEnvelope(run.Request.JobId, prepared.BaseSha, end.Head, prepared.Branch, end.Report is not null, end.FixTurns, changes, end.Report, layer.Evidence, checks).ToJson();
+        var json = new CoderEnvelope(run.Request.JobId, prepared.BaseSha, end.Head, prepared.Branch, end.Report is not null, end.FixTurns, changes, end.Report, layer.Evidence, checks) { Instructions = instructions }.ToJson();
 
         return end.Stop.Length == 0 ? new RoleWorkOutcome.Succeeded(json) : new RoleWorkOutcome.Failed(end.Stop, end.Reason, json);
     }

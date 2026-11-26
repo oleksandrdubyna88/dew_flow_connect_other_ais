@@ -25,6 +25,9 @@ internal sealed record CoderFileChange(string Status, string Path);
 /// </remarks>
 internal sealed record CoderEnvelope(string JobId, string BaseSha, string HeadSha, string Branch, bool SchemaValid, int FixTurns, IReadOnlyList<CoderFileChange> FilesChanged, CoderReport? Report, CoderMainEvidence? MainCheckout = null, CoderChecksReport? Checks = null)
 {
+    /// <summary>What the instruction step of the job came to (SPEC C9 item 8); <see cref="CoderInstructionsRecord.NotDeclared"/> when the base declares none. Written as <c>instructions</c>: its size and hash, never its text.</summary>
+    public CoderInstructionsRecord Instructions { get; init; } = CoderInstructionsRecord.NotDeclared;
+
     public string ToJson()
     {
         using var buffer = new MemoryStream();
@@ -50,6 +53,7 @@ internal sealed record CoderEnvelope(string JobId, string BaseSha, string HeadSh
             WriteReport(json);
             WriteMainCheckout(json);
             Checks?.Write(json);
+            Instructions.Write(json);
             json.WriteEndObject();
         }
 

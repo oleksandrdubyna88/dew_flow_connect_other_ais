@@ -226,7 +226,7 @@ public sealed class CheckRunner(IProcessLauncher launcher, CheckBoundary? bounda
         [.. argv.Select(item => item.Replace("{jobs}", jobs.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal))];
 
     /// <summary>A program named with a folder is relative to the repository root, the way the file writes it; a bare name is looked up on PATH by the launcher.</summary>
-    private static string Executable(string first, string tree) =>
+    public static string Executable(string first, string tree) =>
         first.Contains('/') || first.Contains(Path.DirectorySeparatorChar) ? Path.GetFullPath(Path.Combine(tree, first)) : first;
 
     /// <summary>A project path as a file-name part: letters and digits, everything else a dash; the repository root is <c>root</c>.</summary>

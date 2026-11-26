@@ -91,8 +91,9 @@ internal sealed class CoderRig : IAsyncDisposable
     /// <summary>
     /// The rig. A coder launch needs a systemd user manager, so without one the test is SKIPPED, with the reason — unless <paramref name="needsLayer"/> is false, for a scenario in which no coder is ever launched.
     /// </summary>
+    /// <param name="toolchainOf">The same, made from the path of the rig's stand-in for the person's home — for a scenario whose files must name it.</param>
     /// <param name="toolchain">The text of <c>.coai/toolchain.yaml</c> the BASE commit holds: null is <see cref="DefaultToolchain"/> (a build and a test that pass until a file says otherwise), empty is a repository with no toolchain file.</param>
-    internal static async Task<CoderRig> CreateAsync(bool needsLayer = true, string? toolchain = null, IReadOnlyDictionary<string, string>? extra = null)
+    internal static async Task<CoderRig> CreateAsync(bool needsLayer = true, string? toolchain = null, IReadOnlyDictionary<string, string>? extra = null, Func<string, string>? toolchainOf = null)
     {
         if (needsLayer)
         {
@@ -100,7 +101,7 @@ internal sealed class CoderRig : IAsyncDisposable
         }
 
         var rig = new CoderRig(await RoleFailoverRig.CreateAsync());
-        rig.Base = await LayFixtureAsync(rig.Rig.Git, toolchain, extra);
+        rig.Base = await LayFixtureAsync(rig.Rig.Git, toolchainOf is null ? toolchain : toolchainOf(rig._home.Path), extra);
         Environment.SetEnvironmentVariable("FAKECLI_VERSION_STDOUT", "2.1.330 (Claude Code)\n");
         Environment.SetEnvironmentVariable("FAKECLI_HELP_STDOUT", File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "fixtures", "claude", "help-2.1.330-wsl.txt")));
 

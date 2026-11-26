@@ -1,6 +1,8 @@
 # The checks coai runs on a coder job's worktree in this repository (server.md § 12; shared/toolchain.schema.json).
 # A coder job reads THIS file at its BASE commit, so a change to it takes effect for the jobs after it, not for the job that made it.
 # Block lists only: the strict YAML subset has no flow list but []. Every argv runs from the repository root, with no shell.
+# instructions: not declared. AGENTS.md of this repository orders the rule resolver before any edit, but the resolver's payload for the files of a task is about 334 KB (33 rules; the resolver itself refuses to print more than 32 KiB in one read) and a step may print at most 64 KiB, so
+# the step is NOT declared with a cut text (epoch 3 E3 s7 t3 d5). Until the lead decides, a coder of this repository is told that nothing was run.
 version: 1
 projects:
   - path: src_mcp
