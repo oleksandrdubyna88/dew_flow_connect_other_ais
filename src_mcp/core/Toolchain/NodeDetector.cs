@@ -1,0 +1,211 @@
+using System.Text.Json;
+
+namespace CoaiMcp.Core.Toolchain;
+
+/// <summary>
+/// The Node detector (epoch 3 E4 s2 t4): from the manifests of ONE commit it makes the npm projects of a repository and the steps of each, or refuses. <b>Pure</b>: a <see cref="ManifestSet"/> and the defaults in, a <see cref="Detection"/> out.
+/// </summary>
+/// <remarks>
+/// <para><b>Projects.</b> Each <c>package.json</c> is a project; a root with <c>workspaces</c> is ONE project and every <c>package.json</c> under it is a member, not a project. The JSON is read with a depth limit of 32; text that is not JSON is a refusal that names the file.</para>
+/// <para><b>Only npm.</b> <c>package-lock.json</c> or <c>npm-shrinkwrap.json</c> beside the manifest means npm. <c>pnpm-lock.yaml</c>, <c>yarn.lock</c>, <c>bun.lock</c> and <c>bun.lockb</c> are refused by the name of the package manager (owner's answer 2, 2026-11-25); two lock files and no lock file are refusals.</para>
+/// <para><b>The steps come from facts only</b> (SPEC §A3, measured by s1): restore always (<c>npm ci --ignore-scripts</c>); build when <c>scripts.build</c> is there; typecheck when <c>scripts.typecheck</c> is there, else when <c>tsconfig.json</c> and the <c>typescript</c> package are both there; test when
+/// <c>scripts.test</c> is there and is not npm's placeholder. The runner fact needs the package AND the word in <c>scripts.test</c>. Prettier is the formatter only when it is a devDependency AND has a configuration. <b>No argv item is copied from the manifest</b>: the argv are the table's.
+/// A project with no build, typecheck and test step gets no step at all and is listed as unchecked.</para>
+/// </remarks>
+public static class NodeDetector
+{
+    private const string Cure = "name the commands in " + ToolchainTables.FilePath;
+
+    private static readonly string[] NpmLocks = ["package-lock.json", "npm-shrinkwrap.json"];
+
+    private static readonly (string File, string Manager)[] OtherLocks = [("pnpm-lock.yaml", "pnpm"), ("yarn.lock", "yarn"), ("bun.lock", "bun"), ("bun.lockb", "bun")];
+
+    /// <summary>Detects the Node projects of <paramref name="set"/>. No <c>package.json</c> at all is an empty answer.</summary>
+    public static Detection Detect(ManifestSet set, ToolchainDefaults table)
+    {
+        var stack = table.Stacks["node"];
+        var packages = set.Files.Where(file => file.Stack == "node" && file.Kind == ManifestKind.Manifest).OrderBy(file => file.Path, StringComparer.Ordinal).ToList();
+        var parsed = new List<(ManifestFile File, JsonElement Root, JsonDocument Document)>();
+        try
+        {
+            foreach (var package in packages)
+            {
+                try
+                {
+                    var document = JsonDocument.Parse(package.Text, new JsonDocumentOptions { MaxDepth = 32 });
+                    if (document.RootElement.ValueKind != JsonValueKind.Object)
+                    {
+                        document.Dispose();
+
+                        return new Detection.Refused($"'{package.Path}' is JSON but not an object, so it is not a package manifest; {Cure}");
+                    }
+
+                    parsed.Add((package, document.RootElement, document));
+                }
+                catch (JsonException e)
+                {
+                    return new Detection.Refused($"'{package.Path}' is not JSON that coai can read ({Short(e.Message)}); {Cure}");
+                }
+            }
+
+            var workspaceRoots = parsed.Where(item => item.Root.TryGetProperty("workspaces", out var workspaces) && workspaces.ValueKind is JsonValueKind.Array or JsonValueKind.Object).Select(item => ProjectGraph.Folder(item.File.Path)).ToList();
+            var projects = new List<DetectedProject>();
+            foreach (var (file, root, _) in parsed)
+            {
+                var folder = ProjectGraph.Folder(file.Path);
+                if (workspaceRoots.Any(workspace => workspace != folder && ProjectGraph.Under(workspace, file.Path)))
+                {
+                    continue;
+                }
+
+                var answer = Plan(file, root, folder, set, stack);
+                if (answer.Refusal.Length > 0)
+                {
+                    return new Detection.Refused(answer.Refusal);
+                }
+
+                projects.Add(answer.Project!);
+            }
+
+            return new Detection.Detected(projects);
+        }
+        finally
+        {
+            foreach (var item in parsed)
+            {
+                item.Document.Dispose();
+            }
+        }
+    }
+
+    private sealed record Planned(DetectedProject? Project, string Refusal);
+
+    private static Planned Plan(ManifestFile file, JsonElement root, string folder, ManifestSet set, StackDefaults stack)
+    {
+        var here = set.Of(ManifestKind.Present).Where(present => ProjectGraph.Folder(present.Path) == folder).Select(present => present.Path.Split('/')[^1]).ToList();
+        var locks = here.Where(name => NpmLocks.Contains(name)).ToList();
+        var others = OtherLocks.Where(other => here.Contains(other.File)).ToList();
+        if (others.Count > 0)
+        {
+            var manager = others[0].Manager;
+
+            return new Planned(null, $"'{file.Path}' is a {manager} project (it has {others[0].File}); coai runs npm only. Name the commands in {ToolchainTables.FilePath}, or use npm");
+        }
+
+        if (locks.Count > 1)
+        {
+            return new Planned(null, $"'{file.Path}' has two lock files ({string.Join(" and ", locks)}), so coai cannot tell what `npm ci` would install; keep one, or {Cure}");
+        }
+
+        if (locks.Count == 0)
+        {
+            return new Planned(null, $"'{file.Path}' has no lock file beside it, and `npm ci` needs one; commit package-lock.json, or {Cure}");
+        }
+
+        var scripts = StringMap(root, "scripts");
+        var dependencies = new HashSet<string>(Names(root, "dependencies").Concat(Names(root, "devDependencies")), StringComparer.Ordinal);
+        var testScript = scripts.GetValueOrDefault("test") ?? string.Empty;
+        var hasTest = scripts.ContainsKey("test") && !IsPlaceholder(testScript);
+        var tsconfig = here.Contains("tsconfig.json");
+        var hasTypecheckScript = scripts.ContainsKey("typecheck");
+        var typecheck = hasTypecheckScript || (tsconfig && dependencies.Contains("typescript"));
+        var hasBuild = scripts.ContainsKey("build");
+        var prettier = dependencies.Contains("prettier") && (root.TryGetProperty("prettier", out _) || here.Any(name => ManifestSearch.Matches(".prettierrc*", name) || ManifestSearch.Matches("prettier.config.*", name)));
+        var runner = RunnerOf(testScript, dependencies);
+
+        var steps = new List<DetectedStep>();
+        if (hasBuild || typecheck || hasTest)
+        {
+            var workingFolder = folder.Length == 0 ? "." : folder;
+            void Add(string name, IReadOnlyList<string> argv)
+            {
+                var step = stack.Steps[name]!;
+                steps.Add(new DetectedStep(name, argv, step.Network, workingFolder, file.Path, name == "format" ? step.Extensions : []));
+            }
+
+            Add("restore", stack.Steps["restore"]!.Argv);
+            if (prettier)
+            {
+                Add("format", stack.Steps["format"]!.Argv);
+            }
+
+            if (hasBuild)
+            {
+                Add("build", stack.Steps["build"]!.Argv);
+            }
+
+            if (typecheck)
+            {
+                Add("typecheck", hasTypecheckScript ? stack.Steps["typecheck"]!.Argv : stack.Steps["typecheck"]!.Fallback);
+            }
+
+            if (hasTest)
+            {
+                Add("test", stack.Steps["test"]!.ByRunner[runner]);
+            }
+        }
+
+        var facts = new List<KeyValuePair<string, string>>
+        {
+            new("packageManager", "npm"),
+            new("lock", locks[0]),
+            new("workspaces", root.TryGetProperty("workspaces", out var workspaces) && workspaces.ValueKind is JsonValueKind.Array or JsonValueKind.Object ? "true" : "false"),
+            new("build", hasBuild ? "script" : "none"),
+            new("typecheck", hasTypecheckScript ? "script" : typecheck ? "tsc" : "none"),
+            new("test", hasTest ? "script" : scripts.ContainsKey("test") ? "placeholder" : "none"),
+            new("runner", hasTest ? runner : "none"),
+            new("tsconfig", tsconfig ? "true" : "false"),
+            new("prettier", prettier ? "true" : "false"),
+            new("unchecked", steps.Count == 0 ? "true" : "false"),
+        };
+
+        return new Planned(new DetectedProject("node", file.Path, folder.Length == 0 ? "." : folder, steps, facts, [], TestsNone: !hasTest), string.Empty);
+    }
+
+    /// <summary>npm's own placeholder for a package with no test (<c>echo "Error: no test specified" &amp;&amp; exit 1</c>), however it is quoted.</summary>
+    private static bool IsPlaceholder(string script) => script.Contains("no test specified", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The runner fact: jest and vitest need the package AND the word in <c>scripts.test</c>; node:test needs <c>node --test</c> (or a <c>--test</c> flag of node) in it; else unknown.</summary>
+    private static string RunnerOf(string testScript, HashSet<string> dependencies) =>
+        dependencies.Contains("jest") && ContainsWord(testScript, "jest") ? "jest"
+        : dependencies.Contains("vitest") && ContainsWord(testScript, "vitest") ? "vitest"
+        : ContainsWord(testScript, "node") && (testScript.Contains("--test", StringComparison.Ordinal) || testScript.Contains("node:test", StringComparison.Ordinal)) ? "node-test"
+        : "unknown";
+
+    private static bool ContainsWord(string text, string word)
+    {
+        var at = 0;
+        while ((at = text.IndexOf(word, at, StringComparison.Ordinal)) >= 0)
+        {
+            var before = at == 0 || !char.IsLetterOrDigit(text[at - 1]) && text[at - 1] != '-';
+            var after = at + word.Length >= text.Length || !char.IsLetterOrDigit(text[at + word.Length]) && text[at + word.Length] != '-';
+            if (before && after)
+            {
+                return true;
+            }
+
+            at += word.Length;
+        }
+
+        return false;
+    }
+
+    private static Dictionary<string, string> StringMap(JsonElement root, string name)
+    {
+        var map = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (root.TryGetProperty(name, out var element) && element.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var property in element.EnumerateObject().Where(property => property.Value.ValueKind == JsonValueKind.String))
+            {
+                map[property.Name] = property.Value.GetString()!;
+            }
+        }
+
+        return map;
+    }
+
+    private static IEnumerable<string> Names(JsonElement root, string name) =>
+        root.TryGetProperty(name, out var element) && element.ValueKind == JsonValueKind.Object ? element.EnumerateObject().Select(property => property.Name) : [];
+
+    private static string Short(string message) => message.Length > 120 ? message[..120] : message.Replace('\n', ' ');
+}
