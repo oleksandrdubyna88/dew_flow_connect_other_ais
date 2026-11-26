@@ -8,6 +8,8 @@ import { WslPlace, distroOk, placeKey, placeLabel, wslDecoded, wslPlaceOk } from
 import type { DoorAnswer } from './remotePermission';
 import { RemoteLimits, lastLine, sizeWords } from './remoteSsh';
 import { USERS_SCRIPT } from './remoteUsersScript';
+import type { WslEnd, WslRun } from './remoteWslRun';
+import type { WslPort } from './remoteWslRound';
 import { Captured, capture } from './versionProbe';
 
 /**
@@ -103,13 +105,6 @@ export interface WslSeams {
   readonly door: () => Promise<DoorAnswer>;
 }
 
-/** How a call that was not answered ended. `door` carries the door's own answer. */
-export type WslEnd = 'door' | 'platform' | 'missing' | 'argv' | 'not-started' | 'timeout' | 'capped' | 'wsaetimedout' | 'exit';
-
-export type WslRun =
-  | { readonly kind: 'answered'; readonly code: number; readonly stdout: string }
-  | { readonly kind: 'refused'; readonly refusal: string; readonly end: WslEnd; readonly door?: DoorAnswer };
-
 /** The seams of a real run, but for the door: the caller binds it. */
 export function defaultWslSeams(door: WslSeams['door'], log: WslSeams['log']): WslSeams {
   return {
@@ -122,8 +117,15 @@ export function defaultWslSeams(door: WslSeams['door'], log: WslSeams['log']): W
   };
 }
 
-/** A strike: the call ended at a 30 s limit, ours or WSL's own (§ W10). Neither is a fault of a script. */
-export const isStrike = (run: WslRun): boolean => run.kind === 'refused' && (run.end === 'timeout' || run.end === 'wsaetimedout');
+export { isStrike } from './remoteWslRun';
+export type { WslEnd, WslRun } from './remoteWslRun';
+
+/** The edge's three calls, as the round takes them. */
+export const wslPortOf = (seams: WslSeams): WslPort => ({
+  list: (running) => runWslList(running, seams),
+  users: (distro) => runWslUsers(distro, seams),
+  accounts: (place, mode, digest) => runWslAccounts(place, mode, digest, seams),
+});
 
 // ───────────────── the words (§ W13) ─────────────────
 

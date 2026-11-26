@@ -40,6 +40,13 @@ export const memoryKeyOf = (place: Place): string => (place.kind === 'ssh' ? pla
 /** Whether a memory key is a WSL place's. */
 export const isWslKey = (key: string): boolean => key.startsWith('wsl:');
 
+/** The distro and the user of a `wsl:<distro>/<user>` key; nothing for any other key. A distro's class has no `/`, so the first one splits. */
+export function splitWslKey(key: string): { readonly distro: string; readonly user: string } | undefined {
+  const at = key.indexOf('/');
+
+  return isWslKey(key) && at > 4 ? { distro: key.slice(4, at), user: key.slice(at + 1) } : undefined;
+}
+
 /** The distro's class and nothing else. */
 export const distroOk = (distro: string): boolean => DISTRO_CLASS.test(distro);
 

@@ -3,7 +3,7 @@ import type { AccountsMode } from './remoteAccountsScript';
 import type { DoorAnswer } from './remotePermission';
 import { MAX_DISTROS, MAX_PLACES, WslPlace, wslNames } from './remotePlaces';
 import { USERS_UNREADABLE_SAID, WslUser, usersOf as readUsers } from './remoteUsersScript';
-import { WslRun, WslSeams, isStrike, runWslAccounts, runWslList, runWslUsers } from './remoteWsl';
+import { WslRun, isStrike } from './remoteWslRun';
 
 /**
  * The WSL part of a round, as a pure function over seams (E3.S1, spec § W5 and § W11; contract K2). The order, each step awaited:
@@ -23,13 +23,6 @@ export interface WslPort {
   readonly users: (distro: string) => Promise<WslRun>;
   readonly accounts: (place: WslPlace, mode: AccountsMode, digest: string | undefined) => Promise<WslRun>;
 }
-
-/** The edge's three calls over one set of seams. */
-export const wslPortOf = (seams: WslSeams): WslPort => ({
-  list: (running) => runWslList(running, seams),
-  users: (distro) => runWslUsers(distro, seams),
-  accounts: (place, mode, digest) => runWslAccounts(place, mode, digest, seams),
-});
 
 /** What a distro is, in the words of § W13. `read`: its users were read; the others say why not. */
 export type DistroState = 'read' | 'not-running' | 'left' | 'users-failed' | 'strikes';
@@ -81,15 +74,23 @@ export const usersFailedSaid = (distro: string, how: string): string => `The Lin
 // ───────────────── what a list call came to ─────────────────
 
 type NamesListing = { readonly kind: 'names'; readonly names: readonly string[]; readonly ignored: number };
-type Listing = NamesListing | { readonly kind: 'failed'; readonly how: string } | { readonly kind: 'door'; readonly door: DoorAnswer };
+/** `said` is the whole sentence (S3, S2 or S1) the scope host shows. */
+type Listing = NamesListing | { readonly kind: 'failed'; readonly said: string } | { readonly kind: 'door'; readonly door: DoorAnswer };
 
-const failed = (how: string): Listing => ({ kind: 'failed', how });
+const failed = (how: string): Listing => ({ kind: 'failed', said: listFailedSaid(how) });
+
+/** The refusals whose own sentence is the whole story: `wsl.exe` is not there (S2), or this is not a Windows window (S1). */
+const WHOLE: ReadonlySet<string> = new Set(['missing', 'platform']);
 
 /** The door's answer of a refused run that was the door's, else nothing. */
 export const doorOf = (run: WslRun): DoorAnswer | undefined => (run.kind === 'refused' && run.end === 'door' ? run.door : undefined);
 
 const refusedListing = (run: Extract<WslRun, { readonly kind: 'refused' }>): Listing => {
   const door = doorOf(run);
+
+  if (WHOLE.has(run.end)) {
+    return { kind: 'failed', said: run.refusal };
+  }
 
   return door === undefined ? failed(listHow(run)) : { kind: 'door', door };
 };
@@ -207,7 +208,7 @@ class Walk<S> {
     if (listing.kind === 'door') {
       this.last = { door: listing.door };
     } else if (listing.kind === 'failed') {
-      this.listFailed = listFailedSaid(listing.how);
+      this.listFailed = listing.said;
       this.set({ failed: this.listFailed, ended: 'failed' });
     }
 

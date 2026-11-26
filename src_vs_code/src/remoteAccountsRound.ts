@@ -1,8 +1,10 @@
 import { credsSession } from './credsSession';
-import { stampOf } from './remotePermission';
 import type { AccountsRead } from './remoteAccountsReply';
 import type { AccountsMode } from './remoteAccountsScript';
-import type { Committed, HostStanding, Merge } from './remoteHosts';
+import type { HostStanding } from './remoteHosts';
+import { WslPlace, isWslKey, memoryKeyOf, splitWslKey } from './remotePlaces';
+import { WslFacts, WslPort, doorOf, retainedAfter, wslRound } from './remoteWslRound';
+import type { PlaceCall, PlaceRun, Visited, WslHooks, WslWalk } from './remoteWslRound';
 import type { DoorAnswer } from './remotePermission';
 import type { RemoteRun } from './remoteSsh';
 import type { LiveTerminal } from './terminalSource';
@@ -15,7 +17,7 @@ import type { LiveTerminal } from './terminalSource';
  * host's FIRST call reads no Claude usage; the one host that first answers with an account that has no usage reading in this round is called
  * once more, for it. So an account's usage is read at most once in a round and a host is called at most twice. The round never asks a
  * person: the door (`may`, E2.S1's) has no ask seam. A door that answers `no-permission` or `stopped` ENDS the round; `no`, `damaged` and
- * `waiting` skip that host. The scope host `wsl` is never called.</p>
+ * `waiting` skip that host. The scope host `wsl` is called only when the window gives the round a WSL port (a Windows window, E3.S3): its turn is `wslTurn`, the WSL part of the round, place by place.</p>
  *
  * <p>A reading never comes back after a Stop, a refusal or a Forget that arrived while its call was in flight: before a result is
  * published the round checks the generation, the Stop and the door again, in that order.</p>
@@ -28,8 +30,6 @@ export const FIRST_DELAY_MS = 30_000;
 /** *Refresh now* and opening the list start no round less than this after the last one ended. */
 export const REFRESH_FLOOR_MS = 60_000;
 export const HOURLY_MS = 3_600_000;
-/** The `globalState` key of the state row (C5). */
-export const STATE_KEY = 'coai.terminalAccountsState';
 
 export type Trigger = 'timer' | 'refresh' | 'open';
 
@@ -70,6 +70,10 @@ export interface HostMemory {
   readonly usageAtMs?: number | undefined;
   /** The Claude Code version at which the usage read went wrong; `''` stands for a version that was not known. */
   readonly usageBlockedAt?: string | undefined;
+  /** How long this place's last call took, in ms: the hover of the age says it beside the exact time (R9a). */
+  readonly tookMs?: number | undefined;
+  /** The scope host `wsl`'s own facts of the last round (E3.S3): the distros, the counts past a cap, a failure, the strikes. Only on the entry `wsl`. */
+  readonly wsl?: WslFacts | undefined;
 }
 
 /** Immutable, by host: every update returns a new map. */
@@ -88,8 +92,11 @@ export function accountsHosts(live: readonly LiveTerminal[]): readonly string[] 
   return [...new Set(hosts)].sort((one, other) => (one < other ? -1 : one > other ? 1 : 0));
 }
 
-/** The hosts a round may call: `accountsHosts` without the scope host `wsl`. */
-export const callableHosts = (live: readonly LiveTerminal[]): readonly string[] => accountsHosts(live).filter((host) => host !== WSL_SCOPE);
+/** The hosts a round may call: `accountsHosts`, and the scope host `wsl` only when the window reads WSL (`wslOn`). */
+export const callableHosts = (live: readonly LiveTerminal[], wslOn = false): readonly string[] => accountsHosts(live).filter((host) => host !== WSL_SCOPE || wslOn);
+
+/** The scope host of a memory key: a WSL place's key belongs to `wsl`; a host is its own. */
+export const scopeOf = (key: string): string => (isWslKey(key) ? WSL_SCOPE : key);
 
 /** The sorted hosts, rotated to start at `round % hosts.length`: no host is always last. */
 export function roundOrder(hosts: readonly string[], round: number): readonly string[] {
@@ -186,6 +193,8 @@ export interface RoundSeams {
   readonly generation: () => number;
   /** One fixed log line for a result that was dropped. */
   readonly dropped: (host: string) => void;
+  /** The WSL port of a Windows window (E3.S3): its three calls, each asking the door in its one spawn function. Nothing, and `wsl` is never called, in any other. */
+  readonly wsl?: WslPort | undefined;
 }
 
 export interface RoundResult {
@@ -226,9 +235,9 @@ type Step =
 const put = (memory: Memory, host: string, next: HostMemory): Memory => new Map<string, HostMemory>([...memory, [host, next]]);
 
 /** The memory of the hosts that are still in the list: a host whose last terminal closed is dropped. */
-export const liveOnly = (memory: Memory, hosts: readonly string[]): Memory => new Map([...memory].filter(([host]) => hosts.includes(host)));
+export const liveOnly = (memory: Memory, hosts: readonly string[]): Memory => new Map([...memory].filter(([key]) => hosts.includes(scopeOf(key))));
 
-const hostLive = (seams: RoundSeams, host: string): boolean => accountsHosts(seams.live()).includes(host);
+const hostLive = (seams: RoundSeams, host: string): boolean => accountsHosts(seams.live()).includes(scopeOf(host));
 
 /** A refusal drops the host's reading; the other kinds keep it. The kind is what the list reads. */
 const withAdmission = (state: RoundState, host: string, kind: NotRead): RoundState => {
@@ -285,13 +294,16 @@ function readMemory(prev: HostMemory, host: string, read: AccountsRead, nowMs: n
 const failedMemory = (prev: HostMemory, run: RemoteRun, nowMs: number): HostMemory =>
   ({ ...prev, failure: { sentence: run.kind === 'refused' ? run.refusal : '', atMs: nowMs }, unreadable: undefined });
 
+/** A host's memory with how long its last call took. */
+const timed = (memory: HostMemory, tookMs: number): HostMemory => ({ ...memory, tookMs });
+
 /** The places that answered with a reading, counting this one when its reply is one. */
 const readPlaces = (state: RoundState, host: string, read: AccountsRead | undefined): ReadonlySet<string> => (read?.kind === 'read' ? new Set([...state.read, host]) : state.read);
 
 /** The result of a call, published: a refused run is a failure that keeps the older reading. */
-function publishedState(state: RoundState, host: string, run: RemoteRun, read: AccountsRead | undefined, nowMs: number): RoundState {
+function publishedState(state: RoundState, host: string, run: RemoteRun, read: AccountsRead | undefined, nowMs: number, tookMs: number): RoundState {
   const prev = state.memory.get(host) ?? {};
-  const next = read === undefined ? failedMemory(prev, run, nowMs) : readMemory(prev, host, read, nowMs);
+  const next = timed(read === undefined ? failedMemory(prev, run, nowMs) : readMemory(prev, host, read, nowMs), tookMs);
   const key = usageKeyOf(read, host);
 
   return { ...state, memory: put(state.memory, host, next), roundUsage: key === undefined ? state.roundUsage : new Set([...state.roundUsage, key]), read: readPlaces(state, host, read) };
@@ -308,7 +320,7 @@ async function checked(context: Context, host: string): Promise<Gate> {
     return { kind: 'abandon' };
   }
 
-  return afterDoor(context, await context.seams.may(host));
+  return afterDoor(context, await context.seams.may(scopeOf(host)));
 }
 
 /** A Stop, a refusal or a Forget since the round started: the generation is not the round's. */
@@ -344,7 +356,7 @@ function droppedStep(seams: RoundSeams, state: RoundState, host: string, gate: E
 const closedStep = (context: Context, state: RoundState): Step => ({ kind: moved(context) ? 'abandoned' : 'skipped', state });
 
 /** The call is back: a closed host is dropped; a result that fails a check is dropped, once logged; else it is published. */
-async function settled(context: Context, state: RoundState, host: string, mode: AccountsMode, run: RemoteRun): Promise<Step> {
+async function settled(context: Context, state: RoundState, host: string, mode: AccountsMode, run: RemoteRun, startedMs: number): Promise<Step> {
   const { seams } = context;
   if (!hostLive(seams, host)) {
     return closedStep(context, state);
@@ -354,7 +366,8 @@ async function settled(context: Context, state: RoundState, host: string, mode: 
     return droppedStep(seams, state, host, gate);
   }
   const read = run.kind === 'answered' ? seams.parse(run, mode) : undefined;
-  const next = publishedState(state, host, run, read, seams.now());
+  const nowMs = seams.now();
+  const next = publishedState(state, host, run, read, nowMs, Math.max(0, nowMs - startedMs));
   seams.landed(next.memory, host);
 
   return { kind: 'published', state: next, read };
@@ -383,14 +396,36 @@ function notYes(seams: RoundSeams, state: RoundState, host: string, door: Exclud
   return { kind: 'skipped', state: skipped };
 }
 
-/** One call to one host: the Stop, the terminal, the door, the call, then `settled`. */
-async function hostStep(context: Context, state: RoundState, host: string, call: 'first' | 'usage'): Promise<Step> {
+/** What a call is made with: the mode and, for a usage call, the digest of the first reply. An ssh host's call is the round's `call`; a WSL place's is the walk's. */
+type Runner = (mode: AccountsMode, digest: string | undefined) => Promise<PlaceRun | RemoteRun>;
+
+/** The door's own answer, when a WSL call was refused by the door inside its spawn (an ssh run has none). */
+const doorAnswerOf = (run: PlaceRun | RemoteRun): DoorAnswer | undefined => (run.kind === 'refused' && 'end' in run ? doorOf(run) : undefined);
+
+/** A WSL place whose distro was not running when it was read again: no call was made, and the place keeps nothing. */
+const withoutKey = (state: RoundState, key: string): RoundState => ({ ...state, memory: new Map([...state.memory].filter(([one]) => one !== key)) });
+
+/** The call is back: the door's refusal inside it, a place that was not read, or a result to publish. */
+async function afterCall(context: Context, state: RoundState, host: string, mode: AccountsMode, got: PlaceRun | RemoteRun, startedMs: number): Promise<Step> {
+  const door = doorAnswerOf(got);
+  if (door !== undefined && door !== 'yes') {
+    return notYes(context.seams, state, host, door);
+  }
+  if (got.kind === 'left') {
+    return { kind: 'skipped', state: withoutKey(state, host) };
+  }
+
+  return settled(context, admitted(state, host), host, mode, got, startedMs);
+}
+
+/** One call to one place: the Stop, the terminal, the door, the call, then `afterCall`. `host` is the memory key. */
+async function hostStep(context: Context, state: RoundState, host: string, call: 'first' | 'usage', run: Runner): Promise<Step> {
   const { seams } = context;
   const early = await beforeCall(context, state, host);
   if (early !== undefined) {
     return early;
   }
-  const door = await seams.may(host);
+  const door = await seams.may(scopeOf(host));
   if (door !== 'yes') {
     return notYes(seams, state, host, door);
   }
@@ -400,20 +435,112 @@ async function hostStep(context: Context, state: RoundState, host: string, call:
     return late;
   }
   const mode = modeFor(call);
+  const startedMs = seams.now();
 
-  return settled(context, admitted(state, host), host, mode, await seams.call(host, mode));
+  return afterCall(context, state, host, mode, await run(mode, undefined), startedMs);
 }
 
 /** A host's first call, and the one extra call for the account that reply names, when it is due. */
 async function hostRound(context: Context, state: RoundState, host: string): Promise<Step> {
-  const first = await hostStep(context, state, host, 'first');
+  const run: Runner = (mode) => context.seams.call(host, mode);
+  const first = await hostStep(context, state, host, 'first', run);
   if (first.kind !== 'published' || first.read === undefined) {
     return first;
   }
   const { seams, policy, trigger } = context;
   const second = needsSecondCall(first.read, first.state.roundUsage, first.state.memory, host, policy, seams.now(), trigger);
 
-  return second ? hostStep(context, first.state, host, 'usage') : first;
+  return second ? hostStep(context, first.state, host, 'usage', run) : first;
+}
+
+// ───────────────── the WSL turn (E3.S3) ─────────────────
+
+/** The answer of the door that a kept admission stands for: what the WSL part ended with, when a place's own door question said no. */
+const DOOR_OF_KIND: Readonly<Record<NotRead, DoorAnswer>> = { refused: 'no', 'not-asked': 'no-permission', full: 'no', damaged: 'damaged', unwritten: 'waiting' };
+
+/** The scope host's facts are in its entry of the memory. */
+const withFacts = (state: RoundState, facts: WslFacts): RoundState =>
+  ({ ...state, memory: put(state.memory, WSL_SCOPE, { ...(state.memory.get(WSL_SCOPE) ?? {}), wsl: facts, admission: undefined }) });
+
+/** The places of distros and users that the walk found gone, or not running, keep nothing; a list that was not read keeps all. */
+function retired(state: RoundState, walk: WslWalk<RoundState>): RoundState {
+  const kept = ([key]: readonly [string, HostMemory]): boolean => {
+    const place = splitWslKey(key);
+
+    return place === undefined || retainedAfter(walk.seen, place.distro, place.user);
+  };
+
+  return { ...state, memory: new Map([...state.memory].filter(kept)) };
+}
+
+/** What ends the WSL part after a place whose own door question said no: the answer that kind stands for. */
+const endAfter = (step: Step, key: string): Visited<RoundState>['end'] => (step.kind === 'abandoned' ? 'stopped' : doorEnd(step.kind === 'skipped' ? step.state.memory.get(key) : undefined));
+
+/** The WSL part's end for a place's kept admission, or nothing when it has none. */
+function doorEnd(memory: HostMemory | undefined): Visited<RoundState>['end'] {
+  const kind = memory?.admission;
+
+  return kind === undefined ? undefined : { door: DOOR_OF_KIND[kind] };
+}
+
+/**
+ * The scope host `wsl`'s turn: the WSL part of the round, place by place, one at a time and awaited. One class because it is one sequence of awaited
+ * steps whose state the walk's hooks and its visits both move; what leaves it is a `Step`, as for a host.
+ */
+class WslTurn {
+  private state: RoundState;
+
+  constructor(private readonly context: Context, state: RoundState, private readonly port: WslPort) {
+    this.state = state;
+  }
+
+  private hooks(): WslHooks {
+    return {
+      stillOn: async () => !(await ended(this.context)) && hostLive(this.context.seams, WSL_SCOPE),
+      facts: (facts) => { this.landsFacts(facts); },
+    };
+  }
+
+  private landsFacts(facts: WslFacts): void {
+    this.state = withFacts(this.state, facts);
+    this.context.seams.landed(this.state.memory, WSL_SCOPE);
+  }
+
+  /** One place: the same step as a host's (the Stop, the terminal, the door, the call, the checks, the publication), with the walk's call. */
+  private async visit(_state: RoundState, place: WslPlace, call: PlaceCall): Promise<Visited<RoundState>> {
+    const key = memoryKeyOf(place);
+    const step = await hostStep(this.context, this.state, key, 'first', (mode, digest) => call(mode, digest));
+    this.state = step.state;
+
+    return { state: step.state, end: endAfter(step, key) };
+  }
+
+  private finish(walk: WslWalk<RoundState>): Step {
+    this.state = retired(this.state, walk);
+    this.context.seams.landed(this.state.memory, WSL_SCOPE);
+
+    return walk.end === 'stopped' ? { kind: 'abandoned', state: this.state } : { kind: 'published', state: this.state, read: undefined };
+  }
+
+  async run(): Promise<Step> {
+    const early = await beforeCall(this.context, this.state, WSL_SCOPE);
+    if (early !== undefined) {
+      return early;
+    }
+    const door = await this.context.seams.may(WSL_SCOPE);
+    if (door !== 'yes') {
+      return notYes(this.context.seams, this.state, WSL_SCOPE, door);
+    }
+
+    return this.finish(await wslRound(this.port, this.hooks(), this.state, (state, place, call) => this.visit(state, place, call)));
+  }
+}
+
+/** The turn of one scope host: `wsl` is the WSL walk when the window gives the round a port; every other host is `hostRound`. */
+function turnOf(context: Context, state: RoundState, host: string): Promise<Step> {
+  const port = host === WSL_SCOPE ? context.seams.wsl : undefined;
+
+  return port === undefined ? hostRound(context, state, host) : new WslTurn(context, state, port).run();
 }
 
 /** The round's end. A generation that moved by now abandons it: its memory is never stored over what a Stop cleared. A closed host's older entry goes. */
@@ -428,10 +555,10 @@ const finished = (context: Context, state: RoundState, abandoned: boolean): Roun
  */
 export async function runRound(seams: RoundSeams, memory: Memory, round: number, trigger: Trigger, policy: UsagePolicy = USAGE_POLICY): Promise<RoundResult> {
   const context: Context = { seams, trigger, policy, token: seams.generation() };
-  const hosts = roundOrder(callableHosts(seams.live()), round);
+  const hosts = roundOrder(callableHosts(seams.live(), seams.wsl !== undefined), round);
   let state: RoundState = { memory: liveOnly(memory, hosts), roundUsage: new Set(), asked: new Set(), read: new Set() };
   for (const host of hosts) {
-    const step = await hostRound(context, state, host);
+    const step = await turnOf(context, state, host);
     state = step.state;
     if (step.kind === 'abandoned') {
       return finished(context, state, true);
@@ -470,7 +597,10 @@ const refusedIn = (standings: readonly HostStanding[], host: string): boolean =>
  * deleted: the entry is what the list reads, and a round that ends later cannot bring the older reading back.
  */
 export const withRefusals = (memory: Memory, refused: ReadonlySet<string>): Memory =>
-  new Map([...memory].map(([host, one]): [string, HostMemory] => [host, refused.has(host) ? { ...one, reading: undefined, admission: 'refused' } : one]));
+  new Map([...memory].filter(([key]) => !refused.has(scopeOf(key)) || key === scopeOf(key)).map(([host, one]): [string, HostMemory] => [host, refused.has(host) ? refusedEntry(one) : one]));
+
+/** A refused host's entry: its reading and its WSL facts go, and the kind the door will answer stays. */
+const refusedEntry = (one: HostMemory): HostMemory => ({ ...Object.fromEntries(Object.entries(one).filter(([field]) => field !== 'wsl')), reading: undefined, admission: 'refused' });
 
 /**
  * One round, and what follows it, in a window. A round that failed — a seam rejected — is logged once through `failed`, and the timer is still set
@@ -561,7 +691,7 @@ export function refreshAnswer(input: { readonly running: boolean; readonly lastE
 export const openStarts = (input: { readonly running: boolean; readonly lastEndMs: number | undefined; readonly now: number; readonly unreadHost: boolean }): boolean =>
   input.unreadHost && refreshAnswer(input) === 'start';
 
-const hasAnswer = (one: HostMemory | undefined): boolean => [one?.reading, one?.failure].some((held) => held !== undefined);
+const hasAnswer = (one: HostMemory | undefined): boolean => [one?.reading, one?.failure, one?.wsl].some((held) => held !== undefined);
 
 /** A host that is not refused and has neither a reading nor a failure. */
 export const unreadHost = (hosts: readonly string[], memory: Memory, standings: readonly HostStanding[]): boolean =>
@@ -609,192 +739,5 @@ export const callFor = (test: boolean, real: AccountsCall, replaced: AccountsCal
 
 // ───────────────── the state row and the Stop (C5) ─────────────────
 
-export interface AccountsState {
-  /** E1's two notice times: no longer written (E2.S4); a row that holds them is read as before and keeps them. */
-  readonly toldUtc?: string;
-  readonly lastAutoNoticeUtc?: string;
-  readonly stoppedUtc?: string;
-  /** When the one notice `accounts-can-be-shown` was raised, for this installation. */
-  readonly canBeShownUtc?: string;
-  /** The copy of the newest withdrawal's stamp (E2.S1, § P5): a stamp, or a value that is not one — then it counts as a withdrawal. */
-  readonly withdrawnStamp?: unknown;
-  /** When the icon's question was first asked. */
-  readonly askedUtc?: string;
-  readonly [other: string]: unknown;
-}
-
-const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> => typeof value === 'object' && value !== null && !Array.isArray(value);
-
-const FIELDS: readonly string[] = ['toldUtc', 'lastAutoNoticeUtc', 'stoppedUtc', 'askedUtc', 'canBeShownUtc'];
-
-const fieldsOk = (value: Readonly<Record<string, unknown>>): boolean => FIELDS.every((field) => value[field] === undefined || typeof value[field] === 'string');
-
-/** `undefined` (never written) is the empty state; an object whose three fields are each absent or a string is that state; anything else is damaged. */
-export function accountsStateOf(value: unknown): { readonly kind: 'state'; readonly state: AccountsState } | { readonly kind: 'damaged' } {
-  if (value === undefined) {
-    return { kind: 'state', state: {} };
-  }
-
-  return isRecord(value) && fieldsOk(value) ? { kind: 'state', state: value } : { kind: 'damaged' };
-}
-
-/** The Stop's copy in the row. A row that cannot be read is STOPPED, not empty: the stop is the way out when a read does harm on a VM. */
-export function stoppedOf(value: unknown): boolean {
-  const read = accountsStateOf(value);
-
-  return read.kind === 'damaged' || typeof read.state.stoppedUtc === 'string';
-}
-
-/**
- * What the permission needs of the row (E2.S1, § P5). `withdrawn`: a stamp, nothing, or a value that is not a stamp (`'unreadable'`, which counts as a
- * withdrawal); a row that cannot be read at all is STOPPED and has no permission. `stopped`: the Stop's copy.
- */
-export function permissionRowOf(value: unknown): { readonly withdrawn: number | 'unreadable' | undefined; readonly stopped: boolean; readonly askedUtc: string | undefined } {
-  const read = accountsStateOf(value);
-  if (read.kind === 'damaged') {
-    return { withdrawn: 'unreadable', stopped: true, askedUtc: undefined };
-  }
-  const copy = read.state.withdrawnStamp;
-
-  return { withdrawn: copy === undefined ? undefined : (stampOf(copy) ?? 'unreadable'), stopped: typeof read.state.stoppedUtc === 'string', askedUtc: read.state.askedUtc };
-}
-
-/** A FIELD change of the state row. The first two are E1's; `withdrawn`, `floor` and `asked` are the permission's (E2.S1); `canBeShown` is the one notice's (E2.S4). */
-export type StateChange =
-  | { readonly stop: string }
-  | { readonly start: true }
-  /** The one notice was raised. Written once. */
-  | { readonly canBeShown: string }
-  /** A withdrawal's stamp: the row's copy becomes the higher of the two. `press`: a person's press; `read`: a copy-out, which never replaces a copy that is not a stamp. */
-  | { readonly withdrawn: number; readonly utc: string; readonly by: 'press' | 'read' }
-  /** An *Allow*: the copy is raised to its floor; a copy that is not a stamp is REPLACED by it. `restart`: the copy is removed. */
-  | { readonly floor: number; readonly utc: string; readonly restart?: true }
-  /** The icon's question was asked. Written once. */
-  | { readonly asked: string };
-
-export type StateCommitted = { readonly kind: 'written' } | { readonly kind: 'kept' };
-
-const without = (state: AccountsState, field: string): AccountsState => Object.fromEntries(Object.entries(state).filter(([key]) => key !== field));
-
-type WithdrawnChange = Extract<StateChange, { readonly withdrawn: number }>;
-type FloorChange = Extract<StateChange, { readonly floor: number }>;
-
-/** The row an *Allow* leaves over a row that could not be read: the floor as the copy (when it is one), still STOPPED. */
-const damagedFloor = (change: FloorChange): AccountsState => ({ ...(change.floor >= 1 && change.restart !== true ? { withdrawnStamp: change.floor } : {}), stoppedUtc: change.utc });
-
-/** A withdrawal over a row that could not be read: a person's press writes the copy with the stop's time; a copy-out writes nothing. */
-const damagedWithdrawn = (change: WithdrawnChange): AccountsState | undefined => (change.by === 'press' ? { withdrawnStamp: change.withdrawn, stoppedUtc: change.utc } : undefined);
-
-/**
- * Over a row that cannot be read only a person's press writes: a stop writes a row with its time, a start an empty row, a withdrawal or an *Allow* the
- * copy with the stop's time (the row stays STOPPED); a notice time, a copy-out and the first asking write nothing.
- */
-const DAMAGED_BY: Readonly<Record<string, (change: never) => AccountsState | undefined>> = {
-  stop: (change: { readonly stop: string }) => ({ stoppedUtc: change.stop }),
-  start: () => ({}),
-  withdrawn: damagedWithdrawn,
-  floor: damagedFloor,
-};
-
-/** The name of the field that says which change it is. */
-const fieldOf = (change: StateChange): string | undefined => Object.keys(DAMAGED_BY).find((field) => field in change);
-
-const damagedNext = (change: StateChange): AccountsState | undefined => {
-  const field = fieldOf(change);
-
-  return field === undefined ? undefined : (DAMAGED_BY[field] as (change: StateChange) => AccountsState | undefined)(change);
-};
-
-const stoppingNext = (state: AccountsState, change: { readonly stop: string } | { readonly start: true }): AccountsState | undefined =>
-  ('stop' in change ? { ...state, stoppedUtc: change.stop } : state.stoppedUtc === undefined ? undefined : without(state, 'stoppedUtc'));
-
-/** The first time stays: the notice is once for each installation. */
-const canBeShownNext = (state: AccountsState, utc: string): AccountsState | undefined => (state.canBeShownUtc === undefined ? { ...state, canBeShownUtc: utc } : undefined);
-
-const isCopy = (state: AccountsState): boolean => state.withdrawnStamp !== undefined;
-
-/** The copy raised to `stamp` — only when it is absent or a LOWER stamp. A copy that is not a stamp is never replaced here. */
-function copyNext(state: AccountsState, stamp: number): AccountsState | undefined {
-  const had = stampOf(state.withdrawnStamp);
-
-  return !isCopy(state) || (had !== undefined && had < stamp) ? { ...state, withdrawnStamp: stamp } : undefined;
-}
-
-/** An *Allow* over a copy that is not a stamp: it is replaced by the floor, or removed when there is no floor. */
-const replacedCopy = (state: AccountsState, floor: number): AccountsState => (floor >= 1 ? { ...state, withdrawnStamp: floor } : without(state, 'withdrawnStamp'));
-
-/** An *Allow*: a copy that is not a stamp is REPLACED by the floor; the restart removes the copy. Else the copy is raised to the floor when the floor is higher. */
-function floorNext(state: AccountsState, change: FloorChange): AccountsState | undefined {
-  if (change.restart === true) {
-    return isCopy(state) ? without(state, 'withdrawnStamp') : undefined;
-  }
-
-  return isBadCopy(state) ? replacedCopy(state, change.floor) : raisedTo(state, change.floor);
-}
-
-/** A copy that is there and is not a stamp. */
-const isBadCopy = (state: AccountsState): boolean => isCopy(state) && stampOf(state.withdrawnStamp) === undefined;
-
-const raisedTo = (state: AccountsState, floor: number): AccountsState | undefined => (floor >= 1 ? copyNext(state, floor) : undefined);
-
-const askedNext = (state: AccountsState, utc: string): AccountsState | undefined => (state.askedUtc === undefined ? { ...state, askedUtc: utc } : undefined);
-
-/** One merge for each field that says which change it is. */
-const READABLE_BY: Readonly<Record<string, (state: AccountsState, change: never) => AccountsState | undefined>> = {
-  stop: stoppingNext,
-  start: stoppingNext,
-  canBeShown: (state: AccountsState, change: { readonly canBeShown: string }) => canBeShownNext(state, change.canBeShown),
-  withdrawn: (state: AccountsState, change: WithdrawnChange) => copyNext(state, change.withdrawn),
-  floor: floorNext,
-  asked: (state: AccountsState, change: { readonly asked: string }) => askedNext(state, change.asked),
-};
-
-const readableNext = (state: AccountsState, change: StateChange): AccountsState | undefined => {
-  const field = Object.keys(READABLE_BY).find((one) => one in change);
-
-  return field === undefined ? undefined : (READABLE_BY[field] as (state: AccountsState, change: StateChange) => AccountsState | undefined)(state, change);
-};
-
-/**
- * The merge of the state row, given to `sessions.commitKey`: it reads the value in the step of the write. A stale VARIABLE is harmless; a stale
- * WINDOW is not, and what keeps the Stop is the refusals file (S1 X17): `stoppedUtc` is its copy.
- */
-export const stateMerge: Merge<StateChange, StateCommitted> = (stored, change) => {
-  const read = accountsStateOf(stored);
-  const next = read.kind === 'damaged' ? damagedNext(change) : readableNext(read.state, change);
-
-  return next === undefined ? { next: undefined, result: { kind: 'kept' } } : { next: { value: next }, result: { kind: 'written' } };
-};
-
-/** What the Stop needs of the road: the file's three answers and the one commit of a `globalState` key. */
-export interface StopDoor {
-  readonly stopRound: () => Promise<Committed>;
-  readonly startRound: () => Promise<Committed>;
-  readonly roundStop: () => Promise<'stopped' | 'running' | 'damaged'>;
-  readonly commitKey: <C, R>(key: string, change: C, merge: Merge<C, R>) => Promise<R>;
-}
-
-/**
- * The round is stopped when the FILE says so (read from the disk) OR the copy in the row does. A `damaged` file is not a stop here: every
- * admission then answers `damaged` and the list says so.
- */
-export async function isStopped(door: Pick<StopDoor, 'roundStop'>, readState: () => unknown): Promise<boolean> {
-  return (await door.roundStop()) === 'stopped' || stoppedOf(readState());
-}
-
-/** The file FIRST, then the copy, whatever the first answered: a Stop that was not saved still stops this window. */
-export async function stopTheRound(door: StopDoor, utc: string): Promise<void> {
-  await door.stopRound();
-  await door.commitKey(STATE_KEY, { stop: utc }, stateMerge);
-}
-
-/** The file FIRST; the copy is cleared only when the file took the start (`written` or `kept`). Answers whether it was. */
-export async function startTheRound(door: StopDoor): Promise<boolean> {
-  const started = await door.startRound();
-  if (started.kind !== 'written' && started.kind !== 'kept') {
-    return false;
-  }
-  await door.commitKey(STATE_KEY, { start: true }, stateMerge);
-
-  return true;
-}
+export { STATE_KEY, accountsStateOf, isStopped, permissionRowOf, startTheRound, stateMerge, stopTheRound, stoppedOf } from './remoteAccountsStateRow';
+export type { AccountsState, StateChange, StateCommitted, StopDoor } from './remoteAccountsStateRow';

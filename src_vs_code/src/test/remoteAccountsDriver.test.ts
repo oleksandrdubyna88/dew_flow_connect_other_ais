@@ -64,6 +64,7 @@ function rig(init: { hosts?: readonly string[]; permitted?: boolean; test?: bool
     clearTimer: (handle) => { (handle as { cleared: boolean }).cleared = true; },
     landed: (host) => { landed.push(host); },
     log: () => undefined,
+    wsl: () => undefined,
     readState: () => control.row,
     door: {
       stopRound: () => Promise.resolve({ kind: 'written', row: undefined, evicted: [] }),

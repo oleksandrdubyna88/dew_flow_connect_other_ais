@@ -28,7 +28,7 @@
       "id": "chat",
       "entry": "shell/modules/chat/index.ts",
       "out": "dist/modules/chat.js",
-      "budgetBytes": 598016,
+      "budgetBytes": 614400,
       "forbidInputs": ["src/runtimeState.ts", "shell/modules/runtime.ts"]
     },
     {

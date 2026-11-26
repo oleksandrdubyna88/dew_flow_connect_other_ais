@@ -91,7 +91,7 @@ test('E2S2-T16: Codex and Antigravity join nothing, and the places in no Claude 
   assert.equal(none.get('host-d')?.manager, 'apt-get');
   assert.equal(none.get('host-h')?.said, 'signed out');
   assert.equal(none.get('host-i')?.said, 'no Claude Code found');
-  assert.match(none.get('wsl')?.said ?? '', /WSL on this PC/u);
+  assert.match(none.get('wsl')?.said ?? '', /wsl — this PC/u);
   assert.equal(none.get('wsl')?.action, null);
 });
 
