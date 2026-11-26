@@ -42,6 +42,17 @@ async function putBack(accounts: Doors['accounts'], sessions: Doors['sessions'],
   accounts.replaceCall(undefined);
   accounts.replaceWsl(undefined);
   await sessions.restore(before);
+  await seesTheStore(accounts);
+}
+
+/**
+ * The window's round reads the permission when something asks it to, and it starts a round at once only on an EDGE: not-given, then given. A raw
+ * `restore` sends the change signal, but the window reads the store only after its own awaits; a scenario that gives the permission at once after a restore
+ * can find the grant before the window saw the withdrawal, and then there is no edge and no round. A round asked for here with no permission answers nothing and
+ * makes the window read the store as it is.
+ */
+async function seesTheStore(accounts: Doors['accounts']): Promise<void> {
+  await accounts.runRoundNow('refresh');
 }
 
 export async function theAccountsRoundRunsOnlyUnderThePermission(): Promise<void> {
@@ -100,6 +111,7 @@ export async function theIconOpensOneTabAndItsModelHoldsBothHosts(): Promise<voi
   const names = [`Creds: ${HOST_A} / s1`, `Creds: ${HOST_B} / s1`];
   const terminals = names.map((name) => vscode.window.createTerminal({ name }));
   try {
+    await seesTheStore(accounts);
     await until(() => names.every((name) => vscode.window.terminals.some((one) => one.name === name)), 'the two terminals did not open');
     assert.equal(accounts.tabOpen(), false, 'a tab was open before the icon was pressed');
     assert.equal((await sessions.allow()).kind, 'given', 'the permission was not given through the keeper');
@@ -145,6 +157,7 @@ export async function theWslPlacesAreInTheTabsModel(): Promise<void> {
   const name = 'Creds: wsl / s1';
   const terminal = vscode.window.createTerminal({ name });
   try {
+    await seesTheStore(accounts);
     await until(() => vscode.window.terminals.some((one) => one.name === name), 'the terminal did not open');
     assert.equal((await sessions.allow()).kind, 'given', 'the permission was not given through the keeper');
     await until(() => accounts.memoryHosts().filter((key) => key.startsWith('wsl:')).length === 3, 'the round did not remember the three places');

@@ -157,8 +157,11 @@ export async function thePermissionIsGivenAndWithdrawnThroughTheRealStores(): Pr
     assert.ok(['yes', 'stopped'].includes(await door.may('round', HOST)));
     assert.equal(await door.withdraw(), 'withdrawn');
     const files = await door.withdrawnFiles();
-    assert.equal(files.length, 1, `a withdrawal did not make exactly one file: ${JSON.stringify(files)}`);
-    const stamp = Number(/^withdrawn-(\d+)\.json$/u.exec(files[0] ?? '')?.[1]);
+    // At least one file. A window's own listener may read the store while the press is in flight and land the unsaved withdrawal first (`landUnsaved`), so two
+    // files are by design (the lower one is the earlier try); the stamp that counts is the highest, and it is the one the row keeps and the next *Allow* leaves.
+    assert.ok(files.length >= 1, `a withdrawal made no file: ${JSON.stringify(files)}`);
+    const stamp = Math.max(...files.map((one) => Number(/^withdrawn-(\d+)\.json$/u.exec(one)?.[1])));
+    assert.ok(Number.isInteger(stamp) && stamp >= 1, `a withdrawal file is not named by a stamp: ${JSON.stringify(files)}`);
     assert.equal(((await door.stored()).row as { withdrawnStamp?: number } | undefined)?.withdrawnStamp, stamp, 'the copy in the state row is not the stamp of the file');
     assert.equal(await door.may('session', HOST), 'no-permission');
     assert.equal(await door.may('round', HOST), 'no-permission');
