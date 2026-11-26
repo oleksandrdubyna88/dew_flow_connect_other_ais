@@ -1,6 +1,6 @@
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: t3-checks-at-base-resolve
-title: "ChecksAtBase resolves through ToolchainResolve: the file at the base, or the manifests of the base and of the head, all read from the main repository; a coder still cannot change its own checks"
+title: "ChecksAtBase resolves through ToolchainResolve: the file at the base, or the manifests of the base and of the head, all read from the main repository; the head's own definitions run and what the coder changed is reported (owner decision 2026-11-26)"
 kind: security
 complexity: 5
 dependsOn:
@@ -17,6 +17,6 @@ dod:
   - id: d1
     item: "T1: the checks of a coder job on a fixture repository with no file run the detected steps in real units and end green, for a node project and for a dotnet unit; with a file the steps are the file's, and every existing test of ChecksAtBase passes unchanged"
   - id: d2
-    item: "D3: a head commit that deletes the test script, the lock file or a test project is toolchain_refused and no step runs; a head commit that adds .coai/toolchain.yaml is reported as today (ToolchainChange.Added) and the detected steps run, not the new file"
+    item: "D3: a head commit that deletes the test script or a test project loses that step, the loss is reported (`the worktree removed <step> of <project>`) and the head's other steps run; a head that deletes the lock file, adds a manifest of an unbuilt stack or breaks the toolchain file cannot be run and is refused for that reason only; a head commit that adds or changes .coai/toolchain.yaml is reported (ToolchainChange.Added or Changed) and the HEAD's file is the file that runs"
   - id: d3
     item: "the head is read as the COMMIT coai made, from the main repository's objects: an untracked or ignored manifest in the worktree changes nothing; T5: the rule that the worktree and HEAD are the same after the checks holds for the restore step (a restore that leaves a file git would add is tree_changed, never green)"

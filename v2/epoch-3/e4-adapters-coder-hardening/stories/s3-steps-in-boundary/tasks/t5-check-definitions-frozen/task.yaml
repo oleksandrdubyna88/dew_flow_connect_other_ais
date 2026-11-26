@@ -1,6 +1,6 @@
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: t5-check-definitions-frozen
-title: "A coder cannot change what a detected check runs: the check definition of a project is compared between the base and the head, and a difference refuses the job"
+title: "The head's own check definitions run, and what the head changed in the check definition of a project the base has is REPORTED, never refused (owner decision 2026-11-26; the task id keeps its first name)"
 kind: security
 complexity: 6
 dependsOn: []
@@ -11,16 +11,19 @@ files:
   - src_mcp/core/Toolchain/NodeDetector.cs
   - src_mcp/core/Toolchain/DotnetDetector.cs
   - src_mcp/core/Toolchain/ToolchainResolve.cs
+  - src_mcp/core/Toolchain/FrozenDefinitions.cs
+  - src_mcp/core/Toolchain/DefinitionReport.cs
   - shared/toolchains.json
-  - src_mcp/tests/ACoderCannotChangeADetectedCheckTests.cs
+  - src_mcp/tests/AChangedCheckDefinitionIsReportedTests.cs
+  - src_mcp/tests/AHeadsChangesAreReportedTests.cs
 dod:
   - id: d1
-    item: "the check definition of a detected or defaulted node project is the whole `scripts` member of its package.json (every script a step runs, its pre and post scripts and the scripts it calls by name are in it) and the name of its lock file; of a dotnet unit it is the test projects its solution file names, the facts that make each a test project and choose its runner, the `test` member of global.json, and the names of every Target, Import and UsingTask element in the unit's project files and in the .props and .targets files that apply to it"
+    item: "the check definition of a detected or defaulted node project is the whole `scripts` member of its package.json (every script a step runs, its pre and post scripts and the scripts it calls by name are in it) and the name of its lock file; of a dotnet unit it is the test projects its solution file names, the facts that make each a test project and choose its runner, the `test` member of global.json, and the names of every Target, Import and UsingTask element in the unit's project files and in the .props and .targets files that apply to it; this is what is COMPARED between the base and the head, to be reported"
   - id: d2
-    item: "D12: for a project the base has, a definition that differs at the head is toolchain_refused before any step; the sentence names the project and the member (`the worktree changed scripts.test of <project>`) and the cure (land the change in a commit of its own, or name the commands in .coai/toolchain.yaml); a head that replaces `scripts.test` with `echo passed` gives that refusal, zero planned steps and never green"
+    item: "D12: for a project the base has, a definition that differs at the head is REPORTED, not refused: the head's own definitions run, the line `the worktree changed scripts.test of <project>` is in the envelope's `toolchain.changedDefinitions` and in `changedTestCommands`, `definitionsChanged` is true, and a head that replaces `scripts.test` with `echo passed` runs that script; a green check then means the head's own definitions passed, and the envelope says so"
   - id: d3
-    item: "D13: the same for a dotnet unit: a head that adds a Target named VSTest, Test or Build to a test project or to Directory.Build.targets, takes a test project out of the solution file, or changes the runner in global.json is refused"
+    item: "D13: the same for a dotnet unit: a head that adds a Target named VSTest, Test or Build to a test project or to Directory.Build.targets, takes a test project out of the solution file, or changes the runner is reported the same way (a head whose changes leave nothing that can be run, such as an MTP project without the runner setting, is refused for that reason only)"
   - id: d4
-    item: "D14: what is not a definition is not refused: a new or changed source or test file, a new PackageReference, ProjectReference or PackageVersion, a new dependency in package.json with its lock file; a project only the head has runs with its own definition and the answer marks it `definedByHead`"
+    item: "D14: a new or changed source or test file is not reported as a definition (a count of test files modified, added and deleted is in `headTestFiles`); a new PackageReference, ProjectReference or dependency changes a project file or package.json and is reported as a changed definition file, and is restored and built; a project only the head has runs with its own definition and the answer marks it `definedByHead`"
   - id: d5
-    item: "the .props, .targets and global.json files are manifest names of toolchains.json and are read by the listing of s2 t2 with its limits and its XML rule; the compare is pure, and what differs is in the answer (`changedBetweenBaseAndHead`)"
+    item: "the report: `definitionsChanged`, a one-line `definitionSummary`, `changedDefinitionFiles`, `changedLinksOrSubmodules`, `lostSteps`, `changedDefinitions`, `changedTestCommands`, and in the job's record `checks/round-<n>/changed-definitions.txt` with the spelled paths; the lists of shared/toolchains.json are only the classifier of which changed paths are called a definition or configuration file; the compare is pure; no value of the head is echoed in a sentence"

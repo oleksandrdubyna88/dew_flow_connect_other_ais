@@ -22,3 +22,5 @@ dod:
     item: "inside an affected dotnet unit the test step names only the test projects that reach a changed project through the reverse ProjectReference graph of the head, with a project the head removed counted as changed; a changed solution file, global.json, nuget.config, or any .props or .targets file makes every test project of the unit affected"
   - id: d5
     item: "S2 and S11: impact unknown runs EVERY project in full: a changed path outside every project folder (a root configuration, a shared folder, documents), a reference that cannot be resolved, a project file that cannot be read; a selection never selects nothing, and the round records each unit that was left out and the reason"
+  - id: d6
+    item: "owner decision 2026-11-26 (M13 of the security verify): the selection is INFORMATION ONLY in this version: every detected unit runs, whatever the selection would have left out, and the envelope's `toolchain.selection` says `applied: false` and lists what would have been left out"
