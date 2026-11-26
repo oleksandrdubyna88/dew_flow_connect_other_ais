@@ -265,6 +265,7 @@ with the next plan round (section 10).
 | CX-T3 | the JavaScript of `functions.exec` reaches no file, environment, process or network by itself | release — **not measured yet (X1 b)** | B6, B10, B11 |
 | CX-T4 | no item of a turn's stream is a tool outside the measured list (an MCP call, a web search; an agent call when CX-T2 says the stream shows it) | turn | B12 |
 | CX-T5 | after every turn the rollout files in `sessions` of the job's `CODEX_HOME` are those of the handle's thread and of no other thread, at least one is there, and none of their function calls has a name that starts with `collaboration.` (added by addendum 2, section 13.3: the stream does not show an agent call) | turn | B9 to B12 |
+| CX-T6 | with `-c web_search="disabled"` on the argv the model has no web search tool; without it a search is an item of type `web_search` in the stream (added by section 13.11 after the measure of X9 b: the model-free tool list cannot tell) | release | B10, B12 |
 | CX-C1 | the job's `config.toml` is byte for byte what coai wrote, read back inside the unit | pre, and launch (written before every turn) | B14 |
 | CX-C2 | the argv is CX1, fresh and resumed, and holds no never-flag of SPEC C3 | launch | B12, B14 |
 | CX-C3 | a `.codex/config.toml` with an MCP server in a stand-in project does not change the tool list of `codex debug prompt-input` (the project is not trusted) | pre | B13 |
@@ -292,6 +293,7 @@ with the next plan round (section 10).
 | AG-A2 | no tool event of a turn that was not denied names a tool outside `read_file`, `write_file`, `edit_file` | turn | B12 |
 | AG-M1 | the argv has `--mode accept-edits` and `--agent coai-coder`, fresh and resumed, and no never-flag of SPEC C3 | launch | B9, B14 |
 | AG-M2 | the stderr of a turn holds no mode fall-back line (and the stream names `accept-edits`, when G1 finds where) | turn | B9 |
+| AG-M4 | with `--mode accept-edits` an edit inside the worktree is done and a command is denied, fresh and resumed (defined in section 12.2; added by addendum 3, section 14.3: the init line names the same mode for every start, so AG-M3 cannot enter) | release | B9 |
 | AG-B1 | the working directory of the unit is the guard folder; the worktree is only an `--add-dir` root | pre, and launch | B13 |
 | AG-B2 | hooks and agents in `.agents` of the worktree do not run, also on a resumed turn and also when they appear after turn 0 | release — **the resumed half is not measured yet (G1)** | B13 |
 | AG-B3 | the guard folder cannot be written from inside the unit (**when G1 shows agy runs so**) | pre | B13, B14 |
@@ -306,6 +308,11 @@ After addendum 2 (section 13, 2026-11-26): 23 codex ids. Section 13.3 is read WI
 CX-T2, CX-T3, CX-C4 and CX-R4, what CX-T1, CX-T4 and CX-C2 mean now, adds CX-T5, and section 13.5 says what the owner's decision of
 2026-11-26 leaves of CX-P1, U9 and X2. Two rows of the table were touched by that addendum (CX-C4: its class cell, the old words kept in
 it; CX-T5: new); no other row was changed.
+
+After section 13.11 (the measure of X9, 2026-11-26): 24 codex ids; one row is new (CX-T6), and 13.11 gives the exact rule of CX-T4.
+After addendum 3 (section 14, 2026-11-26): 19 agy ids; one row is new (AG-M4). Section 14.3 is read WITH the agy table above: it says
+what was measured on agy 1.5.18 for AG-G5, AG-B2, AG-B3 and AG-R2, that AG-G5 is tied by the step index and not by an id, and that
+AG-P2 does not enter. Section 14.5 says what the owner's decision of 2026-11-26 leaves of AG-P1, G9 and G13.
 
 ## 9. The refresh margin (codex)
 
@@ -712,3 +719,256 @@ table):
 - The judge ran no row again, started no vendor program and ran no test: the suite was not run on this commit (other agents held the
   build), so "the table agrees with section 8" was checked by the judge with a script that copies the test's own pattern, not by the
   test.
+
+### 13.11 After the measure of X9 (2026-11-26, results section 10): X9 is closed
+
+Judge: the same. Head `220add50`. Read: `RESULTS_codex_coder.md` section 10 and `out_codex/x9_*`. Run by the judge: nothing but reads
+of saved files. The program is the one of 13.2 (`codex-cli 0.171.0`, the same sha256). Calls: 4, so 23 of the owner's 30.
+
+**The verdict stays ship, and condition 3 of 13.1 is met: no row of X9 failed.** What the judge checked in the saved material: the
+answers of the two scripts add up to 160 errors and no content (40 + 40 + 30 + 24 + 10 + 10 + 6; the only two `OK` lines are the two
+empty MCP lists); call 22 holds one `agent_message` and no search item, call 23 holds a `web_search` item started and completed;
+the process samples of calls 20 and 21 name `codex`, `codex-code-mode` and `codex-linux-sandbox` and nothing else.
+
+- **X9 (a) holds → CX-T3 now stands in its full sense** (class `release`): none of the eleven host functions takes a place to read
+  from. `image`, `audio`, `content` and `generatedImage` take inline data and refuse a path, a `file:` address and an `http:` address
+  (the last by name: "remote image URLs are not supported"); the listener on the host loopback saw 0 requests; `store` and `load` are
+  a table in the script's own memory; `notify` sends text to the model. Fresh and resumed. What it rests on: one script of the model
+  (call 5) and one of the measurer (calls 20, 21). Not tried: a raw image or audio block with data (it carries bytes, not a place);
+  only a decoy stood for `auth.json`; nobody attacked the isolate. **C5 stays, smaller**: the JavaScript still runs outside the vendor
+  sandbox behind one layer, and that layer now has two days of evidence instead of one script.
+- **X9 (b) holds → C8 is closed.** With the flag the model has no web search; without it the model used one, and the stream then
+  holds an item of type `web_search`. The model-free list is the same with and without the flag, so **CX-T1 does not cover the web
+  search**, whatever its row says, and no `pre` row can. New id **CX-T6**, class `release`: the flag's effect, one pair of calls, one
+  model. At the time of a job two things stand for it: the flag is on the argv (CX-C2) and a `web_search` item ends the job (CX-T4).
+  CX-T4 sees a search after it happened: text may have left, nothing of the turn is committed. That residue is a line of C6, not a
+  risk of its own: on a release that drops the key, the first search is what tells.
+- **X9 (c) holds.** The two list tools answer empty lists and `read_mcp_resource` knows no server; `doctor` says `mcp servers = 0`.
+  No resource of the account is reachable.
+
+**The exact rule of CX-T4** (class `turn`; it replaces the words of 13.3). After every turn coai reads every item of the stream, the
+started form and the completed form alike:
+
+1. `agent_message`, `command_execution`, `file_change` and `error` items are allowed. They are the item types of the measured turns
+   that are not a tool outside the list.
+2. An `mcp_tool_call` item is allowed ONLY when all of this is true: `server` is exactly `codex`; `tool` is exactly
+   `list_mcp_resources` or `list_mcp_resource_templates`; `error` is null; and a completed item's result is one text block that parses
+   to exactly `{"resources":[]}` or `{"resourceTemplates":[]}`. These are the two measured tools of the list, with their measured
+   answer. Every other `mcp_tool_call` ends the job: another server, another tool (a `read_mcp_resource` that succeeded means a server
+   exists), an error, and **a list that is not empty** — that one is a resource nobody measured, the hole of B12 that X9 (c) looked for.
+3. An item of type `web_search` and an item of type `collab_tool_call` always end the job.
+4. **An item of any other type ends the job, and the reason names the type.** The stream is the vendor's; a type nobody has seen
+   cannot be told from a new tool. This will refuse a job the first time a model sends a type the measure did not meet (the saved
+   streams are all of `gpt-6-luna` at low effort and hold no reasoning item): the type is then looked at and added here by an
+   addendum. Without a version gate (C6) this is the check that notices a new release, so it is closed on purpose.
+
+"Ends the job" is `coder-boundary`, never green, and nothing of that turn is committed. A rule that ended the job on ANY
+`mcp_tool_call` would be safe and would fire on two harmless measured tools; the rule above is as closed and does not.
+
+**`codex-exec-server` — no new id; one line more for CX-C1; one small risk.** It started in none of the 5 sampled calls, and a turn's
+rollout names one environment, `local`. The program's own text says it can run as a child of the CLI for a configured "environment",
+and names a file `environments.toml` beside `auth.json`. Nothing of that was tried. What it would mean if it worked: the model's
+commands run somewhere that is not the vendor sandbox. So:
+
+- Who can put that file into the job's `CODEX_HOME`: not a command of the model (CX-V2: a write into the job folder does not reach the
+  disk), not the JavaScript (CX-T3), not a check (S1 hides the coder folder), not a file of the repository (the home is not in the
+  worktree). Each of these has an id already, so no id is added.
+- **The launch half of CX-C1 gets one line:** before every launch, turn 0 and every fix turn, the job's `CODEX_HOME` holds no file
+  named `environments.toml`; one that is there refuses the launch as `coder-boundary`. It costs one look and it is a tripwire for the
+  day one of the layers above fails.
+- **C9 (new, small).** A third program of the folder can run commands as an "environment", and what starts it was not measured. A
+  job relies on nobody being able to configure one. Worth one model-free probe when the story is built (a scratch home with such a
+  file: does the CLI read it, does the process appear); it is not a condition of the verdict.
+
+**The ids after this section:** CX-T3 `release` (full sense), CX-T4 `turn` (the rule above), CX-T6 `release` (new), CX-C1 `pre`, and
+`launch` (one line more). **The risks for the owner after it:** C1 to C4 as in 13.8; C5 (smaller), C6, C7; **C8 closed**; C9 (new,
+small). For the lead: s5 t2 no longer waits for X9; s5 t3 — CX-T1 is not evidence about the web search; s5 t4 d3 — the rule above,
+with FakeCli playing a non-empty list, another server and an unknown item type; s5 t2 d2 — the `environments.toml` look; the second
+refresh fixture of 13.6 exists now (`codex-refresh-failed-host-network.json`, the vendor's address removed).
+
+## 14. Addendum 3 (2026-11-26): agy 1.5.18 after the open-row measure of s6 t7
+
+Judge: Fable, the same role (epoch 3 E3 s6 t7 d8). Head `220add50` on `feat/v2-ep3-e3-measure`. Read: `RESULTS_agy_coder.md` sections 9
+and 10 (and 2 to 5 again), `v2/spikes/e3s5_measure/out_agy/` (every stream, hook log, comparison and diff), the two new fixtures, the
+task file of s6 t7. Run by the judge: **no vendor CLI, no model call, no build, no test**; read-only commands on saved material and
+one `sha256sum` of the installed program: 14.2. Sections 1 to 12 stand, but for one new row of section 8 (AG-M4).
+
+The measured release is **agy 1.5.18**, not the 1.5.17 of sections 1 to 8: agy updated itself on the morning of the measure, and the
+owner's word (relayed by the coordinator, 2026-11-26; the judge did not see it) was to measure what is installed, and that a version
+gates nothing. Every row of this addendum is a fact about 1.5.18. The rows of 1.5.17 are history of a program that is no longer on
+the disk.
+
+### 14.1 Verdict
+
+**agy: ship — by the owner's decision, with the must-change list of section 6 as 14.4 amends it and the risks of 14.7.** The form of
+section 1 stays; the judge does not make it a plain "ship". Of the four reasons section 1 gave against agy on the evidence alone:
+
+1. *B13 was not measured on a resumed turn* — **gone.** It holds fresh, resumed, and resumed after a hooks file and an agent file
+   were written into the worktree between the turns (three turns, the canary folder empty each time). The refuse condition of d8 is
+   not met.
+2. *The unit does not hide the sign-in from a process inside it* — **smaller, not gone.** A copy with no refresh token runs a turn
+   (AG-R2). What a process in the unit can read is then an access token of about one hour.
+3. *There is no network limit* — **stands; the cure is now known to work and is not built.** agy ran `models` and a turn in a unit
+   with no network through a relay (G11). It is E4's.
+4. *B6, B11 and B12 rest on agy's own agent file and hook, and the hook is open on "exit 0, no output"* — **stands**, seen again on
+   1.5.18.
+
+All rows B1 to B15 held on 1.5.18, fresh and resumed, in one prompt of 15 steps over three turns, with the guard deciding every tool
+call (13, 12 and 12 payloads for 13, 12 and 12 tool events). The guard of the measure was the SHELL guard of s4. coai's own handler
+(`--agy-hook`, G2) has not met agy yet; its rows are s6 t2 and s6 t4.
+
+**G13 stands in a new form.** The version is recorded as history (14.5), and that record makes nothing launchable. The agy coder is
+not to become launchable — by whatever the table's reader reads after its change — before the owner's recorded word on 14.7.
+
+### 14.2 What the judge checked itself
+
+| # | Claim of the results | How | Answer |
+|---|---|---|---|
+| J21 | the sha256 of the program | `sha256sum` of the installed `agy` (read-only, not started) | equal: `7c96ad8c944c1a8d195ca34d2041a3d74d5166c96662b52183b748a3c455d52f`, the file of 08:42 |
+| J22 | `permission_mode` is `request-review` on every start | the init line of all 19 saved streams (11 turns, 8 starts with no turn) | true, 19 of 19 — also on turn 7, where a command RAN |
+| J23 | the step index ties the stream to the hook | the seven saved comparisons | true: 53 of 53 tool events over turns 1, 2, 3, 4, 8, 9 and 11 (the "41 of 41" of the results is turns 1 to 4), names equal, no `toolCall.id` in any stream. The 53 payloads name three tools only: `write_file` 28, `edit_file` 15, `read_file` 10. Turn 10 has no saved hook log; turns 5 to 7 have logs and no comparison |
+| J24 | the mode decides whether a command runs | the results and stderr of turns 5, 6, 7 | true: turns 5 and 6 hold `denied_actions: command`; turn 7, the same agent with no `--mode`, answered `DONE 1000`. The stderr of turns 5 and 6 names TWO more ways to allow a command: a rule under `permissions.allow` in a `settings.json`, and the skip-permissions flag |
+| J25 | exit 0 with no output lets the tool run | the tree diff of turn 11 | true: `u9_empty.txt` is on the disk |
+| J26 | five hosts, all through the proxy | `proxy_hosts.log`, the ledger | the log holds 10 `CONNECT` lines to five hosts, all inside 5 seconds; the turn took 11. The file does not say whether they are the `models` call, the turn, or both. The ledger `calls.tsv` holds 10 lines for 11 turns: the proxy turn is not in it (its stream is saved and the results count it) |
+| J27 | an expired copy with no refresh token waits and prints a login address | `free_start_expired_norefresh.err` | true, and one line more than the results quote: `Or, paste the authorization code here and press Enter:`. The CLI then reads a code from standard input — the channel on which a job's prompt arrives |
+| J28 | a read-only program folder stops the update | `ro_copy_update_log.txt` | true for 1.5.18: `not fully accessible (readable: true, writable: false), skipping update` |
+| J29 | "agy loads hooks and agents from the cwd only" | the answers of turns 1 to 3 | true for hooks and agents. NOT true for rules: every answer began with the word a rule file in `.agents` of the worktree ordered, while the guard denies the model every read under `.agents`. So agy itself reads `.agents` of an `--add-dir` root for rule text. Where it draws the line between "text" and "code" is its own choice on this release |
+| J30 | nothing saved is a token | `grep` for the three token prefixes over `out_agy/` and the fixtures | 0 files; the login address is saved with its challenge and state removed |
+
+### 14.3 The ids: which enter the table, and in which class
+
+| Id | In the table | Class | What was seen on 1.5.18 | What it does not cover |
+|---|---|---|---|---|
+| AG-P2 | **no** — it stays listed and pending | — | the program runs from a read-only copy in another folder, and from its own folder bound read-only | the store of G9 was the tool of the pin, and by the owner's decision nothing is pinned (14.5). The half that stays is U9: the program cannot be written from inside the unit |
+| AG-G5 | **yes** (it leaves `pending`), **with another tie** | `turn` | the id the hook sees is in no stream; the stream's `step_index` is the hook's `stepIdx` for 53 of 53 events and the tool names are equal (J23) | "the same id" in its row becomes "the same conversation id, step index and tool name". The exact rule: 14.4, G15. It reads agy's own account of a turn: a tool that ran with no event in the stream would not be seen (none was met) |
+| AG-B2 | **yes** (it stays) | `release` | turns 1 to 3: hooks and an agent committed in `.agents` of the worktree, and such files written after turn 0, did not run, fresh and resumed | rule TEXT of the worktree is loaded (J29, risk A7). A `settings.json` with permission rules in the worktree or in the home was not tried (J24). Nothing asks this at the time of a job |
+| AG-B3 | **yes** (it leaves `pending`) | `pre` | turn 4: a turn works with the guard folder bound read-only; agy writes nothing into its working directory | one turn |
+| AG-R2 | **yes** (it leaves `pending`) | `pre`, and `launch` | turn 8 and two calls with no model: a copy with a valid access token and no refresh token lists the models and runs a turn, and its file is not rewritten; a full copy that expired is refreshed by `agy models` with no repository, the fingerprint of the refresh token the same before and after | a refresh in the middle of a running turn was not measured. The expired copy does not fail at once (14.6) |
+| AG-M3 | **no** | — | the init line says `request-review` for no mode, `plan`, `accept-edits`, the `auto` fall-back and an unknown mode (J22) | it cannot tell the modes apart, so it is not evidence |
+| AG-M4 | **yes** (new row of section 8) | `release` | turns 5 and 6: with `--mode accept-edits` a command of an agent that has a command tool is denied, fresh and resumed; turn 7, the control with no `--mode`: the command RAN | the edit half ("an edit inside the worktree is done") is every other turn of the measure. Nothing asks the mode at the time of a job: A9 |
+
+What older ids mean now (their classes do not change):
+
+- **AG-M2** (`turn`): the stream half is dropped — no field of any stream names a mode but the init line. The stderr half stays and
+  grows: a line that starts `warning: --mode` or `warning: unrecognized --mode` (fixture `agy-mode-fallback.json`) ends the job
+  `coder-boundary`. So does a result with a `denied_actions` that is not empty, and the stderr line `a tool required the "command"
+  permission`: with the coder agent and the guard nothing can reach the permission layer, so either one means the agent file or the
+  guard did not hold and only the mode stopped a command.
+- **AG-G4** (`release`): seen again on 1.5.18 — `deny`, a non-zero exit and a hook killed at its time each stop the tool; exit 0 with
+  no output lets it run (A4). And the hook was called for every tool event of every compared turn (J23).
+- **AG-A1** (`release`): the model's own list is `edit_file`, `manage_task`, `read_file`, `write_file`, fresh and resumed. A resumed
+  turn without `--agent` was not measured on this release; G5 keeps `--agent` on every argv.
+- **AG-P1** (`launch`): see 14.5.
+
+### 14.4 Must-change, as amended
+
+- **G15 (new) — the turn check of AG-G5.** G4 changes: the guard's record holds the conversation id, the step index, the tool name
+  and the decision. After every turn, before anything is committed, coai lays the stream beside the records of that turn:
+  1. every tool event of the stream has exactly ONE record with the same conversation id, step index and tool name;
+  2. an event that ended `DONE` has the decision `allow`; an event whose record says `deny` ended `ERROR`;
+  3. every record has its event; the two counts are equal;
+  4. every tool name is one of `read_file`, `write_file`, `edit_file` (AG-A2).
+  Anything else ends the job `coder-boundary`: an event with no record (the hook was not called, or the handler died — the open door
+  of A4), a record with no event, two records for one step, another name. Without a version gate this is the ONE check that notices,
+  on the day agy ships a release that does not call the hook for some tool. It notices after the tool ran; the unit bounds what that
+  tool could reach.
+- **G10 is on (AG-R2).** The coder's unit gets a copy with the access token only. The refresh is a unit of its own: `agy models`, no
+  model, no repository, no worktree, on a full copy in a folder that no coder unit and no check unit can see, deleted when the unit
+  ends. Before EVERY launch: `expiry` of the coder's copy ≥ now + the unit's `RuntimeMaxSec` + 5 minutes, else no launch. A token
+  lives about one hour, so the turn's deadline for agy has to fit under it, and a fresh copy is made for every turn. A launch that
+  cannot have the margin is refused; it is never started on less.
+- **G7 and AG-B3: the guard folder is bound read-only** in the coder's unit, and stays hidden from the checks (S1).
+- **G6 and G14: `--mode accept-edits` stays on every argv** although nothing can read back that it took (AG-M1 is coai's half,
+  AG-M4 the release fact, AG-M2 the signs after a turn).
+- **G9: no store.** The program folder is bound read-only (U9); that alone made 1.5.18 skip its update inside a unit (J28).
+- **G11: unchanged, E4.** For its design: the five hosts of 14.2 J26 are one call's worth; two of them are not the model's
+  (`lh3.googleusercontent.com`, `play.googleapis.com`), and whether agy works without them was not asked.
+- **The failover** reads as a lost agy sign-in: the stderr text `Authentication required`, or `authentication timed out`, or a result
+  with `authentication failed or timed out` (fixture `agy-copy-expired.json`), and the `Please sign in` text of `agy models`. The
+  margin above is what keeps a job from meeting it; the 60 seconds are otherwise paid on every such start. The stderr of that case
+  holds a login address: it is not copied into an envelope or a notice.
+
+### 14.5 The release — history, by the owner's decision
+
+As for codex (13.5). The entry in `shared/coder-boundary-releases.json` is under the key `measured` of the agy row: `1.5.18`, measured
+2026-11-26, results heading "10. agy 1.5.18 - the open rows of the judgement G1, measured 2026-11-26 after the owner's word (epoch 3 E3
+s6 t7)", judgement heading: the heading of this section, program `agy` sha256
+`7c96ad8c944c1a8d195ca34d2041a3d74d5166c96662b52183b748a3c455d52f`. `releases` stays empty; no code changed.
+
+What the decision leaves of the older text (not rewritten by the judge): **AG-P1** keeps only its help half (the help declares
+`--mode accept-edits`, `--agent`, `--add-dir`, `--conversation` and the stream formats); **G9** keeps the read-only bind and loses the
+store; **A6** ("the cost of the pin") is gone and A10 takes its place; **G13** is 14.1's last paragraph.
+
+### 14.6 The sign-in, as measured
+
+- A refresh did not rotate the token in five observations on two days (fingerprint `5a286b2d` each time). Still not a contract (A5).
+  With G10 it matters MORE, not less: coai now runs a refresh of its own before turns. If the vendor ever rotates, a refresh on
+  coai's copy leaves the owner's real file with a dead token.
+- So coai refreshes only when it must: when the real file's access token already has the margin, the coder's copy is cut from it and
+  no refresh runs.
+- An expired copy with no refresh token turns the start into a login: an address on stderr, 60 seconds of waiting, and a read of an
+  authorization code from standard input (J27). In a job, standard input is the prompt. A code only works for the challenge of that
+  one start, which is printed on stderr and nowhere else, so text of a repository cannot complete a login by itself. It is named as
+  A11 because it is a channel nobody designed for.
+
+### 14.7 Risks for the owner
+
+**A1 to A9 as they stand after the measure.**
+
+- **A1** — smaller with AG-R2: a process in the coder's unit can read an access token of about one hour, not the refresh token. The
+  rest of A1 stands word for word: that no other process runs there rests on agy itself.
+- **A2** — stands until the forwarder of G11 is built (E4). It can be built: agy worked behind a relay in a unit with no network.
+- **A3** — stands. The init line lists the same 60 tool names whatever the agent; the real list is the model's own answer.
+- **A4** — stands, seen again on 1.5.18.
+- **A5** — stands, with more weight (14.6).
+- **A6** — gone with the pin. See A10.
+- **A7** — stands, and is now explained (J29): agy itself loads rule text from `.agents` of the worktree.
+- **A8** — stands.
+- **A9 — now real, not conditional.** The mode a turn ran in cannot be read from anything agy prints. In the default mode a command
+  of an agent that has a command tool RUNS; with `--mode accept-edits` it is denied; the init line is the same for both. A silent
+  fall-back is stopped by the agent file (no command tool) and the guard (denies `run_command`), and is seen afterwards only by the
+  signs of AG-M2.
+
+**New.**
+
+- **A10. No version gate, on a CLI that replaces itself about once a day** (the owner's decision of 2026-11-26). Three releases were
+  seen in two days: 1.5.16, 1.5.17, 1.5.18. This weighs more for agy than C6 does for codex. codex has a sandbox of the operating system
+  that a preflight row TRIES before every job. agy's whole inner boundary is how the program behaves — the hook is called for every
+  tool (AG-G4), the agent file limits the tools (AG-A1), hooks of the worktree do not load (AG-B2), the mode denies a command
+  (AG-M4) — all four are class `release`, none can be asked without a model turn, and the vendor's side also decides (the mode
+  already depends on the account). A job on tomorrow's release runs on four facts about today's. What is left at the time of a
+  job: the unit, the guard's own rows with coai's handler (AG-G1, AG-G2, AG-G3), the argv, and after every turn G15. Inside one job
+  the program cannot change itself (read-only bind), but two turns of one job can run two releases when the owner's own agy updated
+  in between.
+- **A11. An expired copy opens a login prompt on the channel of the job's prompt** (14.6). The margin before every launch is what
+  keeps a job away from it.
+- **A12. coai's refresh unit holds the owner's refresh token.** G10 takes it out of the coder's unit and puts it, for the seconds of
+  one `agy models`, into a unit of coai's own: no model, no repository, no worktree, but the whole network (A2) and the vendor's
+  program. It is the smaller place by far. It is still a place the token was not in before coai, and S1 and S2 have to hold for
+  that folder too.
+- **A13. The guard is tied to the stream by a step index, not by an id** (AG-G5). The index is agy's own counter. A release that
+  numbers steps otherwise makes G15 refuse jobs (closed, as intended); a release whose stream leaves out a tool event would pass it.
+
+### 14.8 For the lead
+
+1. **s6 t2**: the guard's record (G4 with the conversation id and the step index). **s6 t5**: G15, the signs of AG-M2, the failover
+   texts and the two fixtures. **s6 t3**: the read-only guard folder; the copy with no refresh token and the margin before every
+   launch; the agy turn deadline under the life of a token. **s6 t1**: by the owner's decision no release and no hash gates (14.5).
+   **s7 t6**: the refresh unit and where its full copy lives (A12); refresh only when the real file has no margin.
+2. **The owner**: 14.7 before the agy coder becomes launchable (G13). **E4**: G11 can be built; the hosts.
+3. **SPEC**: C6 (the store is gone; the tie of the turn check), C8 item 4 (AG-M4 it is; A9), section H risk 9 (A9 real, A10 to A13).
+4. **d7 of s6 t7**: 11 turns, inside its 12. The ledger file holds 10 lines for the 11 turns (J26). Four predictions differed from
+   what was seen and are reported so (results 10.2).
+5. The judge edited no task file. The files of this commit are this file and the table.
+
+### 14.9 Not measured, and not checked by this judge
+
+- coai's own handler against agy (every row used the shell guard). The multi-edit tool's name at the hook: G3 denies an unknown name,
+  so an edit by that tool fails closed until it is measured.
+- A resumed turn without `--agent`; `--sandbox`; the worktree as the working directory; a `settings.json` with permission rules in
+  the home or in the worktree; a setting that turns the update off.
+- A refresh inside a running turn; the exact life of a fresh access token; a token the vendor rotates.
+- Any connection through the relay but those of J26: a login, an update, plugins, the remote-control host the log names.
+- The rows of 1.5.17 that were not run again on 1.5.18 (the controls of U10, the 35 model-free probes of the unit).
+- Another machine, and any release but 1.5.18.
+- The judge ran no row again, started no vendor program and ran no test.
