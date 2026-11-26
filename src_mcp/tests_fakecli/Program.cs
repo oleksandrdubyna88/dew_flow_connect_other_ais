@@ -222,6 +222,7 @@ if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor" || minimal is
         // cannot reconstruct an argv, a character no argv contains can. The stdin text is
         // recorded as the LAST field, since that is where the prompt lives now.
         LaunchRecord.Write(record, string.Join('\0', args.Append(prompt.StdIn)), read("FAKECLI_RECORD_GATE"));
+        CoaiMcp.FakeCli.CodexVerbs.RecordWhere(record);
     }
 
     var steering = Steering.For(prompt.Text, read, CoaiMcp.FakeCli.ModelMap.For(args, read));

@@ -90,7 +90,7 @@ internal static class RoleStops
             // The stderr of a lost agy sign-in holds a login address (a challenge of that one start): it is not copied into the sentence, the evidence or a notice.
             return vendor == "agy"
                 ? new RoleStop(RoleStopWords.Crash, "the sign-in is lost: agy asked for a new sign-in, and its login address is not copied here", failure.Kind, SkipsVendor: true, Transient: false) { NoEvidence = true }
-                : new RoleStop(RoleStopWords.Crash, "the sign-in is lost: " + said, failure.Kind, SkipsVendor: true, Transient: false);
+                : new RoleStop(RoleStopWords.Crash, "the sign-in is lost: " + said + SignInCure(vendor), failure.Kind, SkipsVendor: true, Transient: false);
         }
 
         return Stopped(failure, said);
@@ -127,7 +127,7 @@ internal static class RoleStops
     internal static bool SignInLost(string vendor, ProcessResult process) => process.ExitCode != 0 && vendor switch
     {
         "claude" => ClaudeSignInLost(process.StdOut),
-        "codex" => CodexSignInLost(process.StdOut),
+        "codex" => CodexSignInLost(process),
         "agy" => AgySignInLost(process),
         _ => false,
     };
@@ -137,9 +137,22 @@ internal static class RoleStops
         && IsTrue(envelope, "is_error")
         && Text(envelope, "result").StartsWith("Not logged in", StringComparison.Ordinal);
 
-    private static bool CodexSignInLost(string stdout) =>
-        Lines(stdout).Any(line => line.TryGetProperty("type", out var type) && type.GetString() is "error" or "turn.failed"
-            && (Text(line, "message") + Text(line.TryGetProperty("error", out var error) && error.ValueKind == JsonValueKind.Object ? error : default, "message")).Contains("401 Unauthorized", StringComparison.Ordinal));
+    /// <summary>
+    /// A codex turn that lost its sign-in (the judgement's section 13.6; epoch 3 E3 s5 t4), by ANY of: a stderr line with <c>Failed to refresh token</c> (the CLI's own line, written before any answer of the vendor, in every network state); a <c>turn.failed</c> message with <c>unauthorized (401)</c>
+    /// (the vendor refused the token); the sentence <c>Your access token could not be refreshed</c> (an override that ANSWERED 400); or the recorded <c>401 Unauthorized</c> of a file with no sign-in. <c>workspace routing discovery failed</c> alone is none of them: with the host network it says the network or the vendor could not be reached, and goes the road of a crash.
+    /// </summary>
+    private static bool CodexSignInLost(ProcessResult process) =>
+        process.StdErr.Contains("Failed to refresh token", StringComparison.Ordinal)
+        || process.StdErr.Contains("Your access token could not be refreshed", StringComparison.Ordinal)
+        || Lines(process.StdOut).Any(line => line.TryGetProperty("type", out var type) && type.GetString() is "error" or "turn.failed" && CodexMessage(line) is var message
+            && (message.Contains("401 Unauthorized", StringComparison.Ordinal) || message.Contains("unauthorized (401)", StringComparison.Ordinal) || message.Contains("Your access token could not be refreshed", StringComparison.Ordinal)));
+
+    private static string CodexMessage(JsonElement line) =>
+        Text(line, "message") + Text(line.TryGetProperty("error", out var error) && error.ValueKind == JsonValueKind.Object ? error : default, "message");
+
+    /// <summary>What the person does about a lost sign-in, for a vendor that has a cure the coder can name: codex refreshes its own file when it is run once by the person (a coder's job holds a copy that is never refreshed).</summary>
+    private static string SignInCure(string vendor) =>
+        vendor == "codex" ? "; run codex once yourself (its own CLI refreshes your own sign-in file), then start the job again — the other models of codex are skipped" : string.Empty;
 
     /// <summary>The recorded texts of a lost agy sign-in (fixtures <c>agy-no-sign-in</c> and <c>agy-copy-expired</c>, and <c>agy models</c>): <c>Authentication required</c>, <c>authentication timed out</c>, <c>Please sign in</c> on stderr, or a result whose error starts <c>authentication failed</c>. Whatever the case of the words.</summary>
     private static bool AgySignInLost(ProcessResult process) =>

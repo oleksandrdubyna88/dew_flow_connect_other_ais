@@ -46,6 +46,21 @@ internal static class CodexVerbs
         return parsed is not null && parsed.TryGetValue(name, out var value) ? value : string.Empty;
     }
 
+    /// <summary>
+    /// Where a codex-shaped launch ran: for a launch that has a <c>CODEX_HOME</c>, one file <c>sidecars/&lt;pid&gt;.where</c> in the record folder holding its working folder and that home, one to a line — what the argv record cannot say, and what a test of "the same folder, the same home" reads. Nothing for a launch with no such variable.
+    /// </summary>
+    public static void RecordWhere(string recordFolder)
+    {
+        if (Environment.GetEnvironmentVariable("CODEX_HOME") is not { Length: > 0 } home)
+        {
+            return;
+        }
+
+        var folder = Path.Combine(recordFolder, "sidecars");
+        Directory.CreateDirectory(folder);
+        File.WriteAllLines(Path.Combine(folder, Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture) + ".where"), [Directory.GetCurrentDirectory(), home]);
+    }
+
     // ---------- sandbox ----------
 
     private static int Sandbox(string[] args)

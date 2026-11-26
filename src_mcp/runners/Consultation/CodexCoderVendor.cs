@@ -75,8 +75,11 @@ internal sealed class CodexCoderVendor : ICoderVendor
 
     public bool PointsAtInstructionBlock => true;
 
-    /// <summary>The turn check of codex (s5 t4): the stream is read there. Until it is built the stream says nothing wrong.</summary>
-    public CoderTurnVerdict CheckTurn(ProcessResult process, string expectedSession) => CodexTurnCheck.Check(process, expectedSession);
+    /// <summary>The turn check of codex without a job (s5 t4): the rollout of CX-T5 cannot be found, which ends the job — a check closed by construction.</summary>
+    public CoderTurnVerdict CheckTurn(ProcessResult process, string expectedSession) => CodexTurnCheck.Check(process, expectedSession, null);
+
+    /// <summary>The turn check of codex (s5 t4): CX-S1, the rule of CX-T4 over the stream, and CX-T5 over the rollout files of the job's <c>CODEX_HOME</c>.</summary>
+    public CoderTurnVerdict CheckTurn(ProcessResult process, string expectedSession, BoundaryJob job) => CodexTurnCheck.Check(process, expectedSession, job);
 
     /// <summary>The preflight of codex (s5 t3): its own rows, one for every id of class pre of its row of the table — <see cref="CodexPreflight"/>.</summary>
     public CoderPreflightPlan? PreflightPlan(BoundaryHost host, BoundaryJob job, CoderProgram program, string windowsCopy, TimeSpan runtimeMax) => CodexPreflight.Plan(host, job, program, windowsCopy);
@@ -215,6 +218,12 @@ internal sealed class CodexCoderVendor : ICoderVendor
         if (RealPath.Lstat(Path.Combine(codexHome, EnvironmentsFile)).Kind != EntryKind.Missing)
         {
             return Refused(request, $"the job's CODEX_HOME holds a file named {EnvironmentsFile}, which would let the CLI run commands outside its sandbox; the codex coder was not launched");
+        }
+
+        // The launch half of CX-T5: a fresh attempt starts with no rollout of an earlier thread of the job (a failed-over model's), so the check after the turn can hold "no file of another thread" as written.
+        if (!CodexSessions.IsResumed(request.Arguments) && CodexSessions.Clear(codexHome) is { Length: > 0 } sessionsProblem)
+        {
+            return Refused(request, sessionsProblem);
         }
 
         var program = CoderProgram.Resolve(request.Executable, host.Path, job);

@@ -40,6 +40,9 @@ public sealed class ARoleStopIsReadFromTheRecordedSignalsTests
     // A crash that also skips the vendor: a lost sign-in (three recorded), and an option the CLI does not know (claude's recorded wording).
     [InlineData("claude-no-sign-in", "crash", true, "the sign-in is lost")]
     [InlineData("codex-no-sign-in", "crash", true, "the sign-in is lost")]
+    // The two recorded refreshes that were due and failed (judgement 13.6): the run with no network and the shape a job meets, the host network. Each says the sign-in is lost and tells the person to run codex once.
+    [InlineData("codex-refresh-failed", "crash", true, "run codex once yourself")]
+    [InlineData("codex-refresh-failed-host-network", "crash", true, "run codex once yourself")]
     [InlineData("agy-no-sign-in", "crash", true, "the sign-in is lost")]
     [InlineData("claude-bad-flag", "crash", true, "unknown option")]
     // A plain crash: the next model of the same vendor may well work.

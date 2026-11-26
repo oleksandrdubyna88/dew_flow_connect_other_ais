@@ -154,7 +154,7 @@ internal sealed class CoderRig : IAsyncDisposable
     /// One launch of the fake coder: the files it writes below its working folder, what it says, how long it waits before it answers, and — a coder that goes where it must not — the ABSOLUTE paths it tries to write (what the OS refuses
     /// goes to its stderr).
     /// </summary>
-    internal sealed record Launch(IReadOnlyDictionary<string, string>? Edits, string Answer, int SleepMs = 0, IReadOnlyList<string>? TryWrites = null, string Session = "", int Exit = 0, string Stderr = "", string Stdout = "", IReadOnlyDictionary<string, string>? HomeFiles = null, IReadOnlyList<string>? Reads = null, bool IgnoreTerm = false);
+    internal sealed record Launch(IReadOnlyDictionary<string, string>? Edits, string Answer, int SleepMs = 0, IReadOnlyList<string>? TryWrites = null, string Session = "", int Exit = 0, string Stderr = "", string Stdout = "", IReadOnlyDictionary<string, string>? HomeFiles = null, IReadOnlyList<string>? Reads = null, bool IgnoreTerm = false, string OutfileText = "");
 
     /// <summary>
     /// What FakeCli does for <paramref name="model"/>, launch by launch (the last repeats). The steering file — the coder's child reads only that — is written again with every call.
@@ -221,6 +221,11 @@ internal sealed class CoderRig : IAsyncDisposable
             entry["stderr"] = launch.Stderr;
         }
 
+        if (launch.OutfileText.Length > 0)
+        {
+            entry["outfileText"] = launch.OutfileText;
+        }
+
         return entry;
     }
 
@@ -260,25 +265,47 @@ internal sealed class CoderRig : IAsyncDisposable
     internal string JobTemp(RoleJobRecord job) => Path.Combine(JobFolder(job), "coder", "tmp");
 
     /// <summary>
+    /// True for a scenario whose coder is codex (epoch 3 E3 s5 t4): its unit covers <c>/tmp</c> with a tmpfs of its own and binds the job's <c>vartmp</c> folder at <c>/var/tmp</c>, so the fake's map and record folder are staged THERE, not in the temp folder claude's unit sees as <c>/tmp</c>.
+    /// </summary>
+    internal bool CodexUnit { get; set; }
+
+    /// <summary>The folder of the job the fake's map and launch records are staged in, as the host sees it.</summary>
+    internal string Scratch(RoleJobRecord job) => CodexUnit ? Path.Combine(JobFolder(job), "coder", "vartmp") : JobTemp(job);
+
+    private string UnitScratch => CodexUnit ? BoundaryUnit.UnitVarTemp : BoundaryUnit.UnitTemp;
+
+    /// <summary>The record folder of the job's launches, as the host sees it: one <c>.argv</c> file for each launch, and the sidecars the fake writes beside them.</summary>
+    internal string LaunchFolder(RoleJobRecord job) => Path.Combine(Scratch(job), "launches");
+
+    /// <summary>What FakeCli does for <paramref name="model"/>, launch by launch, as raw model-map entries (a codex-shaped answer the claude envelope of <see cref="Says(string, Launch[])"/> would spoil). The steering file is written again.</summary>
+    internal CoderRig SaysRaw(string model, params object[] entries)
+    {
+        _inner.Says(model, entries);
+        Steer(_inner.MapFile, _inner.RecordFolder);
+
+        return this;
+    }
+
+    /// <summary>
     /// Makes the job's model map and record folder where the coder's unit will find them: the map is copied into the job's temp folder, and the steering file names the paths AS THE UNIT SEES THEM (<c>/tmp/…</c>). Called by <see cref="RunAsync"/>
     /// just before the job runs; it needs the job id, which a test only has once the job exists.
     /// </summary>
     internal void Stage(RoleJobRecord job)
     {
-        var temp = JobTemp(job);
+        var temp = Scratch(job);
         Directory.CreateDirectory(Path.Combine(temp, "launches"));
         if (File.Exists(_inner.MapFile))
         {
             File.Copy(_inner.MapFile, Path.Combine(temp, "model-map.json"), overwrite: true);
         }
 
-        Steer($"{BoundaryUnit.UnitTemp}/model-map.json", $"{BoundaryUnit.UnitTemp}/launches");
+        Steer($"{UnitScratch}/model-map.json", $"{UnitScratch}/launches");
         _staged.Add(job.JobId);
     }
 
     /// <summary>The argv of every launch of the coder of <paramref name="job"/> — recorded inside its unit, read from the job's temp folder; empty when the job never launched a coder.</summary>
     internal IReadOnlyList<string[]> Launches(RoleJobRecord job) =>
-        Directory.Exists(Path.Combine(JobTemp(job), "launches")) ? RoleFailoverRig.LaunchesIn(Path.Combine(JobTemp(job), "launches")) : [];
+        Directory.Exists(LaunchFolder(job)) ? RoleFailoverRig.LaunchesIn(LaunchFolder(job)) : [];
 
     internal async Task<(int Exit, RoleJobRecord Job)> RunAsync(RoleJobRecord job, Action<string>? boundary = null, TimeProvider? clock = null)
     {
