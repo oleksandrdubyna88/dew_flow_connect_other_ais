@@ -76,7 +76,7 @@ internal sealed class BoundaryBed : IAsyncDisposable
     {
         var jobs = Path.Combine(Parent(), "jobs");
         UseJobRoot(Path.Combine(jobs, "job-a"));
-        var other = Path.Combine(jobs, "job-b", "coder", "home");
+        var other = Path.Combine(jobs, "job-b", "coder", "claude", "home");
         Directory.CreateDirectory(other);
         var secret = Path.Combine(other, "transcript.txt");
         File.WriteAllText(secret, "another job's coder home\n");

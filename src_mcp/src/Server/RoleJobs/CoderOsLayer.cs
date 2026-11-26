@@ -54,7 +54,7 @@ internal sealed class CoderOsLayer(BoundaryJob job, CoderTurns turns, IProcessLa
     public IReadOnlyList<CoderSignInRecord> SignInRecords() =>
         [.. SignIns.All().Where(state => state.Before is not null).Select(state => CoderSignInRecord.Of(state.Vendor, state.Before!, SignInCopy.Snapshot(state.RealFile)))];
 
-    /// <summary>The copies of the job are deleted when its work ends, whatever came of it; the sweep of E2 removes what a killed job left.</summary>
+    /// <summary>The copies of the job are deleted when its work ends, whatever came of it; what a killed runner left goes with the job's folder when the retention removes it (30 days or 200 jobs).</summary>
     public void RemoveSignInCopies()
     {
         foreach (var state in SignIns.All())
@@ -65,7 +65,7 @@ internal sealed class CoderOsLayer(BoundaryJob job, CoderTurns turns, IProcessLa
                 continue;
             }
 
-            CoderSignInCopy.Remove(job.CoderHomeFolder, state.CopyFile);
+            CoderSignInCopy.Remove(state.Home, state.CopyFile);
         }
     }
 
@@ -115,7 +115,7 @@ internal sealed class CoderOsLayer(BoundaryJob job, CoderTurns turns, IProcessLa
         // A copy is deleted. A BIND of the real file (claude's) leaves the empty place it was bound onto in the home when its unit ends, and the next vendor's preflight asks whether that sign-in is visible: the empty place goes too.
         // The copy as the vendor left it (agy rewrites its file during a turn) is read for its token texts BEFORE it is deleted: they stay in the commit search for the rest of the job.
         SignIns.All().FirstOrDefault(state => state.Vendor == vendor.Id)?.Remember();
-        var said = CoderSignInCopy.Remove(job.CoderHomeFolder, vendor.Home(job).SignInFile, mountPointOnly: vendor.SignIn is CoderSignInRecipe.BindRealFile);
+        var said = CoderSignInCopy.Remove(vendor.Home(job).Home, vendor.Home(job).SignInFile, mountPointOnly: vendor.SignIn is CoderSignInRecipe.BindRealFile);
 
         return said.Length == 0 ? string.Empty : $"the sign-in copy of {vendor.Id} could not be removed before the next vendor started: {said}";
     }
@@ -133,7 +133,7 @@ internal sealed class CoderOsLayer(BoundaryJob job, CoderTurns turns, IProcessLa
     {
         if (outcome is CoderTurnOutcome.UnitNotStopped)
         {
-            // A unit that may still be alive is writing in the job's home: its copy is not deleted under it (the sweep of E2 removes it when the unit is gone).
+            // A unit that may still be alive is writing in the job's home: its copy is not deleted under it (it goes with the job's folder when the retention removes it).
             _unitMayBeAlive = true;
         }
 
@@ -232,6 +232,12 @@ internal static class CoderSignInCopy
         if (string.IsNullOrEmpty(folder))
         {
             return $"the sign-in copy at '{copy}' is not in a folder";
+        }
+
+        // The home itself is a real folder at its own real path, or nothing is deleted through it (M8): a coder with a shell can make its home a link.
+        if (Runners.Files.RealPath.Lstat(home).Kind != Runners.Files.EntryKind.Missing && SignInCopy.HomeProblem(home) is { Length: > 0 } homeProblem)
+        {
+            return $"{homeProblem}, so the copy at '{copy}' was not deleted";
         }
 
         // A folder that is not there at all: the vendor never got as far as making it (its CLI was missing, its probe refused), so there is nothing of its to delete (security verify pass 3, S21). Only a MISSING entry is this: a link (even a dangling one) or a file of

@@ -105,7 +105,8 @@ internal static class BoundaryPreflight
         """;
 
     private const string HomeRow = """
-        if [ "$HOME" = "$rh" ]; then row home-is-the-jobs bad "HOME is the real HOME"
+        if [ -L "$HOME" ]; then row home-is-the-jobs bad "HOME is a link, not the job's own folder"
+        elif [ "$HOME" = "$rh" ]; then row home-is-the-jobs bad "HOME is the real HOME"
         elif { true > "$rh/$probe"; } 2>/dev/null; then rm -f "$rh/$probe"; row home-is-the-jobs bad "a file was WRITTEN in the real HOME"
         elif ! { true > "$HOME/$probe"; } 2>/dev/null; then row home-is-the-jobs bad "the job HOME cannot be written"
         else rm -f "$HOME/$probe"; row home-is-the-jobs ok "HOME is the job's own folder and the real HOME cannot be written"; fi

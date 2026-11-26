@@ -1,4 +1,5 @@
 using CoaiMcp.Runners.Consultation;
+using CoaiMcp.Runners.Files;
 using CoaiMcp.Core.Toolchain;
 using CoaiMcp.Runners.Processes;
 
@@ -87,7 +88,22 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
         }
 
         var real = Path.Combine(host.RealHome, recipe.RealRelativePath.Length > 0 ? recipe.RealRelativePath : recipe.RelativePath);
-        var state = states.Of(Vendor.Id, () => new SignInJobState(Vendor.Id, recipe, Vendor.Home(job).SignInFile, real));
+        var state = states.Of(Vendor.Id, () => new SignInJobState(Vendor.Id, recipe, Vendor.Home(job).SignInFile, real, Vendor.Home(job).Home));
+        // The vendor's home is made by the preflight, which runs AFTER this; on the first launch it is not there yet, and the copy needs it. A home that IS there is looked at by the copy itself (a real folder at its own real path, M8).
+        if (RealPath.Lstat(Vendor.Home(job).Home).Kind == EntryKind.Missing)
+        {
+            try
+            {
+                Directory.CreateDirectory(Vendor.Home(job).Home);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                return $"the coder's home for {Vendor.Id} could not be made ({e.GetType().Name}), so the launch was not started";
+            }
+        }
+
+        // A refresh folder a killed runner left (it holds the FULL real file) goes at the next start, before anything else is asked (M10).
+        SignInRefresh.Delete(job.RefreshFolder);
         state.Before ??= SignInCopy.Snapshot(real);
         if (!state.Before.Exists)
         {
@@ -124,7 +140,14 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
                     return $"the sign-in of {Vendor.Id} needs a refresh and its program cannot be run in a unit: {program.Problem}";
                 }
 
-                scratch = job.JobRoot.TrimEnd(Path.DirectorySeparatorChar) + ".refresh";
+                // The full copy lives INSIDE the job folder, so every unit of the job has it under the cover and the retention removes it with the job (the fourth security verify of s7 t6, M10). Where the job folder is its own cover, the folder that holds the jobs is not hidden from
+                // the refresh unit and the full copy would lie under no cover of its own: no refresh is run there.
+                if (job.IsItsOwnCover)
+                {
+                    return $"the sign-in of {Vendor.Id} needs a refresh, and on this machine the folder of the jobs cannot be hidden from the refresh unit, so none is run and the launch was not started; start {Vendor.Id} once yourself (its own CLI refreshes your own file), then start the coder again";
+                }
+
+                scratch = job.RefreshFolder;
                 state.Refreshes++;
                 var unit = BoundaryUnit.UnitName(job, $"refresh{state.Refreshes}");
                 var refreshed = await new SignInRefresh(launcher, host).RunAsync(job, state.RealFile, scratch, recipe.RealRelativePath.Length > 0 ? recipe.RealRelativePath : recipe.RelativePath, program, recipe.RefreshArgv, [new("PATH", BoundaryHost.SystemPath), new("HOME", scratch), new("LANG", "C.UTF-8"), new("TERM", "dumb"), new("NO_COLOR", "1")], unit, Degrade, ct);
@@ -136,7 +159,7 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
                 source = ((SignInRefreshResult.Refreshed)refreshed).File;
             }
 
-            return SignInCopy.Make(recipe, source, state.CopyFile, job.CoderHomeFolder) is SignInCopyResult.Refused refused ? refused.Sentence : string.Empty;
+            return SignInCopy.Make(recipe, source, state.CopyFile, Vendor.Home(job).Home) is SignInCopyResult.Refused refused ? refused.Sentence : string.Empty;
         }
         finally
         {
@@ -209,7 +232,7 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
     private async Task<IReadOnlyList<PreflightRow>> PreflightAsync(BoundaryHost launchHost, BoundaryJob job, CoderProgram program, string windowsCopy, CancellationToken ct)
     {
         var unit = CoderUnit.UnitName(job, "pre");
-        var signIn = launchHost.SignInFile.Length > 0 ? job.CoderSignInFile : string.Empty;
+        var signIn = launchHost.SignInFile.Length > 0 ? Vendor.Home(job).SignInFile : string.Empty;
         IReadOnlyList<string> inner =
             ["/usr/bin/env", "-i", .. Vendor.Environment(host, job).Select(pair => $"{pair.Key}={pair.Value}"), .. BoundaryPreflight.CoderCommand(job, launchHost, program, windowsCopy, signIn)];
         var arguments = BoundaryUnit.Wrap(unit, Vendor.WorkingDirectory(job), [], Vendor.UnitProperties(launchHost, job, program, PreflightBudget + UnitControl.Backstop), inner, Degrade);

@@ -23,8 +23,8 @@ internal abstract record SignInRefreshResult
 /// holds the FULL copy of the real file, so the CLI refreshes it as it does at its own start.
 /// </summary>
 /// <remarks>
-/// <para><b>What the unit does not have:</b> no repository, worktree, main checkout, guard folder, coder home or model — its one writable folder is the scratch home, and the isolation, the hardening and the stop timeout are the family's (<see cref="BoundaryUnit.Isolation"/>, <see cref="BoundaryUnit.Hardening"/>, <c>TimeoutStopSec</c>), with the host network.</para>
-/// <para><b>Where the full copy lives</b> (risk A12): in a folder the caller names that no coder unit and no check unit is given — a sibling of the job folder, under the folder the units cover with an empty tmpfs — and it is deleted when the unit ends, before the coder starts, whatever the unit came to.</para>
+/// <para><b>What the unit does not have:</b> no model, no coder home, no other job's folder (the folder of the jobs is an empty tmpfs; a worktree or main checkout that lies elsewhere is read-only under <c>ProtectSystem=strict</c>, as in every unit of the family, and is not bound) — its one writable folder is the scratch home, and the isolation, the hardening and the stop timeout are the family's (<see cref="BoundaryUnit.Isolation"/>, <see cref="BoundaryUnit.Hardening"/>, <c>TimeoutStopSec</c>), with the host network.</para>
+/// <para><b>Where the full copy lives</b> (risk A12, M10 of the fourth security verify): in <c>&lt;job&gt;/refresh</c>, INSIDE the job folder, so every unit of the job has it under the cover and the retention removes it with the job. It is deleted when the unit ends, before the coder starts, whatever the unit came to; a runner that dies while the unit runs leaves it, and the next start of the job deletes it (<see cref="CoderBoundary"/>), else the retention does. The job folder being its own cover, no refresh is run (the caller refuses).</para>
 /// <para>The caller's real file is never opened for writing: the full copy is a byte copy made through a shared read handle.</para>
 /// </remarks>
 internal sealed class SignInRefresh(IProcessLauncher launcher, BoundaryHost host)
@@ -130,7 +130,7 @@ internal sealed class SignInRefresh(IProcessLauncher launcher, BoundaryHost host
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            // What stays is under the folder the E2 sweep removes with the job.
+            // What stays is inside the job folder: the next start of the job deletes it, else the retention removes it with the job.
         }
     }
 }
