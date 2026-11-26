@@ -1,8 +1,8 @@
 # coai v2 — epoch 3, epic E3 (roles complete: scout, judge, codex + agy coder, review_plan over a feature folder) — epic plan for the gate (generated)
 
-Parent plan: v2/PLAN.md; architecture: v2/architecture/server.md (§2, §8, §10, §19, §20, §23); built on epoch-3 E1 (role jobs, router, failover, work-plan schema) and E2 (the coder, its boundaries, the fix loop, the claude key pool), which is merged into this branch. The full spec is SPEC.md in the same folder; its digest is below, before the YAML files. This is the plan AFTER the plan gate of 2026-11-25 (proceed, 5 findings accepted: section J), after four later changes (section K: the security judgement of s4 t6, the owner's decision 39, the coder comparison of E2 and the owner's decision 40), after the second plan round of 2026-11-26 (proceed, 2 findings, both accepted: section L), after the owner's decisions of 2026-11-26 (section M), and after the re-review round of E3 (coai session `1089eaa8`, read at `c48b3a5c`, `proceed`; 3 findings accepted, 1 rejected: section N) with one more owner decision that came after it (a version of a CLI gates nothing, for any vendor: section M, entry 1.8). Sections J to N are in SPEC_CHANGES.md beside the spec. **The parent plan is stopped for re-review (`## Plan changes` of v2/PLAN.md, eleven entries in its epoch 1), and the owner ordered epoch 3 revised and reviewed whole. The next epoch of the ledger is not open yet; no code of the plan follows before it is.**
+Parent plan: v2/PLAN.md; architecture: v2/architecture/server.md (§2, §8, §10, §19, §20, §23); built on epoch-3 E1 (role jobs, router, failover, work-plan schema) and E2 (the coder, its boundaries, the fix loop, the claude key pool), which is merged into this branch. The full spec is SPEC.md in the same folder; its digest is below, before the YAML files. This is the plan AFTER the plan gate of 2026-11-25 (proceed, 5 findings accepted: section J), after four later changes (section K: the security judgement of s4 t6, the owner's decision 39, the coder comparison of E2 and the owner's decision 40), after the second plan round of 2026-11-26 (proceed, 2 findings, both accepted: section L), after the owner's decisions of 2026-11-26 (section M), and after the re-review round of E3 (coai session `1089eaa8`, read at `c48b3a5c`, `proceed`; 3 findings accepted, 1 rejected: section N) with two owner decisions that came after it: a version of a CLI gates nothing, for any vendor (section M, entry 1.8), and the answer on the addenda 2 and 3 of the judgement (section O, entries 1.15 to 1.17). Sections J to O are in SPEC_CHANGES.md beside the spec. **The parent plan is stopped for re-review (`## Plan changes` of v2/PLAN.md, seventeen entries in its epoch 1; 1.12 to 1.14 are E4's), and the owner ordered epoch 3 revised and reviewed whole. The next epoch of the ledger is not open yet; no code of the plan follows before it is.**
 
-Plan commit: `ca0a3b7d` on `feat/v2-ep3-e3-roles` (the re-review round read `c48b3a5c`, whose plan commit was `66bc4eea`). The approval id of the scope `v2/epoch-3/e3-roles-complete` at `ca0a3b7d` was NOT computed for this bundle: the planner does not build in a tree a coder builds in, and no one-shot mode prints the id. It is the id that `review_plan(featureFolder: "v2", workItem: "v2/epoch-3/e3-roles-complete")` records for that commit. No earlier id holds: packed files changed again (`v2/PLAN.md`, `SPEC.md`, three story files and fourteen task files), and by finding F1 the id of every scope moves once more when the pack format version is built. The pack holds the same 57 files; their sizes sum to 175889 bytes at `ca0a3b7d` (167120 at `66bc4eea`, 158730 at `99fb13fd`, where the pack was 166321 bytes), so the pack stays far under 256 KiB. `SPEC.md` is in the pack (the `spec` file of `epic.yaml`) and is 64534 bytes of the 65536 a file of the pack may hold. This bundle and `SPEC_CHANGES.md` are not in the pack: a free `.md` file beside the nodes is on the line Not sent. `coai-mcp --validate-work v2` at that commit: valid (5 epochs, 24 epics, 37 stories, 134 tasks; limits from the defaults).
+Plan commit: `bafc871e` on `feat/v2-ep3-e3-roles` (the re-review round read `c48b3a5c`, whose plan commit was `66bc4eea`; `ca0a3b7d` folded its findings in). The approval id of the scope `v2/epoch-3/e3-roles-complete` at `bafc871e` was NOT computed for this bundle: the planner does not build in a tree a coder builds in, and no one-shot mode prints the id. It is the id that `review_plan(featureFolder: "v2", workItem: "v2/epoch-3/e3-roles-complete")` records for that commit. No earlier id holds: packed files changed again (`v2/PLAN.md`, `SPEC.md` and thirteen task files since `ca0a3b7d`), and by finding F1 the id of every scope moves once more when the pack format version is built. The pack holds the same 57 files; their sizes sum to 186991 bytes at `bafc871e` (175889 at `ca0a3b7d`, 167120 at `66bc4eea`, 158730 at `99fb13fd`, where the pack was 166321 bytes), so the pack stays far under 256 KiB. `SPEC.md` is in the pack (the `spec` file of `epic.yaml`) and is 64839 bytes of the 65536 a file of the pack may hold. This bundle and `SPEC_CHANGES.md` are not in the pack: a free `.md` file beside the nodes is on the line Not sent. `coai-mcp --validate-work v2` at that commit: valid (5 epochs, 24 epics, 37 stories, 134 tasks; limits from the defaults).
 
 | Story | Tasks | Complexity sum | Depends on |
 |---|---|---|---|
@@ -24,9 +24,10 @@ validates first and packs in topological order.
 **Where the epic stands.** This digest says what the PLAN is; which task is built is in the task results and in git, and the
 re-review sorts that work. At the second plan round: s1 and s2 (scout, judge) and s3 (the plan round over a folder) were built,
 s4 (the codex and agy write boundary) was measured and judged, s5 to s8 were plan only. Since then code of s7 and s8 was
-written on this branch, and the two measures s5 t6 and s6 t7 run on `feat/v2-ep3-e3-measure`. The table of coder boundaries
-holds no history record of a finished measure for codex or agy yet, so the product does not ship either: the judgement tied
-its verdict to the open rows of s5 t6 and s6 t7. That is the judgement's condition, not a version (entry 1.8 below).
+written on this branch, and the two measures s5 t6 and s6 t7 are done on `feat/v2-ep3-e3-measure`, with the addenda 2 and 3 of
+the judgement (commit `d0dca16d`; that branch is not merged into this one yet). Both verdicts are `ship`. Neither vendor is
+launchable: the mark `launchable` of its row is off until the must-changes of its addendum are built and green (entry 1.16
+below).
 
 **The owner's decisions of 2026-11-26 — plan changes; the plan is STOPPED FOR RE-REVIEW** (`SPEC_CHANGES.md` section M; the
 ledger is `## Plan changes` of `v2/PLAN.md`, entries 1.1 to 1.7, all with the source `owner`). The owner on counting them and
@@ -65,7 +66,7 @@ program store (G9), the refusal after a self-update, accepted risk A6, the versi
 the installed CLI what it DOES: a flag its help does not declare, the preflight rows, the launch checks, the turn checks.
 New risk 13: a boundary is measured on one version and runs on every later one; a property of class `release` is assumed
 there, not measured. One reading of the planner's: codex and agy still do not ship before the addendum of their open-rows
-measure, because that is the judgement's condition and not a version. s6 t7 runs on the version installed now (1.5.18)
+measure, because that is the judgement's condition and not a version (replaced the same day by the owner's condition, 1.16). s6 t7 runs on the version installed now (1.5.18)
 inside 30 turns; a row that does not fit is recorded as not measured; d5 (G9) is dropped.
 (1.9, reviewer, F0) The failure record of the instruction step redacts the argv and the last lines of standard error before
 they are recorded or shown: a rule of records, not of the prompt (s7 t3 d7, new; V24).
@@ -79,6 +80,36 @@ Rejected: F2 (this repository has no instruction step until the resolver has a s
 Tasks: still 44. New dod items: s3 t4 d6, s7 t1 d6, s7 t3 d7, s8 t3 d3, s8 t4 d5. To keep SPEC.md under 64 KiB, three records
 of what is done moved word for word into `SPEC_CHANGES.md`: the help table of 2026-11-25, the unknowns of s4, the questions
 to the owner with the answers of 2026-11-25.
+
+**The owner's answer on the addenda 2 and 3 of the judgement (2026-11-26): ledger entries 1.15 to 1.17** (`SPEC_CHANGES.md`
+section O, with the map of the judgement's lists 13.11 and 14.8 on the task files; the planner has the answer from the
+lead, not in the owner's own words).
+(1.15) The risks the addenda added are accepted: codex C5 (the model's JavaScript runs outside the vendor sandbox), C6 (no
+version gate), C7 (an agent's work is not in the stream), C9 (a third program that can run commands as an "environment");
+agy A10 (no version gate on a CLI that replaces itself daily), A11 (an expired copy opens a login prompt on the channel of
+the job's prompt), A12 (coai's refresh unit holds the refresh token), A13 (the guard is tied to the stream by a step
+index). C8 was closed by the measure. A9 is now real, not conditional. G13 is answered.
+(1.16) codex and agy become launchable coders ONLY after the must-changes of the judgements are built and green — G15, the
+exact rule of CX-T4, the `environments.toml` refusal, a refresh before the launch so that an expired copy never reaches a
+start — "not before". Built as a mark, `launchable`, in the vendor's row: off for both, turned on by ONE commit (s5 t5 d4
+for codex, s8 t6 d4 for agy) that names the green suite run it rests on. The history of measures makes nothing launchable.
+This replaces the planner's reading under 1.8. s8 t4 now depends on s8 t6.
+(1.17) The property and behaviour checks stay — an item type of the stream that nobody measured, a flag the help does not
+declare, the preflight rows, the turn checks. One of them may stop a job after a CLI updated itself. That is accepted as
+protection and is not a version gate.
+The must-changes, by task. codex: the argv is CX1 and `-c agents.enabled=false` on every turn (s5 t2 d1); no
+`environments.toml` in the job's `CODEX_HOME` before every launch (s5 t2 d2); the tool list with the job's own model, 11
+names, and `codex doctor` (s5 t3 d3); the three signs of a lost sign-in and the second fixture (s5 t4 d2); the rule of
+CX-T4 — `agent_message`, `command_execution`, `file_change` and `error` pass, an `mcp_tool_call` only for the two list tools
+of the server `codex` with an empty list, a `web_search` and a `collab_tool_call` end the job, and an item of any other type
+ends the job naming the type — and CX-T5, the rollout file (s5 t4 d3); the copy with a placeholder for the refresh token
+(s7 t6). agy: the guard's record holds the conversation id, the step index, the tool and the decision (s6 t2 d3); G15 —
+every tool event has exactly one record with the same three, `DONE` goes with `allow` and `deny` with `ERROR`, the counts
+are equal, the tools are the three file tools — and the signs of AG-M2 (s6 t5 d3); the failover texts (s6 t5 d2); the
+read-only guard folder and program folder (s6 t3 d2); the copy with the access token only, a fresh one for every turn, its
+expiry at least now + `RuntimeMaxSec` + 5 minutes before EVERY launch or no launch, the refresh in a unit of its own and
+only when the real file has no margin (s6 t3 d3, s7 t6). AG-M3 is not built: the init line says the same for every mode.
+Tasks: still 44. New dod items: s5 t5 d4, s8 t6 d4. New scenarios V25 to V29.
 
 **What changed since the gate of 2026-11-25** (section K, now in `SPEC_CHANGES.md`). (1) The security judgement of s4 t6: codex `ship`, agy `ship` with
 a must-change list and accepted risks; four tasks added (s5 t6, s6 t7, s7 t5, s7 t6), one moved (s6 t6 → s8 t6). (2) The owner's
@@ -139,8 +170,8 @@ read-only) or from the vendor's own sandbox seen working inside the unit.
 
 The role refuses in three places. (a) One table, `shared/coder-boundary-releases.json`, filled only from the judgement: per vendor
 the verdict, the ids of the properties the verdict relies on, each with its class, and the HISTORY of its measures (the release,
-the date, the sha256 of the program file, the stream values a turn check compares): information, compared with nothing. A vendor
-ships by its verdict; one whose open rows are not measured to the end has no history record and is not shipped yet. (b) A write
+the date, the sha256 of the program file, the stream values a turn check compares): information, compared with nothing. The history
+makes nothing launchable: a vendor with `ship` is launchable only when the mark `launchable` of its row is on (entry 1.16). (b) A write
 capability per vendor that asks only what the installed CLI declares: every flag of the argv is in its help. The installed version
 is recorded beside the measured one and gates nothing, for claude too; an older, a newer and an unnamed version are launched. (c) The job preflight with no model, inside the exact launch unit, before each job: one
 row for EVERY id of class `pre`; a wrong answer refuses the job. The other classes: `launch` is asked by coai before every launch,
@@ -153,11 +184,11 @@ record into the table; a test holds every record to its results heading and its 
 **The judgement (s4 t6, done; `v2/spikes/RESULTS_codex_agy_write_boundary_judgement.md`).** codex 0.171.0: `ship`. agy 1.5.17: `ship`
 by the owner's decision 39, with a must-change list (G1 to G14) and accepted risks (A1 to A9). The owner accepted A1 to A9 and
 the codex risks C1 to C4 on 2026-11-26, so agy's verdict and history record enter the table on the addendum of s6 t7 with no further word of
-the owner; only a risk an addendum adds or widens goes to the owner. A6 (the cost of the pin) fell away with the pin. The table starts with NO history record for either vendor: one enters only with the addendum that follows
+the owner; only a risk an addendum adds or widens goes to the owner. A6 (the cost of the pin) fell away with the pin. The table started with NO history record for either vendor; one entered with the addendum that followed
 the open-rows measure of s5 t6 (codex: a `spawn_agent` child, the JavaScript of `functions.exec`, a `CODEX_HOME` outside `/tmp`, late
 `.codex` files, the refresh) or s6 t7 (agy: B13 on a resumed turn, the guard folder read-only, the stream beside the hook, the mode
-of the init line, a sign-in copy with no refresh token, agy behind a proxy; the program from a read-only copy is dropped). Until then the
-product does not ship either. What the judgement made of the launch: in the unit of codex and of agy the main checkout and the coder
+of the init line, a sign-in copy with no refresh token, agy behind a proxy; the program from a read-only copy is dropped). Both measures are done and both addenda say `ship`
+(sections 13 and 14 of the judgement at `d0dca16d`); the product still launches neither until its mark is on. What the judgement made of the launch: in the unit of codex and of agy the main checkout and the coder
 root are HIDDEN, not read-only; a sign-in reaches a unit only as a COPY that coai makes for the job, deleted when the job ends, and
 the commit search also looks for the copy's tokens (s7 t6); no CHECK unit sees the coder folder or another job's folder — a build
 step with the host network could read the sign-in copy and rewrite the agy guard before this (measured; s7 t5); the judgement's pin
@@ -179,15 +210,15 @@ sign-in copies) depends only on s4 and is built in every case; s5 (codex) and s6
 Per combination: ship/ship → failover claude → codex → agy, both resumed; ship/refuse → claude → codex, a start on agy refused;
 refuse/ship → claude → agy, a start on codex refused; refuse/refuse → claude models only, no paid coder run. The failover test and
 the route test run all four combinations with an injected table, and the fake CLI records zero launches of a refused vendor. A
-vendor with the verdict `ship` and no history record yet counts as refused; a vendor whose installed version is not the measured
+vendor with the verdict `ship` whose mark `launchable` is off counts as refused; a vendor whose installed version is not the measured
 one is shipped like any other.
 
-The shape: codex turn 0 is `codex exec` with the measured set in the worktree with `CODEX_HOME` in the job folder and the permission
+The shape: codex turn 0 is `codex exec` with the measured set and `-c agents.enabled=false` in the worktree with `CODEX_HOME` in the job folder and the permission
 profile in the job's `config.toml`, written and read back before every turn; a fix turn is `codex exec resume <thread of turn 0>`.
 agy turn 0 runs the coder agent behind the write guard with `--mode accept-edits` and `--agent coai-coder` on every argv; a fix
 turn adds `--conversation <id of turn 0>`. The handle carries the vendor (the seam is story s7). A lost session is a crash: the next
 model starts from the last coai commit. Never in an argv: codex `--dangerously-bypass-approvals-and-sandbox`,
-`-s danger-full-access`, `--trust`, `--ephemeral`; agy `--dangerously-skip-permissions`. Scenarios V1 to V24 (V6 now: an
+`-s danger-full-access`, `--trust`, `--ephemeral`; agy `--dangerously-skip-permissions`. Scenarios V1 to V29 (V6 now: an
 installed version other than the measured one is launched, for each of the three vendors, with both versions in the envelope).
 
 **C7. The coder prompt of each vendor (new; the owner's decision 40).** The evidence: on one task and base codex `gpt-6.1-terra`
@@ -213,11 +244,11 @@ coai's own guard handler (s6 t2, s6 t4); the report through the strict reader �
 a null of a member the status does not use is read as absent (s5 t2 d2); the vendor's prompt as the product renders it, on a
 repository whose instruction file orders a command (s8 t4 d4). The agy mode: the init line said `permission_mode: request-review`
 with `--mode accept-edits` on the argv, and the s4 measure saw `--mode auto` fall back to the default mode, where a command RAN.
-The rule: the argv is a request and proves no mode; s6 t7 d9 measures the init value for each mode, fresh and resumed; when the
-value for `accept-edits` differs from the default mode's and the fall-back's it is stored with the history record of the measure and the turn check
-compares the init line of EVERY turn (id AG-M3; another value or no init line ends the job `coder-boundary`); when the line does
-not tell the modes apart, the mode is a property of class `release` (AG-M4), row B9 rests for a job on the agent file and the guard
-alone, and that is accepted risk A9, which the owner accepted on 2026-11-26. No launch is passed on the flag alone.
+The rule: the argv is a request and proves no mode. Measured by s6 t7 d9 on agy 1.5.18: the init line says `request-review` for
+every mode, so it is not evidence and AG-M3 is not built. The mode is a property of class `release` (AG-M4: with `accept-edits` a
+command is denied, with no `--mode` it RAN); row B9 rests for a job on the agent file and the guard, and the signs of AG-M2 (a
+mode warning on stderr, a `denied_actions` that is not empty, the permission line) are read after every turn. That is accepted
+risk A9, now real and not conditional; the owner accepted it. No launch is passed on the flag alone.
 
 **C9. The instruction step (new; second plan round).** A coder of coai runs no command of its own, so a command that a
 repository's instruction file orders before an edit is run by coai or by nobody, and the coder is told which. `.coai/toolchain.yaml`
@@ -280,12 +311,14 @@ Windows or macOS; `review_feature(featureFolder)`; a document written by the jud
 the model; coai tells the person the class and the line and the person decides. Risk 10, wider: a green check means that the
 head's OWN definitions passed, for a coder of every vendor; the envelope says when a definition changed. Risk 13: a boundary is
 measured on one version and runs on every later one; after an update nothing is measured again, and what holds a job is what coai
-can ask the installed CLI. Risk 7 (an update refuses the vendor) is gone, and accepted risk A6 fell away.
+can ask the installed CLI. Risk 7 (an update refuses the vendor) is gone, and accepted risk A6 fell away. Risk 9 now holds every accepted risk of the
+judgement and its addenda: agy A1 to A13 without A6, codex C1 to C9 without C8, which the measure closed.
 
 **For the owner.** Answered: the credential (decisions 35, 37), agy as a coder (39), the scout and coder lists (35), the prompt of
 each vendor (40; its line was reworded after the second round), and on 2026-11-26 the caps, the accepted risks, the main-AI
-rows, the instruction step, the pack, the checks of E4 and the rule that a version gates nothing (above). Nothing of E3 waits for
-the owner now. What can still come: a vendor an addendum refuses (C5), a risk an addendum adds. For the
+rows, the instruction step, the pack, the checks of E4 and the rule that a version gates nothing (above). On the addenda of the judgement: the new
+risks accepted, the launch condition, the checks that stay (entries 1.15 to 1.17). Nothing of E3 waits for
+the owner now. What can still come: a risk a later addendum adds. For the
 whole review, not the owner's words: the names of the two main-AI rows; that codex and agy do not ship before the addendum of their
 open-rows measure (the planner's reading of entry 1.8); and whether «прокси и адреса не нужны», said of the
 restore step, also means the forwarder of a coder unit (judgement G11) and the measure s6 t7 d6 — they are unchanged here.
@@ -868,9 +901,9 @@ files:
   - src_mcp/tests/ACodexCoderLaunchTests.cs
 dod:
   - id: d1
-    item: "V1 and V2, id CX-C2: the fresh argv is exactly the flag set CX1 that RESULTS_codex_coder.md names, as the addendum of t6 confirmed it, with the worktree as cwd; a fix turn is exec resume with the thread of turn 0 and every flag of the fresh argv that exec resume accepts; none of the never-flags of SPEC section C3 is reachable (a test tries each)"
+    item: "V1 and V2, id CX-C2: the fresh argv is exactly the set of the judgement's addendum 2, section 13.4 (commit d0dca16d on feat/v2-ep3-e3-measure, not merged into this branch yet): the flag set CX1 of RESULTS_codex_coder.md AND -c agents.enabled=false, with --disable hooks, the approval policy never and the web search disabled among them, with the worktree as cwd; a fix turn is exec resume with the thread of turn 0 and EVERY flag of the fresh argv (no flag of the set is dropped on a resumed turn; a test compares the two sets); the rows X9 are closed (section 13.11), so this task waits for no measure; none of the never-flags of SPEC section C3 is reachable (a test tries each)"
   - id: d2
-    item: "id CX-C1, judgement X4 and X8: the job's config.toml (the permission profile coai as default_permissions) is written and read back before EVERY launch, fresh and resumed, and no turn starts without it; the output schema is the flat variant the API accepts, a test holds it equal to coai's report reader, and the reader stays the check of a report; V19: the flat variant makes every member required, and codex then writes a member the status does not use as null (seen in the coder comparison of E2: reason and notes null on an ok report) — only such a null is read as absent, a null of any other member and an unknown member stay errors, and a test gives the reader a report of that shape"
+    item: "id CX-C1, judgement X4 and X8: the job's config.toml (the permission profile coai as default_permissions) is written and read back before EVERY launch, fresh and resumed, and no turn starts without it; the launch half of CX-C1 (section 13.11; a must-change the owner named on 2026-11-26): before EVERY launch, turn 0 and every fix turn, the job's CODEX_HOME holds no file named environments.toml, and one that is there refuses the launch as coder-boundary (a test plants one before turn 0 and one before a fix turn, and FakeCli records no launch); the output schema is the flat variant the API accepts, a test holds it equal to coai's report reader, and the reader stays the check of a report; V19: the flat variant makes every member required, and codex then writes a member the status does not use as null (seen in the coder comparison of E2: reason and notes null on an ok report) — only such a null is read as absent, a null of any other member and an unknown member stay errors, and a test gives the reader a report of that shape"
   - id: d3
     item: "judgement X5, ids U2, U3, U6 and U8: the unit is the measured one — the main checkout and the coder root HIDDEN and not read-only, only <main>/.git and the worktree bound back, the folder of all jobs hidden, the /tmp shape under which codex sandbox starts and the same shape in the preflight and in the launch, a home with CODEX_HOME inside the job's coder folder that holds the sign-in COPY of s7 t6; never RestrictNamespaces, never ReadWritePaths=/mnt"
   - id: d4
@@ -901,7 +934,7 @@ dod:
   - id: d2
     item: "V9, the vendor sandbox, ids CX-V1 to CX-V6, with codex sandbox -P coai and a probe inside that unit: it starts; a write in the worktree works; a write into the job folder and beside the worktree does not reach the disk; the job's auth.json, the job folder and the main checkout cannot be read; a listener that coai opens on the host loopback is reached from the unit and NOT from the sandbox; no foreign process and no canary name in /proc; .git, .agents and .codex of the worktree cannot be written"
   - id: d3
-    item: "V9, the rest: CX-T1 and CX-C3 (codex debug prompt-input with the exact flags gives the measured tool names, also with a stand-in project that holds a .codex/config.toml with an MCP server), CX-C1 (config.toml read back, byte for byte), CX-R2 (the override is in the environment and a connection to its address is REFUSED), CX-R3 (the sign-in is the job's copy, 0600; the real ~/.codex is not there) and, when the table holds it, CX-R4 (the placeholder)"
+    item: "V9, the rest, as the judgement's addendum 2 sets it (sections 13.3 and 13.11, commit d0dca16d on feat/v2-ep3-e3-measure): CX-T1 (codex debug prompt-input with the exact flags AND the job's own model and effort gives exactly the 11 measured names and no name that starts with collaboration., also with a stand-in project that holds a .codex/config.toml with an MCP server; a list that differs refuses the job; the row is NO evidence about the web search — its flag is CX-T6, class release), CX-C4 and CX-C3 (codex doctor --json inside the unit, with the flags of the launch and the job's CODEX_HOME, names the permission profile coai, the filesystem sandbox and the network sandbox restricted, the approval policy Never and mcp servers = 0; the row ignores the exit code, has a deadline, and is red when a field is missing or the report says the config could not be loaded), CX-C1 (config.toml read back, byte for byte), CX-R2 (the override is in the environment and a connection to its address is REFUSED), CX-R3 (the sign-in is the job's copy, 0600; the real ~/.codex is not there) and CX-R4 (the copy holds exactly the placeholder coai wrote in the place of the refresh token; in the table since addendum 2)"
   - id: d4
     item: "a wrong answer of ANY row refuses the job before any launch and names the row; a test holds the pre ids of the table for codex and the rows equal (an id with no row and a row with no id both fail); each row goes red when its property is dropped through the test seam; a row never carries the output of a program it ran, and no row prints a token"
   - id: d5
@@ -928,9 +961,9 @@ dod:
   - id: d1
     item: "FakeCli as codex: red, then green after 2 fix turns; the recorded argv shows exec resume with the thread of turn 0 on both, from the worktree, with the same CODEX_HOME and the same flags; the report is read from the output file; an invalid report gets ONE repair turn in the same thread"
   - id: d2
-    item: "V13: a resume that answers with the recorded no-session text of the fixture ends the attempt as a crash, and the next model starts from the last coai commit; no fix turn starts a new session by itself; the recorded refresh-failed text of the fixture of t6 is a lost sign-in, so the other models of codex are skipped"
+    item: "V13: a resume that answers with the recorded no-session text of the fixture ends the attempt as a crash, and the next model starts from the last coai commit; no fix turn starts a new session by itself; the failover reads a codex turn as a lost sign-in — the other models of codex are skipped and the cure tells the person to run codex once themselves — when ANY of the three signs of the judgement, section 13.6, is there: a stderr line with Failed to refresh token; a turn.failed message with unauthorized (401); the sentence Your access token could not be refreshed; the text workspace routing discovery failed with none of the three is NOT a lost sign-in and goes the road of a crash; both recorded fixtures are played: codex-refresh-failed.json (no network) and codex-refresh-failed-host-network.json (the shape a job meets; on feat/v2-ep3-e3-measure at d0dca16d)"
   - id: d3
-    item: "ids CX-S1 and CX-T4 of the judgement, after EVERY turn, through the turn check of the seam (s7 t2): a thread id that is not the handle's ends the attempt as a crash; an item of the stream that is a tool outside the measured list (an MCP call, a web search, and an agent call when the addendum of t6 says the stream shows it) ends the job coder-boundary, never green, and nothing of that turn is committed; FakeCli plays each case"
+    item: "V26, ids CX-S1, CX-T4 and CX-T5 of the judgement, after EVERY turn, through the turn check of the seam (s7 t2): a thread id that is not the handle's ends the attempt as a crash; the exact rule of CX-T4 (the judgement, section 13.11, commit d0dca16d on feat/v2-ep3-e3-measure; a must-change the owner named on 2026-11-26) over every item of the stream, the started and the completed form alike: agent_message, command_execution, file_change and error items pass; an mcp_tool_call item passes ONLY when its server is exactly codex, its tool is exactly list_mcp_resources or list_mcp_resource_templates, its error is null and the result of a completed item is one text block that parses to an empty resources list or an empty resourceTemplates list; a web_search item and a collab_tool_call item always end the job; an item of ANY other type ends the job, and the reason names the type; CX-T5: after the turn the rollout file of the handle's thread in sessions of the job's CODEX_HOME is read, and no such file, a file that cannot be read, a file of another thread or a call named collaboration.* ends the job; ends the job is coder-boundary, never green, and nothing of that turn is committed; FakeCli plays each case, among them a list that is not empty, another server, a read_mcp_resource that succeeded, a web search and an item type nobody measured; such a check may stop a job after codex updated itself, and the owner accepted that on 2026-11-26 as protection: it is not a version gate"
   - id: d4
     item: "V17, the owner's decision 40 (SPEC section C7; the coder comparison of E2: codex refused the claude prompt twice and was green with two bullets changed): src_mcp/src/Roles/prompts/coder.codex.md is the prompt of the codex coder; it differs from coder.md in the tools bullet (read with read-only shell commands, change with apply_patch; no build, no test and no git command) and in ONE added bullet, which says only what is true (SPEC section C7 item 4, second plan round): the model does not run a command that an instruction file of the repository orders before work, that is no reason to refuse, what coai ran before the turn is at the end of the prompt under the heading Run by coai before your turn, and when that section says nothing was run the model names the command in notes; every other rule of those files still applies; the bullet does not say that coai runs a command or a check that the block does not show; a test holds every other line byte-equal; every tool it names is in the measured list of id CX-T1; the codex fix prompt does not say that the model has no shell; FakeCli as codex records this prompt on turn 0 and the codex fix prompt on a fix turn"
 ```
@@ -948,6 +981,7 @@ parallel: false
 security: true
 files:
   - src_mcp/tests/ACodexCoderBoundaryTests.cs
+  - shared/coder-boundary-releases.json
 dod:
   - id: d1
     item: "V7: the fake coder writes the main checkout, a folder beside the worktree, the .git pointer and the stand-in home: each is stopped by the OS, the job ends coder-boundary and is never green, and the main checkout is byte-equal"
@@ -955,6 +989,8 @@ dod:
     item: "V8: a child command of the fake cannot read a file of the hidden main checkout, the worktree of another job, the folder of another job or the sign-in file of the stand-in REAL home, cannot start a unit and cannot run a Windows .exe; a control unit without the additions shows that the same reads then work"
   - id: d3
     item: "said by a test, so that nobody reads the unit as more than it is: a child command of the fake CAN read the job's own sign-in copy inside the unit — that read is closed by the vendor's sandbox (ids CX-V3 and CX-V5, the preflight rows of t3), which the fake does not have"
+  - id: d4
+    item: "V29, the owner's condition of 2026-11-26 (SPEC section C2 item 1 and section C6; ledger entry 1.16): the codex coder becomes launchable by ONE commit of this task, the last of the story, which turns on the mark launchable of the codex row of shared/coder-boundary-releases.json — and only when the must-changes of the judgement's addendum 2 are built and green: the argv of section 13.4 (t2 d1), the environments.toml refusal (t2 d2), the preflight rows with doctor and the job's own model (t3 d3), the rule of CX-T4 and CX-T5 (t4 d3), the three signs of the failover (t4 d2), the margin CX-R1 (t1 d3) and the copy with the placeholder (s7 t6); the commit names the green run of the whole MCP suite it rests on; before it the product refuses a codex coder by data, and a test holds the mark off until then"
 ```
 
 ## v2/epoch-3/e3-roles-complete/stories/s5-codex-coder/tasks/t6-codex-open-rows-measure/task.yaml
@@ -1044,7 +1080,7 @@ dod:
   - id: d2
     item: "judgement G2, closed by construction: the handler is this binary (--agy-hook), started by the hook's command with exec and nothing else; it writes an explicit decision for EVERY input — an empty input, text that is not JSON and a payload with no Path are each deny; a deadline of its own (5 s, under the hook's 10 s) ends in deny; an exception ends in deny; a decision that cannot be written is a non-zero exit; tests give it each of these and a closed standard output, and NONE ends with exit 0 and no output (the one answer agy 1.5.17 takes as allow)"
   - id: d3
-    item: "judgement G4: the handler appends one record for each decision (the id of the tool call, the tool name, the decision; never the content of a write) to a file of the job's coder folder that is outside the worktree and outside the guard folder; a record that cannot be written is a deny"
+    item: "judgement G4 as G15 amends it (addendum 3, section 14.4, commit d0dca16d on feat/v2-ep3-e3-measure; a must-change the owner named on 2026-11-26): the handler appends one record for each decision — the conversation id, the step index, the tool name and the decision; never the content of a write; the id the hook sees is in no stream, so it is not the tie — to a file of the job's coder folder that is outside the worktree and outside the guard folder; a record that cannot be written is a deny"
   - id: d4
     item: "judgement G5: the agent file is the measured bytes of RESULTS_agy_coder.md section 2 and nothing else; the folder of the guard is the own folder of the job (under the job's coder folder), written and read back before EVERY launch; the read-only agent, hook and folder are byte for byte what they were (their tests pass unchanged)"
   - id: d5
@@ -1070,11 +1106,11 @@ files:
   - src_mcp/tests/AAgyCoderLaunchTests.cs
 dod:
   - id: d1
-    item: "V3 and V4, id AG-M1, judgement G5 and G6: the fresh argv is exactly the flag set AG1 that RESULTS_agy_coder.md names, with --mode accept-edits AND --agent coai-coder on EVERY argv; a fix turn adds --conversation with the id of turn 0 and changes nothing else, so a conversation that agy starts in silence is still the coder agent behind the guard; none of the never-flags of SPEC section C3 is reachable (a test tries each); the argv is a request and proves no mode: the mode a turn ran in is read from its own stream by the turn check of t5 (SPEC section C8), never taken from the flag"
+    item: "V3 and V4, id AG-M1, judgement G5 and G6: the fresh argv is exactly the flag set AG1 that RESULTS_agy_coder.md names, with --mode accept-edits AND --agent coai-coder on EVERY argv; a fix turn adds --conversation with the id of turn 0 and changes nothing else, so a conversation that agy starts in silence is still the coder agent behind the guard; none of the never-flags of SPEC section C3 is reachable (a test tries each); the argv is a request and proves no mode: the mode a turn ran in cannot be read from anything agy prints (AG-M4 is class release; accepted risk A9), the signs of AG-M2 are read by the turn check of t5 (SPEC section C8), and nothing is taken from the flag"
   - id: d2
-    item: "judgement G7, id AG-B1: the working directory of the unit is the guard folder of the job and NEVER the worktree (the seam of s7 t1 carries it; a test fails for an agy launch whose cwd is the worktree); the worktree is the one --add-dir root; the guard folder is bound read-only in the unit when the addendum of t7 holds AG-B3"
+    item: "judgement G7, id AG-B1: the working directory of the unit is the guard folder of the job and NEVER the worktree (the seam of s7 t1 carries it; a test fails for an agy launch whose cwd is the worktree); the worktree is the one --add-dir root; the guard folder is bound read-only in the unit (AG-B3 is in the table since addendum 3 of the judgement), and so is the program folder (U9: G9 keeps the read-only bind and loses the store)"
   - id: d3
-    item: "ids U2, U3, U6 and U8: the unit is the measured one — the main checkout and the coder root HIDDEN and not read-only, only <main>/.git and the worktree bound back, the folder of all jobs hidden, a home of its own in the job's coder folder with the sign-in copy of s7 t6 by the recipe the addendum allows (the copy with no refresh token, a fresh access token before every launch and a turn capped at 45 minutes; or the full copy, read-write); never the real sign-in file"
+    item: "ids U2, U3, U6 and U8: the unit is the measured one — the main checkout and the coder root HIDDEN and not read-only, only <main>/.git and the worktree bound back, the folder of all jobs hidden, a home of its own in the job's coder folder with the sign-in copy of s7 t6 by the recipe of addendum 3 (G10, AG-R2; section 14.4, commit d0dca16d on feat/v2-ep3-e3-measure): the copy holds the access token only; a fresh copy is made for every turn; V28: before EVERY launch its expiry is at least now + the RuntimeMaxSec of the unit + 5 minutes, and a launch that cannot have the margin is refused and never started on less — a must-change the owner named on 2026-11-26, so that an expired copy never reaches a start and never opens the login prompt on the channel of the job's prompt (risk A11); the deadline of an agy turn fits under the life of a token (about one hour); never the full copy and never the real sign-in file in the coder's unit"
   - id: d4
     item: "V14, id U7: only the allow-list reaches the CLI, compared name by name from inside a real unit; agy gets no variable for its sign-in; a canary value is in no recorded argv"
   - id: d5
@@ -1100,13 +1136,13 @@ files:
   - src_mcp/tests/AAgyCoderPreflightTests.cs
 dod:
   - id: d1
-    item: "V9, the unit: before each agy coder job the preflight runs inside the EXACT launch unit (the same property list and the same working directory the launch gets, a test compares the two) and has one row for each of U1 to U9 of the judgement, section 8, for AG-B1 (the working directory is the guard folder, not the worktree), for AG-R1 (the sign-in is the job's copy, 0600, the only sign-in file there; the real ~/.gemini is not there) and, when the table holds them, for AG-B3 (the guard folder cannot be written) and AG-R2 (the copy holds no refresh token and its access token outlives the turn)"
+    item: "V9, the unit: before each agy coder job the preflight runs inside the EXACT launch unit (the same property list and the same working directory the launch gets, a test compares the two) and has one row for each of U1 to U9 of the judgement, section 8, for AG-B1 (the working directory is the guard folder, not the worktree), for AG-R1 (the sign-in is the job's copy, 0600, the only sign-in file there; the real ~/.gemini is not there) for AG-B3 (the guard folder cannot be written) and for AG-R2 (the copy holds no refresh token and its expiry has the margin of t3 d3); both are in the table since addendum 3 of the judgement"
   - id: d2
     item: "V9, the guard, in the same unit, through the EXACT command line of hooks.json run from the guard folder: AG-G1 — one payload for each case of t2 d1, allow for the write inside the worktree and deny for each other (outside, .git, .agents, .codex, a file link out, a folder link out, the guard folder, the sign-in file, a command tool, a network tool, manage_task, an unknown tool, no Path); AG-G2 — an EMPTY input and text that is not JSON are each answered with an explicit deny; AG-G3 — hooks.json, the agent file, the hook script and the guard's own file are read back and are the expected bytes"
   - id: d3
     item: "a wrong answer of ANY row refuses the job before any launch and names the row; a test holds the pre ids of the table for agy and the rows equal (an id with no row and a row with no id both fail); each row goes red when its property or its part of the guard is dropped through the test seam"
   - id: d4
-    item: "the envelope says what the rows do not prove: that agy calls the hook for every tool and that the agent file limits the tools are ids of class release (AG-G4, AG-A1, AG-B2 and, when the table holds it, AG-M4: the mode a turn ran in) — named as measured, with the release they were measured on beside the installed one, never as probed before the job"
+    item: "the envelope says what the rows do not prove: that agy calls the hook for every tool and that the agent file limits the tools are ids of class release (AG-G4, AG-A1, AG-B2 and AG-M4: the mode a turn ran in) — named as measured, with the release they were measured on beside the installed one, never as probed before the job"
   - id: d5
     item: "V10: no user manager, native Windows and macOS are refused before any process starts"
 ```
@@ -1115,7 +1151,7 @@ dod:
 ```yaml
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: t5-agy-fix-turns
-title: "Fix turns with an agy conversation: --conversation with the handle of turn 0, the conversation id compared on every turn, the usage of each turn, and the check of every turn's own stream against the guard's records and against the measured mode value"
+title: "Fix turns with an agy conversation: --conversation with the handle of turn 0, the conversation id compared on every turn, the usage of each turn, and the check of every turn's own stream against the guard's records (G15) and for the signs of a mode that did not hold"
 kind: code
 complexity: 6
 dependsOn:
@@ -1131,9 +1167,9 @@ dod:
   - id: d1
     item: "FakeCli as agy: red, then green after 2 fix turns; the recorded argv shows --conversation with the id of turn 0 on both, with --mode accept-edits and --agent coai-coder, the same home and the same guard folder as cwd; an invalid report gets ONE repair turn in the same conversation"
   - id: d2
-    item: "V13 and judgement G8, id AG-S1: a resumed turn whose conversation id is not the handle's — also with exit code 0 — or whose stderr has the recorded not-found line of the fixture ends the attempt as a crash; the worktree goes back to the last coai commit before the next model starts; no fix turn goes on in a new conversation"
+    item: "V13 and judgement G8, id AG-S1: a resumed turn whose conversation id is not the handle's — also with exit code 0 — or whose stderr has the recorded not-found line of the fixture ends the attempt as a crash; the worktree goes back to the last coai commit before the next model starts; no fix turn goes on in a new conversation; the failover reads as a lost agy sign-in the stderr text Authentication required or authentication timed out, a result with authentication failed or timed out (fixture agy-copy-expired.json) and the Please sign in text of agy models (addendum 3 of the judgement, section 14.4), so the other models of agy are skipped; the stderr of that case holds a login address and is not copied into an envelope or a notice"
   - id: d3
-    item: "ids AG-A2 and AG-M2 and, when the table holds them, AG-G5 and AG-M3, after EVERY turn through the turn check of the seam (s7 t2): a tool event that was not denied and names a tool outside read_file, write_file and edit_file; the recorded mode fall-back line of the fixture of t7 on stderr; a tool event with no guard record of the same id and the decision allow; V18, AG-M3: an init line whose permission_mode is not the value the table holds from the measure, or a stream with no init line — each ends the job coder-boundary, never green, and nothing of that turn is committed; FakeCli plays each case, and one case has the right argv with the wrong init value, so that the flag alone never passes"
+    item: "V25, G15 (addendum 3 of the judgement, section 14.4, commit d0dca16d on feat/v2-ep3-e3-measure; a must-change the owner named on 2026-11-26), ids AG-G5 and AG-A2, after EVERY turn through the turn check of the seam (s7 t2), before anything is committed: coai lays the stream beside the guard's records of that turn — every tool event of the stream has exactly ONE record with the same conversation id, step index and tool name; an event that ended DONE has the decision allow, and an event whose record says deny ended ERROR; every record has its event and the two counts are equal; every tool name is read_file, write_file or edit_file; an event with no record, a record with no event, two records for one step and another tool name each end the job; V18, the signs of AG-M2: a stderr line that starts with warning: --mode or warning: unrecognized --mode (fixture agy-mode-fallback.json), a result with a denied_actions that is not empty, and the stderr line that a tool required the command permission each end the job; AG-M3 is NOT built: the init line says the same for every mode (addendum 3), so nothing compares it; ends the job is coder-boundary, never green, and nothing of that turn is committed; FakeCli plays each case, and one case has the right argv with a mode warning on stderr, so that the flag alone never passes; such a check may stop a job after agy updated itself, and the owner accepted that on 2026-11-26 as protection: it is not a version gate"
   - id: d4
     item: "V16: the usage line of each turn holds that turn only (the sum agy reports is subtracted)"
   - id: d5
@@ -1211,11 +1247,11 @@ dod:
   - id: d2
     item: "V5: a resume handle carries the vendor beside the job and the worktree, and a handle of another vendor, job or worktree is refused before a process starts"
   - id: d3
-    item: "V11, judgement S5: shared/coder-boundary-releases.json is the ONE table: per vendor the verdict (ship or refuse), the ids of the properties the verdict relies on, each with its class (pre, launch, turn or release, judgement section 8), and the HISTORY of its measures (for each one: the release, the date, the heading of its results, the heading of its judgement, the sha256 of the measured program file and the values of the CLI's own stream that a turn check compares); the history is information: no code compares an installed version or hash with it (the owner's decision of 2026-11-26, SPEC section C2); a vendor ships by its verdict; codex and agy start with the verdict ship and NO history record, which says that the open rows of the judgement are not measured to the end, and such a vendor is not shipped until the commit of s5 t6 or s6 t7 writes the addendum's verdict and the record; a vendor that is not shipped is refused with a sentence that names the shipped vendors; a scan test fails when a second place decides it, and its companion proves the scan matches the one place"
+    item: "V11, judgement S5: shared/coder-boundary-releases.json is the ONE table: per vendor the verdict (ship or refuse), the ids of the properties the verdict relies on, each with its class (pre, launch, turn or release, judgement section 8), and the HISTORY of its measures (for each one: the release, the date, the heading of its results, the heading of its judgement, the sha256 of the measured program file and the values of the CLI's own stream that a turn check compares); the history is information: no code compares an installed version or hash with it (the owner's decision of 2026-11-26, SPEC section C2); the history (the key measured; both vendors have a record since the addenda 2 and 3 of the judgement) makes nothing launchable; a vendor is launchable only when its verdict is ship AND its row carries the mark launchable (the owner's condition of 2026-11-26, SPEC section C2 item 1): the mark is off for codex and for agy and is turned on by ONE commit — of s5 t5 for codex, of s8 t6 for agy — after the must-changes of the judgement's addenda are built and green; a vendor that is not launchable is refused with a sentence that names the launchable vendors; a scan test fails when a second place decides it, and its companion proves the scan matches the one place"
   - id: d4
     item: "the table is filled only from the judgement file: a test reads the repository and fails for a history record whose results heading, judgement verdict or sha256 is not there, for a relied-on id that the judgement does not list, and for an id whose class differs from the judgement's"
   - id: d5
-    item: "the seam is built for every combination of verdicts: with both vendors refused, or with no history record for either, the table still refuses them by data and the tests of this task pass"
+    item: "the seam is built for every combination of verdicts: with both vendors refused, or with the mark off for either, the table still refuses them by data and the tests of this task pass"
   - id: d6
     item: "the owner's decision of 2026-11-26, for EVERY vendor (ledger entry 1.8; SPEC section C2 item 2): no CLI version, release, hash or pin of claude, codex or agy refuses a launch, stops a job, or asks for a new measure, a new judgement or a doc rewrite; the floor of ClaudeWriteCapability (2.1.330) stops refusing and becomes the history record of claude in the table, and its cure sentence (update claude) leaves the product; before the change a scan lists every place of src_mcp where a version, a release or a hash of a vendor's CLI decides a refusal or a stop, for the coder, the reviewers and the consultants, and the list is in the task result; each place is changed to record the version instead, or is named in the result with the reason it is not a version gate (a flag that the help does not declare is not one); the scan stays as a test, with a companion that proves it matches something; for each of the three vendors a test launches a version below and a version above the measured one; the envelope and the record of every coder job name the installed version beside the last measured one"
 ```
@@ -1371,13 +1407,13 @@ dod:
   - id: d1
     item: "judgement S3: the sign-in of a vendor that signs in with a file reaches its coder unit only as a COPY that coai makes for the job from the recipe of the seam (which file, which fields are kept): mode 0600 in a 0700 folder of the job's coder home, never a bind of the real file, made for the job and never kept after it — removed when the job ends and by the sweep of E2 after a kill; claude does not change"
   - id: d2
-    item: "the recipe can put a placeholder in the place of a field (codex: the refresh token, when the table holds CX-R4) and can name a refresh step with no model (agy: when the table holds AG-R2): that step runs in a unit of its own with the isolation of the family and the network, a scratch home with the full copy, and NO repository, worktree, guard or model; only the access token and its expiry go into the coder's copy, and the full copy of the step is deleted before the coder starts"
+    item: "the recipe can put a placeholder in the place of a field (codex: the refresh token, CX-R4) and can name a refresh step with no model (agy: AG-R2); both ids are in the table since the addenda 2 and 3 of the judgement (commit d0dca16d on feat/v2-ep3-e3-measure); the step runs in a unit of its own with the isolation of the family and the network, a scratch home with the full copy, and NO repository, worktree, guard or model; the full copy lives in a folder that no coder unit and no check unit can see (risk A12: the rules S1 and S2 hold for that folder too) and is deleted when the unit ends, before the coder starts; only the access token and its expiry go into the coder's copy; the step runs ONLY when the access token of the real file has no margin: when it has, the coder's copy is cut from the real file and no refresh runs (section 14.6)"
   - id: d3
-    item: "the gate of a recipe is asked before EVERY launch (codex: CX-R1 of s5 t1; agy with AG-R2: expiry >= now + the RuntimeMaxSec of the unit + 5 minutes), and a turn of a vendor whose copy cannot be refreshed is capped by the life of its token"
+    item: "the gate of a recipe is asked before EVERY launch (codex: CX-R1 of s5 t1; agy with AG-R2: expiry >= now + the RuntimeMaxSec of the unit + 5 minutes), and a turn of a vendor whose copy cannot be refreshed is capped by the life of its token; a launch that cannot have the margin is refused and never started on less, so that an expired copy never reaches a start (risk A11; a must-change the owner named on 2026-11-26); for agy a fresh copy is made for every turn"
   - id: d4
     item: "the real sign-in file is opened for reading only; its sha256 and modification time before and after the job are in the envelope (a hash, never text), and a difference is a notice to the person"
   - id: d5
-    item: "judgement S4, id K3: the commit search of E2 s7 (staged blobs and names, before and after git add, fail closed) also gets the token texts of the job's copy as they are AFTER the turn; a hit ends the job coder-boundary and nothing is committed; a test plants a token of a made-up copy in a file, in a file name and behind a working-tree-encoding attribute"
+    item: "judgement S4, id K3: the commit search of E2 s7 (staged blobs and names, before and after git add, fail closed) also gets the token texts of the job's copy as they are AFTER the turn (for codex the access token and the id token; its refresh token is a placeholder); a hit ends the job coder-boundary and nothing is committed; a test plants a token of a made-up copy in a file, in a file name and behind a working-tree-encoding attribute"
   - id: d6
     item: "no token text reaches an argv, a log, a notice, the envelope or an exception (the sentinel tests of E2 s7, extended to this type); every test runs with a temp home and never reads a real sign-in"
 ```
@@ -1413,7 +1449,7 @@ dod:
   - id: d1
     item: "V12 with FakeCli and an injected table, once for EACH of the four combinations of ship and refuse for codex and agy: the job fails over through exactly the shipped vendors in route order (both: claude, codex, agy; one: claude and that one; none: the claude models only), each switch from the last coai commit (git status clean) in a new session with a handle bound to the new vendor, one switch line and one notice that names the vendor"
   - id: d2
-    item: "in every combination the fake records ZERO launches of a refused vendor, a model the caller named on a refused vendor is refused before any folder, and no test of a combination needs or waits for a launch of a refused vendor; a vendor with the verdict ship and no history record in the table (its open rows are not measured to the end) is not shipped and counts as refused; a vendor whose installed version is not the measured one is shipped like any other"
+    item: "in every combination the fake records ZERO launches of a refused vendor, a model the caller named on a refused vendor is refused before any folder, and no test of a combination needs or waits for a launch of a refused vendor; a vendor with the verdict ship whose mark launchable is off (the must-changes of its judgement are not built and green yet) counts as refused; a vendor whose installed version is not the measured one is shipped like any other"
   - id: d3
     item: "the unit of each vendor holds only the sign-in copy or the variable name of that vendor (read from the properties of the unit and from inside it); the sign-in copy of the vendor that was left is deleted before the unit of the next vendor starts; the fix-turn count stays the count of the job; a spent quota skips only the other models of that vendor"
 ```
@@ -1472,17 +1508,18 @@ kind: measure
 complexity: 5
 dependsOn:
   - t3-read-only-paid-proof
+  - t6-agy-boundary-scenarios
 parallel: false
 security: true
 files:
   - v2/epoch-3/e3-roles-complete/RESULTS_roles_proof.md
 dod:
   - id: d1
-    item: "for each vendor the table ships: one real coder job with the smallest model of that vendor, on the version that is installed on the day (no version is waited for and none is measured again), on a fixture repository with its own toolchain file and a planted red check; the file holds the job id, the installed version beside the last measured one and the sha256 of the program that ran (history), the session id of turn 0 and of the fix turn (equal, read from the own stream of the CLI), fixTurns, green, the properties of the unit, the preflight rows by id, the answer of the turn check of each turn and the spend"
+    item: "for each vendor that is launchable (the verdict ship and the mark on): one real coder job with the smallest model of that vendor, on the version that is installed on the day (no version is waited for and none is measured again), on a fixture repository with its own toolchain file and a planted red check; the file holds the job id, the installed version beside the last measured one and the sha256 of the program that ran (history), the session id of turn 0 and of the fix turn (equal, read from the own stream of the CLI), fixTurns, green, the properties of the unit, the preflight rows by id, the answer of the turn check of each turn and the spend"
   - id: d2
     item: "the owner's cap of 2026-11-26: t3 and this task together spend at most 30 USD (it replaces 2 runs for a vendor and 0.50 USD here); the task starts from what t3 left and writes down every run and its spend (the count of tokens where the CLI names no cost); the cap is enforced before each call (d5), never by reading the ledger afterwards; a second run of a vendor only after a recorded change; the real sign-in file has the same bytes and modification time before and after, and the job's sign-in copy is gone after the job"
   - id: d3
-    item: "a vendor the table refuses, or does not ship yet (no history record: its open rows are not measured to the end), is written as not run, with the reason, and is not a missing proof; with both so the task is done when the file says so"
+    item: "a vendor the table refuses, or that is not launchable yet (its mark is off: the must-changes of its judgement are not built and green), is written as not run, with the reason, and is not a missing proof; with both so the task is done when the file says so"
   - id: d4
     item: "SPEC section C8, what the coder comparison of E2 could not show (a harness ran codex and agy in the unit shape of the s4 measure; the product ran neither): the job is started by start_role and runs in the unit, with the preflight rows, the turn check and, for agy, the handler of the product; the fixture repository carries an AGENTS.md that orders a command before any edit AND declares that command as its instruction step; the output of the step holds one rule that no file of the worktree holds (a name the new test must carry); turn 0 of each vendor is not refused, and the commit of the job follows that rule (read from the diff) — the effect of the step, not only the absence of a refusal; the file holds the instructions member of the envelope; the file holds the prompt id and the sha256 of the rendered turn-0 prompt, how the strict reader took the report (for codex: its null members), and for agy the permission_mode of the init line of each turn beside the value of the table"
   - id: d5
@@ -1525,6 +1562,7 @@ parallel: false
 security: true
 files:
   - src_mcp/tests/AAgyCoderBoundaryTests.cs
+  - shared/coder-boundary-releases.json
 dod:
   - id: d1
     item: "V7: the fake coder writes the main checkout, a folder beside the worktree, the .git pointer and the stand-in home: each is stopped by the OS, the job ends coder-boundary and is never green, and the main checkout is byte-equal"
@@ -1532,4 +1570,6 @@ dod:
     item: "V8: a child command of the fake cannot read a file of the hidden main checkout, the worktree of another job, the folder of another job or the sign-in files of the stand-in REAL home, cannot start a unit and cannot run a Windows .exe; a control unit without the additions shows that the same reads then work"
   - id: d3
     item: "said by a test, so that nobody reads the unit as more than it is: a child command of the fake CAN read the job's own sign-in copy inside the unit (accepted risk A1 of the judgement) — for agy only the agent file, the guard and the mode keep a command from existing"
+  - id: d4
+    item: "V29, the owner's condition of 2026-11-26 (SPEC section C2 item 1 and section C6; ledger entry 1.16): the agy coder becomes launchable by ONE commit of this task, the last task of agy, which turns on the mark launchable of the agy row of shared/coder-boundary-releases.json — and only when the must-changes of the judgement's addendum 3 are built and green: the guard's record with the conversation id and the step index (s6 t2 d3), G15 and the signs of AG-M2 (s6 t5 d3), the read-only guard folder (s6 t3 d2), the copy with no refresh token, the margin before every launch and the refresh unit (s6 t3 d3, s7 t6), the preflight rows (s6 t4) and the failover texts (s6 t5 d2); the commit names the green run of the whole MCP suite it rests on; before it the product refuses an agy coder by data, and a test holds the mark off until then"
 ```
