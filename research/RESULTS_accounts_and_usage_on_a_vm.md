@@ -444,8 +444,17 @@ strace; 6 processes traced. The programs started:
   reads the command line of another live session. Read-only.
 
 No hook command, no MCP server, no plugin process. Two seconds after the read, the user's processes younger than 40 s
-were the ssh session, its `bash`, `ps` and `awk` only: nothing outlived the read. **Verdict: nothing was started that
-is not Claude Code's own; W7 passes.**
+were the ssh session, its `bash`, `ps` and `awk` only: nothing outlived the read.
+
+**Verdict: W7 passes, on this reading of its criterion.** The criterion fails a read that starts "a program that
+is not Claude Code's own — a hook's command, an MCP server": something the person configured, which Claude Code
+would start for them. Nothing of that kind was started. Three of the traced files are not Claude Code's binary:
+`timeout`, which our own command line starts, and `/bin/sh` with `ps`. **`/bin/sh -c "ps -o command= -p <pid>"` is
+counted as Claude Code's own**: Claude Code itself starts it, as its own call to read a process's command line, and
+no hook, MCP server or plugin of the person asks for it. `rg` is Claude Code's own binary under another name, its
+bundled ripgrep. So "Claude Code's own" here means *started by Claude Code for its own work*, not *a file that
+Claude Code shipped*: `sh` and `ps` are the system's files. This reading is the planner's, written down on
+2026-11-26 after a review of the record asked for it; no decision of the owner on it is recorded here.
 
 ### W6 — what a usage read writes: a fixed number of backups → "every round"
 
@@ -479,4 +488,5 @@ backups are frequent — five in 25 minutes — and every one of these five is l
 
 `cd / && timeout -k 1 25 agy --version </dev/null`: printed `1.5.17`, exit 0, **886 ms**. The program's size was
 278 438 600 bytes before and after; nothing under `~/.gemini` and not the program was newer than a marker made just
-before; no process was left.
+before; no process was left. **So no change was SEEN in the two places that were checked — under `~/.gemini`, and
+the program file. No other place was checked**: this record does not say that `agy --version` writes nothing.
