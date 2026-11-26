@@ -90,6 +90,7 @@ internal sealed class CoderOsLayer(BoundaryJob job, CoderTurns turns, IProcessLa
     {
         CoderTurnOutcome.WriteStopped stopped => new CoderOsStop("write-stopped", stopped.Sentence, Started: true),
         CoderTurnOutcome.Refused refused => new CoderOsStop("boundary-refused", refused.Sentence, Started: false),
+        CoderTurnOutcome.UnitNotStopped notStopped => new CoderOsStop("unit-not-stopped", notStopped.Sentence, Started: true),
         _ => null,
     };
 
@@ -100,6 +101,7 @@ internal sealed class CoderOsLayer(BoundaryJob job, CoderTurns turns, IProcessLa
             CoderTurnOutcome.Finished finished => finished.Evidence,
             CoderTurnOutcome.Failed failed => failed.Evidence,
             CoderTurnOutcome.WriteStopped stopped => stopped.Evidence,
+            CoderTurnOutcome.UnitNotStopped notStopped => notStopped.Evidence,
             _ => null,
         };
         if (seen is not null)
@@ -162,15 +164,12 @@ internal sealed class CoderTurnLauncher(CoderOsLayer layer, string recordTo = ""
         {
             CoderTurnOutcome.Finished finished => finished.Run.Result,
             CoderTurnOutcome.WriteStopped stopped => stopped.Run.Result,
-            CoderTurnOutcome.Failed failed => Failure(failed),
+            CoderTurnOutcome.UnitNotStopped notStopped => notStopped.Run.Result,
+            CoderTurnOutcome.Failed failed => failed.Run.Result,
             CoderTurnOutcome.Refused refused => new ProcessResult(-1, string.Empty, refused.Sentence, TimedOut: false),
             _ => new ProcessResult(-1, string.Empty, "the coder launch ended in a way coai does not know", TimedOut: false),
         };
     }
-
-    /// <summary>A failed turn keeps the process's own result — its exit, its deadline, its cancel — except where the process said exit 0 and the layer did not trust it (a unit that would not stop): that is a failed launch, never an answer.</summary>
-    private static ProcessResult Failure(CoderTurnOutcome.Failed failed) =>
-        failed.Run.Result is { ExitCode: 0, TimedOut: false, Cancelled: false } ? new ProcessResult(1, string.Empty, failed.Sentence, TimedOut: false) : failed.Run.Result;
 }
 
 /// <summary>
@@ -178,7 +177,7 @@ internal sealed class CoderTurnLauncher(CoderOsLayer layer, string recordTo = ""
 /// </summary>
 /// <remarks>
 /// <b>It never follows a link out of the home.</b> The coder writes into its home, and a link it made where the copy's folder is (<c>.codex</c> to a person's real folder) would make a delete through it delete the person's own sign-in. The folder is resolved first; a copy whose
-/// resolved folder is not inside the home's resolved path is not deleted and is said. The vendor's unit has ended and been stopped before this runs (<see cref="RoleFailover"/> calls it between two attempts), so nothing races the resolution.
+/// resolved folder is not inside the home's resolved path is not deleted and is said. This runs only when the vendor's unit was SEEN GONE: <c>CoderTurns.Classify</c> asks <c>BoundaryRun.Gone</c> first, for every exit, and a unit that is still there is <c>CoderTurnOutcome.UnitNotStopped</c>, which <see cref="CoderOsLayer.StopOf"/> turns into the job-ending stop <c>coder-boundary</c> (kind <c>unit-not-stopped</c>) for turn 0, the repair turn and every fix turn — so <see cref="RoleFailover"/>, which calls this between two attempts, is never reached with a live unit, and nothing races the resolution. <c>TimeoutStopSec=10</c> on every unit makes "gone" the usual end of a process that ignores the stop signal (<c>ACoderUnitThatCannotBeStoppedTests</c>, <c>ACoderFailsOverAcrossVendorsTests</c>).
 /// </remarks>
 internal static class CoderSignInCopy
 {

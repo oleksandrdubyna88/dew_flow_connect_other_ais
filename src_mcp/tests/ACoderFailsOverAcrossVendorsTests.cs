@@ -439,6 +439,57 @@ public sealed class ACoderFailsOverAcrossVendorsTests
         rig.Launches(job).Select(ModelOf).Should().Equal("terra");
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task D3_AFirstVendorWhoseUnitIgnoresTheStopSignal_EndsTheJobCoderBoundary_TheNextVendorNeverStarts_AndTheCopyIsNotDeletedUnderALiveUnit(bool inAFixTurn)
+    {
+        var set = Set(Verdict.Ship, Verdict.Ship);
+        await using var rig = await RigAsync(set);
+        rig.AttemptTimeout = TimeSpan.FromSeconds(3);
+        // TimeoutStopSec is taken out of the coder units (the degrade seam), as an old or odd manager would leave them: the unit that ignores the signal is still alive when coai's wait ends.
+        rig.Degrade = arguments => arguments.Any(argument => argument.StartsWith("coai-coder-", StringComparison.Ordinal)) ? WithoutStopTimeout(arguments) : arguments;
+        var job = rig.NewJob(route: ["codex/terra", $"agy/{Argon}"]);
+        var hangs = new CoderRig.Launch(null, CoderRig.Report(), SleepMs: 300_000, IgnoreTerm: true, HomeFiles: CopyOf("codex"));
+        rig.Says("terra", inAFixTurn ? [Writes(CoderRig.Red + " 0", CodexLast, null, CopyOf("codex")), hangs] : [hangs]).Says(Argon, Writes(CoderRig.Green, AgyLast, [CopyPath(rig, job, "codex")], CopyOf("agy")));
+        try
+        {
+            var (_, ended) = await rig.RunAsync(job);
+
+            (ended.State, ended.Stop).Should().Be((RoleJobStates.Failed, RoleStopWords.CoderBoundary), ended.Reason);
+            ended.Reason.Should().Contain("could not be stopped");
+            rig.Launches(job).Select(ModelOf).Should().OnlyContain(model => model == "terra", "the next vendor is never started beside a unit that is still alive");
+            File.ReadAllText(CopyPath(rig, job, "codex")).Should().Contain(CodexCopy, "the copy of the vendor whose unit may still be alive is not deleted: nothing was reached that deletes it");
+            File.Exists(CopyPath(rig, job, "agy")).Should().BeFalse("the next vendor never ran");
+            rig.Rig.SwitchLines().Should().BeEmpty();
+        }
+        finally
+        {
+            foreach (var unit in await rig.UnitsOfAsync(job))
+            {
+                await new ProcessLauncher().RunAsync(new ProcessRequest("systemctl", ["--user", "kill", "--signal=SIGKILL", "--kill-whom=all", unit.Replace(".service", string.Empty, StringComparison.Ordinal) + ".service"], rig.Repo) { Timeout = TimeSpan.FromSeconds(20) });
+            }
+
+            var until = System.Diagnostics.Stopwatch.StartNew();
+            while (until.Elapsed < TimeSpan.FromSeconds(30) && (await rig.UnitsOfAsync(job)).Count > 0)
+            {
+                await Task.Delay(200, TestContext.Current.CancellationToken);
+            }
+        }
+    }
+
+    private static IReadOnlyList<string> WithoutStopTimeout(IReadOnlyList<string> arguments)
+    {
+        var list = arguments.ToList();
+        var at = list.FindIndex(argument => argument.StartsWith("TimeoutStopSec=", StringComparison.Ordinal));
+        if (at > 0)
+        {
+            list.RemoveRange(at - 1, 2);
+        }
+
+        return list;
+    }
+
     [Fact]
     public async Task S21_AVendorThatNeverGotAsFarAsItsFolders_FailsOver_NotCoderBoundary()
     {

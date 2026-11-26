@@ -71,6 +71,9 @@ internal sealed class CoderRig : IAsyncDisposable
     /// <summary>A test-only rewrite of every unit's argument list (a property taken away); null leaves the layer as it ships.</summary>
     internal Func<IReadOnlyList<string>, IReadOnlyList<string>>? Degrade { get; set; }
 
+    /// <summary>How long one coder launch may run before coai stops its unit; thirty seconds unless a test needs a shorter wait.</summary>
+    internal TimeSpan AttemptTimeout { get; set; } = TimeSpan.FromSeconds(30);
+
     /// <summary>The line a fixture file of <see cref="StateFile"/> says to make the test step fail, and the one that lets it pass.</summary>
     internal const string Red = "state: red";
 
@@ -144,7 +147,7 @@ internal sealed class CoderRig : IAsyncDisposable
     /// One launch of the fake coder: the files it writes below its working folder, what it says, how long it waits before it answers, and — a coder that goes where it must not — the ABSOLUTE paths it tries to write (what the OS refuses
     /// goes to its stderr).
     /// </summary>
-    internal sealed record Launch(IReadOnlyDictionary<string, string>? Edits, string Answer, int SleepMs = 0, IReadOnlyList<string>? TryWrites = null, string Session = "", int Exit = 0, string Stderr = "", string Stdout = "", IReadOnlyDictionary<string, string>? HomeFiles = null, IReadOnlyList<string>? Reads = null);
+    internal sealed record Launch(IReadOnlyDictionary<string, string>? Edits, string Answer, int SleepMs = 0, IReadOnlyList<string>? TryWrites = null, string Session = "", int Exit = 0, string Stderr = "", string Stdout = "", IReadOnlyDictionary<string, string>? HomeFiles = null, IReadOnlyList<string>? Reads = null, bool IgnoreTerm = false);
 
     /// <summary>
     /// What FakeCli does for <paramref name="model"/>, launch by launch (the last repeats). The steering file — the coder's child reads only that — is written again with every call.
@@ -192,6 +195,11 @@ internal sealed class CoderRig : IAsyncDisposable
             entry["readFiles"] = launch.Reads;
         }
 
+        if (launch.IgnoreTerm)
+        {
+            entry["ignoreTerm"] = true;
+        }
+
         if (launch.Stderr.Length > 0)
         {
             entry["stderr"] = launch.Stderr;
@@ -218,7 +226,7 @@ internal sealed class CoderRig : IAsyncDisposable
     internal static IReadOnlyDictionary<string, string> Edits(params string[] names) => names.ToDictionary(name => name, name => $"the coder wrote {name}\n");
 
     internal RoleDescriptor Descriptor(Action<string>? boundary = null) =>
-        new(RoleDescriptors.Coder, "the coder", () => new CoderWork { Boundary = boundary, Vendors = Vendors, Turns = TurnsOf(Host, Degrade), AttemptTimeout = TimeSpan.FromSeconds(30), Ladder = [TimeSpan.FromMinutes(5)] }, RouteAs: "coder", Check: CoderTask.Refusal);
+        new(RoleDescriptors.Coder, "the coder", () => new CoderWork { Boundary = boundary, Vendors = Vendors, Turns = TurnsOf(Host, Degrade), AttemptTimeout = AttemptTimeout, Ladder = [TimeSpan.FromMinutes(5)] }, RouteAs: "coder", Check: CoderTask.Refusal);
 
     /// <summary>The job's turns over the stand-in machine: the real boundary code, the host and the degrade this rig holds at the moment the descriptor is made.</summary>
     private static Func<IProcessLauncher, CoderTurns> TurnsOf(BoundaryHost host, Func<IReadOnlyList<string>, IReadOnlyList<string>>? degrade) =>
