@@ -23,6 +23,18 @@
   [SPEC_CHANGES.md](epoch-3/e3-roles-complete/SPEC_CHANGES.md): the judgement of s4 t6, the coder comparison and the two
   findings of the second plan round are named there as plan changes. Whether they become entries is the lead's decision.)
   (What each entry changed in E3: section M of the same file. The re-review record for epoch 2 is written by the re-review.)
+- 1.8 · 2026-11-26 · owner · contract, approach, dod — a new version of a CLI never stops anything, for every vendor (claude, codex and agy alike): no version, release, hash or pin of any vendor's CLI gates, refuses, stops a job or forces a new measure, a new judgement or a doc rewrite; what was measured is history ("measured on X"); a vendor ships by its verdict
+- 1.9 · 2026-11-26 · reviewer · contract, dod — re-review round of epoch 3 E3 (session 1089eaa8, proceed), finding F0: the failure record of the instruction step redacts the argv and the last lines of standard error before they are recorded or shown; a rule of records, not of the prompt
+- 1.10 · 2026-11-26 · reviewer · contract, dod — the same round, finding F1: the approval id covers a pack format version, raised with the outside-dependency change of 1.6; an approval of an older format binds no coder job and the refusal asks for a new plan round; so the approval id of every scope moves once
+- 1.11 · 2026-11-26 · reviewer · contract, dod — the same round, finding F3: the 30 USD cap of E3 s8 t3 and s8 t4 is enforced before each call by a reserved priced worst case, not from the ledger afterwards; the reservation is recorded beside the actual cost
+  (Entry 1.8: the owner's words as the lead gave them — "a new version must never stop anything, or rewrite docs, pins and so
+  on. It came out, it came out. We move on. We can write down for history which version the check was on." — and that it
+  holds for every AI. It takes "only a measured release", the pins and the claude version floor out of the plan.)
+  (Entries 1.9 to 1.11 are the three findings accepted in the re-review round of E3, which read the plan at c48b3a5c. One
+  finding, F2, was rejected: it is the owner's decision of entry 1.4. They are recorded as entries by the lead's order. The
+  rule of plan changes also says that what a re-review changes is the baseline of the next epoch; whoever opens epoch 2
+  decides which reading stands. The plan stays stopped: epoch 2 and its re-review record are not written here.)
+  (What these four changed in E3: sections M and N of the same file.)
 
 ## Goal
 

@@ -1,5 +1,5 @@
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: s7-vendor-seam-rows
-title: "The vendor seam of the coder, built whatever the verdicts are: one table of verdicts and measured releases, the fix loop through the seam, the measured lists in role-defaults, the route by shipped vendor"
+title: "The vendor seam of the coder, built whatever the verdicts are: one table of verdicts and of the history of measures (no version gates anything), the fix loop through the seam, the measured lists in role-defaults, the route by shipped vendor"
 dependsOn:
   - s4-codex-agy-measure
