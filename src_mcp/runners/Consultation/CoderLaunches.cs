@@ -29,9 +29,13 @@ internal static class CoderLaunches
 
     private static readonly StringComparer SamePlace = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
 
-    /// <summary>Why a coder launch must not start — empty when its job, worktree and handle agree.</summary>
-    public static string WhyNot(LaunchConfinement.Coder coder) =>
-        WhyNotHere(coder) is { Length: > 0 } here ? here : WhyNotTheHandle(coder);
+    /// <summary>
+    /// Why a coder launch must not start — empty when its vendor ships and its job, worktree and handle agree. The vendor comes first (epoch 3 E3 s7 t1): a vendor the table does not ship is refused with a sentence that names the shipped ones, before anything
+    /// else is asked of the launch. <paramref name="vendors"/> is the product's set unless a test injects another.
+    /// </summary>
+    internal static string WhyNot(LaunchConfinement.Coder coder, CoderVendorSet? vendors = null) =>
+        (vendors ?? CoderVendors.Shipped).Resolve(coder.Vendor) is CoderVendorResolution.Refused refused ? refused.Sentence
+        : WhyNotHere(coder) is { Length: > 0 } here ? here : WhyNotTheHandle(coder);
 
     /// <summary>Why the job and the worktree of a coder launch are not usable together, whatever its handle — empty when they are.</summary>
     public static string WhyNotHere(LaunchConfinement.Coder coder)
@@ -63,6 +67,11 @@ internal static class CoderLaunches
         if (!ConsultantHandle.IsWellFormed(handle.SessionId))
         {
             return "the coder's resume handle carries a session id that is not well formed — start this job's turn again without a handle";
+        }
+
+        if (!string.Equals(handle.Vendor, coder.Vendor, StringComparison.Ordinal))
+        {
+            return $"the coder's resume handle belongs to the {handle.Vendor} CLI and this launch is for {coder.Vendor}, and a conversation is never continued on another vendor's CLI — resume a job only on the vendor that started it";
         }
 
         if (handle.JobId != coder.JobId)

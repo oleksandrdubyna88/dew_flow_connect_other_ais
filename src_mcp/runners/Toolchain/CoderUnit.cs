@@ -138,6 +138,10 @@ internal static partial class CoderUnit
     /// environment is still exactly the allow-list and the crossed names: the shell's own <c>PWD</c> is unset before the exec.
     /// </remarks>
     internal static IReadOnlyList<string> Inner(BoundaryHost host, BoundaryJob job, CoderProgram program, IReadOnlyList<string> arguments, Crossing crossing) =>
+        Inner(Environment(host, job), program, arguments, crossing);
+
+    /// <summary><see cref="Inner(BoundaryHost, BoundaryJob, CoderProgram, IReadOnlyList{string}, Crossing)"/> with the environment allow-list of the vendor's seam (<see cref="ICoderVendor.Environment"/>) instead of claude's.</summary>
+    internal static IReadOnlyList<string> Inner(IReadOnlyList<KeyValuePair<string, string>> environment, CoderProgram program, IReadOnlyList<string> arguments, Crossing crossing) =>
     [
         "/bin/sh", "-c",
         "for v in $(/usr/bin/env | /usr/bin/sed -n 's/^\\([A-Za-z_][A-Za-z0-9_]*\\)=.*/\\1/p'); do "
@@ -145,7 +149,7 @@ internal static partial class CoderUnit
         + string.Concat(crossing.OnStdin.Select(pair => $"IFS= read -r {pair.Key} || exit 70; export {pair.Key}; "))
         + "unset PWD OLDPWD; exec /usr/bin/env \"$@\"",
         "coai-coder",
-        .. Environment(host, job).Select(pair => $"{pair.Key}={pair.Value}"),
+        .. environment.Select(pair => $"{pair.Key}={pair.Value}"),
         program.Real,
         .. arguments,
     ];
@@ -154,7 +158,14 @@ internal static partial class CoderUnit
     /// <param name="degrade">For a test only: rewrites the finished argument list. Production passes nothing.</param>
     internal static IReadOnlyList<string> Arguments(BoundaryHost host, BoundaryJob job, CoderProgram program, string unit, TimeSpan runtimeMax, IReadOnlyList<string> arguments,
         Crossing crossing, Func<IReadOnlyList<string>, IReadOnlyList<string>>? degrade = null) =>
-        BoundaryUnit.Wrap(unit, job.Tree.Root, [.. crossing.ByName.Select(name => $"--setenv={name}")], Properties(host, job, program, runtimeMax), Inner(host, job, program, arguments, crossing), degrade);
+        Wrapped(unit, job.Tree.Root, Properties(host, job, program, runtimeMax), Environment(host, job), program, arguments, crossing, degrade);
+
+    /// <summary>
+    /// The argv of <c>systemd-run</c> for one launch of ANY vendor (epoch 3 E3 s7 t1): the properties, the working directory and the environment are the vendor's (<see cref="ICoderVendor"/>), the way the unit is wrapped and the secrets cross is the one road.
+    /// </summary>
+    internal static IReadOnlyList<string> Wrapped(string unit, string workingDirectory, IReadOnlyList<string> properties, IReadOnlyList<KeyValuePair<string, string>> environment, CoderProgram program, IReadOnlyList<string> arguments,
+        Crossing crossing, Func<IReadOnlyList<string>, IReadOnlyList<string>>? degrade = null) =>
+        BoundaryUnit.Wrap(unit, workingDirectory, [.. crossing.ByName.Select(name => $"--setenv={name}")], properties, Inner(environment, program, arguments, crossing), degrade);
 
     /// <summary>The variable the claude CLI reads a pool key from; the inner shell reads it from the first line of stdin and exports it itself (epoch 3 E2 s7, second judgement), and it is always the first line (<see cref="Cross"/>).</summary>
     internal const string ClaudeKeyVariable = "CLAUDE_CODE_OAUTH_TOKEN";

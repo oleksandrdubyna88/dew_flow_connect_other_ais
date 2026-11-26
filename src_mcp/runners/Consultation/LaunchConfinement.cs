@@ -40,6 +40,9 @@ public abstract record LaunchConfinement
 
         /// <summary>The id of the pool key this turn runs on (epoch 3 E2 s7); empty when the launch carries none. A resume handle made for another key is refused (<see cref="CoderLaunches.WhyNot"/>).</summary>
         public string KeyId { get; init; } = string.Empty;
+
+        /// <summary>The vendor whose CLI this coder turn runs on (epoch 3 E3 s7 t1): the id of a <see cref="ICoderVendor"/>. claude by default; a resume handle made for another vendor is refused (<see cref="CoderLaunches.WhyNot"/>).</summary>
+        public string Vendor { get; init; } = CoderBoundaryTable.Claude;
     }
 
     public static LaunchConfinement AsShipped { get; } = new Shipped();

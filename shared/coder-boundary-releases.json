@@ -1,0 +1,99 @@
+{
+ "version": 1,
+ "note": "The ONE table of the codex and agy coder verdicts (epoch 3 E3 s7 t1, judgement S5). Filled only from the judgement file; a release is added only by the commit of s5 t6 (codex) or s6 t7 (agy), with its results heading, its judgement heading, the sha256 of the measured program file and the values of the CLI own stream that a turn check compares. claude is not here: it keeps the floor of ClaudeWriteCapability.",
+ "judgement": "v2/spikes/RESULTS_codex_agy_write_boundary_judgement.md",
+ "shared": [
+  { "id": "U1", "class": "pre" },
+  { "id": "U2", "class": "pre" },
+  { "id": "U3", "class": "pre" },
+  { "id": "U4", "class": "pre" },
+  { "id": "U5", "class": "pre" },
+  { "id": "U6", "class": "pre" },
+  { "id": "U7", "class": "pre" },
+  { "id": "U8", "class": "pre" },
+  { "id": "U9", "class": "pre" },
+  { "id": "K1", "class": "pre" },
+  { "id": "K2", "class": "pre" },
+  { "id": "K3", "class": "turn" }
+ ],
+ "vendors": [
+  {
+   "id": "codex",
+   "verdict": "ship",
+   "results": "v2/spikes/RESULTS_codex_coder.md",
+   "releases": [],
+   "properties": [
+    { "id": "CX-P1", "class": "launch" },
+    { "id": "CX-V1", "class": "pre" },
+    { "id": "CX-V2", "class": "pre" },
+    { "id": "CX-V3", "class": "pre" },
+    { "id": "CX-V4", "class": "pre" },
+    { "id": "CX-V5", "class": "pre" },
+    { "id": "CX-V6", "class": "pre" },
+    { "id": "CX-T1", "class": "pre" },
+    { "id": "CX-T2", "class": "release" },
+    { "id": "CX-T3", "class": "release" },
+    { "id": "CX-T4", "class": "turn" },
+    {
+     "id": "CX-C1",
+     "class": "pre",
+     "also": [
+      "launch"
+     ]
+    },
+    { "id": "CX-C2", "class": "launch" },
+    { "id": "CX-C3", "class": "pre" },
+    { "id": "CX-C4", "class": "release" },
+    { "id": "CX-R1", "class": "launch" },
+    { "id": "CX-R2", "class": "pre" },
+    { "id": "CX-R3", "class": "pre" },
+    { "id": "CX-S1", "class": "turn" },
+    { "id": "CX-S2", "class": "launch" },
+    { "id": "CX-S3", "class": "turn" }
+   ],
+   "pending": [
+    "CX-R4"
+   ]
+  },
+  {
+   "id": "agy",
+   "verdict": "ship",
+   "results": "v2/spikes/RESULTS_agy_coder.md",
+   "releases": [],
+   "properties": [
+    { "id": "AG-P1", "class": "launch" },
+    { "id": "AG-G1", "class": "pre" },
+    { "id": "AG-G2", "class": "pre" },
+    {
+     "id": "AG-G3",
+     "class": "pre",
+     "also": [
+      "launch"
+     ]
+    },
+    { "id": "AG-G4", "class": "release" },
+    { "id": "AG-A1", "class": "release" },
+    { "id": "AG-A2", "class": "turn" },
+    { "id": "AG-M1", "class": "launch" },
+    { "id": "AG-M2", "class": "turn" },
+    {
+     "id": "AG-B1",
+     "class": "pre",
+     "also": [
+      "launch"
+     ]
+    },
+    { "id": "AG-B2", "class": "release" },
+    { "id": "AG-R1", "class": "pre" },
+    { "id": "AG-S1", "class": "turn" },
+    { "id": "AG-S2", "class": "launch" }
+   ],
+   "pending": [
+    "AG-P2",
+    "AG-G5",
+    "AG-B3",
+    "AG-R2"
+   ]
+  }
+ ]
+}

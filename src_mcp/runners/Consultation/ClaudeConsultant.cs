@@ -49,9 +49,6 @@ public sealed class ClaudeConsultant(IReviewerRuntime inner, string vendor = "cl
     /// </summary>
     private static readonly string ReadTools = string.Join(',', ConfinementPlanner.ClaudeDiskTools);
 
-    /// <summary>The coder's tools: the read tools and the two that write — still no shell (R11), ONE argument, comma-joined, the form the probe measured.</summary>
-    private static readonly string WriteTools = string.Join(',', ConfinementPlanner.ClaudeWriteTools);
-
     public string Vendor => vendor;
 
     public ConsultantMemory Memory => new ConsultantMemory.VendorRemembers();
@@ -118,18 +115,18 @@ public sealed class ClaudeConsultant(IReviewerRuntime inner, string vendor = "cl
             return new ConsultantPreparation.Refused(new ConsultFailure.LaunchRefused(why));
         }
 
-        var asked = await ClaudeWriteCapability.ProbeAsync(launcher, Executable(launch.Settings), launch.RepoPath, ct);
+        var asked = await CoderVendors.Claude.ProbeAsync(launcher, Executable(launch.Settings), launch.RepoPath, ct);
 
         return asked switch
         {
-            ClaudeWriteCapability.Ready ready => new ConsultantPreparation.Ready(
+            CoderCapability.Ready ready => new ConsultantPreparation.Ready(
                 launch with { Settings = launch.Settings with { ClaudeCli = ClaudeCapability.WithRestricted } },
                 ClaudeCapability.WithRestricted.Qualifier,
                 $"coder write launch: claude {ready.Version} declares --restricted, --permission-prompts and acceptEdits")
             { CliVersion = ready.Version },
-            ClaudeWriteCapability.Refused { CouldNotStart: true } refused =>
+            CoderCapability.Refused { CouldNotStart: true } refused =>
                 new ConsultantPreparation.Refused(new ConsultFailure.CliNotFound(refused.Said, ConsultFailures.InstallCureFor("claude"))),
-            ClaudeWriteCapability.Refused refused => new ConsultantPreparation.Refused(new ConsultFailure.VendorRefused(refused.Said, refused.Cure)),
+            CoderCapability.Refused refused => new ConsultantPreparation.Refused(new ConsultFailure.VendorRefused(refused.Said, refused.Cure)),
             _ => throw new InvalidOperationException("a write capability is ready or refused"),
         };
     }
@@ -148,20 +145,8 @@ public sealed class ClaudeConsultant(IReviewerRuntime inner, string vendor = "cl
             throw new ArgumentException("a coder launch needs a claude whose help declares --restricted, and is never built without it", nameof(launch));
         }
 
-        var request = Request(launch,
-            [
-                "-p",
-                "--output-format", "json",
-                ClaudeCapability.RestrictedFlag,
-                "--tools", WriteTools,
-                "--permission-mode", ClaudeWriteCapability.AcceptEdits,
-                ClaudeWriteCapability.PermissionPromptsFlag, "none",
-                NoMcpServers.ClaudeFlag,
-                "--add-dir", coder.Worktree,
-                .. coder.Resume.IsNone ? [] : (string[])["--resume", coder.Resume.SessionId],
-                .. launch.Settings.Model.Length > 0 ? (string[])["--model", launch.Settings.Model] : [],
-            ],
-            coder.Worktree);
+        // The argv is the seam's (epoch 3 E3 s7 t1): this adapter only adds what every claude launch carries (the executable, the environment of the request).
+        var request = Request(launch, [.. coder.Resume.IsNone ? CoderVendors.Claude.FreshArgv(launch.Settings.Model, coder.Worktree) : CoderVendors.Claude.ResumedArgv(launch.Settings.Model, coder.Worktree, coder.Resume.SessionId)], coder.Worktree);
 
         return new ReviewerInvocation(vendor, CoderLaunches.Role, CoderLaunches.ForCoder(request), string.Empty, inner, Model: launch.Settings.Model);
     }

@@ -1,3 +1,4 @@
+using CoaiMcp.Runners.Consultation;
 using CoaiMcp.Core.Toolchain;
 using CoaiMcp.Runners.Processes;
 
@@ -25,6 +26,9 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
 
     private readonly UnitControl _units = new(launcher, host);
 
+    /// <summary>The seam of the vendor this boundary bounds (epoch 3 E3 s7 t1): its unit's properties, working directory, environment, home and program. claude by default, which is what the boundary was before the seam.</summary>
+    internal ICoderVendor Vendor { get; init; } = CoderVendors.Claude;
+
     /// <summary>For a test only: rewrites the finished <c>systemd-run</c> argument list of every unit this boundary starts, so a RED can drop one property and see the preflight refuse. Production never sets it.</summary>
     internal Func<IReadOnlyList<string>, IReadOnlyList<string>>? Degrade { get; init; }
 
@@ -36,9 +40,9 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
     /// <summary>The properties a coder launch of this job runs with — the list the result records. Empty when the program cannot be given to a unit. <paramref name="withKey"/>: the launch carries a pool key, so no sign-in file is bound and the key folder is hidden.</summary>
     public IReadOnlyList<string> PropertiesFor(BoundaryJob job, string executable, TimeSpan runtimeMax, bool withKey = false)
     {
-        var program = CoderProgram.Resolve(executable, host.Path, job);
+        var program = Vendor.Program(executable, host.Path, job);
 
-        return program.Problem.Length > 0 ? [] : CoderUnit.Properties(HostFor(withKey), job, program, runtimeMax);
+        return program.Problem.Length > 0 ? [] : Vendor.UnitProperties(HostFor(withKey), job, program, runtimeMax);
     }
 
     /// <summary>
@@ -77,13 +81,13 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
             return Refuse(early, []);
         }
 
-        var program = CoderProgram.Resolve(executable, host.Path, job);
+        var program = Vendor.Program(executable, host.Path, job);
         if (program.Problem.Length > 0)
         {
             return Refuse($"The coder was not launched: {program.Problem}.", []);
         }
 
-        var prepared = BoundaryFolders.Prepare(host, job, job.CoderFolders, job.CoderTempFolder, job.CoderVarTempFolder);
+        var prepared = BoundaryFolders.Prepare(host, job, Vendor.Home(job).Folders, job.CoderTempFolder, job.CoderVarTempFolder);
         if (prepared.Sentence.Length > 0)
         {
             return Refuse(prepared.Sentence, []);
@@ -102,7 +106,7 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
     private async Task<BoundaryAdmission> AskAsync(BoundaryHost launchHost, BoundaryJob job, CoderProgram program, string windowsCopy, CancellationToken ct)
     {
         var rows = await PreflightAsync(launchHost, job, program, windowsCopy, ct);
-        var record = new BoundaryRecord(BoundaryRecord.UnitBoundary, CoderUnit.Properties(launchHost, job, program, PreflightBudget + UnitControl.Backstop), "host", NetworkReason, rows);
+        var record = new BoundaryRecord(BoundaryRecord.UnitBoundary, Vendor.UnitProperties(launchHost, job, program, PreflightBudget + UnitControl.Backstop), "host", NetworkReason, rows);
         var bad = rows.FirstOrDefault(row => !row.Held);
 
         return bad is not null
@@ -118,8 +122,8 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
         var unit = CoderUnit.UnitName(job, "pre");
         var signIn = launchHost.SignInFile.Length > 0 ? job.CoderSignInFile : string.Empty;
         IReadOnlyList<string> inner =
-            ["/usr/bin/env", "-i", .. CoderUnit.Environment(host, job).Select(pair => $"{pair.Key}={pair.Value}"), .. BoundaryPreflight.CoderCommand(job, launchHost, program, windowsCopy, signIn)];
-        var arguments = BoundaryUnit.Wrap(unit, job.Tree.Root, [], CoderUnit.Properties(launchHost, job, program, PreflightBudget + UnitControl.Backstop), inner, Degrade);
+            ["/usr/bin/env", "-i", .. Vendor.Environment(host, job).Select(pair => $"{pair.Key}={pair.Value}"), .. BoundaryPreflight.CoderCommand(job, launchHost, program, windowsCopy, signIn)];
+        var arguments = BoundaryUnit.Wrap(unit, Vendor.WorkingDirectory(job), [], Vendor.UnitProperties(launchHost, job, program, PreflightBudget + UnitControl.Backstop), inner, Degrade);
         var started = await _units.StartAsync(new ProcessRequest(host.SystemdRun, arguments, job.Tree.Root)
         {
             Timeout = PreflightBudget,
@@ -153,7 +157,7 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
             throw new ArgumentException("the unit's part name is 1 to 16 characters of a-z, 0-9 and '-', starting with a letter or a digit", nameof(part));
         }
 
-        var program = CoderProgram.Resolve(request.Executable, host.Path, job);
+        var program = Vendor.Program(request.Executable, host.Path, job);
         if (program.Problem.Length > 0)
         {
             throw new InvalidOperationException($"the coder's program cannot be run in the unit: {program.Problem}");
@@ -167,10 +171,11 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
         var sent = WithSecretsOnStdin(request, crossing);
         var unit = CoderUnit.UnitName(job, part);
         var launchHost = HostFor(keyed);
-        var record = seen with { Properties = CoderUnit.Properties(launchHost, job, program, request.Timeout + UnitControl.Backstop) };
+        var properties = Vendor.UnitProperties(launchHost, job, program, request.Timeout + UnitControl.Backstop);
+        var record = seen with { Properties = properties };
         try
         {
-            var arguments = CoderUnit.Arguments(launchHost, job, program, unit, request.Timeout + UnitControl.Backstop, request.Arguments, crossing, Degrade);
+            var arguments = CoderUnit.Wrapped(unit, Vendor.WorkingDirectory(job), properties, Vendor.Environment(launchHost, job), program, request.Arguments, crossing, Degrade);
             var started = await _units.StartAsync(sent with
             {
                 Executable = host.SystemdRun,

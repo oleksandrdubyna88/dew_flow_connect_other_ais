@@ -36,7 +36,7 @@ public sealed class CoderTurns(CoderBoundary boundary, FilesystemInvariant invar
     /// <param name="ct">The caller's cancel.</param>
     public async Task<CoderTurnOutcome> RunAsync(BoundaryJob job, ProcessRequest request, string part, CancellationToken ct = default)
     {
-        if (WrongWorktree(job, request) is { Length: > 0 } wrong)
+        if (WrongWorktree(boundary.Vendor.WorkingDirectory(job), job, request) is { Length: > 0 } wrong)
         {
             return new CoderTurnOutcome.Refused(wrong, new BoundaryRecord(BoundaryRecord.UnitBoundary, [], "host", CoderBoundary.NetworkReason, []));
         }
@@ -55,14 +55,16 @@ public sealed class CoderTurns(CoderBoundary boundary, FilesystemInvariant invar
         return Classify(run, evidence);
     }
 
-    /// <summary>The sentence that says the launch does not stand in the worktree of the job, or empty. The unit starts in the job's worktree whatever the request says, so a request for another folder is refused rather than quietly moved.</summary>
-    private static string WrongWorktree(BoundaryJob job, ProcessRequest request)
+    /// <summary>The sentence that says the launch does not stand where the vendor's unit starts (the job's worktree for claude; <see cref="ICoderVendor.WorkingDirectory"/>), or empty. The unit starts there whatever the request says, so a request for another folder is refused rather than quietly moved.</summary>
+    private static string WrongWorktree(string expected, BoundaryJob job, ProcessRequest request)
     {
         var asked = RealPath.Resolve(request.WorkingDirectory);
 
-        return asked.Ok && string.Equals(asked.Path, job.Tree.Root, StringComparison.Ordinal)
+        return asked.Ok && string.Equals(asked.Path, expected, StringComparison.Ordinal)
             ? string.Empty
-            : $"The coder launch stands in '{request.WorkingDirectory}', which is not the worktree of job {job.JobId} ({job.Tree.Root}); it was not started.";
+            : expected == job.Tree.Root
+                ? $"The coder launch stands in '{request.WorkingDirectory}', which is not the worktree of job {job.JobId} ({job.Tree.Root}); it was not started."
+                : $"The coder launch stands in '{request.WorkingDirectory}', which is not where the coder of job {job.JobId} starts ({expected}); it was not started.";
     }
 
     private sealed record Snapped(FilesystemSnapshot? Snapshot, string Why);
