@@ -5,7 +5,7 @@
 > **Taken up, 2026-11-25, not built:** the revision for epoch 3 of
 > [the accounts plan](PLAN_the_terminal_panel_shows_the_accounts_and_their_usage.md) takes it into its § 3 (story
 > E2.S1): the session road asks the one door before EVERY spawn of a press, and a later spawn never asks a person.
-> That revision is not approved yet. This file is closed by the stories document of E2; until then it stays the
+> The owner approved that revision as epoch 3 on 2026-11-26. This file is closed by the stories document of E2; until then it stays the
 > record of the finding.
 
 ## The finding

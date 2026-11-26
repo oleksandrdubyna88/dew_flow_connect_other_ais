@@ -5,8 +5,8 @@
 > **Taken up, 2026-11-25, not built:** the revision for epoch 3 of
 > [the accounts plan](PLAN_the_terminal_panel_shows_the_accounts_and_their_usage.md) decides it in its § 4, as part
 > of revision 2 of the script (story E3.S2): the mode `claude-usage` reads Claude only, each mode's worst path is
-> counted with its KILL seconds, and a test holds it at least 2 s under the ceiling. That revision is not approved
-> yet. This file is closed by the stories document of E3; until then it stays the record of the finding.
+> counted with its KILL seconds, and a test holds it at least 2 s under the ceiling. The owner approved that revision as
+> epoch 3 on 2026-11-26. This file is closed by the stories document of E3; until then it stays the record of the finding.
 
 ## The finding
 

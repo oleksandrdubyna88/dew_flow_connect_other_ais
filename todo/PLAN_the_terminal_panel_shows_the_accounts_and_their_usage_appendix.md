@@ -1,7 +1,7 @@
 # PLAN — appendix to "the terminal panel shows the AI accounts of the open ssh hosts, and their usage"
 
-> Status: **appendix of an open plan, in two parts (2026-11-19 and 2026-11-25); its plan is stopped at entries 2.2
-> and 2.3 and revised for epoch 3, not approved.** It belongs to
+> Status: **appendix of an open plan, in two parts (2026-11-19 and 2026-11-25); its plan stopped at entries 2.2
+> and 2.3, was revised for epoch 3, and the owner approved epoch 3 on 2026-11-26.** It belongs to
 > [PLAN_the_terminal_panel_shows_the_accounts_and_their_usage.md](PLAN_the_terminal_panel_shows_the_accounts_and_their_usage.md)
 > and is promoted with it. **Part 1, §§ A–H (2026-11-19).** The plan was 154 KB when the plan gate read it on
 > `653140c3`, and one reviewer could not take it whole. What is here was moved out of it **word for word**, so that
@@ -12,6 +12,8 @@
 > stopped at `07370c49`. The revision for epoch 3 rewrote it whole, and its text at the stop — the plan that epoch 2
 > approved and that epic E1 built (#1047, `d0241e45`) — is § I, word for word. **§ J (2026-11-25)** is one section
 > of the revised plan, moved word for word to keep the plan under 100 KB: what the code does on `d0241e45`.
+> **§ K (2026-11-26)** is six more passages, moved word for word when the approval of epoch 3 added the read of
+> root; § J also holds, marked as added, the owner's answers of that day.
 
 | § | What it holds | Why it is not in the plan |
 |---|---|---|
@@ -25,6 +27,7 @@
 | H | Three passages of § 1 and § 4 in full: why a QuickPick, why the working folder `/`, why `TZ=UTC` | The plan keeps the rule and the measured fact of each |
 | I | **Part 2.** The plan as it stood at the stop (`07370c49`, 2026-11-25): its status block and every section after the ledger — the goal, the owner's decisions, what the code did, § 1 to § 5 of the design, what the plan does not do, Security with the eight residuals of the refusals file, Growth, the boundaries, the build order, the test plan, the Definition of Done and the epics with R1–R12 | The revision for epoch 3 rewrote the plan whole. The plan of today cites § I for what epic E1 built and what stays in force: the refusals file, its lock and its markers, the script and its reply, the tests of E1 |
 | J | From the plan as revised for epoch 3 (`3a42eebc`): *What the code does today — verified on `d0241e45`*, with its file and line references, *What was measured, and what the real window showed*, the questions Q1–Q4 as they were asked (the owner answered Q1–Q3 on 2026-11-25; the plan holds the answers), and the owner's decisions 1–20, each with how it stands after the stop | The plan was 98 KB and the plan round's five findings needed room; the plan keeps a short list and cites § J. **What § J says of a per-host "yes" and of Q1's other way was overtaken by the plan round's finding 0: every door needs the permission** |
+| K | From the plan as approved for epoch 3 (`2df01bb4`), moved on 2026-11-26: the short list of what the design stands on in the code, why the build order is as it is, why the epics are split as they are, what the time table of revision 2 did not take, the security judgements of 2026-11-25, and the cut of *Build order* step 1 as it was planned | The owner's answer "root too" at the approval added the read of root to the plan; these six passages are reasons and records, and the plan keeps every rule |
 
 ## § A — The owner's decisions in full, and the questions with their answers
 
@@ -2164,6 +2167,13 @@ an answer the other way changes the named section before epoch 3 is approved, an
 | Q3 | The installer (E6) under the new consent. Decision 19 said "no press", when a per-host "yes" stood behind it. A permission worded "may I read?" cannot cover a change of a machine | **Nothing is installed under the permission to read.** Answered: one more "yes", once for all hosts, for "install `jq` where it is missing"; where the user has no rights, the command is shown |
 | Q4 | The merge conditions ask the owner to check a VSIX built from the head of each of E2, E3 and E4 in a real window BEFORE that epic merges (the check of 2.0.901 came after the merge, and found three things) | **Yes**, three checks, each a short table of rows (*Epics*) |
 
+**Added on 2026-11-26; not part of the moved passage.** The owner's answers with the approval of epoch 3, the same
+day: **Q4 — yes**, as the text took it. **Root of a WSL distro is read too** ("root too"): the revision said that
+root is never a place and kept a read of root's own accounts as candidate C9; the owner's answer takes it into the
+approved baseline as the plan's decision 24 — root is a place of its own, read as itself. **The go for the
+measurements** W9, in a disposable distro with two users on this PC, and W6 and W7, on a VM. An answer given with
+the approval is part of the baseline and no ledger entry. The plan holds the answers.
+
 ### Owner decisions 1–20, each with how it stands after the stop — from *Owner decisions* of the plan as it stood at `3a42eebc` with the plan round folded in, word for word
 
 1. An icon beside the chat icon in the terminal panel's title bar opens the view. **Stands.**
@@ -2194,3 +2204,82 @@ an answer the other way changes the named section before epoch 3 is approved, an
     `coai.terminalAccountsInstallMissingTools`, is not built: Q3's answer replaces it.** The one-time "yes" for
     installs, which a person gives and withdraws, is the one switch; a setting beside it would be a second place
     that says the same thing, and one that a settings file can change.
+
+## § K — Six passages of the plan as approved for epoch 3, moved on 2026-11-26, word for word
+
+The owner approved epoch 3 on 2026-11-26 with the answer that root of a WSL distro is read too (the plan's
+decision 24). The text on root needed room, and the plan stays under 100 KB. These six passages were moved here
+from the plan as it stood at `2df01bb4`, word for word. None is changed by the approval, and each is reasons or
+a record, not a rule: the plan keeps every rule.
+
+### K.1 — What the design stands on: the short list of *What the code does today — verified on `d0241e45`*
+
+Paths under `src_vs_code/`. The full section is § J.
+
+- The round's door allows a new host by itself and uses an old "yes" with no press (`src/remoteKeeper.ts:355`,
+  `:376`); `consentOf` and `yesOf` answer `yes` for an automatic row at the session door too
+  (`src/remoteHosts.ts:126`, `:144`). `wsl` goes to `ssh` like any host (`src/remoteSsh.ts:55`).
+- The memory holds ONE entry for each host, and a reply replaces it whole (`src/remoteAccountsRound.ts:268`).
+  `USAGE_POLICY` is `off` (`:39`). The script adds to the inherited `PATH` (`src/remoteAccountsScript.ts:276`), and
+  its `claude-usage` path is 31 s at worst against the ceiling of 30 s (T46).
+- A press reads the consent once (`src/remoteRead.ts:337`, `:348`; T9); a waiting marker reads as `damaged`
+  (`src/remoteKeeper.ts:399`; T8).
+- The view is a QuickPick (`src/remoteAccountsHost.ts:456`) that is drawn again only when a read lands. A tab
+  with a table exists once and is the pattern: `src/roundsLogPanel.ts:94`, `:98`, `:104`.
+- A refusal and the Stop are in `terminal-hosts/refused.json` of each side (`src/remoteRefusals.ts:44`).
+
+### K.2 — *Build order*: why this order
+
+**Why this order.** *The consent first:* main reads with no "yes" today, every later check runs through the door,
+and the acceptance of entry 2.3 can be seen on the owner's 20 hosts at once. *The table with it:* the permission
+needs a place to be asked and shown, and the table is how the owner checks every later epic — the QuickPick could
+not show what was read. *WSL third:* it needs the place identity that the table's model already has, and a check
+on this PC that can run while E2 is built. *The usage fourth:* it needs revision 2, which E3 pins, and two
+measurements that depend on the owner's go and on a VM, not on our code; it is the smallest epic and the one the
+owner will see most, so it merges as soon as its three conditions hold. *The long runs fifth:* two hours with live
+sessions and the two-window gate prove the read-only build before anything installs; they run once more on E6's
+build, which is the one released (the plan round's finding 3). *The installer
+last:* it changes a machine, so the read-only path is proven first (the consultants, `f4af076c`), and its consent
+is its own: one more "yes", once for all hosts (Q3).
+
+### K.3 — *Epics*: why the split is as it is
+
+The consultants' rule of 2026-11-19 holds for each: an epic is the smallest thing that runs end to end on real
+input, and it ends with the owner seeing it in a real window. That rule is why E2 carries the consent AND the
+table, and why the real runs are no longer one epic at the end: the check of 2.0.901 found three faults that a
+row in a real window would have shown before the merge.
+
+### K.4 — § 4, the time table of revision 2: what was not taken
+
+*Not taken:* shortening the limits by 3 s in total gives exactly 28 s with every
+stage in one call, and it cuts `agy`'s limit, whose real time is not measured; raising the ceiling makes a dead
+host hold a round longer.
+
+### K.5 — *Security*: the judgements of 2026-11-25
+
+**Judgements.** *Road (a):* yes, on what is measured, with W7 as the gate that can still fail it. *The consent:*
+entry 2.3 puts a person's "yes" back in front of every call, which the planner recommended on 2026-11-19 and E1 did
+not have; one "yes" for all hosts is the owner's width, and the judge's condition is that the question names the
+later hosts, the WSL users and the programs that are started. *WSL:* per-user runs are right and root-for-all
+would be wrong; the interop residual is real and is the person's to accept with the permission; nothing is
+promised as read-only before W9. *The tab:* a webview is a larger surface than a QuickPick, and it is closed by
+construction — text only, no remote source, names in, fixed strings out. *The installer:* outside the permission
+to read; it has a "yes" of its own, once for all hosts (Q3, answered), kept and withdrawn like the first.
+
+The judgement on root as a place, of 2026-11-26, is in the plan, *Security*.
+
+### K.6 — *Build order*, step 1: the cut as it was planned
+
+The cut is merged: #1051, `b1ec467c`.
+
+1. **The cut, during the stop** (*The full stop*, step 6: merged work that contradicts the revised plan is
+   corrected in a new pull request; the owner gave the go on 2026-11-25). ONE small pull request, with four
+   parts. (a) In every build from main the accounts round makes no call, by a timer or by a press: the timer is
+   not armed, the round's door admits no host, nothing goes to `wsl`; the list says that reading is off until the
+   permission of the next build. (b) **An automatic row counts as no answer at the SESSION door too**: today
+   `consentOf` and `yesOf` (`src/remoteHosts.ts:126`, `:144`) answer `yes` for `how: 'auto'` while the setting is
+   on, so a chat door reads a host nobody was asked about. (c) The help in five languages and `SECURITY.md` say
+   what that build does: no host is read by itself. (d) The setting `coai.terminalAccountsAllowNewHosts` stays
+   registered and says *no effect in this build*; E2 retires the key. **No extension release is cut from main
+   before the cut is merged**: main holds a build that logs in to hosts with no "yes". A revert of #1047 is not
+   taken: E2 to E4 build on its modules.
