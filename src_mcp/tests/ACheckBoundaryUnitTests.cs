@@ -69,16 +69,16 @@ public sealed class ACheckBoundaryUnitTests
             if [ -e {{outside}} ]; then echo "sees outside-canary"; else echo "hidden outside-canary"; fi
             """;
 
-        var run = await bed.ShellAsync(script);
+        var run = await bed.ShellAsync(script, restore: true);
 
         run.Result.ExitCode.Should().Be(0, run.Result.StdErr);
         var said = run.Result.StdOut.Split('\n', StringSplitOptions.RemoveEmptyEntries);
         said.Should().Contain(["wrote worktree", "refused main", "refused main-git", "refused worktree-git-pointer-append", "wrote tmp", "wrote vartmp", "wrote home", "wrote nuget-job-packages", "wrote npm-cache", "wrote dotnet-home"]);
         said.Should().Contain(["refused nuget-shared-packages", "read shared-packages-seed", "hidden outside-canary"], "the shared package folder is a read-only fallback and nothing else of the host's temp folder is there");
         File.Exists(Path.Combine(bed.Worktree, "from-unit.txt")).Should().BeTrue("the worktree is the one writable source folder");
-        File.Exists(Path.Combine(bed.Job.TempFolder, "from-unit.txt")).Should().BeTrue("the temp folder of the unit is the job's own folder");
-        File.Exists(Path.Combine(bed.Job.VarTempFolder, "from-unit.txt")).Should().BeTrue("the var temp folder of the unit is the job's own folder");
-        File.Exists(Path.Combine(bed.Job.HomeFolder, "from-unit.txt")).Should().BeTrue("HOME is the job's");
+        File.Exists(Path.Combine(bed.Job.TempFolder, "from-unit.txt")).Should().BeFalse("the unit wrote it, and the folder is emptied after every step (M16)");
+        File.Exists(Path.Combine(bed.Job.VarTempFolder, "from-unit.txt")).Should().BeFalse("emptied after every step (M16)");
+        File.Exists(Path.Combine(bed.Job.HomeFolder, "from-unit.txt")).Should().BeFalse("HOME is the job's own and is emptied after every step (M16)");
         File.Exists(Path.Combine(bed.Job.NuGetFolder, "from-unit.txt")).Should().BeTrue("NUGET_PACKAGES is the job's writable folder");
         File.Exists(Path.Combine(bed.Job.NpmFolder, "from-unit.txt")).Should().BeTrue();
         File.Exists(Path.Combine(bed.SharedPackages, "from-unit.txt")).Should().BeFalse("the shared package folder was read-only");
@@ -191,11 +191,11 @@ public sealed class ACheckBoundaryUnitTests
 
         run.Result.ExitCode.Should().Be(0, run.Result.StdErr);
         var said = run.Result.StdOut.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-        said.Should().Contain(["hidden coder-folder", "unreadable coder-config", "refused coder-config", "refused coder-home", "refused job-folder", "wrote home", "wrote nuget-job-packages"], "the coder's folder is not in the unit, the job folder is read-only, and the folders the checks use are still theirs");
+        said.Should().Contain(["hidden coder-folder", "unreadable coder-config", "refused coder-config", "refused coder-home", "refused job-folder", "wrote home", "refused nuget-job-packages"], "the coder's folder is not in the unit, the job folder is read-only, and the folders the checks use are still theirs");
         File.ReadAllText(coderConfig).Should().Be("coder config\n", "the coder's config was not touched");
         File.Exists(Path.Combine(bed.Job.CoderHomeFolder, "from-unit.txt")).Should().BeFalse();
         File.Exists(Path.Combine(bed.Job.JobRoot, "from-unit.txt")).Should().BeFalse();
-        File.Exists(Path.Combine(bed.Job.HomeFolder, "from-unit.txt")).Should().BeTrue("HOME is still the job's own writable folder");
+        File.Exists(Path.Combine(bed.Job.HomeFolder, "from-unit.txt")).Should().BeFalse("HOME was writable to the unit and is emptied after the step (M16)");
     }
 
     [Fact]

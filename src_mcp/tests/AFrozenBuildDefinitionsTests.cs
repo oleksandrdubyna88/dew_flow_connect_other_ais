@@ -46,6 +46,30 @@ public sealed class AFrozenBuildDefinitionsTests
         { "a solution file", false, "src/App.slnx", "<Solution />" },
         { "global.json", false, "global.json", "{ \"sdk\": { \"version\": \"10.0.100\" } }" },
         { "nuget.config in any case", false, "NuGet.Config", "<configuration />" },
+        // pass 3, M15: files a tool reads by itself that no list of names knew
+        { "M15 tests/T.csproj.user with a TestingPlatform property", false, "tests/T.csproj.user", "<Project><PropertyGroup><TestingPlatformCommandLineArguments>--ignore-exit-code 2</TestingPlatformCommandLineArguments></PropertyGroup></Project>" },
+        { "M15 tests/T.csproj.user with InitialTargets and an Exec", false, "tests/T.csproj.user", "<Project InitialTargets=\"HeadCode\"><Target Name=\"HeadCode\"><Exec Command=\"id\" /></Target></Project>" },
+        { "M15 Properties/launchSettings.json", false, "tests/Properties/launchSettings.json", "{ \"profiles\": { \"x\": { \"commandLineArgs\": \"--ignore-exit-code 2\" } } }" },
+        { "M15 Shared.projitems", false, "src/Shared.projitems", "<Project />" },
+        { "M15 build/common.proj", false, "build/common.proj", "<Project />" },
+        { "M15 build/Tasks.tasks", false, "build/Tasks.tasks", "<Project />" },
+        { "M15 .editorconfig", false, ".editorconfig", "root = true\n[*.cs]\ndotnet_diagnostic.CS8600.severity = none\n" },
+        { "M15 .globalconfig", false, ".globalconfig", "is_global = true\n" },
+        { "M15 stylecop.json", false, "stylecop.json", "{ }" },
+        { "M15 T.xunit.runner.json", false, "tests/T.xunit.runner.json", "{ }" },
+        { "M15 a local package source", false, "packages/Foo.1.0.0.nupkg", "PK" },
+        { "M15 MSBuild.rsp", false, "MSBuild.rsp", "-p:X=1\n" },
+        { "a shell script a definition could invoke", false, "scripts/test.sh", "exit 0\n" },
+        // node
+        { "M15 vite.config.ts", true, "vite.config.ts", "export default { test: { passWithNoTests: true } };\n" },
+        { "M15 jest.unit.config.js", true, "jest.unit.config.js", "module.exports = { passWithNoTests: true };\n" },
+        { "M15 test/jest-e2e.json", true, "test/jest-e2e.json", "{ \"passWithNoTests\": true }" },
+        { "M15 .env", true, ".env", "NODE_OPTIONS=--require ./x.js\n" },
+        { "M15 playwright.config.ts", true, "playwright.config.ts", "export default {};\n" },
+        { "M15 .swcrc", true, ".swcrc", "{ }" },
+        { "M15 spec/support/jasmine.json", true, "spec/support/jasmine.json", "{ }" },
+        { "M15 a tarball", true, "vendor/x.tgz", "x" },
+        { "M15 a source file named like a setup file", true, "setup.ts", "export {};\n" },
         // node
         { "M8 a second scripts.test key", true, "package.json", "{ \"name\": \"p\", \"version\": \"1.0.0\", \"scripts\": { \"test\": \"jest\", \"test\": \"echo passed\" }, \"devDependencies\": { \"jest\": \"29.7.0\" } }\n" },
         { "M9 the lock file's resolved address", true, "package-lock.json", NodeLock.Replace("https://registry.npmjs.org/jest/-/jest-29.7.0.tgz", "http://127.0.0.1:9/jest-29.7.0.tgz") },
@@ -94,7 +118,7 @@ public sealed class AFrozenBuildDefinitionsTests
     public async Task AHeadThatChangesNothingFrozen_RunsItsChecks_AsBefore()
     {
         await using var rig = await CoderRig.CreateAsync(toolchain: string.Empty, extra: DotnetBase());
-        rig.Says("sonnet", new CoderRig.Launch(new Dictionary<string, string> { ["Class1.cs"] = "public class Class1 { public int X; }\n", ["notes/readme.md"] = "x\n" }, CoderRig.Report()));
+        rig.Says("sonnet", new CoderRig.Launch(new Dictionary<string, string> { ["Class1.cs"] = "public class Class1 { public int X; }\n", ["notes/readme.md"] = "x\n", ["tests/FooTests.cs"] = "public class FooTests { }\n", ["src/web/app.ts"] = "export {};\n" }, CoderRig.Report()));
         var job = rig.NewJob();
 
         var (_, ended) = await rig.RunAsync(job);
@@ -123,8 +147,8 @@ public sealed class AFrozenBuildDefinitionsTests
     public async Task M6_AnIgnoredNpmrcTheCoderLeftInTheTree_CannotChangeWhatNpmRuns()
     {
         var toolchain = "version: 1\nprojects:\n  - path: \"app\"\n    adapter: node\n    build:\n      - \"/bin/sh\"\n      - \"-c\"\n      - \"test ! -e .npmrc && echo built\"\n    test:\n      - \"/bin/sh\"\n      - \"-c\"\n      - \"echo tested\"\n";
-        await using var rig = await CoderRig.CreateAsync(toolchain: toolchain, extra: new Dictionary<string, string> { [".gitignore"] = Ignore });
-        rig.Says("sonnet", new CoderRig.Launch(new Dictionary<string, string> { [".gitignore"] = Ignore + ".npmrc\n", [".npmrc"] = "script-shell=/usr/bin/true\n", [CoderRig.StateFile] = CoderRig.Green + "\n" }, CoderRig.Report()));
+        await using var rig = await CoderRig.CreateAsync(toolchain: toolchain, extra: new Dictionary<string, string> { [".gitignore"] = Ignore + ".npmrc\n" });
+        rig.Says("sonnet", new CoderRig.Launch(new Dictionary<string, string> { [".npmrc"] = "script-shell=/usr/bin/true\n", [CoderRig.StateFile] = CoderRig.Green + "\n" }, CoderRig.Report()));
         var job = rig.NewJob();
 
         var (_, ended) = await rig.RunAsync(job);
@@ -205,5 +229,90 @@ public sealed class AFrozenBuildDefinitionsTests
         }
 
         return list;
+    }
+
+    // ---- pass 3, M16: the job's home, temp and caches ----
+
+    [Fact]
+    public async Task M16_WhatAStepWritesInTheJobsHomeAndTemp_IsGoneForTheNextStepAndTheNextRound()
+    {
+        var absent = "test ! -e \"$HOME/.npmrc\" && test ! -e \"$HOME/.local\" && test ! -e \"$TMPDIR/leftover\"";
+        var build = $"{absent} && mkdir -p \"$HOME/.local/share/Microsoft/MSBuild/Current/Microsoft.Common.targets/ImportAfter\" && echo x > \"$HOME/.local/share/Microsoft/MSBuild/Current/Microsoft.Common.targets/ImportAfter/x.targets\" && echo y > \"$HOME/.npmrc\" && echo y > \"$TMPDIR/leftover\" && echo built";
+        var test = $"{absent} || exit 3; if grep -rq '{CoderRig.Red}' src 2>/dev/null; then echo 'FAILED thing: the state is red'; exit 1; fi; echo tested";
+        await using var rig = await CoderRig.CreateAsync(toolchain: ToolchainFixture.Shell(build, test));
+        rig.Says("sonnet", new CoderRig.Launch(new Dictionary<string, string> { [CoderRig.StateFile] = CoderRig.Red + "\n" }, CoderRig.Report()), new CoderRig.Launch(new Dictionary<string, string> { [CoderRig.StateFile] = CoderRig.Green + "\n" }, CoderRig.Report()));
+        var job = rig.NewJob();
+
+        var (_, ended) = await rig.RunAsync(job);
+
+        ended.State.Should().Be(RoleJobStates.Succeeded, ended.Reason);
+        var envelope = rig.Envelope(job);
+        envelope.GetProperty("green").GetBoolean().Should().BeTrue("the build of the second round found no home, no temp file and no config left by the first, and the test step none left by the build of its own round");
+        envelope.GetProperty("rounds").GetArrayLength().Should().Be(2);
+    }
+
+    [Fact]
+    public async Task M16_OnlyARestoreStepCanWriteTheCaches_EveryOtherStepSeesThemReadOnly()
+    {
+        var restore = "for v in NUGET_PACKAGES npm_config_cache DOTNET_CLI_HOME; do eval \"d=\\$$v\"; echo x > \"$d/from-restore\" || exit 4; done; echo restored";
+        var build = "for v in NUGET_PACKAGES npm_config_cache DOTNET_CLI_HOME; do eval \"d=\\$$v\"; test -e \"$d/from-restore\" || exit 5; if echo y > \"$d/from-build\" 2>/dev/null; then exit 7; fi; done; echo built";
+        var toolchain = "version: 1\nprojects:\n  - path: \"app\"\n    adapter: node\n    restore:\n      - \"/bin/sh\"\n      - \"-c\"\n      - '" + restore + "'\n    build:\n      - \"/bin/sh\"\n      - \"-c\"\n      - '" + build + "'\n    test:\n      - \"/bin/sh\"\n      - \"-c\"\n      - \"if echo y > \\\"$NUGET_PACKAGES/from-test\\\" 2>/dev/null; then exit 8; fi; echo tested\"\n";
+        await using var rig = await CoderRig.CreateAsync(toolchain: toolchain);
+        rig.Says("sonnet", new CoderRig.Launch(new Dictionary<string, string> { [CoderRig.StateFile] = CoderRig.Green + "\n" }, CoderRig.Report()));
+        var job = rig.NewJob();
+
+        var (_, ended) = await rig.RunAsync(job);
+
+        ended.State.Should().Be(RoleJobStates.Succeeded, ended.Reason);
+        rig.Envelope(job).GetProperty("checks").EnumerateArray().Select(step => (step.GetProperty("step").GetString(), step.GetProperty("exitCode").GetInt32())).Should().Equal(("restore", 0), ("build", 0), ("test", 0));
+    }
+
+    // ---- S22: a .git entry below the root, which the clean and status --ignored do not see ----
+
+    [Fact]
+    public async Task S22_ANestedGitFolderInATrackedFolder_RefusesTheRound()
+    {
+        await using var rig = await CoderRig.CreateAsync(extra: new Dictionary<string, string> { ["tests/Existing.cs"] = "public class Existing { }\n" });
+        rig.Says("sonnet", new CoderRig.Launch(new Dictionary<string, string> { [CoderRig.StateFile] = CoderRig.Green + "\n", ["tests/.git/Hidden.cs"] = "public class Hidden { }\n" }, CoderRig.Report()));
+        var job = rig.NewJob();
+
+        var (_, ended) = await rig.RunAsync(job);
+
+        ended.State.Should().Be(RoleJobStates.Failed, ended.Reason);
+        ended.Stop.Should().BeOneOf("checks-changed-tree", "coder-commit");
+        rig.Envelope(job).GetProperty("green").GetBoolean().Should().BeFalse();
+    }
+
+    // ---- S24: a person can tell which file to move to its own commit ----
+
+    [Fact]
+    public async Task S24_TheRefusedPathsAreInTheJobsRecord_NotInTheSentence()
+    {
+        await using var rig = await CoderRig.CreateAsync(toolchain: string.Empty, extra: DotnetBase());
+        rig.Says("sonnet", new CoderRig.Launch(new Dictionary<string, string> { ["tests/T.csproj.user"] = "<Project />\n", [CoderRig.StateFile] = CoderRig.Green + "\n" }, CoderRig.Report()));
+        var job = rig.NewJob();
+
+        var (_, ended) = await rig.RunAsync(job);
+
+        ended.Reason.Should().NotContain("T.csproj.user");
+        File.ReadAllText(Path.Combine(rig.World.Store.FolderOf(job.JobId)!.Location, "checks", "round-0", "refused-paths.txt")).Should().Contain("tests/T.csproj.user");
+    }
+
+    // ---- S21: the envelope counts the tests the head changed or deleted ----
+
+    [Fact]
+    public async Task S21_TheEnvelopeCountsTheTestFilesTheHeadChanged()
+    {
+        var files = DotnetBase();
+        files["tests/FooTests.cs"] = "public class FooTests { }\n";
+        await using var rig = await CoderRig.CreateAsync(toolchain: string.Empty, extra: files);
+        rig.Says("sonnet", new CoderRig.Launch(new Dictionary<string, string> { ["tests/FooTests.cs"] = "public class FooTests { public int X; }\n", ["tests/NewTests.cs"] = "public class NewTests { }\n", ["Class1.cs"] = "public class Class1 { public int X; }\n" }, CoderRig.Report()));
+        var job = rig.NewJob();
+
+        var (_, ended) = await rig.RunAsync(job);
+
+        ended.Stop.Should().NotBe("toolchain-refused", ended.Reason);
+        var tests = rig.Envelope(job).GetProperty("headTestFiles");
+        (tests.GetProperty("modified").GetInt32(), tests.GetProperty("added").GetInt32(), tests.GetProperty("deleted").GetInt32()).Should().Be((1, 1, 0));
     }
 }

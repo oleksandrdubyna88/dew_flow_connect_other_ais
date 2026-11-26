@@ -53,26 +53,28 @@ public sealed class ChecksAtBase(GitHistory history, CheckRunner runner)
         var change = Compare(atBase.File, tree.Read(ToolchainTables.FilePath, ToolchainTables.MaxBytes));
         var file = ToolchainFile.Read(atBase.File);
         var headSha = string.Empty;
+        TestFileCounts? headTests = null;
         if (request.Job is { } coderJob)
         {
             // The interim gate (INTERIM, the owner decides): the whole tree of the head against the base, before ANY step, for detected and stated commands alike.
             var gate = await FrozenGateAsync(coderJob, baseSha, ct);
             if (gate.Refusal.Length > 0)
             {
-                return new CheckResult(CheckState.ToolchainRefused, [], gate.Refusal) with { ToolchainChange = change };
+                return new CheckResult(CheckState.ToolchainRefused, [], gate.Refusal) with { ToolchainChange = change, RefusedPaths = gate.Paths, HeadTests = gate.Tests };
             }
 
             headSha = gate.HeadSha;
+            headTests = gate.Tests;
         }
 
         var result = request.Job is { } job && file is not ToolchainRead.Refused
             ? await RunDetectedAsync(file, job, baseSha, headSha, request, ct)
             : await runner.RunAsync(file, request, ct);
 
-        return result with { ToolchainChange = change, Note = result.Note + Reported(change, baseSha) };
+        return result with { HeadTests = headTests, ToolchainChange = change, Note = result.Note + Reported(change, baseSha) };
     }
 
-    private sealed record Gate(string Refusal, string HeadSha);
+    private sealed record Gate(string Refusal, string HeadSha, IReadOnlyList<string> Paths, TestFileCounts? Tests);
 
     /// <summary>
     /// The head commit of the worktree (read through the hardened coder-tree door, <c>--no-replace-objects</c>) and the verdict of <see cref="FrozenDefinitions"/> on what it changed against the base, read from the MAIN repository's objects. An unreadable head or listing refuses: no partial list decides.
@@ -83,13 +85,15 @@ public sealed class ChecksAtBase(GitHistory history, CheckRunner runner)
         var headSha = head.Ran && head.Ok ? head.Out.Trim() : string.Empty;
         if (!GitHistory.IsCommitish(headSha))
         {
-            return new Gate("the head commit of the worktree could not be read, so whether it changed a frozen build definition is not known and nothing was run (interim rule: the owner decides)", string.Empty);
+            return new Gate("the head commit of the worktree could not be read, so whether it changed a frozen build definition is not known and nothing was run (interim rule: the owner decides)", string.Empty, [], null);
         }
 
         var raw = await git.RawChangesAsync(job.Tree.MainCheckout, baseSha, headSha, FrozenDefinitions.MaxChars, ct);
         var changes = raw.Ran && raw.Ok ? FrozenDefinitions.ParseRaw(raw.Out) : null;
 
-        return new Gate(FrozenDefinitions.Refusal(changes, raw.Truncated, ToolchainDefaults.Current), headSha);
+        var refusal = FrozenDefinitions.Refusal(changes, raw.Truncated, ToolchainDefaults.Current);
+
+        return new Gate(refusal, headSha, refusal.Length > 0 && changes is not null ? [.. FrozenDefinitions.RefusedPaths(changes, ToolchainDefaults.Current).Take(200).Select(path => PathSpelling.Spell(path))] : [], changes is null ? null : FrozenDefinitions.TestFiles(changes));
     }
 
     /// <summary>

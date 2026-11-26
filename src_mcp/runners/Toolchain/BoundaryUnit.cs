@@ -31,7 +31,7 @@ internal static class BoundaryUnit
     internal static string UnitName(BoundaryJob job, string part) => $"{UnitPrefix}{job.JobId}-{part}";
 
     /// <summary>The <c>-p</c> properties of one unit, in the order they are given.</summary>
-    internal static IReadOnlyList<string> Properties(BoundaryHost host, BoundaryJob job, CheckNetwork network, TimeSpan runtimeMax)
+    internal static IReadOnlyList<string> Properties(BoundaryHost host, BoundaryJob job, CheckNetwork network, TimeSpan runtimeMax, bool writableCaches = true)
     {
         var tree = job.Tree;
 
@@ -42,7 +42,7 @@ internal static class BoundaryUnit
             $"BindReadOnlyPaths={tree.MainCheckout}",
             $"BindReadOnlyPaths={tree.GitEntry}",
             .. Mounts(job),
-            .. JobView(job),
+            .. JobView(job, writableCaches),
             $"BindPaths={job.TempFolder}:{UnitTemp}",
             $"BindPaths={job.VarTempFolder}:{UnitVarTemp}",
             .. KeysHidden(job),
@@ -79,10 +79,11 @@ internal static class BoundaryUnit
     /// folder also holds the CODER's home and config (<see cref="BoundaryJob.CoderFolder"/>) — its CLI's settings, its transcripts, its caches — which a check, running code the coder wrote, must neither read nor change; before this, the whole job folder was bound writable and the
     /// coder's folder with it.
     /// </summary>
-    internal static IReadOnlyList<string> JobView(BoundaryJob job) =>
+    internal static IReadOnlyList<string> JobView(BoundaryJob job, bool writableCaches = true) =>
     [
         $"TemporaryFileSystem={job.JobCover}:ro",
-        .. job.CheckFolders.Select(folder => $"BindPaths={folder}"),
+        $"BindPaths={job.HomeFolder}",
+        .. job.CacheFolders.Select(folder => writableCaches ? $"BindPaths={folder}" : $"BindReadOnlyPaths={folder}"),
     ];
 
     /// <summary>
@@ -154,14 +155,14 @@ internal static class BoundaryUnit
     /// <param name="workingDirectory">The folder the command starts in: the worktree (the default) or a real folder inside it (E4 s3 t2). It changes no property of the unit: the worktree is bound whole.</param>
     /// <exception cref="ArgumentException">The program's name has an <c>=</c> (<c>env</c> would read it as an assignment), or the argv is empty.</exception>
     internal static IReadOnlyList<string> Arguments(BoundaryHost host, BoundaryJob job, string unit, CheckNetwork network, TimeSpan runtimeMax,
-        IReadOnlyDictionary<string, string?> extra, IReadOnlyList<string> command, Func<IReadOnlyList<string>, IReadOnlyList<string>>? degrade = null, string? workingDirectory = null)
+        IReadOnlyDictionary<string, string?> extra, IReadOnlyList<string> command, Func<IReadOnlyList<string>, IReadOnlyList<string>>? degrade = null, string? workingDirectory = null, bool writableCaches = true)
     {
         if (command.Count == 0 || command[0].Contains('=', StringComparison.Ordinal) || command[0].StartsWith('-'))
         {
             throw new ArgumentException("the program to run in the unit is empty, starts with '-' or holds '='", nameof(command));
         }
 
-        return Wrap(unit, workingDirectory ?? job.Tree.Root, [], Properties(host, job, network, runtimeMax),
+        return Wrap(unit, workingDirectory ?? job.Tree.Root, [], Properties(host, job, network, runtimeMax, writableCaches),
             ["/usr/bin/env", "-i", .. Environment(host, job, extra).Select(pair => $"{pair.Key}={pair.Value}"), .. command], degrade);
     }
 

@@ -80,7 +80,7 @@ public sealed class AFrozenDefinitionsTests
     [Fact]
     public void ACleanHead_AnythingButAFrozenPath_IsNotRefused()
     {
-        var changes = FrozenDefinitions.ParseRaw(Raw(("100644", "100644", 'M', "src/Foo.cs"), ("000000", "100644", 'A', "tests/FooTests.cs"), ("100644", "000000", 'D', "docs/old.md"), ("100644", "100755", 'M', "scripts/test.sh")));
+        var changes = FrozenDefinitions.ParseRaw(Raw(("100644", "100644", 'M', "src/Foo.cs"), ("000000", "100644", 'A', "tests/FooTests.cs"), ("100644", "000000", 'D', "docs/old.md"), ("100644", "100755", 'M', "src/web/app.TS"), ("100644", "100644", 'M', "tests/__snapshots__/a.snap")));
 
         FrozenDefinitions.Refusal(changes, cut: false, Table).Should().BeEmpty();
     }
@@ -129,5 +129,60 @@ public sealed class AFrozenDefinitionsTests
         var act = () => ToolchainDefaults.Parse(json);
 
         act.Should().Throw<ToolchainDefaultsException>().WithMessage("*frozen.coai-and-git*");
+    }
+
+    // ---- pass 3, M15: an allow list ----
+
+    [Fact]
+    public void TheAllowListIsInTheSharedFile()
+    {
+        Table.AllowedSourceExtensions.Should().Equal(".cs", ".fs", ".vb", ".razor", ".cshtml", ".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs", ".css", ".scss", ".html", ".md", ".txt", ".snap");
+        Table.ConfigNamePattern.Should().Be("(^\\.|config|rc$|rc\\.|^setup|^global|^jest|^vite|^vitest|^playwright|^webpack|^rollup|^babel|^eslint|^prettier|^tsup|^esbuild|^karma|^mocha|^ava|^cypress|^nx|^turbo)");
+    }
+
+    [Theory]
+    [InlineData("src/Foo.cs", true)]
+    [InlineData("tests/FooTests.cs", true)]
+    [InlineData("src/web/App.TSX", true)]
+    [InlineData("docs/readme.md", true)]
+    [InlineData("tests/__snapshots__/a.snap", true)]
+    [InlineData("a/b/c/styles.scss", true)]
+    [InlineData("tests/T.csproj.user", false)]
+    [InlineData("tests/Properties/launchSettings.json", false)]
+    [InlineData("src/Shared.projitems", false)]
+    [InlineData(".editorconfig", false)]
+    [InlineData(".globalconfig", false)]
+    [InlineData("vite.config.ts", false)]
+    [InlineData("jest.unit.config.js", false)]
+    [InlineData("test/jest-e2e.json", false)]
+    [InlineData(".env", false)]
+    [InlineData("packages/Foo.1.0.0.nupkg", false)]
+    [InlineData("scripts/test.sh", false)]
+    [InlineData("Makefile", false)]
+    [InlineData("src/.hidden.cs", false)]
+    [InlineData("setup.ts", false)]
+    [InlineData("src/GlobalUsings.cs", false)]
+    [InlineData("src/AppConfig.cs", false)]
+    [InlineData("webpack.dev.js", false)]
+    [InlineData("src/Foo.cs.", false)]
+    [InlineData("src/Foo.cs ", false)]
+    [InlineData("src/Foo", false)]
+    public void OnlySourceFilesOfTheClosedListWithANonConfigNameMayBeChanged(string path, bool allowed) =>
+        FrozenDefinitions.IsAllowedChange(path, Table).Should().Be(allowed);
+
+    [Fact]
+    public void ADeleteOrARenameOfAnythingElse_IsRefusedToo_ARenameIsADeleteAndAnAdd()
+    {
+        var changes = FrozenDefinitions.ParseRaw(Raw(("100644", "000000", 'D', "tests/T.csproj.user"), ("000000", "100644", 'A', "tests/T.csproj.user.bak")));
+
+        FrozenDefinitions.Refusal(changes, cut: false, Table).Should().StartWith("the head changed 2 frozen build definition path(s)");
+    }
+
+    [Fact]
+    public void TheTestFilesTheHeadChanged_AreCountedByTheirStatus()
+    {
+        var changes = FrozenDefinitions.ParseRaw(Raw(("100644", "100644", 'M', "tests/FooTests.cs"), ("000000", "100644", 'A', "tests/NewTests.cs"), ("100644", "000000", 'D', "src/App.test.ts"), ("100644", "100644", 'M', "src/Foo.cs"), ("100644", "000000", 'D', "src/Foo.spec.js")))!;
+
+        FrozenDefinitions.TestFiles(changes).Should().Be(new TestFileCounts(1, 1, 2));
     }
 }

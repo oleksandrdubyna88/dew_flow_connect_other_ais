@@ -127,6 +127,11 @@ internal sealed record CoderChecksReport(IReadOnlyList<CoderChecksRound> Rounds,
         }
 
         json.WriteEndArray();
+        json.WriteStartObject("headTestFiles");
+        json.WriteNumber("modified", last.HeadTests?.Modified ?? 0);
+        json.WriteNumber("added", last.HeadTests?.Added ?? 0);
+        json.WriteNumber("deleted", last.HeadTests?.Deleted ?? 0);
+        json.WriteEndObject();
         WriteToolchain(json, last.Toolchain, last.Selection);
         json.WriteStartArray("rounds");
         foreach (var round in Rounds)

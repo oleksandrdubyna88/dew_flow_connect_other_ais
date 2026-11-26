@@ -45,7 +45,7 @@ public sealed class CheckBoundary(IProcessLauncher launcher, BoundaryHost host)
     internal Func<IReadOnlyList<string>, IReadOnlyList<string>>? Degrade { get; init; }
 
     /// <summary>The properties a step of this job runs with in this network state — the list the result records.</summary>
-    public IReadOnlyList<string> PropertiesFor(BoundaryJob job, CheckNetwork network, TimeSpan runtimeMax) => BoundaryUnit.Properties(host, job, network, runtimeMax);
+    public IReadOnlyList<string> PropertiesFor(BoundaryJob job, CheckNetwork network, TimeSpan runtimeMax, bool writableCaches = true) => BoundaryUnit.Properties(host, job, network, runtimeMax, writableCaches);
 
     /// <summary>
     /// The preflight, before the job: makes the job's folders, then runs the exact property set once for each network state the steps use and asks the OS every item of <see cref="BoundaryPreflight.Items"/>.
@@ -134,7 +134,7 @@ public sealed class CheckBoundary(IProcessLauncher launcher, BoundaryHost host)
     /// <param name="workingDirectory">Where the command starts: a real folder inside the worktree, already checked by the caller; null is the worktree (E2).</param>
     /// <exception cref="InvalidOperationException">The admission is not for this job and network state.</exception>
     public async Task<BoundaryRun> RunAsync(BoundaryAdmission.Admitted admitted, BoundaryJob job, NetworkChoice network, string part, IReadOnlyList<string> command,
-        IReadOnlyDictionary<string, string?> extra, TimeSpan timeout, int maxOutputChars, CancellationToken ct = default, string? workingDirectory = null)
+        IReadOnlyDictionary<string, string?> extra, TimeSpan timeout, int maxOutputChars, CancellationToken ct = default, string? workingDirectory = null, bool restore = false)
     {
         if (admitted.JobId != job.JobId || !admitted.Records.TryGetValue(network.Mode, out var seen))
         {
@@ -142,10 +142,16 @@ public sealed class CheckBoundary(IProcessLauncher launcher, BoundaryHost host)
         }
 
         var unit = BoundaryUnit.UnitName(job, part);
-        var record = seen with { Network = network.Wire, NetworkReason = network.Reason, Properties = PropertiesFor(job, network.Mode, timeout + UnitControl.Backstop) };
+        var record = seen with { Network = network.Wire, NetworkReason = network.Reason, Properties = PropertiesFor(job, network.Mode, timeout + UnitControl.Backstop, writableCaches: restore) };
+        var emptied = BoundaryFolders.EmptyForStep(job);
+        if (emptied.Length > 0)
+        {
+            return new BoundaryRun(new ProcessResult(StepRecord.NotStartedExitCode, string.Empty, emptied, TimedOut: false), unit, Gone: true, record);
+        }
+
         try
         {
-            var started = await StartAsync(job, unit, network.Mode, timeout, extra, command, ct, maxOutputChars, workingDirectory);
+            var started = await StartAsync(job, unit, network.Mode, timeout, extra, command, ct, maxOutputChars, workingDirectory, writableCaches: restore);
 
             var result = started.Problem.Length > 0 ? started.Result with { StdErr = started.Problem } : started.Result;
 
@@ -156,12 +162,16 @@ public sealed class CheckBoundary(IProcessLauncher launcher, BoundaryHost host)
             await _units.EnsureGoneAsync(unit);
             throw;
         }
+        finally
+        {
+            BoundaryFolders.EmptyForStep(job);
+        }
     }
 
     private async Task<UnitStart> StartAsync(BoundaryJob job, string unit, CheckNetwork network, TimeSpan timeout, IReadOnlyDictionary<string, string?> extra,
-        IReadOnlyList<string> command, CancellationToken ct, int maxOutputChars = 1024 * 1024, string? workingDirectory = null)
+        IReadOnlyList<string> command, CancellationToken ct, int maxOutputChars = 1024 * 1024, string? workingDirectory = null, bool writableCaches = true)
     {
-        var arguments = BoundaryUnit.Arguments(host, job, unit, network, timeout + UnitControl.Backstop, extra, command, Degrade, workingDirectory);
+        var arguments = BoundaryUnit.Arguments(host, job, unit, network, timeout + UnitControl.Backstop, extra, command, Degrade, workingDirectory, writableCaches);
 
         return await _units.StartAsync(new ProcessRequest(host.SystemdRun, arguments, job.Tree.Root)
         {

@@ -104,7 +104,7 @@ public sealed class ADetectionHardeningTests
 
         var steps = detection.Should().BeOfType<Detection.Detected>().Subject.Projects.Single().Steps;
 
-        steps.Should().OnlyContain(step => step.Argv.Skip(1).All(item => item.StartsWith('-') == false || item.StartsWith("-c") || item.StartsWith("-m:") || item == "--no-restore" || item == "--no-build" || item == "--project" || item == "--folder" || item == "--include"));
+        steps.Should().OnlyContain(step => step.Argv.Skip(1).All(item => item.StartsWith('-') == false || item.StartsWith("-c") || item.StartsWith("-m:") || item == "--no-restore" || item == "--no-build" || item == "--no-launch-profile" || item == "--project" || item == "--folder" || item == "--include"));
         steps.Select(step => step.Argv.Single(item => item.Contains("App.slnx") || item.Contains("T.csproj"))).Should().OnlyContain(item => item.StartsWith("./"));
     }
 

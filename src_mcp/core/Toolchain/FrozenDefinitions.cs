@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using System.Globalization;
 
 namespace CoaiMcp.Core.Toolchain;
@@ -25,8 +26,59 @@ public sealed record RawTreeChange(string OldMode, string NewMode, string OldId,
 /// definition invokes (<c>scripts/test.sh</c>) is not frozen, and the base's own tests can be edited by the head: the owner's question.</para>
 /// <para>This file names no frozen file: the list is data (<c>shared/toolchains.json</c>), and a scan test holds the code to it.</para>
 /// </remarks>
+/// <summary>How many test files a head modified, added and deleted.</summary>
+public sealed record TestFileCounts(int Modified, int Added, int Deleted);
+
 public static class FrozenDefinitions
 {
+    /// <summary>
+    /// <b>The allow list (pass 3, M15).</b> Whether a head may change this path: its extension (the last one, without case) is in <see cref="ToolchainDefaults.AllowedSourceExtensions"/>, its base name does not match <see cref="ToolchainDefaults.ConfigNamePattern"/>, and it is not a name of the frozen lists.
+    /// A name with no extension, a dot file, a trailing dot or space, a config-shaped name — each is refused. A regular expression that does not answer in time refuses too.
+    /// </summary>
+    public static bool IsAllowedChange(string path, ToolchainDefaults table)
+    {
+        var name = path[(path.LastIndexOf('/') + 1)..];
+        var dot = name.LastIndexOf('.');
+        if (dot <= 0 || !table.AllowedSourceExtensions.Contains(name[dot..], StringComparer.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        try
+        {
+            return !table.ConfigName.IsMatch(name) && !IsFrozen(path, table);
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>The paths of a head that are not allowed changes, in the listing's order: what the job's record names so that a person can tell what to move to a commit of its own.</summary>
+    public static IReadOnlyList<string> RefusedPaths(IReadOnlyList<RawTreeChange> changes, ToolchainDefaults table) =>
+        [.. changes.Where(change => change.IsLinkOrSubmodule || !IsAllowedChange(change.Path, table)).Select(change => change.Path)];
+
+    /// <summary>
+    /// How many test files the head modified, added and deleted (S21 of pass 3): a file whose name or whose folder reads as a test (<c>tests/</c>, <c>__tests__</c>, <c>spec/</c>, <c>*.test.*</c>, <c>*.spec.*</c>, <c>*Tests.*</c>, <c>*Test.*</c>), counted by the listing's status. The gate lets the head edit tests; this makes it visible.
+    /// </summary>
+    public static TestFileCounts TestFiles(IReadOnlyList<RawTreeChange> changes)
+    {
+        var tests = changes.Where(change => LooksLikeATest(change.Path)).ToList();
+
+        return new TestFileCounts(tests.Count(change => change.Status is 'M' or 'T'), tests.Count(change => change.Status == 'A'), tests.Count(change => change.Status == 'D'));
+    }
+
+    private static bool LooksLikeATest(string path)
+    {
+        var segments = path.Split('/');
+        var name = segments[^1];
+        var stem = name.Contains('.', StringComparison.Ordinal) ? name[..name.IndexOf('.', StringComparison.Ordinal)] : name;
+
+        return segments[..^1].Any(segment => segment.ToLowerInvariant() is "test" or "tests" or "__tests__" or "spec" or "specs")
+            || name.Contains(".test.", StringComparison.OrdinalIgnoreCase) || name.Contains(".spec.", StringComparison.OrdinalIgnoreCase)
+            || stem.EndsWith("Tests", StringComparison.OrdinalIgnoreCase) || stem.EndsWith("Test", StringComparison.OrdinalIgnoreCase) || stem.EndsWith("Spec", StringComparison.OrdinalIgnoreCase);
+    }
+
     /// <summary>The most characters of a raw listing read; a longer one is cut and refused (a head that changed that many paths is not decided by a partial list).</summary>
     public const int MaxChars = 8 * 1024 * 1024;
 
@@ -82,13 +134,13 @@ public static class FrozenDefinitions
         }
 
         var links = changes.Count(change => change.IsLinkOrSubmodule);
-        var frozen = changes.Count(change => !change.IsLinkOrSubmodule && IsFrozen(change.Path, table));
+        var frozen = changes.Count(change => !change.IsLinkOrSubmodule && !IsAllowedChange(change.Path, table));
         if (links + frozen == 0)
         {
             return string.Empty;
         }
 
-        return $"the head changed {frozen.ToString(CultureInfo.InvariantCulture)} frozen build definition path(s) and {links.ToString(CultureInfo.InvariantCulture)} symlink or submodule path(s) against the base; what the checks build and test is decided by the base commit, "
+        return $"the head changed {frozen.ToString(CultureInfo.InvariantCulture)} frozen build definition path(s) and {links.ToString(CultureInfo.InvariantCulture)} symlink or submodule path(s) against the base (a path counts as a build definition unless it is a source file of the allowed kinds with a name that is not a configuration's); what the checks build and test is decided by the base commit, "
             + "so a job cannot add or change a project, a package, a lock file, a runner configuration or a link, and nothing was run. This is an interim rule (the owner decides): land such a change in a commit of its own, or take it in by hand.";
     }
 }

@@ -138,17 +138,17 @@ internal sealed class BoundaryBed : IAsyncDisposable
         new(Launcher, host ?? Host) { Degrade = degrade };
 
     /// <summary>One <c>sh -c</c> script run as a step of this job in its own unit; the unit's name is <c>part</c>. The preflight runs first, as it does before a job, and must admit it.</summary>
-    public Task<BoundaryRun> ShellAsync(string script, string part = "s1", CheckNetwork network = CheckNetwork.Private, CheckBoundary? boundary = null, TimeSpan? timeout = null, CancellationToken ct = default) =>
-        CommandAsync(["/bin/sh", "-c", script], new Dictionary<string, string?>(), part, network, boundary, timeout, ct);
+    public Task<BoundaryRun> ShellAsync(string script, string part = "s1", CheckNetwork network = CheckNetwork.Private, CheckBoundary? boundary = null, TimeSpan? timeout = null, CancellationToken ct = default, bool restore = false) =>
+        CommandAsync(["/bin/sh", "-c", script], new Dictionary<string, string?>(), part, network, boundary, timeout, ct, restore);
 
-    public async Task<BoundaryRun> CommandAsync(IReadOnlyList<string> command, IReadOnlyDictionary<string, string?> extra, string part = "s1", CheckNetwork network = CheckNetwork.Private, CheckBoundary? boundary = null, TimeSpan? timeout = null, CancellationToken ct = default)
+    public async Task<BoundaryRun> CommandAsync(IReadOnlyList<string> command, IReadOnlyDictionary<string, string?> extra, string part = "s1", CheckNetwork network = CheckNetwork.Private, CheckBoundary? boundary = null, TimeSpan? timeout = null, CancellationToken ct = default, bool restore = false)
     {
         boundary ??= Boundary();
         var admission = await boundary.AdmitAsync(Job, [network], ct);
         var admitted = admission.Should().BeOfType<BoundaryAdmission.Admitted>(admission.ToString()).Subject;
         var choice = network == CheckNetwork.Private ? NetworkChoice.None("test") : NetworkChoice.OnHost("test");
 
-        return await boundary.RunAsync(admitted, Job, choice, part, command, extra, timeout ?? TimeSpan.FromSeconds(60), 1024 * 1024, ct);
+        return await boundary.RunAsync(admitted, Job, choice, part, command, extra, timeout ?? TimeSpan.FromSeconds(60), 1024 * 1024, ct, restore: restore);
     }
 
     /// <summary>The units of this job that are still loaded — a check's (<c>coai-check-</c>) or the coder's (<c>coai-coder-</c>). Empty where there is no systemctl at all: then no unit can have been started.</summary>

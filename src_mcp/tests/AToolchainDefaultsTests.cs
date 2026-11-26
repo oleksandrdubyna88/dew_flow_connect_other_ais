@@ -63,7 +63,7 @@ public sealed class AToolchainDefaultsTests
         dotnet.Steps["build"]!.Argv.Should().Equal("dotnet", "build", "{unit}", "-c", "Debug", "--no-restore", "-m:{jobs}");
         dotnet.Steps["typecheck"].Should().BeNull("dotnet has no typecheck step");
         dotnet.Steps["test"]!.ByRunner["vstest"].Should().Equal("dotnet", "test", "{unit}", "--no-build", "-c", "Debug");
-        dotnet.Steps["test"]!.ByRunner["mtp"].Should().Equal("dotnet", "test", "--project", "{unit}", "--no-build", "-c", "Debug");
+        dotnet.Steps["test"]!.ByRunner["mtp"].Should().Equal("dotnet", "test", "--project", "{unit}", "--no-build", "-c", "Debug", "--no-launch-profile");
         dotnet.Steps["format"]!.Argv.Should().Equal("dotnet", "format", "whitespace", ".", "--folder", "--include", "{file}");
         dotnet.Steps["format"]!.Extensions.Should().Equal(".cs");
         dotnet.Switches.Keys.Should().Equal("NO_COLOR", "DOTNET_NOLOGO", "DOTNET_CLI_TELEMETRY_OPTOUT", "MSBUILDDISABLENODEREUSE");

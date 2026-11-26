@@ -240,7 +240,7 @@ public sealed class CheckRunner(IProcessLauncher launcher, CheckBoundary? bounda
     {
         try
         {
-            return new StartedStep(await boundary!.RunAsync(admitted, job, network, $"s{number}", command, step.Switches, step.Timeout, CheckLimits.LogBytes, ct, workingFolder), string.Empty);
+            return new StartedStep(await boundary!.RunAsync(admitted, job, network, $"s{number}", command, step.Switches, step.Timeout, CheckLimits.LogBytes, ct, workingFolder, restore: step.Step == CheckStep.Restore), string.Empty);
         }
         catch (ArgumentException e)
         {

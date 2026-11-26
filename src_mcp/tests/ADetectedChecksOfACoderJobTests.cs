@@ -193,7 +193,7 @@ public sealed class ADetectedChecksOfACoderJobTests
         var result = await RunAsync(bed, Checks(bed));
 
         result.State.Should().Be(CheckState.ToolchainRefused);
-        result.Note.Should().Contain("rust").And.Contain("native/Cargo.toml");
+        result.Note.Should().Contain("frozen build definition", "the gate refuses a path that is not a source file before the detection names the stack");
     }
 
     [Fact]

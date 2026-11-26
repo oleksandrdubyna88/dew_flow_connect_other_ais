@@ -139,6 +139,12 @@ public sealed record CheckResult(CheckState State, IReadOnlyList<StepRecord> Ste
     /// <summary>What level one of the selection decided for the round: which projects ran and what was left out, with the reason (E4 s3 t6). Null when no selection was made (a file that states every command, a run with no coder job).</summary>
     public AffectedSelection? Selection { get; init; }
 
+    /// <summary>The paths of the head the gate refused (spelled by <see cref="PathSpelling"/>), for the job's record — never for a sentence (S24 of pass 3); empty for any other state.</summary>
+    public IReadOnlyList<string> RefusedPaths { get; init; } = [];
+
+    /// <summary>How many test files the head modified, added and deleted (S21 of pass 3); null when the head was not read.</summary>
+    public TestFileCounts? HeadTests { get; init; }
+
     /// <summary>Only a run that ran every step and saw every one pass.</summary>
     public bool Green => State == CheckState.Green;
 

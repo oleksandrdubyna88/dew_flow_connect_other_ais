@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using System.Text.Json;
 
 namespace CoaiMcp.Core.Toolchain;
@@ -76,14 +77,26 @@ public sealed class ToolchainDefaults
 
     private static readonly Lazy<ToolchainDefaults> Shipped = new(() => Parse(ReadSeed()));
 
-    private ToolchainDefaults(IReadOnlyDictionary<string, StackDefaults> stacks, IReadOnlyDictionary<string, IReadOnlyList<string>> frozen)
+    private ToolchainDefaults(IReadOnlyDictionary<string, StackDefaults> stacks, IReadOnlyDictionary<string, IReadOnlyList<string>> frozen, IReadOnlyList<string> allowedSourceExtensions, string configNamePattern, Regex configName)
     {
         Stacks = stacks;
         Frozen = frozen;
+        AllowedSourceExtensions = allowedSourceExtensions;
+        ConfigNamePattern = configNamePattern;
+        ConfigName = configName;
     }
 
     /// <summary>The frozen build definitions (INTERIM, the owner decides): the patterns of file names, by group, whose change by a coder's head refuses the checks. See <see cref="FrozenDefinitions"/>.</summary>
     public IReadOnlyDictionary<string, IReadOnlyList<string>> Frozen { get; }
+
+    /// <summary>The extensions (lower case, with the dot) of the source files a coder's head may change (the allow list of the interim gate).</summary>
+    public IReadOnlyList<string> AllowedSourceExtensions { get; }
+
+    /// <summary>The regular expression (without case) of a configuration's file name: a file whose name matches it is never an allowed source file, whatever its extension.</summary>
+    public string ConfigNamePattern { get; }
+
+    /// <summary>The compiled <see cref="ConfigNamePattern"/>, with a timeout.</summary>
+    internal Regex ConfigName { get; }
 
     /// <summary>Every frozen pattern of every group.</summary>
     public IReadOnlyList<string> FrozenPatterns => [.. Frozen.Values.SelectMany(group => group).Distinct(StringComparer.OrdinalIgnoreCase)];
@@ -128,12 +141,32 @@ public sealed class ToolchainDefaults
             }
 
             var frozen = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+            IReadOnlyList<string> allowed = [];
+            var configPattern = string.Empty;
             if (root.TryGetValue("frozen", out var frozenElement))
             {
                 foreach (var (group, names) in Members(frozenElement, "frozen", null))
                 {
                     if (group == "comment")
                     {
+                        continue;
+                    }
+
+                    if (group == "allowedSourceExtensions")
+                    {
+                        allowed = Strings(names, "frozen.allowedSourceExtensions");
+                        if (allowed.Count == 0 || allowed.Any(extension => extension.Length < 2 || extension[0] != '.' || extension.Contains('/') || extension.Contains('\\') || extension != extension.ToLowerInvariant() || extension.IndexOf('.', 1) >= 0))
+                        {
+                            throw new ToolchainDefaultsException("frozen.allowedSourceExtensions: a list of lower case extensions, each one dot and a name");
+                        }
+
+                        continue;
+                    }
+
+                    if (group == "configNamePattern")
+                    {
+                        configPattern = names.ValueKind == JsonValueKind.String ? names.GetString() ?? string.Empty : throw new ToolchainDefaultsException("frozen.configNamePattern: a text was expected");
+
                         continue;
                     }
 
@@ -145,7 +178,22 @@ public sealed class ToolchainDefaults
                 }
             }
 
-            return new ToolchainDefaults(stacks, frozen);
+            Regex configName;
+            try
+            {
+                configName = new Regex(configPattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
+            }
+            catch (ArgumentException)
+            {
+                throw new ToolchainDefaultsException("frozen.configNamePattern: a regular expression was expected");
+            }
+
+            if (allowed.Count == 0 || configPattern.Length == 0)
+            {
+                throw new ToolchainDefaultsException("frozen: 'allowedSourceExtensions' and 'configNamePattern' are both required");
+            }
+
+            return new ToolchainDefaults(stacks, frozen, allowed, configPattern, configName);
         }
     }
 

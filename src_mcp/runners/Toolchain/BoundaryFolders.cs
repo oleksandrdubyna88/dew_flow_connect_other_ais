@@ -52,6 +52,32 @@ internal static class BoundaryFolders
         return copy;
     }
 
+    /// <summary>
+    /// M16 of pass 3: empties the job's home and its two temp folders (the folders stay: they are bind sources). Called before AND after every check step, so a step's writes — a configuration in the home that MSBuild or npm reads by itself, a file in the temp folder — are seen by no other step and
+    /// no other round. A directory a step made read-only is made writable first. Links are removed, never followed. A sentence says what could not be removed; empty when all is empty.
+    /// </summary>
+    internal static string EmptyForStep(BoundaryJob job)
+    {
+        foreach (var folder in new[] { job.HomeFolder, job.TempFolder, job.VarTempFolder })
+        {
+            try
+            {
+                if (Directory.Exists(folder))
+                {
+                    Files.GitScratch.DeleteLeavingLinkTargetsUnread(folder);
+                }
+
+                Directory.CreateDirectory(folder);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                return $"a folder of the job could not be emptied between two steps, so the step was not run: {e.GetType().Name}";
+            }
+        }
+
+        return string.Empty;
+    }
+
     /// <summary>Removes the Windows program's copy and the three markers, as soon as the preflight unit has ended.</summary>
     internal static void Tidy(BoundaryJob job, string copy, string temp, string varTemp)
     {

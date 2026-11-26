@@ -36,6 +36,9 @@ internal sealed record CoderChecksRound(int Turn, string HeadSha, string State, 
     /// <summary>What level one of the selection decided: the projects that ran and each one left out with its reason (E4 s3 t6); null when nothing was selected.</summary>
     public AffectedSelection? Selection { get; init; }
 
+    /// <summary>How many test files the head modified, added and deleted (S21 of pass 3): the gate lets a head edit tests, so the envelope says how many it touched.</summary>
+    public TestFileCounts? HeadTests { get; init; }
+
     public const string TreeChanged = "tree_changed";
 
     /// <summary>Only a run that ran every step, saw every one pass, and left the worktree and HEAD where they were.</summary>
@@ -97,6 +100,7 @@ internal sealed class CoderChecks(IRoleRun run, GitHistory git, CoderOsLayer lay
         var result = await new ChecksAtBase(git, new CheckRunner(layer.Launcher, layer.ChecksBoundary()))
             .RunCoderJobAsync(new DiskWorkFolder(tree.Root), baseSha, layer.Job, logs, Jobs, ct, step => RecordStep(logs, step));
         RecordRefusal(result, logs);
+        RecordRefusedPaths(result, logs);
         ct.ThrowIfCancellationRequested();
         var after = await StateAsync(ct);
         if (Moved(before, after) is { Length: > 0 } moved)
@@ -104,7 +108,7 @@ internal sealed class CoderChecks(IRoleRun run, GitHistory git, CoderOsLayer lay
             return Unverified(turn, head, moved, Steps(result));
         }
 
-        return new CoderChecksRound(turn, head, result.State.Wire(), Steps(result), result.Note, result.State == CheckState.Failed ? DigestOf(result) : []) { Toolchain = result.Toolchain, Selection = result.Selection };
+        return new CoderChecksRound(turn, head, result.State.Wire(), Steps(result), result.Note, result.State == CheckState.Failed ? DigestOf(result) : []) { Toolchain = result.Toolchain, Selection = result.Selection, HeadTests = result.HeadTests };
     }
 
     /// <summary>
@@ -121,6 +125,25 @@ internal sealed class CoderChecks(IRoleRun run, GitHistory git, CoderOsLayer lay
 
         var part = $"s{step.Number}";
         Record(logs, part, CoderUnitRecord.CheckUnitName(layer.Job, part), step.Boundary, step.Started, $"{step.Project} {step.Step.Wire()}");
+    }
+
+    /// <summary>S24 of pass 3: the paths the gate refused go into the job's record (<c>refused-paths.txt</c> beside the round's logs, spelled by <see cref="PathSpelling"/>), not into the sentence the model reads.</summary>
+    private void RecordRefusedPaths(CheckResult result, string logs)
+    {
+        if (result.RefusedPaths.Count == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            Directory.CreateDirectory(logs);
+            File.WriteAllLines(Path.Combine(logs, "refused-paths.txt"), result.RefusedPaths);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            run.Log.Warning("role job {JobId}: the refused paths of the checks could not be written", run.Request.JobId);
+        }
     }
 
     /// <summary><c>unit-preflight.json</c> when the preflight refused the checks and no unit of a step ran.</summary>
@@ -191,9 +214,23 @@ internal sealed class CoderChecks(IRoleRun run, GitHistory git, CoderOsLayer lay
             return status.Refusal.Length > 0 ? status.Refusal : "git could not read the worktree's status before the checks, so the checks are not trusted and nothing was run";
         }
 
-        return status.Out.Length == 0
-            ? string.Empty
-            : "the worktree is not equal to the commit the checks were to run on (after git clean -ffdx, git status --ignored still shows changes), so the checks are not trusted and nothing was run";
+        if (status.Out.Length != 0)
+        {
+            return "the worktree is not equal to the commit the checks were to run on (after git clean -ffdx, git status --ignored still shows changes), so the checks are not trusted and nothing was run";
+        }
+
+        // S22 of pass 3: neither the clean nor the status sees a folder named .git inside a tracked folder (git takes it for a nested repository and leaves it alone).
+        return HasANestedGit(tree.Root)
+            ? "the worktree holds a .git entry below its root, which git's clean and status do not look into, so the checks are not trusted and nothing was run"
+            : string.Empty;
+    }
+
+    private static bool HasANestedGit(string root)
+    {
+        var options = new EnumerationOptions { RecurseSubdirectories = true, AttributesToSkip = FileAttributes.ReparsePoint, IgnoreInaccessible = true, MatchType = MatchType.Simple };
+        var own = Path.Combine(root, ".git");
+
+        return Directory.EnumerateFileSystemEntries(root, ".git", options).Any(entry => !string.Equals(entry, own, StringComparison.Ordinal));
     }
 
     /// <summary>The worktree as git sees it: HEAD and the porcelain status (tracked changes and untracked files that are not ignored), or the sentence that says git could not answer.</summary>

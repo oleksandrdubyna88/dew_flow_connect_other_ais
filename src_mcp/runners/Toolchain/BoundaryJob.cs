@@ -119,6 +119,9 @@ public sealed record BoundaryJob(
     /// <summary>The per-job folders a check unit binds at their own path (its <c>HOME</c>, the package and cache folders): every folder of <see cref="Folders"/> but the two temp folders, which are bound at <c>/tmp</c> and <c>/var/tmp</c>. The coder's folder is not one of them.</summary>
     public IReadOnlyList<string> CheckFolders => [HomeFolder, NuGetFolder, NpmFolder, DotnetFolder];
 
+    /// <summary>The package and cache folders of a check unit (M16 of pass 3): writable in a restore step only, read-only in every other step. The home and the two temp folders are emptied before and after every step.</summary>
+    public IReadOnlyList<string> CacheFolders => [NuGetFolder, NpmFolder, DotnetFolder];
+
     /// <summary>Every per-job folder coai makes, in the order they are made.</summary>
     public IReadOnlyList<string> Folders => [HomeFolder, TempFolder, VarTempFolder, NuGetFolder, NpmFolder, DotnetFolder];
 

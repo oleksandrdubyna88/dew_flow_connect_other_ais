@@ -185,7 +185,7 @@ public sealed class ADotnetDetectorTests
     {
         var unit = Detected(Detect(("App.slnx", "x"), ("tests/T.csproj", Mtp), ("global.json", SdkMtp))).Single();
 
-        unit.Steps.Single(step => step.Name == "test").Argv.Should().Equal("dotnet", "test", "--project", "./tests/T.csproj", "--no-build", "-c", "Debug");
+        unit.Steps.Single(step => step.Name == "test").Argv.Should().Equal("dotnet", "test", "--project", "./tests/T.csproj", "--no-build", "-c", "Debug", "--no-launch-profile");
         unit.Fact("runner").Should().Be("mtp");
         unit.Fact("mtpOptIn").Should().Be("true");
     }
