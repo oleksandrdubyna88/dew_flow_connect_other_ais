@@ -317,3 +317,97 @@ The `shift 9` (item 4), apart from M4:
   `SubmodulesRow(1)` shifts past the stand-in to the mounts; the coder's script is unchanged (`SubmodulesRow(4)`). No script spells `${` (grep of `BoundaryPreflight.cs`), so the manager changes nothing in the script's text.
 - A row the script did not print is a row that did not hold (`BoundaryPreflight.Parse`), so a script that died at the shift refuses the job.
 - With `--expand-environment=no` every shape of P4 arrives as written (P6), so M4's fix needs no change of any script.
+
+
+---
+
+# Pass 3 — the pass-2 fixes in `2eb40e31`, and the security-relevant code of s8 t1 (`a7358b69`) (2026-11-26)
+
+Judge: Fable (security judgement role). Read-only for product code: no edit, no build, no test run, no model call.
+Branch `feat/v2-ep3-e3-roles` at `2eb40e31`. Every path and line below is at `2eb40e31` (`git show 2eb40e31:<path>`, `git diff 893382a3 2eb40e31`); the working files were not read.
+
+Read: the product diff of the range (14 files); `src_mcp/runners/Toolchain/{CoderBoundary,CoderUnit,CoderTurns,CheckBoundary,BoundaryPreflight,BoundaryFolders,UnitControl,BoundaryHost}.cs`; `src_mcp/runners/Consultation/CoderVendors.cs`;
+`src_mcp/runners/Files/RealPath.cs`; `src_mcp/src/Server/RoleJobs/{CoderOsLayer,RoleFailover,CoderWork,CoderRoute,RoleRoute,RoleJobService,RoleModelLauncher,RoleKeyRoad,CoderJobFolders,CoderInstructions}.cs`;
+`src_mcp/core/Work/StrictYamlReader.cs`; `src_mcp/tests_fakecli/{Program,CoderVerbs,ModelMap}.cs` and the project files; `src_mcp/tests/ACoderFailsOverAcrossVendorsTests.cs`; SPEC section E; S3 and S4 of the judgement; the s8 todo.
+
+Run by the judge: one scratch unit of a made-up process (P8; killed and reset, none is left). No test was run. Not read: any key file, any environment.
+
+## P3.1 Verdict
+
+**The pass-2 must-changes are closed**: M4, M5, M6 (both parts) and S13 are fixed as asked.
+
+**s8 t1: must-change 1 (M7), then ready.** It is in code E2 wrote; s8 t1 is the change that makes it matter between vendors, and its new class states the opposite as a fact.
+
+| # | What | Where |
+|---|---|---|
+| M7 | A coder unit that could NOT be stopped does not end the job. The failover goes on to the next model, of another vendor too, beside a unit that is still alive, and `LeaveVendor` runs with a live writer in the home | `CoderTurns.cs:93-114`, `CoderOsLayer.cs:89-94`, `:172-173`, `RoleFailover.cs:362` |
+
+**"A vendor other than claude gets none of claude's credentials" is the right reading of SPEC E7** ("a unit holds only its own vendor's sign-in"), and it does not stand in the way of s7 t6: a copy for the job lies in the coder's home and needs no bind from the host.
+It is half of E7. The other half, and one thing t6 must decide before it makes a copy, are C2 below.
+
+## P3.2 What was measured
+
+| # | Question | Answer |
+|---|---|---|
+| P8 | A scratch user unit whose one process ignores the stop signal; then `systemctl --user stop` with the product's wait of 20 s (`UnitControl.cs:19`) | The unit's `TimeoutStopUSec` is 1 min 30 s (the manager's default; the product sets none). After the 20 s the stop client was ended, the unit was **`deactivating`** and its process **alive**. `EnsureGoneAsync` answers "not gone" for that state. A kill signal ended it |
+
+## P3.3 Must-change
+
+**M7. A unit that could not be stopped is read as a model that crashed.**
+
+- Where: `CoderTurns.Classify` (`CoderTurns.cs:93-114`) asks `!run.Gone` only for a process that exited 0, and even then answers `CoderTurnOutcome.Failed`. For an exit that is not 0 the sentence is "the coder exited N" and `Gone` is not looked at.
+  `CoderOsLayer.StopOf` (`CoderOsLayer.cs:89-94`) makes a job-ending stop of `WriteStopped` and `Refused` only; `CoderTurnLauncher.Failure` (`:172-173`) hands the failover a plain failed process, which it classifies as a crash and answers with the next model.
+  `RoleFailover.AttemptAsync` then calls `VendorLeft` (`RoleFailover.cs:362`) and starts the next unit. The remark of `CoderSignInCopy` (`CoderOsLayer.cs:181`) says "the vendor's unit has ended and been stopped before this runs, so nothing races the resolution". Nothing makes that true. No test holds the path.
+- How a unit stays: P8. Any process that ignores the stop signal lives up to 90 s; coai waits 20. The `systemd-run` client must also end early for the result to be a crash. It ends by itself when the manager's connection drops, and a process in a unit can end it:
+  a unit may signal the person's processes (P3 and S1 of the E2 verify; `PrivatePIDs` was taken out again, `6786502c`). A claude coder has no shell. A codex coder has one.
+- Scenario: a job on codex, then agy. A process the codex model started ignores the stop signal and ends its own client. coai reads a crash, waits 20 s, deletes codex's sign-in copy and starts agy's unit. For up to 70 s more the old unit runs with the coder's home, its temp folders and the worktree writable:
+  1. it writes the sign-in back (a CLI that refreshes its token rewrites the file by itself; S4 of the judgement says agy does), and agy's unit reads it: E7 is broken;
+  2. it swaps the copy's folder for a link between `RealPath.Resolve` (`:196-197`) and `File.Delete` (`:229`), and the delete lands in the folder the link names, the person's real one among them. One try for each failover, a narrow window, a real one;
+  3. it edits the worktree under the next coder and under coai's `git add`, after `Restore` proved the tree clean.
+  The same road was there in E2 between two claude models (point 3 only). s8 t1 adds another vendor's sign-in to it.
+- Smallest fix: in `Classify`, `!run.Gone` FIRST and for every result, as an outcome of its own that `StopOf` turns into `coder-boundary` (kind `unit-not-stopped`, started: true): the job ends, nothing of the turn is committed, no next attempt.
+  To make it rare as well: `TimeoutStopSec=` on every unit of the family, shorter than the stop wait (10 s against 20), so the manager kills what ignores the signal while coai still waits.
+  One test on a real unit: a turn whose process ignores the stop signal and whose client is ended finishes the job `coder-boundary` with no later launch; and the remark of `CoderSignInCopy` then names the stop that makes it true.
+
+## P3.4 Should
+
+- **C2. Before s7 t6 makes a copy: one home for each vendor, or the delete is not enough.** `LeaveVendor` removes ONE file at ONE path. Every vendor's unit binds the same coder folder (`CoderUnit.cs:61-63`: home, `/tmp`, `/var/tmp`), and nothing between two vendors empties it (`BoundaryFolders.Tidy` removes three markers).
+  So what the left vendor's CLI or model put anywhere else in the home or the temp folders, a second name of the copy (a hard link, a plain copy), a refresh file, a note, is read by the next vendor's unit. An ignored file in the worktree goes the same way.
+  The copy at its own path, untouched, is handled; a copy that moved is not, and after the delete coai no longer knows the token texts S4 wants searched in a commit.
+  The structural answer: `<job>/coder/<vendor>/…`, bound only into that vendor's unit; the delete is then hygiene and no path a model could prepare is walked. Else: remember the token texts of every copy the job made, for the commit search of every later turn.
+  Also for t6, from S16: the REAL sign-in files of codex and agy must be out of claude's units and the check units where the home is not under a hidden folder; the coder's preflight has no other-job row, and a claude coder's unit binds the whole coder root (S20).
+- **S21. By reading, not measured: a left vendor whose folder was never made ends the job instead of failing over.** `RealPath.Resolve` answers OK for a path whose last names are missing (`RealPath.cs:345`), so the branch at `CoderOsLayer.cs:204-208` ("the folder is not there") is not reached for a missing folder.
+  The code goes on to `File.Delete` (`:229`), which on Linux throws `DirectoryNotFoundException` when the file's folder is not there; that is an `IOException`, so the answer is "could not be deleted" and the job ends `coder-boundary`.
+  It is reached when the first vendor never got as far as its folders: its CLI is missing or its probe refused, so `_lastVendor` is set (`RoleFailover.cs:373`) and `BoundaryFolders.Prepare` never ran. A job that should go from a missing claude CLI to the next vendor would stop instead. The closed side, but the wrong stop.
+  Ask `Lstat(folder)` for `Missing` first and answer empty; one test with a first vendor that was never started.
+- **S22. `VendorLeft` answers "nothing left" for a vendor it cannot resolve** (`CoderWork.cs:127`). Not reachable today (the vendor was launched through the same `Resolve`); make it the sentence, not the empty string.
+- **S23. The branch is on the vendor's id** (`CoderBoundary.cs:71`: `Vendor.Id != CoderBoundaryTable.Claude`). SPEC E5 wants one table and no second place that decides by vendor. The seam already holds the fact as data: bind the host's file only for a vendor whose recipe is `BindRealFile`.
+  And the words: such a launch is recorded as `keyed` and its rows speak of "a launch that has a pool key" (`BoundaryPreflight.cs`, `SignInAbsentRow`, `KeysHiddenRow`, `SignInRow`). With t6 it is a third state, a copy of its own, with rows of its own (0600 in 0700, its own file there, no other vendor's).
+- **S24. The coder's preflight asks for the key FOLDER only** (`BoundaryPreflight.cs:257`); the property hides the folder and the keys file (`BoundaryUnit.KeysHidden`), and the check's row asks both. Give the coder's row the same list. It is the row that now speaks for every unit of another vendor.
+- **S25.** The fake's `readFiles` writes the first 80 characters of every file it is told to read into the record folder (`CoderVerbs.TryRead`). The tests name stand-ins only (the rig's home is a temp folder). Say in the field's remark that a real path must never be named there; SPEC E3.
+- **Open from the earlier passes:** S2 (path sockets), S5 to S8, S11, S12, S14 to S20 as far as not named above. S14 is closed by M5's fix (a file or a link at the stand-in's name is not touched).
+
+## P3.5 Confirmed safe
+
+The pass-2 fixes:
+
+- **M4.** `--expand-environment=no` is in `DetachedLauncher.UnitPrefix` (`DetachedLauncher.cs:37`), and `BoundaryUnit.Wrap` (`BoundaryUnit.cs:176`) builds every unit's line from it; a grep finds no other place that builds a `systemd-run` line. Measured in pass 2 (P6). An old client's refusal names the version. Two tests on a real unit.
+- **M5.** The stand-in is made in `Path.GetDirectoryName(JobRoot)` whatever the cover (`CheckBoundary.cs:144`); a leftover folder of that name is replaced, a file or a link there is never touched and gives no stand-in (`:151-160`); no stand-in is the row `bad … nothing was observed` (`BoundaryPreflight.cs:174`).
+  The job folder is refused when it is not its own real path before any of this runs. Three tests: the own-cover layout is asked, the one-folder layout that the unit shows goes red and refuses the job, a stand-in that cannot be made is a bad row.
+- **M6.** The YAML reader repeats no text of the file: the five messages that did are fixed sentences now and `Shorten` is gone; what it still puts into a message is a size, a line number and a named indicator. `CoderInstructions.cs:110` passes the whole refusal through `Redaction.SafeText`.
+- **S13.** `CoderJobFolders.RemoveOf` removes the stand-in by its one name (`:52`), by the same `Remove` that leaves a link alone; the record stays while any of the three names stays.
+
+s8 t1:
+
+- **No claude credential in another vendor's unit.** `HostFor` and `KeyedLaunch` (`CoderBoundary.cs:65`, `:71`) give every launch of another vendor a host with `BindSignIn` false, in the admission and in the run alike, so `BoundaryHost.SignInFile` is empty and no property names the file.
+  The preflight asks from inside in the keyed mode: the sign-in is at neither its place in the job's home nor its real path, and the key folder cannot be read. A vendor's own property list that forgot the hiding is refused by those rows.
+  Only a claude model draws a pool key (`RoleKeyRoad.Fresh`, `:91-93`), so no claude key is on another vendor's stdin. In the product today only claude has a type (`CoderVendors.Shipped`), so none of this runs outside a test yet.
+- **The delete does not leave the home.** `CoderSignInCopy.Remove` resolves the home and the copy's FOLDER and refuses a folder that resolves outside the home (`CoderOsLayer.cs:210-214`); the delete is of the last name under the resolved folder, and `File.Delete` removes a link, never what it points at.
+  A folder at the copy's name is refused. After the delete the name is looked at again. Every refusal ends the job `coder-boundary` before the next unit (`RoleFailover.cs:362-365`), and it runs before `Restore` and before anything of the next attempt. With no live writer (M7) there is no window.
+- **The empty place of claude's bind.** Deleted only when it is a regular file of length 0 (`:224-227`): a link, a folder or a file with something in it is refused and ends the job.
+  A planted link cannot be followed (the kind is read without following, and the delete is of the name). A hard link there is one more name of an empty file; removing it changes nothing else. The real file cannot be hard-linked from inside the unit (another mount).
+  A model that put a COPY of the real sign-in there makes the job stop, which is right; a copy under another name is C2.
+- **A refused vendor is never launched; a refused model makes nothing.** The start routes first (`RoleJobService.cs:80`), before the key check, the store, the job id and the runner; `CoderRoute.Narrow` drops entries of a vendor that does not resolve and refuses a model the caller named on one. The worktree is made later still, by the runner.
+  The runner asks the set again at every launch (`RoleModelLauncher.cs:65`). `CoderSet` and `Vendors` are `internal` properties with the product's set as their value; no setting, no environment name and no argument reaches them (grep).
+- **The fake cannot be reached in a product build.** `FakeCli` is a project of its own; no product project references it, only the two test projects; the product reads no `FAKECLI_` name; CI builds it and never publishes it. `readFiles` is read from a test's model map, inside the fake only.
+- **The reading of E7** (the question): right, for the reasons in the verdict. What it leaves for t6 is C2 and S23.
