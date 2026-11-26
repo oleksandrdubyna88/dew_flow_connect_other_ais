@@ -26,6 +26,9 @@ internal sealed record CoderPromptRecord(string Id, string Sha256)
 /// </summary>
 internal sealed record CoderCliRecord(string Vendor, string Installed, string LastMeasured)
 {
+    /// <summary>What the preflight rows of this vendor do not prove (ids of class <c>release</c>: measured on the release named beside the installed one, never probed before the job); empty for a vendor that says nothing.</summary>
+    public string NotProved { get; init; } = string.Empty;
+
     /// <summary>No CLI was launched (a job that ended before any model).</summary>
     public static CoderCliRecord None { get; } = new(string.Empty, string.Empty, string.Empty);
 
@@ -40,6 +43,11 @@ internal sealed record CoderCliRecord(string Vendor, string Installed, string La
         json.WriteString("vendor", Vendor);
         json.WriteString("installed", Installed);
         json.WriteString("lastMeasured", LastMeasured);
+        if (NotProved.Length > 0)
+        {
+            json.WriteString("notProvedByPreflight", NotProved);
+        }
+
         json.WriteEndObject();
     }
 }

@@ -65,6 +65,12 @@ internal sealed partial class RoleModelLauncher(Func<string, string?> settings, 
     public async Task<RoleLaunched> LaunchAsync(ModelRef model, string prompt, string repoPath, string outputDir, TimeSpan timeout, CancellationToken ct, string handle = "", RoleKey? key = null)
     {
         var (runtime, name) = RuntimeOf(model.Vendor);
+        // A vendor whose sign-in lives for a limited time caps the deadline of every turn of it (agy: under the life of a token).
+        if (Coder is not null && Vendors.Resolve(model.Vendor) is CoderVendorResolution.Launchable capped && capped.Vendor.TurnDeadline is { } cap && cap < timeout)
+        {
+            timeout = cap;
+        }
+
         if (Coder is not null && Vendors.Resolve(model.Vendor) is CoderVendorResolution.Refused unshipped)
         {
             // A vendor the table does not ship is never launched as a coder: the refusal names the shipped ones, and the failover goes on to the next model.
@@ -97,7 +103,7 @@ internal sealed partial class RoleModelLauncher(Func<string, string?> settings, 
             McpServersToSwitchOff = NoMcpServers.CodexConfigured(settings),
         })
         {
-            Confinement = Coder is null ? LaunchConfinement.AsShipped : Coder with { KeyId = keyId, Vendor = model.Vendor, Resume = handle.Length == 0 ? CoderHandle.None : CoderHandle.Bind(Coder with { KeyId = keyId, Vendor = model.Vendor }, handle) },
+            Confinement = Coder is null ? LaunchConfinement.AsShipped : Coder with { KeyId = keyId, Vendor = model.Vendor, WorkFolder = Layer is not null && Vendors.Resolve(model.Vendor) is CoderVendorResolution.Launchable found ? found.Vendor.WorkingDirectory(Layer.Job) : string.Empty, Resume = handle.Length == 0 ? CoderHandle.None : CoderHandle.Bind(Coder with { KeyId = keyId, Vendor = model.Vendor }, handle) },
             // The ONE place the text of a pool key is taken: it goes into the credential, which puts it in the child's environment and nowhere else.
             Credential = pooled is null ? null : new LaunchCredential(pooled.Secret.Id, pooled.Secret.Reveal()),
             OwnHome = pooled is null || Coder is not null ? string.Empty : Path.Combine(outputDir, "claude-home"),

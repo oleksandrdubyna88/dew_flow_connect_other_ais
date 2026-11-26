@@ -64,6 +64,7 @@ internal static partial class CoderUnit
             $"BindPaths={job.CoderVarTempFolder}:{BoundaryUnit.UnitVarTemp}",
             .. host.SignInFile.Length > 0 ? [$"BindReadOnlyPaths={host.SignInFile}:{job.CoderSignInFileOf(vendor)}"] : Array.Empty<string>(),
             .. KeysHidden(host, job),
+            .. BoundaryUnit.VendorSignInsHidden(host),
             .. program.BindFolder.Length > 0 ? [$"BindReadOnlyPaths={program.BindFolder}"] : Array.Empty<string>(),
             .. host.ResolverFile.Length > 0 ? [$"BindReadOnlyPaths={host.ResolverFile}"] : Array.Empty<string>(),
             .. BoundaryUnit.Hardening,

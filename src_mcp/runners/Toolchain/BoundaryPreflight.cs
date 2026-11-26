@@ -72,13 +72,13 @@ internal static class BoundaryPreflight
     /// <summary>The name of the Windows program's copy in the worktree while the preflight runs. Removed as soon as the unit ends.</summary>
     internal const string ProgramCopyName = ".coai-preflight.exe";
 
-    private const string Header = """
+    internal const string Header = """
         wt=$1; main=$2; rh=$3; net=$4; job=$5; exe=$6; res=$7
         row() { printf '%s\t%s\t%s\n' "$1" "$2" "$3"; }
         probe=.coai-preflight-probe
         """;
 
-    private const string WorktreeRow = """
+    internal const string WorktreeRow = """
         if [ ! -e "$wt/.coai-job-$job" ]; then row worktree-write bad "the worktree inside the unit is not the job's worktree"
         elif { true > "$wt/$probe"; } 2>/dev/null; then rm -f "$wt/$probe"; row worktree-write ok "a file was written in the worktree"; else row worktree-write bad "a write in the worktree failed"; fi
         """;
@@ -88,23 +88,23 @@ internal static class BoundaryPreflight
         elif { true > "$main/$probe"; } 2>/dev/null; then rm -f "$main/$probe"; row main-readonly bad "a file was WRITTEN in the main checkout"; else row main-readonly ok "the main checkout is there and a write in it was refused"; fi
         """;
 
-    private const string GitRow = """
+    internal const string GitRow = """
         if { true >> "$wt/.git"; } 2>/dev/null; then row git-readonly bad "the .git pointer of the worktree can be written"
         elif { true > "$main/.git/$probe"; } 2>/dev/null; then rm -f "$main/.git/$probe"; row git-readonly bad "a file was WRITTEN in the .git folder of the main checkout"
         else row git-readonly ok "writes to the .git pointer and to the main .git folder were refused"; fi
         """;
 
-    private const string ManagerRow = """
+    internal const string ManagerRow = """
         if systemd-run --user --quiet --wait --collect --unit "coai-check-$job-escape" true >/dev/null 2>&1; then row no-user-manager-inside bad "a new unit was started from inside the unit"; else row no-user-manager-inside ok "systemd-run --user cannot start a unit from inside"; fi
         """;
 
-    private const string ExeRow = """
+    internal const string ExeRow = """
         if [ -z "$exe" ]; then row windows-exe ok "this host has no Windows interop, so there was no .exe to try"
         elif "$exe" >/dev/null 2>&1; then row windows-exe bad "a Windows program in the worktree RAN"
         else row windows-exe ok "a Windows program in the worktree did not run"; fi
         """;
 
-    private const string HomeRow = """
+    internal const string HomeRow = """
         if [ -L "$HOME" ]; then row home-is-the-jobs bad "HOME is a link, not the job's own folder"
         elif [ "$HOME" = "$rh" ]; then row home-is-the-jobs bad "HOME is the real HOME"
         elif { true > "$rh/$probe"; } 2>/dev/null; then rm -f "$rh/$probe"; row home-is-the-jobs bad "a file was WRITTEN in the real HOME"
@@ -112,7 +112,7 @@ internal static class BoundaryPreflight
         else rm -f "$HOME/$probe"; row home-is-the-jobs ok "HOME is the job's own folder and the real HOME cannot be written"; fi
         """;
 
-    private const string TempRow = """
+    internal const string TempRow = """
         if [ -e "/tmp/.coai-job-$job" ] && [ -e "/var/tmp/.coai-job-$job" ]; then row tmp-is-the-jobs ok "/tmp and /var/tmp are the job's own folders"; else row tmp-is-the-jobs bad "/tmp or /var/tmp is not the job's own folder"; fi
         """;
 
@@ -122,7 +122,7 @@ internal static class BoundaryPreflight
         else row network-state ok "the host network, as the step asked"; fi
         """;
 
-    private const string SocketsRow = """
+    internal const string SocketsRow = """
         gone=
         [ -n "$(ls -A /run/user 2>/dev/null)" ] && gone="$gone /run/user is not empty;"
         if [ -n "$res" ]; then left=$(find /mnt -mindepth 1 -maxdepth 2 2>/dev/null | grep -vxF -e "$res" -e "$(dirname "$res")"); else left=$(find /mnt -mindepth 1 -maxdepth 2 2>/dev/null); fi
@@ -214,7 +214,7 @@ internal static class BoundaryPreflight
     /// The submodule row (epoch 3 E2 s6, the recorded change), present only for a job with a mount: <c>$1</c> after the shift is each mount's target as the unit sees it and then its source. For every mount the target must hold something (the files of the
     /// pinned commit, bound over the empty folder git leaves for a gitlink) and a new file in it must be refused; a write at the source's host path must be refused too, by a bind that is read-only or a path the unit cannot see. Only paths coai made are spelled into the sentence.
     /// </summary>
-    private static string SubmodulesRow(int shift) => $$"""
+    internal static string SubmodulesRow(int shift) => $$"""
         shift {{shift}}
         bad=
         while [ "$#" -ge 2 ]; do
@@ -227,7 +227,7 @@ internal static class BoundaryPreflight
         if [ -z "$bad" ]; then row submodules-readonly ok "every submodule mount holds files and a write into it was refused"; else row submodules-readonly bad "$bad"; fi
         """;
 
-    private static string Join(params string[] rows) => string.Join('\n', rows);
+    internal static string Join(params string[] rows) => string.Join('\n', rows);
 
     /// <summary>
     /// <c>$1</c> worktree, <c>$2</c> main checkout, <c>$3</c> real home, <c>$4</c> network (<c>none</c>|<c>host</c>), <c>$5</c> job id, <c>$6</c> the Windows program to try (empty: none), <c>$7</c> the resolver file bound back under <c>/mnt</c> for a host-network step (empty: none), <c>$8</c> the coder's folder, which must not be visible, <c>$9</c> the key folder and keys file, which must not be readable.

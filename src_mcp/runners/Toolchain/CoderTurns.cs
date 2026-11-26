@@ -51,10 +51,21 @@ public sealed class CoderTurns(CoderBoundary boundary, FilesystemInvariant invar
             return new CoderTurnOutcome.Refused(unsigned, new BoundaryRecord(BoundaryRecord.UnitBoundary, [], "host", CoderBoundary.NetworkReason, []));
         }
 
-        var admission = await bound.AdmitAsync(job, request.Executable, ct, CoderBoundary.CarriesKey(request));
+        // What the vendor writes for every launch (agy's guard folder, written and read back), before the preflight asks the unit about it.
+        if (bound.Vendor.PrepareLaunch(job) is { Length: > 0 } unprepared)
+        {
+            return new CoderTurnOutcome.Refused(unprepared, new BoundaryRecord(BoundaryRecord.UnitBoundary, [], "host", CoderBoundary.NetworkReason, []));
+        }
+
+        var admission = await bound.AdmitAsync(job, request.Executable, ct, CoderBoundary.CarriesKey(request), request.Timeout + UnitControl.Backstop);
         if (admission is BoundaryAdmission.Refused refused)
         {
             return new CoderTurnOutcome.Refused(refused.Sentence, refused.Record);
+        }
+
+        if (bound.Vendor.BeforeStart(job) is { Length: > 0 } notStarted)
+        {
+            return new CoderTurnOutcome.Refused(notStarted, new BoundaryRecord(BoundaryRecord.UnitBoundary, [], "host", CoderBoundary.NetworkReason, []));
         }
 
         var before = await SnapshotAsync(job.Tree.MainCheckout, ct);

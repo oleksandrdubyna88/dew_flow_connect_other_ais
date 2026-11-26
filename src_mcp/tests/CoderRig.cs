@@ -167,6 +167,15 @@ internal sealed class CoderRig : IAsyncDisposable
         return this;
     }
 
+    /// <summary>What FakeCli does for <paramref name="model"/> when each launch is a ready model-map entry (an agy coder: <c>agyTools</c> and the rest, <see cref="AgyCoderBed"/>) — the steering file is written again, as for <see cref="Says(string, Launch[])"/>.</summary>
+    internal CoderRig SaysEntries(string model, params IReadOnlyDictionary<string, object?>[] entries)
+    {
+        _inner.Says(model, [.. entries.Select(entry => (object)entry)]);
+        Steer(_inner.MapFile, _inner.RecordFolder);
+
+        return this;
+    }
+
     private void Steer(string map, string record)
     {
         _steering.Dispose();

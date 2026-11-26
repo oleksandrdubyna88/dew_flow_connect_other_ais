@@ -262,6 +262,12 @@ if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor" || minimal is
 
     GC.KeepAlive(ignoredTerm);
 
+    // The fake as an agy coder (epoch 3 E3 s6 t3, t5; model map `agyTools`): agy's stream, and for each scripted tool the hook of .agents/hooks.json asked the way agy asks it.
+    if (steering.Get("AGY_TOOLS") is { Length: > 0 } agyTools)
+    {
+        return CoaiMcp.FakeCli.AgyCoder.Run(args, agyTools, steering.Get, read("FAKECLI_RECORD_DIR") ?? string.Empty);
+    }
+
     var stderrText = steering.Get("STDERR");
     if (stderrText is { Length: > 0 })
     {

@@ -121,7 +121,7 @@ internal sealed class CoderWork : IRoleWork
             Ladder = Ladder,
             Coder = confinement,
             OsLayer = layer,
-            Follow = (answered, token) => FollowAsync(run, git, prepared, site, loop, judge.Accepted, new CoderFixSession(answered.Model, answered.Handle, confinement, answered.KeyId, answered.Secret), ++answers, layer, cap, note, instructions, sent.GetValueOrDefault(RoleRoute.Format(answered.Model)) ?? CoderPromptRecord.None, new CoderCliRecord(answered.Model.Vendor, answered.CliVersion, Vendors.LastMeasured(answered.Model.Vendor)), token),
+            Follow = (answered, token) => FollowAsync(run, git, prepared, site, loop, judge.Accepted, new CoderFixSession(answered.Model, answered.Handle, confinement, answered.KeyId, answered.Secret) { Counter = answered.Counter }, ++answers, layer, cap, note, instructions, sent.GetValueOrDefault(RoleRoute.Format(answered.Model)) ?? CoderPromptRecord.None, new CoderCliRecord(answered.Model.Vendor, answered.CliVersion, Vendors.LastMeasured(answered.Model.Vendor)) { NotProved = Vendors.Resolve(answered.Model.Vendor) is CoderVendorResolution.Launchable found ? found.Vendor.NotProvedByPreflight : string.Empty }, token),
             Restore = token => CoderRestore.RestoreAsync(git, prepared.Tree, loop.LastCommit, token),
             // A job that leaves a vendor for another deletes what that vendor kept in the job's home before the next unit starts (epoch 3 E3 s8 t1).
             VendorLeft = left => Vendors.Resolve(left) is CoderVendorResolution.Launchable found ? layer.LeaveVendor(found.Vendor) : string.Empty,
@@ -212,7 +212,7 @@ internal sealed class CoderWork : IRoleWork
 
         return ended switch
         {
-            CoderLoopEnd.Done done => new RoleFollowed.Ended(await EnvelopeAsync(run, git, prepared, layer, done, new CoderChecksReport(done.Rounds, cap, note), instructions, prompt, cli, ct)),
+            CoderLoopEnd.Done done => new RoleFollowed.Ended(await EnvelopeAsync(run, git, prepared, layer, done, new CoderChecksReport(done.Rounds, cap, note), instructions, prompt, loop.LastCliVersion.Length > 0 ? cli with { Installed = loop.LastCliVersion } : cli, ct)),
             CoderLoopEnd.FailOver failOver => new RoleFollowed.FailsOver(failOver.Why),
             _ => new RoleFollowed.Ended(((CoderLoopEnd.Halted)ended).Outcome),
         };

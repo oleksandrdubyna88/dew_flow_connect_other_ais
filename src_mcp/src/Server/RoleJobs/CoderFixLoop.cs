@@ -58,6 +58,10 @@ internal sealed class CoderFixLoop(IRoleRun run, GitHistory git, CoderOsLayer la
     private readonly List<CoderChecksRound> _rounds = [];
     private int _fixes;
     private string _last = string.Empty;
+    private ConsultationBilled? _counter;
+
+    /// <summary>The release the CLI of the last fix turn named (empty before any): a CLI may update itself between two launches of one job, and the envelope names the latest beside the last measured one. A record, never a condition.</summary>
+    public string LastCliVersion { get; private set; } = string.Empty;
 
     /// <summary>How many fix turns the job may make — for the whole job, whatever the number of models that take part.</summary>
     public int Cap { get; init; }
@@ -159,8 +163,21 @@ internal sealed class CoderFixLoop(IRoleRun run, GitHistory git, CoderOsLayer la
         Keep(folder, "prompt.txt", prompt, turn);
         var stop = ct.IsCancellationRequested
             ? new RoleStop("stopped", "the job was stopped while this model ran", "stopped", false, false)
-            : RoleFailover.StopOfLaunch(session.Model, launched) ?? CoderTurnCheck.Stop(Vendors, session.Model, launched, session.Handle);
-        RoleFailover.RecordLedger(run, session.Model, launched, stop, ended - begun, launched.Launch?.Usage ?? Usage.None);
+            : CoderTurnCheck.StopFirst(Vendors, session.Model, launched, session.Handle, layer.Job) ?? RoleFailover.StopOfLaunch(session.Model, launched);
+        if (launched.CliVersion.Length > 0)
+        {
+            LastCliVersion = launched.CliVersion;
+        }
+
+        // The usage line of this turn holds this turn only: a cumulative vendor's report is cut by what the session had reported before (V16).
+        var reported = launched.Launch?.Usage ?? Usage.None;
+        var share = launched.Runtime.UsageIsCumulative ? ConsultationUsage.Less(reported, _counter ?? session.Counter) : reported;
+        if (launched.Runtime.UsageIsCumulative && ConsultationUsage.CarriesACounter(reported))
+        {
+            _counter = ConsultationBilled.Of(reported);
+        }
+
+        RoleFailover.RecordLedger(run, session.Model, launched, stop, ended - begun, share);
         ct.ThrowIfCancellationRequested();
         if (stop is not null)
         {
@@ -256,4 +273,8 @@ internal sealed class CoderFixLoop(IRoleRun run, GitHistory git, CoderOsLayer la
 }
 
 /// <summary>The session of a model's turn 0, which every fix turn of that model resumes: the model that answered, the handle it reported, and the confinement that binds the handle to this job and worktree — and the key (<see cref="RoleKey.KeyId"/>) the session runs on: every fix turn resumes with the SAME key.</summary>
-internal sealed record CoderFixSession(ModelRef Model, string Handle, LaunchConfinement.Coder Confinement, string KeyId = "", Server.Keys.ClaudeKeySecret? Secret = null);
+internal sealed record CoderFixSession(ModelRef Model, string Handle, LaunchConfinement.Coder Confinement, string KeyId = "", Server.Keys.ClaudeKeySecret? Secret = null)
+{
+    /// <summary>The counter of a cumulative vendor after turn 0: the first fix turn's report is measured against it.</summary>
+    public ConsultationBilled Counter { get; init; } = new();
+}

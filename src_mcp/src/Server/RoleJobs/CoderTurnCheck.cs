@@ -16,6 +16,14 @@ internal static class CoderTurnCheck
     public const string SessionKind = "session";
 
     /// <summary>
+    /// <see cref="Stop"/> asked BEFORE the launch's own stop is read, where no earlier stop (the layer's, a refusal, a key) says more: a denied action leaves an empty answer, and read first as "no answer" it would be a crash that fails over instead of the boundary fault it is.
+    /// </summary>
+    public static RoleStop? StopFirst(CoderVendorSet vendors, ModelRef model, RoleLaunched launched, string expectedSession, Runners.Toolchain.BoundaryJob? job) =>
+        launched.OsStop is null && launched.Refused is null && launched.KeyStop is null && !launched.KeyExposed && launched.ExposedIds.Count == 0 && launched.Launch?.Process is { ExitCode: 0, TimedOut: false, Cancelled: false }
+            ? Stop(vendors, model, launched, expectedSession, job)
+            : null;
+
+    /// <summary>
     /// The stop a finished turn came to by its own stream, or null when the stream says nothing wrong. A wrong answer ends the job <c>coder-boundary</c> (never green, never a failover: the next model would meet the same layer); a session that is not the
     /// handle's, or is lost, is a <c>crash</c>, so the next model starts from the last coai commit.
     /// </summary>
@@ -23,14 +31,14 @@ internal static class CoderTurnCheck
     /// <param name="model">The model of the turn.</param>
     /// <param name="launched">What the launch came to; one with no process (a refusal before the launch) has no stream and is not asked.</param>
     /// <param name="expectedSession">The session of the job's handle, or empty on turn 0.</param>
-    public static RoleStop? Stop(CoderVendorSet vendors, ModelRef model, RoleLaunched launched, string expectedSession)
+    public static RoleStop? Stop(CoderVendorSet vendors, ModelRef model, RoleLaunched launched, string expectedSession, Runners.Toolchain.BoundaryJob? job = null)
     {
         if (launched.Launch?.Process is not { } process || vendors.Resolve(model.Vendor) is not CoderVendorResolution.Launchable found)
         {
             return null;
         }
 
-        return found.Vendor.CheckTurn(process, expectedSession) switch
+        return (job is null ? found.Vendor.CheckTurn(process, expectedSession) : found.Vendor.CheckTurn(process, expectedSession, job)) switch
         {
             CoderTurnVerdict.Boundary wrong => new RoleStop(RoleStopWords.CoderBoundary, Redaction.SafeText(wrong.Sentence, Redaction.TitleLimit), BoundaryKind, false, false),
             CoderTurnVerdict.Crash lost => new RoleStop(RoleStopWords.Crash, Redaction.SafeText(lost.Sentence, Redaction.TitleLimit), SessionKind, false, false),

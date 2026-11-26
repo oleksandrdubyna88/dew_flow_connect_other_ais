@@ -36,6 +36,9 @@ internal abstract record CoderTurnVerdict
     public sealed record Crash(string Sentence) : CoderTurnVerdict;
 }
 
+/// <summary>A vendor's own preflight (epoch 3 E3 s6 t4): the command its unit runs, the rows the command answers, and what is tidied after it ran.</summary>
+internal sealed record CoderPreflightPlan(IReadOnlyList<string> Command, IReadOnlyList<string> Items, Action Tidy);
+
 /// <summary>Where a vendor's CLI keeps its files inside the coder's unit: its home, the file its sign-in is read from, and the folders coai makes before the preflight.</summary>
 /// <param name="Home">The <c>HOME</c> of the coder's process.</param>
 /// <param name="SignInFile">The path inside <paramref name="Home"/> where the CLI looks for its sign-in.</param>
@@ -122,6 +125,30 @@ internal interface ICoderVendor
     /// The check of a finished turn's OWN stream, asked after EVERY turn, turn 0 too, before anything of that turn is committed (judgement S7, ids of class <c>turn</c>). <paramref name="expectedSession"/> is the session of the job's handle, or empty on turn 0.
     /// </summary>
     CoderTurnVerdict CheckTurn(ProcessResult process, string expectedSession);
+
+    /// <summary>
+    /// The check of a finished turn's stream when the check needs the job's own files (agy: the guard's records, G15). The default is the check that asks none. A vendor that needs them gives a check that FAILS CLOSED when it is asked without them.
+    /// </summary>
+    CoderTurnVerdict CheckTurn(ProcessResult process, string expectedSession, BoundaryJob job) => CheckTurn(process, expectedSession);
+
+    /// <summary>The longest ONE turn of this vendor may be given, or null for no cap of its own (agy: its access token lives about an hour and a launch needs it to outlast the unit and a margin, so a turn is capped to fit under it). The launcher applies it to the deadline of every turn, fix turns too.</summary>
+    TimeSpan? TurnDeadline => null;
+
+    /// <summary>What the rows of the vendor's preflight do not prove, for the job's envelope: the ids that only a measure on a release can show (class <c>release</c>), named as measured and never as probed. Empty for a vendor that says nothing.</summary>
+    string NotProvedByPreflight => string.Empty;
+
+    /// <summary>
+    /// What the vendor writes before EVERY launch, on the files its unit will get (class <c>launch</c> of the judgement: agy's guard folder, written and read back). Empty when the launch may go on, else the sentence that refuses it; nothing is started on a refusal.
+    /// </summary>
+    string PrepareLaunch(BoundaryJob job) => string.Empty;
+
+    /// <summary>What the vendor puts right before the unit of the turn starts, after the preflight (agy: the records the preflight's own probes of the guard wrote are put away, so the records read after the turn are the turn's). Empty, or the sentence that refuses the launch.</summary>
+    string BeforeStart(BoundaryJob job) => string.Empty;
+
+    /// <summary>
+    /// The preflight of THIS vendor, when its rows are not the claude coder's: the command the exact launch unit runs, the rows it answers and what to tidy afterwards. Null means the claude coder's preflight. <paramref name="runtimeMax"/> is the unit's own end.
+    /// </summary>
+    CoderPreflightPlan? PreflightPlan(BoundaryHost host, BoundaryJob job, CoderProgram program, string windowsCopy, TimeSpan runtimeMax) => null;
 
     /// <summary>Asks the installed CLI whether it can be given the write launch (<c>--version</c>, <c>--help</c>) — never launches the coder itself.</summary>
     Task<CoderCapability> ProbeAsync(IProcessLauncher launcher, string executable, string workingDirectory, CancellationToken ct);
@@ -285,5 +312,5 @@ internal static class CoderVendors
     /// <summary>The set the product launches from: the embedded table and the vendors that have a type. Today that is claude alone; s5 and s6 each add their vendor's type.</summary>
     public static CoderVendorSet Shipped => Loaded.Value;
 
-    private static readonly Lazy<CoderVendorSet> Loaded = new(() => CoderVendorSet.Of(CoderBoundaryTable.Shipped));
+    private static readonly Lazy<CoderVendorSet> Loaded = new(() => CoderVendorSet.Of(CoderBoundaryTable.Shipped, AgyCoderVendor.Instance));
 }

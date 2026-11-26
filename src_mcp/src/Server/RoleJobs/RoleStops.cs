@@ -55,6 +55,9 @@ internal static class RoleStopWords
 /// <param name="Transient">A throttle that may clear while the loop waits — the one stop the LAST model waits out.</param>
 internal sealed record RoleStop(string Word, string Reason, string Kind, bool SkipsVendor, bool Transient)
 {
+    /// <summary>True when what the launch printed must not be kept as evidence (agy's lost sign-in: its stderr holds a login address): the evidence is the reason alone.</summary>
+    public bool NoEvidence { get; init; }
+
     /// <summary>Limit, refusal and crash go on to the next model; every other word ends the job.</summary>
     public bool FailsOver => Word is RoleStopWords.Limit or RoleStopWords.Refusal or RoleStopWords.Crash;
 }
@@ -84,7 +87,10 @@ internal static class RoleStops
 
         if (process is not null && SignInLost(vendor, process))
         {
-            return new RoleStop(RoleStopWords.Crash, "the sign-in is lost: " + said, failure.Kind, SkipsVendor: true, Transient: false);
+            // The stderr of a lost agy sign-in holds a login address (a challenge of that one start): it is not copied into the sentence, the evidence or a notice.
+            return vendor == "agy"
+                ? new RoleStop(RoleStopWords.Crash, "the sign-in is lost: agy asked for a new sign-in, and its login address is not copied here", failure.Kind, SkipsVendor: true, Transient: false) { NoEvidence = true }
+                : new RoleStop(RoleStopWords.Crash, "the sign-in is lost: " + said, failure.Kind, SkipsVendor: true, Transient: false);
         }
 
         return Stopped(failure, said);
@@ -135,8 +141,11 @@ internal static class RoleStops
         Lines(stdout).Any(line => line.TryGetProperty("type", out var type) && type.GetString() is "error" or "turn.failed"
             && (Text(line, "message") + Text(line.TryGetProperty("error", out var error) && error.ValueKind == JsonValueKind.Object ? error : default, "message")).Contains("401 Unauthorized", StringComparison.Ordinal));
 
+    /// <summary>The recorded texts of a lost agy sign-in (fixtures <c>agy-no-sign-in</c> and <c>agy-copy-expired</c>, and <c>agy models</c>): <c>Authentication required</c>, <c>authentication timed out</c>, <c>Please sign in</c> on stderr, or a result whose error starts <c>authentication failed</c>. Whatever the case of the words.</summary>
     private static bool AgySignInLost(ProcessResult process) =>
-        process.StdErr.Contains("authentication required", StringComparison.Ordinal)
+        process.StdErr.Contains("authentication required", StringComparison.OrdinalIgnoreCase)
+        || process.StdErr.Contains("authentication timed out", StringComparison.OrdinalIgnoreCase)
+        || process.StdErr.Contains("please sign in", StringComparison.OrdinalIgnoreCase)
         || Lines(process.StdOut).Any(line =>
             Text(line.TryGetProperty("result", out var result) && result.ValueKind == JsonValueKind.Object ? result : default, "error").StartsWith("authentication failed", StringComparison.Ordinal));
 

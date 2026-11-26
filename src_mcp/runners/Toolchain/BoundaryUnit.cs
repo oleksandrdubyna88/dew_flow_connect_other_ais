@@ -70,9 +70,21 @@ internal static class BoundaryUnit
 
     /// <summary>The person's own sign-in file at its real path, hidden from a check unit where the home is not under a hidden folder: a check never needs it (a coder's unit gets it bound at a path of its own home, never at this one).</summary>
     internal static IReadOnlyList<string> SignInHidden(BoundaryHost host) =>
-        host.ResolvedHome is { Length: > 0 } home && System.IO.Path.IsPathFullyQualified(home) && !home.Any(c => char.IsWhiteSpace(c) || char.IsControl(c) || c is ':' or '\\')
-            ? [$"InaccessiblePaths=-{BoundaryJob.RealOrSpelled(System.IO.Path.Combine(home, ".claude", ".credentials.json"))}"]
+        PlainHome(host) is { Length: > 0 } home
+            ? [$"InaccessiblePaths=-{BoundaryJob.RealOrSpelled(System.IO.Path.Combine(home, ".claude", ".credentials.json"))}", .. VendorSignInsHidden(host)]
             : [];
+
+    /// <summary>
+    /// The real sign-in files of the vendors that sign in with a file and are NOT claude's, each at its real path (agy's <c>~/.gemini/antigravity-cli/antigravity-oauth-token</c>): in no unit but as the copy the job made. Where the home lies under a hidden folder (<c>/home</c>) they are out of sight already; this makes it true where it does not.
+    /// Given to the check units, to the claude coder's unit and to every other vendor's unit; the vendor's OWN unit gets its copy at the path inside its home, never this file.
+    /// </summary>
+    internal static IReadOnlyList<string> VendorSignInsHidden(BoundaryHost host) =>
+        PlainHome(host) is { Length: > 0 } home
+            ? [$"InaccessiblePaths=-{BoundaryJob.RealOrSpelled(System.IO.Path.Combine(home, ".gemini", "antigravity-cli", "antigravity-oauth-token"))}"]
+            : [];
+
+    private static string PlainHome(BoundaryHost host) =>
+        host.ResolvedHome is { Length: > 0 } home && System.IO.Path.IsPathFullyQualified(home) && !home.Any(c => char.IsWhiteSpace(c) || char.IsControl(c) || c is ':' or '\\') ? home : string.Empty;
 
     /// <summary>
     /// What a check unit sees of the job's own folder (epoch 3 E2, the E3 judgement of the write boundary): an empty READ-ONLY tmpfs over the job folder, and on top of it only the folders the checks use (<see cref="BoundaryJob.CheckFolders"/>), each bound writable. The job

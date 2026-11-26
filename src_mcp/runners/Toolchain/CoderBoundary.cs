@@ -177,7 +177,7 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
     /// <param name="job">The job: its worktree, its main checkout, its folders.</param>
     /// <param name="executable">The program the launch will run — an absolute path, or a name on coai's PATH.</param>
     /// <param name="ct">The caller's cancel.</param>
-    public async Task<BoundaryAdmission> AdmitAsync(BoundaryJob job, string executable, CancellationToken ct = default, bool withKey = false)
+    public async Task<BoundaryAdmission> AdmitAsync(BoundaryJob job, string executable, CancellationToken ct = default, bool withKey = false, TimeSpan? runtimeMax = null)
     {
         var launchHost = HostFor(withKey);
         var early = host.PlatformRefusal() is { Length: > 0 } platform ? platform : KeyedLaunch(withKey) && job.KeysFolderProblem() is { Length: > 0 } hidden ? hidden : job.CoderProblem() is { Length: > 0 } problem ? problem : job.MountsOnDiskProblem();
@@ -207,7 +207,7 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
 
         try
         {
-            return await AskAsync(launchHost, job, program, prepared.Copy, ct);
+            return await AskAsync(launchHost, job, program, prepared.Copy, runtimeMax ?? PreflightBudget + UnitControl.Backstop, ct);
         }
         finally
         {
@@ -215,9 +215,9 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
         }
     }
 
-    private async Task<BoundaryAdmission> AskAsync(BoundaryHost launchHost, BoundaryJob job, CoderProgram program, string windowsCopy, CancellationToken ct)
+    private async Task<BoundaryAdmission> AskAsync(BoundaryHost launchHost, BoundaryJob job, CoderProgram program, string windowsCopy, TimeSpan runtimeMax, CancellationToken ct)
     {
-        var rows = await PreflightAsync(launchHost, job, program, windowsCopy, ct);
+        var rows = await PreflightAsync(launchHost, job, program, windowsCopy, runtimeMax, ct);
         var record = new BoundaryRecord(BoundaryRecord.UnitBoundary, Vendor.UnitProperties(launchHost, job, program, PreflightBudget + UnitControl.Backstop), "host", NetworkReason, rows);
         var bad = rows.FirstOrDefault(row => !row.Held);
 
@@ -229,21 +229,30 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
     private static BoundaryAdmission.Refused Refuse(string sentence, IReadOnlyList<PreflightRow> rows) =>
         new(sentence, new BoundaryRecord(BoundaryRecord.UnitBoundary, [], "host", NetworkReason, rows));
 
-    private async Task<IReadOnlyList<PreflightRow>> PreflightAsync(BoundaryHost launchHost, BoundaryJob job, CoderProgram program, string windowsCopy, CancellationToken ct)
+    private async Task<IReadOnlyList<PreflightRow>> PreflightAsync(BoundaryHost launchHost, BoundaryJob job, CoderProgram program, string windowsCopy, TimeSpan runtimeMax, CancellationToken ct)
     {
         var unit = CoderUnit.UnitName(job, "pre");
         var signIn = launchHost.SignInFile.Length > 0 ? Vendor.Home(job).SignInFile : string.Empty;
-        IReadOnlyList<string> inner =
-            ["/usr/bin/env", "-i", .. Vendor.Environment(host, job).Select(pair => $"{pair.Key}={pair.Value}"), .. BoundaryPreflight.CoderCommand(job, launchHost, program, windowsCopy, signIn)];
-        var arguments = BoundaryUnit.Wrap(unit, Vendor.WorkingDirectory(job), [], Vendor.UnitProperties(launchHost, job, program, PreflightBudget + UnitControl.Backstop), inner, Degrade);
-        var started = await _units.StartAsync(new ProcessRequest(host.SystemdRun, arguments, job.Tree.Root)
+        // A vendor with a preflight of its own (agy: its own rows, in place of the claude coder's) is asked inside the same unit: the same properties and the same working folder.
+        var plan = Vendor.PreflightPlan(launchHost, job, program, windowsCopy, runtimeMax);
+        try
         {
-            Timeout = PreflightBudget,
-            InheritsEnvironment = false,
-            Passthrough = UnitControl.Client,
-        }, ct);
+            IReadOnlyList<string> inner =
+                ["/usr/bin/env", "-i", .. Vendor.Environment(host, job).Select(pair => $"{pair.Key}={pair.Value}"), .. plan?.Command ?? BoundaryPreflight.CoderCommand(job, launchHost, program, windowsCopy, signIn)];
+            var arguments = BoundaryUnit.Wrap(unit, Vendor.WorkingDirectory(job), [], Vendor.UnitProperties(launchHost, job, program, PreflightBudget + UnitControl.Backstop), inner, Degrade);
+            var started = await _units.StartAsync(new ProcessRequest(host.SystemdRun, arguments, job.Tree.Root)
+            {
+                Timeout = PreflightBudget,
+                InheritsEnvironment = false,
+                Passthrough = UnitControl.Client,
+            }, ct);
 
-        return BoundaryPreflight.Rows(started, started.Problem.Length == 0 && await _units.EnsureGoneAsync(unit), BoundaryPreflight.CoderItemsFor(job));
+            return BoundaryPreflight.Rows(started, started.Problem.Length == 0 && await _units.EnsureGoneAsync(unit), plan?.Items ?? BoundaryPreflight.CoderItemsFor(job));
+        }
+        finally
+        {
+            plan?.Tidy();
+        }
     }
 
     /// <summary>

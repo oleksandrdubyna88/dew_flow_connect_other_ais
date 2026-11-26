@@ -59,6 +59,7 @@
     <EmbeddedResource Include="..\..\shared\ba-output.schema.json" LogicalName="CoaiMcp.ba-output.schema.json" />
     <!-- The coder role's prompt and the shape of its report (epoch 3 E2 s3): inside the binary for the same reason as the BA's. Roles\prompts, OUTSIDE prompts\, for the reason the BA's prompt lives there. -->
     <EmbeddedResource Include="Roles\prompts\coder.md" LogicalName="CoaiMcp.coder-prompt.md" />
+    <EmbeddedResource Include="Roles\prompts\coder.agy.md" LogicalName="CoaiMcp.coder-agy-prompt.md" />
     <EmbeddedResource Include="..\..\shared\coder-report.schema.json" LogicalName="CoaiMcp.coder-report.schema.json" />
     <!-- The scout and the judge (epoch 3 E3 s1): the prompts and the shapes of their answers, inside the binary for the same reason as the BA's. Roles\prompts, OUTSIDE prompts\, for the reason the BA's prompt lives there. -->
     <EmbeddedResource Include="Roles\prompts\scout.md" LogicalName="CoaiMcp.scout-prompt.md" />

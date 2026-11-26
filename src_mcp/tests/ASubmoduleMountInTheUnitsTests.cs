@@ -63,7 +63,7 @@ public sealed class ASubmoduleMountInTheUnitsTests
     ];
 
     /// <summary>The person's sign-in file at the (stand-in) real home's path, hidden from a check unit: the one property a check unit got besides the job view and the pids.</summary>
-    private static readonly string[] SignInHidden = ["InaccessiblePaths=-/nonexistent/home/.claude/.credentials.json"];
+    private static readonly string[] SignInHidden = ["InaccessiblePaths=-/nonexistent/home/.claude/.credentials.json", "InaccessiblePaths=-/nonexistent/home/.gemini/antigravity-cli/antigravity-oauth-token"];
 
     [Fact]
     public void TheCover_IsTheFolderThatHoldsTheJobFolders_WhenItCanBeCovered_AndTheJobFolderItselfWhenItCannot()
@@ -120,7 +120,7 @@ public sealed class ASubmoduleMountInTheUnitsTests
         File.WriteAllText(Path.Combine(real, ".claude", ".credentials.json"), "made-up-sign-in-line-not-a-credential\n");
         var host = NoHome() with { RealHome = link };
 
-        BoundaryUnit.SignInHidden(host).Should().Equal($"InaccessiblePaths=-{real}/.claude/.credentials.json");
+        BoundaryUnit.SignInHidden(host).Should().Equal($"InaccessiblePaths=-{real}/.claude/.credentials.json", $"InaccessiblePaths=-{real}/.gemini/antigravity-cli/antigravity-oauth-token");
         BoundaryPreflight.Command(Job(), host, CheckNetwork.Host, string.Empty).Should().Contain(real).And.NotContain(link, "the rows read the resolved home");
     }
 
@@ -182,7 +182,7 @@ public sealed class ASubmoduleMountInTheUnitsTests
         string[] e2 =
         [
             .. E2Isolation,
-            $"BindReadOnlyPaths={M}", "BindReadOnlyPaths=/w", $"BindPaths={W}", $"BindReadOnlyPaths={W}/.git", $"TemporaryFileSystem={J}:ro", $"BindPaths={J}/coder/claude", $"BindPaths={J}/coder/{TempName}:{BoundaryUnit.UnitTemp}", $"BindPaths={J}/coder/vartmp:{BoundaryUnit.UnitVarTemp}",
+            $"BindReadOnlyPaths={M}", "BindReadOnlyPaths=/w", $"BindPaths={W}", $"BindReadOnlyPaths={W}/.git", $"TemporaryFileSystem={J}:ro", $"BindPaths={J}/coder/claude", $"BindPaths={J}/coder/{TempName}:{BoundaryUnit.UnitTemp}", $"BindPaths={J}/coder/vartmp:{BoundaryUnit.UnitVarTemp}", "InaccessiblePaths=-/nonexistent/home/.gemini/antigravity-cli/antigravity-oauth-token",
             .. E2Hardening,
             "PrivateNetwork=no",
             .. E2Limits,

@@ -48,15 +48,39 @@ public sealed class AntigravityConsultant(
     /// prepared is REFUSED here, with the reason, before anything is launched — never launched without its block.
     /// </summary>
     public Task<ConsultantPreparation> PrepareAsync(ConsultantLaunch launch, IProcessLauncher launcher, CancellationToken ct) =>
-        // The coder is claude only in this epoch (t3, d5): refused before the read-only folder is made for a launch that will not happen.
-        launch.Confinement is LaunchConfinement.Coder
-            ? Task.FromResult<ConsultantPreparation>(CoderLaunches.NoCoder)
+        // A coder's launch is the write launch of s6 (the guard folder is the job's own and is written by the layer, never the consultants' read-only folder); every other launch is as it was.
+        launch.Confinement is LaunchConfinement.Coder coder
+            ? PrepareCoderAsync(launch, coder, launcher, ct)
             : Task.FromResult<ConsultantPreparation>((prepare ?? DefaultPrepare)() switch
             {
                 AntigravityReadOnly.Prepared.Failed failed => new ConsultantPreparation.Refused(
                     new ConsultFailure.VendorRefused(failed.Reason, $"make {AntigravityReadOnly.DefaultBase} writable for this user, then ask again")),
                 _ => new ConsultantPreparation.Ready(launch, string.Empty, string.Empty),
             });
+
+    /// <summary>
+    /// A coder's write launch, prepared (epoch 3 E3 s6 t3): the job, the worktree and the handle are checked first, then the installed agy is asked what its help declares (<see cref="AgyWriteCapability"/>) — refused with the flag it lacks, never launched with a weaker set. The release is on the result as
+    /// a record; it decides nothing.
+    /// </summary>
+    private async Task<ConsultantPreparation> PrepareCoderAsync(ConsultantLaunch launch, LaunchConfinement.Coder coder, IProcessLauncher launcher, CancellationToken ct)
+    {
+        if (CoderLaunches.WhyNot(coder) is { Length: > 0 } why)
+        {
+            return new ConsultantPreparation.Refused(new ConsultFailure.LaunchRefused(why));
+        }
+
+        var asked = await AgyCoderVendor.Instance.ProbeAsync(launcher, Executable(launch.Settings), launch.RepoPath, ct);
+
+        return asked switch
+        {
+            CoderCapability.Ready ready => new ConsultantPreparation.Ready(launch, "coder write launch", $"coder write launch: agy {ready.Version} declares the flags of the coder's argv") { CliVersion = ready.Version },
+            CoderCapability.Refused { CouldNotStart: true } refused => new ConsultantPreparation.Refused(new ConsultFailure.CliNotFound(refused.Said, ConsultFailures.InstallCureFor("antigravity"))),
+            CoderCapability.Refused refused => new ConsultantPreparation.Refused(new ConsultFailure.VendorRefused(refused.Said, refused.Cure)),
+            _ => throw new InvalidOperationException("a write capability is ready or refused"),
+        };
+    }
+
+    private static string Executable(ReviewerSettings settings) => settings.ExecutablePath.Length > 0 ? settings.ExecutablePath : AntigravityStream.InstalledExecutable;
 
     private static AntigravityReadOnly.Prepared DefaultPrepare() =>
         AntigravityReadOnly.Prepare(AntigravityReadOnly.DefaultBase, HookHandler.OfThisProcess());
@@ -183,11 +207,38 @@ public sealed class AntigravityConsultant(
 
     public ReviewerInvocation Build(ConsultantLaunch launch)
     {
-        ConsultantLaunches.MustBeLaunchable(launch);
+        ConsultantLaunches.MustBeLaunchable(launch, takesACoder: launch.Confinement is LaunchConfinement.Coder);
 
-        return launch.Confinement is LaunchConfinement.Planned planned
-            ? Planned(launch, planned.Plan)
-            : AsShipped(launch);
+        return launch.Confinement switch
+        {
+            LaunchConfinement.Coder coder => Coder(launch, coder),
+            LaunchConfinement.Planned planned => Planned(launch, planned.Plan),
+            _ => AsShipped(launch),
+        };
+    }
+
+    /// <summary>
+    /// The coder: the measured flag set AG1 with <c>--mode accept-edits</c> and <c>--agent coai-coder</c> on EVERY turn and <c>--conversation</c> on a fix turn, from the folder the layer says (the guard folder, never the worktree), the prompt as one stream-json message on stdin and no
+    /// explicit environment: the unit sets its own. A launch with no working folder is a contract violation, never one that starts in the worktree.
+    /// </summary>
+    private ReviewerInvocation Coder(ConsultantLaunch launch, LaunchConfinement.Coder coder)
+    {
+        if (coder.WorkFolder.Length == 0 || string.Equals(CoderLaunches.Normalised(coder.WorkFolder), CoderLaunches.Normalised(coder.Worktree), StringComparison.Ordinal))
+        {
+            throw new ArgumentException("an agy coder launch starts in its guard folder, never in the worktree, and is never built without it", nameof(launch));
+        }
+
+        var argv = coder.Resume.IsNone
+            ? AgyCoderVendor.Instance.FreshArgv(launch.Settings.Model, coder.Worktree)
+            : AgyCoderVendor.Instance.ResumedArgv(launch.Settings.Model, coder.Worktree, coder.Resume.SessionId);
+        var request = new ProcessRequest(Executable(launch.Settings), [.. argv], coder.WorkFolder)
+        {
+            StdIn = AntigravityStream.UserMessage(launch.Prompt),
+            Timeout = launch.Settings.Timeout,
+        };
+        ConsultantLaunches.MustCarryNoLineBreak(request.Arguments);
+
+        return new ReviewerInvocation(vendor, CoderLaunches.Role, CoderLaunches.ForCoder(request), string.Empty, inner, Model: launch.Settings.Model);
     }
 
     /// <summary>The stuck consultant, as it ships: plan mode, the live checkout added, resumable.</summary>
