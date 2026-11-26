@@ -212,8 +212,8 @@ test('A3-T16: a usage read that went wrong is not repeated blindly', async () =>
   assert.equal(blockedAfter(claudeFound('x@example.test', { usage: { state: 'failed', why: 'timeout' } })), undefined);
 });
 
-test('A3-T17: the usage policy is one constant, and E1 ships it off', async () => {
-  assert.deepEqual(USAGE_POLICY, { kind: 'off' }, 'E1 would run the usage command before W6 and W7');
+test('A3-T17: the usage policy is one constant, and E3.S5 ships it every-round', async () => {
+  assert.deepEqual(USAGE_POLICY, { kind: 'every-round' }, 'the shipped policy is not every-round');
 
   const hosts = ['a', 'b'];
   const both = accounts({ a: 'x@example.test', b: 'x@example.test' });
@@ -256,14 +256,14 @@ test('A3-T17: the usage policy is one constant, and E1 ships it off', async () =
   const changed = claudeFound('y@example.test');
   assert.equal(needsSecondCall(changed, new Set(), memoryOf(['b', remembered('b', 'x@example.test')]), 'b', OFF, 0, 'refresh'), false, 'a usage read was made while the usage read is off');
   assert.equal(needsSecondCall(changed, new Set(), new Map(), 'b', EVERY_ROUND, 0, 'timer'), true, 'the companion: the same reading is a second call with the policy on');
-  // The shipped constant: six rounds over two hosts make 12 calls and none is `claude-usage`.
+  // The shipped constant: six rounds over two hosts of one account make 18 calls, and each round's one usage call is the second call of its first host.
   const shipped = world({ hosts, reply: both });
   memory = new Map();
   for (let round = 0; round < 6; round += 1) {
     memory = new Map((await runRound(shipped.seams, memory, round, 'timer', USAGE_POLICY)).memory);
   }
-  assert.equal(shipped.calls.length, 12);
-  assert.equal(usageCalls(shipped), 0, 'E1 would run the usage command before W6 and W7');
+  assert.equal(shipped.calls.length, 18);
+  assert.equal(usageCalls(shipped), 6, 'the shipped policy does not read the usage once in each round');
 });
 
 test('A3-T17 companion: due — each policy, on its own', () => {

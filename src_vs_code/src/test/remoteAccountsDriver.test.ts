@@ -315,6 +315,6 @@ test('E2S4-T7 (the round): each place lands with its own host, and the result co
   assert.equal(w.landed.count, 3, 'each place, the refused one too, lands once');
 });
 
-test('E2S4-T10: the shipped usage policy is still off', () => {
-  assert.deepEqual(USAGE_POLICY, { kind: 'off' });
+test('E2S4-T10: the shipped usage policy is `every-round` since E3.S5 (it was off until W6 and W7 were recorded)', () => {
+  assert.deepEqual(USAGE_POLICY, { kind: 'every-round' });
 });

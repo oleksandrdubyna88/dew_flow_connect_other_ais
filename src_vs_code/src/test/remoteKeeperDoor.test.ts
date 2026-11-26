@@ -512,7 +512,8 @@ test('E2S1-T9 (carried CUT-D2, CUT-D3, CUT-D4): the round over the door — an a
     await w.keeper.allow();
     const round = world({ hosts: [H] });
     await runRound({ ...round.seams, may: (host) => w.keeper.may('round', host) }, new Map(), 0, 'timer', undefined);
-    assert.deepEqual(callsOf(round), kind === 'no' ? [] : [`${H} N`], `${kind}: the round over the door called the wrong hosts`);
+    // the shipped policy (every-round since E3.S5) makes the one usage call after the first: the door is asked before each
+    assert.deepEqual(callsOf(round), kind === 'no' ? [] : [`${H} N`, `${H} U`], `${kind}: the round over the door called the wrong hosts`);
   }
   // CUT-D4: the terminal items' key follows "answered no" only
   for (const kind of ['auto', 'yes', 'no'] as const) {

@@ -37,10 +37,11 @@ export type Trigger = 'timer' | 'refresh' | 'open';
 export type UsagePolicy = { readonly kind: 'every-round' } | { readonly kind: 'hourly' } | { readonly kind: 'on-press' } | { readonly kind: 'off' };
 
 /**
- * The ONE constant a later build sets from W6 and W7. E1 ships `off` (the re-review's finding 2): no call is `claude-usage`, by a timer or
- * by a press, so no build runs the usage command before W6 and W7 have recorded results.
+ * The ONE constant of the policy (E3.S5, spec § R2.9): the usage of each account is read in every round, by the one second call of the first place that names it.
+ * Set from the recorded facts: W7 passed (a usage read started nothing that is not Claude Code's own) and W6 selected the row "Claude Code keeps a fixed number of
+ * backups → every round" (five backups, the older ones seen deleted). E1 shipped `off` until W6 and W7 were recorded.
  */
-export const USAGE_POLICY: UsagePolicy = { kind: 'off' };
+export const USAGE_POLICY: UsagePolicy = { kind: 'every-round' };
 
 /**
  * The scope host that is never called, in any window (E2.S4): `Creds: wsl / …` names a login session of a WSL distro, which is not a host that
