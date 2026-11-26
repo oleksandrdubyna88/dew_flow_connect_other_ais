@@ -2,6 +2,11 @@
 
 > Status: TODO, not planned. Found 2026-11-25 by the review of PR #1047 (CodeRabbit thread T9, accepted by the judge as a
 > plan change, not a fix in E1).
+> **Taken up, 2026-11-25, not built:** the revision for epoch 3 of
+> [the accounts plan](PLAN_the_terminal_panel_shows_the_accounts_and_their_usage.md) takes it into its § 3 (story
+> E2.S1): the session road asks the one door before EVERY spawn of a press, and a later spawn never asks a person.
+> The owner approved that revision as epoch 3 on 2026-11-26. This file is closed by the stories document of E2; until then it stays the
+> record of the finding.
 
 ## The finding
 

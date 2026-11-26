@@ -2,6 +2,9 @@
 
 > Status: TODO, not planned. Found 2026-11-25 by the code gate of the accounts plan's E1 (coai session `a4a016fb`,
 > finding 0, rejected there as out of that epic's scope).
+> The revision for epoch 3 of [the accounts plan](PLAN_the_terminal_panel_shows_the_accounts_and_their_usage.md)
+> (2026-11-25, approved by the owner on 2026-11-26) leaves it a todo of its own: that plan's WSL road runs on Windows only, where the tree
+> is killed, and needs no part of this fix.
 
 ## The finding
 
