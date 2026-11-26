@@ -3,8 +3,57 @@
 > Status: **the record of the plan rounds of this epic and of every change of its plan after an approval, 2026-11-26.** The
 > plan as it stands is [SPEC.md](SPEC.md); this file says how it got there. Parent plan: [PLAN.md](../../PLAN.md), whose
 > ledger (`## Plan changes`) counts the changes. Sections J, K and L were moved here from SPEC.md on 2026-11-26, word for
-> word, and so were three records of what is done (C3-H, C4-U, H-Q): the `spec` file of an epic may hold 64 KiB (SPEC.md, B item 5), and with section M it held more. This file is not
+> word, and so were the records of what is done (0-T, C3-H, C4-U, C7-E, C8-T, H-Q): the `spec` file of an epic may hold 64 KiB (SPEC.md, B item 5), and with section M it held more. This file is not
 > in the pack of a folder round: a free `.md` file beside the nodes is on the line Not sent.
+
+## C7-E. The evidence for the coder prompt of each vendor (moved from SPEC.md, section C7, on 2026-11-26)
+
+Moved word for word, to keep SPEC.md under the 64 KiB a spec file may hold. The runs themselves are in
+`v2/epoch-3/e2-coder-one-task/RESULTS_coder_comparison.md`.
+
+**The evidence** (`v2/epoch-3/e2-coder-one-task/RESULTS_coder_comparison.md`, one task, one base). codex `gpt-6.1-terra` answered
+`status: refused` twice on the shipped prompt. Run A, the prompt as claude gets it: `coder.md` names claude's tools and says "You
+have no shell"; codex has none of those names and read no file. Run B, the tools bullet in codex's words: codex read
+`.agents/conventions/ENTRY.md` and `.agents/PROJECT.md`, then refused, because `AGENTS.md` of this repository orders a command (the
+rule resolver) before any edit and the prompt forbids commands. Run C, B plus one bullet about such commands: green, 0 fix turns.
+agy `gemini-4-argon-medium` was green on the shipped prompt (its guard denied the two reads under `.agents`). claude was green on
+the shipped prompt.
+
+## 0-T. What the code had when E3 was planned (moved from SPEC.md, section 0, on 2026-11-26)
+
+Moved word for word, to keep SPEC.md under the 64 KiB a spec file may hold. It describes the code at `0e8e8941`, before
+any task of E3 was built; "today" in it is 2026-11-25 and 2026-11-26.
+
+What the code has today (checked at `0e8e8941`):
+
+- Three roles can start: `probe`, `ba`, `coder` (`src_mcp/src/Server/RoleJobs/RoleDescriptors.cs:19`). The roles table has five
+  lists: orchestrator, coder, scout, important, ba (`src_mcp/src/Roles/RoleDefaults.cs:24`). The scout and important lists have no
+  role that runs.
+- The coder is claude only: `CoderRoute.cs:18`, `CoderLaunches.cs:21`. The codex and agy adapters refuse a coder launch
+  (`CodexConsultant.cs:58`, `AntigravityConsultant.cs:52`).
+- `review_plan` takes `planText` or `committedPlan` (`src_mcp/src/Tools.cs:89`, `src_mcp/src/Server/Stages/PlanInput.cs:10`).
+  `IWorkFolder` was made so that E3 can read a commit (`src_mcp/core/Work/IWorkFolder.cs:27`).
+- A plan round records `PlanSource` with origin `commit` or `text` (`src_mcp/core/Rounds/PlanSource.cs:4`). A coder job is bound to
+  a plan FILE (`src_mcp/src/Server/RoleJobs/CoderPlanBinding.cs:56`).
+- The key pool (E2 s7) is on its own branch. E3 uses only `KEY_POOL_SPEC.md` §7: a claude launch of scout or judge goes through
+  `RoleModelLauncher`, so it gets a pool key when that branch is merged. E3 adds no key code and no pool for codex or agy.
+- Since the merge of `feat/v2-ep3-e2-coder` `ec24ee4c` into this branch (`3c089f7f`, 2026-11-26) the key pool, the coder proof and
+  the coder comparison (`v2/epoch-3/e2-coder-one-task/RESULTS_coder_comparison.md`) are in this tree.
+
+## C8-T. What the coder comparison of E2 did not show (moved from SPEC.md, section C8, on 2026-11-26)
+
+Moved word for word, to keep SPEC.md under the 64 KiB a spec file may hold.
+
+| Not shown by the comparison | Who shows it |
+|---|---|
+| the unit and the preflight rows of the PRODUCT for codex and agy (the harness ran a probe of 17 paths, not the rows) | s5 t3, s6 t4; s8 t4 on a real job |
+| the check units: the harness kept the sign-in copies in a scratch folder under `/tmp`, which a check unit replaces; in the product they are in the job folder | s7 t5 |
+| a fix turn, a resumed thread or conversation, the guard in a red round (nothing went red) | s5 t4, s6 t5 with FakeCli; s8 t4 with a planted red check |
+| coai's own handler (`--agy-hook`): the harness used the shell guard of s4, made fail-closed | s6 t2, s6 t4 |
+| the report through coai's strict reader: codex wrote `"reason":null,"notes":null` (the flat schema makes every member required); agy has no schema flag | s5 t2 d2 (V19), s8 t4 |
+| the vendor's prompt as the PRODUCT renders it, on a repository whose instruction file orders a command | s8 t4 d4 |
+| claude with the main checkout hidden (claude ran in E2's unit: read-only, not hidden) | nobody in E3: the claude unit stays byte for byte |
+| more than one task and one run for each vendor | nobody; s8 t4 adds one run for each vendor |
 
 ## C3-H. What each CLI offered, read from `--help` on 2026-11-25 (moved from SPEC.md, section C3, on 2026-11-26)
 
@@ -18,6 +67,12 @@ longer installed: history, as every measured version is since the owner's decisi
 | Model-free probe | `codex sandbox <command>` runs a command in codex's own sandbox | the hook handler is coai's own program (`--agy-hook`) |
 | Structured answer | `--output-schema <file>` on `exec` and on `exec resume` | `--json-schema` |
 | Never in a coai argv | `--dangerously-bypass-approvals-and-sandbox`, `--dangerously-bypass-hook-trust`, `-s danger-full-access`, `--trust`, `--worktree`, `--ephemeral` (a coder turn), `--add-dir` | `--dangerously-skip-permissions`, `--remote-agent`, `--remote-control`, `--continue` |
+
+Moved with it on the same day, word for word:
+
+Known from the code: codex names its thread in `thread.started` and a lost session says "no rollout found"
+(`CodexConsultant.cs:144`); agy reports usage as the sum of the conversation (`AntigravityConsultant.cs:138`); agy's read-only block
+is an agent with one tool plus a hook that also checks the path (`AntigravityReadOnly.cs:46`).
 
 ## C4-U. The unknowns of the measure of s4 (moved from SPEC.md, section C4, on 2026-11-26)
 
@@ -39,6 +94,12 @@ Moved word for word, to keep SPEC.md under the 64 KiB a spec file may hold. s4 i
 | U11 | agy: `--conversation` in a home of the job's own; the text of a conversation that is not found | paid, small |
 | U12 | both: the model names as the CLI prints them, and the smallest model of each vendor | free |
 | U13 | is there a property of a user unit that limits the network to the vendor's hosts | free |
+
+Moved with it on the same day, word for word:
+
+Each paid measure uses the vendor's smallest model (the vendor-routing rule: never a Claude model on codex or agy), in scratch
+folders, with a home in the scratch folder. Caps of s4 (spent): resume tasks 6 calls each, row tasks 16 calls each; every call and
+its spend are written down (tokens where the CLI names no cost). The caps of the open measures and proofs are in section H.
 
 ## H-Q. The questions to the owner and the answers of 2026-11-25 (moved from SPEC.md, section H, on 2026-11-26)
 
@@ -181,7 +242,7 @@ EVERY AI, claude too — a claude release row or a version check of the coder or
   ship today. The table holds `ship` for both with no history record, because the judgement tied its verdict to the open
   rows (s5 t6, s6 t7). So a vendor with no history record is not shipped until the addendum's commit writes the verdict
   and the record. That is the judgement's condition, not a version. Read the other way, both vendors would ship now,
-  before their open rows are measured.
+  before their open rows are measured. (Replaced the same day by the owner's condition, entry 1.16: section O.)
 - **What the plan now says about the cost** (SPEC.md, risk 13): a boundary is measured on one version and runs on every
   later one; a property of class `release` is assumed, not measured, on a version that was not measured.
 - **s6 t7** runs on the version installed now (1.5.18) inside the cap of 30 turns; a row that does not fit is recorded as
@@ -289,3 +350,55 @@ coder jobs, the approval of this round included if it was a folder round: a new 
 SPEC.md is at its limit again; to make room, three records of what is done moved here word for word: the help table of
 2026-11-25 (C3-H; the never-in-argv rule stays in SPEC.md), the unknowns of s4 (C4-U) and the questions to the owner with
 the answers of 2026-11-25 (H-Q).
+
+## O. The owner's answer on the addenda 2 and 3 of the judgement (2026-11-26) — ledger entries 1.15 to 1.17
+
+The measures s5 t6 and s6 t7 are done, and the judge wrote two addenda: sections 13 (codex-cli 0.171.0) and 14 (agy 1.5.18) of
+`v2/spikes/RESULTS_codex_agy_write_boundary_judgement.md`, at commit `d0dca16d` on `feat/v2-ep3-e3-measure`. That branch is
+not merged into this one yet, so the plan cites the commit. The owner answered the same day. The planner has the answer
+from the lead, not in the owner's own words. The plan stays stopped.
+
+| Entry | The owner's answer | Where it is in E3 |
+|---|---|---|
+| 1.15 | the risks the addenda added are accepted: codex C5, C6, C7 and C9; agy A10, A11, A12 and A13 (A1 to A9 and C1 to C4 were accepted in entry 1.3; C8 was closed by the measure). G13 is answered | SPEC.md H (risk 9), C8 |
+| 1.16 | codex and agy become launchable coders only after the must-changes of the judgements are built and green — G15; the exact rule of CX-T4; the `environments.toml` refusal; a refresh before the launch, so that an expired copy never reaches a start (A11). Not before | SPEC.md C2 item 1, C6, V25 to V29, I; s5 t5 d4 and s8 t6 d4 (new); s7 t1 d3 and d5; s8 t1 d2; s8 t4 (d1, d3, `dependsOn`) |
+| 1.17 | the property and behaviour checks stay — an item type of the stream that nobody measured, a flag the help does not declare, the preflight rows, the turn checks. One of them may stop a job after a CLI updated itself. That is accepted as protection, and it is not a version gate | SPEC.md C2 item 2; s5 t4 d3; s6 t5 d3 |
+
+**How entry 1.16 is built.** The table's history (the key `measured`; both vendors have a record since the addenda) makes
+nothing launchable. A vendor's row carries a mark, `launchable`. It is off for codex and for agy. ONE commit turns it on
+for a vendor, when the must-changes of its addendum are built and green: s5 t5 d4 for codex, s8 t6 d4 for agy. Until then
+the product refuses that vendor's coder by data. This replaces the planner's reading under entry 1.8 (section M: "a vendor
+with no history record is not shipped"): the history records exist now, and the owner's condition is what gates.
+s8 t4, the paid proof, now depends on s8 t6, so that the agy proof runs after agy is launchable.
+
+**The lists 13.11 and 14.8 of the judgement, mapped on the task files.**
+
+| The judgement says | Task |
+|---|---|
+| 13.4, 13.9 item 1: the argv is CX1 and `-c agents.enabled=false`, on every turn; X9 is closed, nothing waits | s5 t2 d1 |
+| 13.11: no `environments.toml` in the job's `CODEX_HOME` before every launch (the launch half of CX-C1) | s5 t2 d2 |
+| 13.3, 13.9 item 2: CX-T1 with the job's own model and the 11 names; the `doctor` row for CX-C4 and CX-C3; CX-R4 is in the table. 13.11: CX-T1 is no evidence about the web search (CX-T6, `release`) | s5 t3 d3 |
+| 13.6, 13.9 item 3: the three signs of a lost sign-in, the text that is not one, the second fixture | s5 t4 d2 |
+| 13.11: the exact rule of CX-T4, with FakeCli playing a list that is not empty, another server and an unknown item type; 13.3: CX-T5, the rollout file | s5 t4 d3 |
+| 13.5, 13.9 item 4: no release and no hash gates | s5 t1 d1 and d2 (done under entry 1.8) |
+| 13.6, 13.9 item 5: the copy with the placeholder; K3 over the access token and the id token | s7 t6 d2 and d5 |
+| 13.9 item 6: the reader, the key `measured`, what makes a vendor launchable | s7 t1 d3 |
+| 14.8 item 1, s6 t2: the guard's record with the conversation id and the step index | s6 t2 d3 |
+| 14.8 item 1, s6 t5: G15, the signs of AG-M2, the failover texts and the two fixtures | s6 t5 d2 and d3 |
+| 14.8 item 1, s6 t3: the read-only guard folder; the copy with no refresh token and the margin before every launch; the turn deadline under the life of a token | s6 t3 d2 and d3 |
+| 14.8 item 1, s6 t1: no release and no hash gates; the program folder bound read-only | s6 t1 (done under entry 1.8); s6 t3 d2 |
+| 14.8 item 1, s7 t6: the refresh unit and where its full copy lives (A12); a refresh only when the real file has no margin | s7 t6 d2 and d3 |
+| 14.3: AG-B3 and AG-R2 are in the table; AG-M4 is class `release`; AG-M3 is not built | s6 t4 d1 and d4; s6 t5 d3; s6 t3 d1 |
+| 14.8 item 2: the owner's word on 14.7 before agy is launchable (G13) | entry 1.15 |
+| 14.8 item 3: the SPEC — the store is gone, the tie of the turn check, AG-M4 and A9, the risks | SPEC.md C6, C8, H |
+
+**Tasks.** None added, none removed: 8 stories, 44 tasks. New dod items: s5 t5 d4, s8 t6 d4. One `dependsOn` is new: s8 t4 on
+s8 t6. `shared/coder-boundary-releases.json` is new in the files of s5 t5 and s8 t6. No complexity number changed.
+
+**For the lead, not done here.** (1) The mark `launchable` is the planner's name for what the owner's condition needs; the
+table on the measure branch has no such member, and the reader is s7 t1's. (2) "Built and green" is said by the commit that
+turns the mark on: it names the suite run it rests on. Nobody but that commit's author checks it. (3) The judgement file
+is not edited: its 14.1 still says that the agy coder waits for the owner's word. (4) 13.11 says CX-T5 and CX-T6 are new
+ids and C9 is worth one model-free probe when the story is built; the probe is not a task and not a condition. (5) To keep
+SPEC.md under 64 KiB, five more records of what is done moved here word for word: C7-E, 0-T, C8-T, and one paragraph each
+under C3-H and C4-U.
