@@ -4,7 +4,7 @@ import { viewOf, viewState } from './remoteAccountsGroups';
 import { INSTALL_JQ } from './remoteAccountsRows';
 import { PLAIN_TEXT, TEXT_CONTROLS_CSS, textControlsHtml, textControlsScript, textControlsStyle } from './textControls';
 import type { TextSettings } from './textControls';
-import { RESET_PASSED, minutesLeft, resetText } from './usageWords';
+import { RESET_PASSED, minutesLeft, resetDate, resetText } from './usageWords';
 import { jsonForScript } from './webviewHtml';
 
 /**
@@ -50,8 +50,15 @@ ${TEXT_CONTROLS_CSS}
   .heading .acts { margin-left: auto; display: inline-flex; gap: 6px; }
   .muted, .sub, .older { opacity: .75; font-size: .92em; }
   .bad { color: var(--vscode-errorForeground); }
-  table.acct { border-collapse: collapse; width: 100%; margin: 2px 0 4px; }
-  table.acct th, table.acct td { text-align: left; vertical-align: top; padding: 4px 10px 4px 0; }
+  table.acct { border-collapse: collapse; width: 100%; margin: 2px 0 4px; table-layout: fixed; }
+  table.acct th, table.acct td { text-align: left; vertical-align: top; padding: 4px 10px 4px 0; overflow-wrap: anywhere; }
+  .pct-g { color: #22c55e; } .pct-o { color: #f97316; } .pct-r { color: #ef4444; }
+  .rs-g { color: #22c55e; } .rs-o { color: #f97316; } .rs-r { color: #ef4444; }
+  .tn-claude-code { color: #d97757; } .tn-codex { color: #38bdf8; } .tn-agy { color: #a78bfa; }
+  td.tb-claude-code { border-left: 3px solid #d97757; padding-left: 8px; } td.tb-codex { border-left: 3px solid #38bdf8; padding-left: 8px; } td.tb-agy { border-left: 3px solid #a78bfa; padding-left: 8px; }
+  body.vscode-light .pct-g, body.vscode-light .rs-g { color: #15803d; } body.vscode-light .pct-o, body.vscode-light .rs-o { color: #c2410c; } body.vscode-light .pct-r, body.vscode-light .rs-r { color: #b91c1c; }
+  body.vscode-light .tn-claude-code { color: #b4532f; } body.vscode-light .tn-codex { color: #0369a1; } body.vscode-light .tn-agy { color: #6d28d9; }
+  body.vscode-light td.tb-claude-code { border-left-color: #b4532f; } body.vscode-light td.tb-codex { border-left-color: #0369a1; } body.vscode-light td.tb-agy { border-left-color: #6d28d9; }
   table.acct th { font-weight: 600; font-size: .92em; opacity: .85; }
   th button.sortbtn { border: 0; background: transparent; padding: 0; font-weight: inherit; color: inherit; }
   th[aria-sort="ascending"] button.sortbtn::after { content: " ↑"; }
@@ -62,7 +69,7 @@ ${TEXT_CONTROLS_CSS}
   .none-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 3px 0; }
   @media (max-width: 560px) {
     table.acct, table.acct tbody, table.acct tr, table.acct td { display: block; width: auto; }
-    table.acct thead { display: none; }
+    table.acct thead, table.acct colgroup { display: none; }
     table.acct tr { padding: 4px 0; border-bottom: 1px solid var(--vscode-panel-border); }
     .acct td .label { display: inline-block; min-width: 9em; opacity: .7; }
     .toolbar { gap: 6px 10px; }
@@ -101,6 +108,7 @@ const SCRIPT = `
   var viewState = ${viewState.toString()};
   var minutesLeft = ${minutesLeft.toString()};
   var resetText = ${resetText.toString()};
+  var resetDate = ${resetDate.toString()};
   var agoWords = ${agoWords.toString()};
 
   var model = null;
@@ -142,18 +150,27 @@ const SCRIPT = `
     return node;
   }
   /** A text that the 15-second tick writes again: fn(nowMs) gives it. It belongs to the unit being built. */
+  /** What a live text says: a string, or parts [text, class] where the class is one of the own closed names (a colour), never a value of a VM. */
+  function paint(node, out) {
+    if (typeof out === 'string') { node.textContent = out; return; }
+    node.textContent = '';
+    out.forEach(function (part) { node.appendChild(el('span', part[1] || null, part[0])); });
+  }
+  function keyOf(out) { return typeof out === 'string' ? out : JSON.stringify(out); }
   function live(node, fn) {
-    node.textContent = fn(now());
+    var first = fn(now());
+    paint(node, first);
     if (!timed[current]) { timed[current] = []; }
-    timed[current].push({ node: node, fn: fn });
+    timed[current].push({ node: node, fn: fn, key: keyOf(first) });
     return node;
   }
   function tick() {
     var at = now();
     Object.keys(timed).forEach(function (key) {
       timed[key].forEach(function (one) {
-        var text = one.fn(at);
-        if (one.node.textContent !== text) { one.node.textContent = text; }
+        var out = one.fn(at);
+        var key = keyOf(out);
+        if (one.key !== key) { one.key = key; paint(one.node, out); }
       });
     });
   }
@@ -173,15 +190,26 @@ const SCRIPT = `
     return ago(parent, at, took);
   }
 
-  function leftText(left) { return left === null ? '—' : left + '% left'; }
+  /** The colour of a percent LEFT, by the number only: over 60 green, 10 to 60 orange, under 10 red; a dash has none. */
+  function pctClass(left) { return left === null ? '' : left > 60 ? 'pct-g' : left < 10 ? 'pct-r' : 'pct-o'; }
+  /** The colour of the minutes left on the 5-hour reset: under 10 green, 10 to 30 orange, over 30 red. */
+  function resetClass(minutes) { return minutes < 10 ? 'rs-g' : minutes <= 30 ? 'rs-o' : 'rs-r'; }
+  function leftParts(left) { return left === null ? [['—', '']] : [[left + '%', pctClass(left)], [' left', '']]; }
+  /** A reset: under 24 hours the countdown (coloured on the 5-hour window only), from 24 hours on the local date and time, plain. */
+  function resetParts(resetsAt, t, five) {
+    var minutes = minutesLeft(resetsAt, t);
+    if (minutes === null) { return [['resets in —', '']]; }
+    if (resetsAt - t >= 86400000) { return [['resets ' + resetDate(resetsAt), '']]; }
+    return [['resets in ', ''], [resetText(minutes), five ? resetClass(minutes) : '']];
+  }
 
   /** A window cell: the percent LEFT or a dash, and under it when it resets. A Codex window whose reset has passed says so. */
-  function cellNode(cell, codex) {
+  function cellNode(cell, codex, five) {
     var box = el('div', 'cell');
     var passed = function (t) { return codex && cell.resetsAt !== null && t >= cell.resetsAt; };
-    box.appendChild(live(el('div', 'left'), function (t) { return passed(t) ? '—' : leftText(cell.left); }));
+    box.appendChild(live(el('div', 'left'), function (t) { return passed(t) ? '—' : leftParts(cell.left); }));
     if (cell.resetsAt !== null) {
-      var reset = live(el('div', 'reset'), function (t) { return passed(t) ? WORDS.passed : 'resets in ' + resetText(minutesLeft(cell.resetsAt, t)); });
+      var reset = live(el('div', 'reset'), function (t) { return passed(t) ? WORDS.passed : resetParts(cell.resetsAt, t, five); });
       reset.setAttribute('title', stamp(cell.resetsAt));
       box.appendChild(reset);
     } else if (cell.left !== null) {
@@ -191,12 +219,24 @@ const SCRIPT = `
   }
   function namedLine(one) {
     var line = live(el('div', 'sub'), function (t) {
-      return one.name + ' ' + leftText(one.left) + (one.resetsAt === null ? '' : ' · resets in ' + resetText(minutesLeft(one.resetsAt, t)));
+      var head = [[one.name + ' ', '']].concat(leftParts(one.left));
+      return one.resetsAt === null ? head : head.concat([[' · ', '']], resetParts(one.resetsAt, t, false));
     });
     if (one.resetsAt !== null) { line.setAttribute('title', stamp(one.resetsAt)); }
     return line;
   }
 
+  /** ONE width set for every table of a grouping, so the blocks line up. A width attribute, not a style: the CSP allows no inline style. */
+  function cols(widths) {
+    var group = el('colgroup');
+    widths.forEach(function (width) { var col = el('col'); col.setAttribute('width', width + '%'); group.appendChild(col); });
+    return group;
+  }
+  var W_SERVER = [14, 38, 24, 24];
+  var W_ACCOUNT = [22, 78];
+  var W_CODEX = [22, 28, 16, 16, 18];
+  var W_AGY = [22, 30, 48];
+  var W_USER = [14, 18, 23, 23, 22];
   function td(label, className) {
     var cell = el('td', className);
     cell.appendChild(el('span', 'label', label));
@@ -213,6 +253,7 @@ const SCRIPT = `
     cols.forEach(function (col) {
       var th = el('th');
       th.setAttribute('scope', 'col');
+      if (col.tool) { th.className = 'tn-' + col.tool; }
       th.setAttribute('aria-sort', sortOf(col));
       if (col.key) {
         th.appendChild(button(col.label, function () { sortBy(col.key, col.tool); })).className = 'sortbtn';
@@ -296,9 +337,9 @@ const SCRIPT = `
       return [both];
     }
     var five = td('5-hour window');
-    five.appendChild(cellNode(row.five, codex));
+    five.appendChild(cellNode(row.five, codex, true));
     var week = td('Weekly window');
-    week.appendChild(cellNode(row.week, codex));
+    week.appendChild(cellNode(row.week, codex, false));
     row.models.forEach(function (one) { week.appendChild(namedLine(one)); });
     row.others.forEach(function (one) { week.appendChild(namedLine(one)); });
     return [five, week];
@@ -306,8 +347,8 @@ const SCRIPT = `
 
   // ───── Server ─────
   function toolCell(row) {
-    var cell = td('Tool');
-    cell.appendChild(el('strong', null, WORDS.toolNames[row.tool]));
+    var cell = td('Tool', 'tb-' + row.tool);
+    cell.appendChild(el('strong', 'tn-' + row.tool, WORDS.toolNames[row.tool]));
     if (row.version !== null) { cell.appendChild(el('div', 'muted', row.version)); }
     return cell;
   }
@@ -341,7 +382,7 @@ const SCRIPT = `
     if (block.rows.length > 0) {
       var body = el('tbody');
       block.rows.forEach(function (row) { body.appendChild(serverRow(row)); });
-      node.appendChild(put(el('table', 'acct'), headRow([
+      node.appendChild(put(el('table', 'acct'), cols(W_SERVER), headRow([
         { label: 'Tool', key: 'name' }, { label: 'Account', key: 'account' }, { label: '5-hour window', key: 'left5h' }, { label: 'Weekly window', key: 'leftWeek' },
       ]), body));
     }
@@ -363,15 +404,15 @@ const SCRIPT = `
   function accountUnit(account) {
     var node = el('section', 'block');
     var heading = el('div', 'heading');
-    put(heading, el('strong', 'host', account.text));
+    put(heading, el('strong', 'host tn-claude-code', account.text));
     if (account.usage.plan !== null) { heading.appendChild(el('span', 'muted', 'plan ' + account.usage.plan)); }
     node.appendChild(heading);
     var usage = el('div', 'usage');
     if (account.usage.span !== null) {
       usage.appendChild(el('div', 'muted', account.usage.span));
     } else {
-      var five = el('div'); put(five, el('span', 'label muted', '5-hour '), cellNode(account.usage.five, false));
-      var week = el('div'); put(week, el('span', 'label muted', 'Weekly '), cellNode(account.usage.week, false));
+      var five = el('div'); put(five, el('span', 'label muted', '5-hour '), cellNode(account.usage.five, false, true));
+      var week = el('div'); put(week, el('span', 'label muted', 'Weekly '), cellNode(account.usage.week, false, false));
       account.usage.models.forEach(function (one) { week.appendChild(namedLine(one)); });
       put(usage, five, week);
     }
@@ -379,15 +420,15 @@ const SCRIPT = `
     var body = el('tbody');
     account.places.forEach(function (one) {
       var tr = el('tr');
-      put(tr, put(td('Place'), el('strong', null, one.shown)), readCell(one.place, one.failure, one.readAt, one.tookMs));
+      put(tr, put(td('Place', 'tb-claude-code'), el('strong', null, one.shown)), readCell(one.place, one.failure, one.readAt, one.tookMs));
       body.appendChild(tr);
     });
-    node.appendChild(put(el('table', 'acct'), headRow([{ label: 'Place', key: 'name' }, { label: 'Read', key: 'age' }]), body));
+    node.appendChild(put(el('table', 'acct'), cols(W_ACCOUNT), headRow([{ label: 'Place', key: 'name' }, { label: 'Read', key: 'age' }]), body));
     return node;
   }
   function lineRow(line, withWindows) {
     var tr = el('tr');
-    put(tr, put(td('Place'), el('strong', null, line.shown)), accountCell(line.row));
+    put(tr, put(td('Place', 'tb-' + line.row.tool), el('strong', null, line.shown)), accountCell(line.row));
     if (withWindows) {
       windowCells(line.row).forEach(function (cell) { tr.appendChild(cell); });
     } else {
@@ -398,17 +439,17 @@ const SCRIPT = `
   }
   function sectionUnit(title, lines, withWindows) {
     var node = el('section', 'block');
-    node.appendChild(el('h2', null, title));
+    node.appendChild(el('h2', 'tn-' + (withWindows ? 'codex' : 'agy'), title));
     var body = el('tbody');
     lines.forEach(function (line) { body.appendChild(lineRow(line, withWindows)); });
-    var cols = [{ label: 'Place', key: 'name' }, { label: 'Account', key: 'account' }];
+    var columns = [{ label: 'Place', key: 'name' }, { label: 'Account', key: 'account' }];
     if (withWindows) {
-      cols.push({ label: '5-hour window', key: 'left5h' }, { label: 'Weekly window', key: 'leftWeek' });
+      columns.push({ label: '5-hour window', key: 'left5h' }, { label: 'Weekly window', key: 'leftWeek' });
     } else {
-      cols.push({ label: 'Usage' });
+      columns.push({ label: 'Usage' });
     }
-    cols.push({ label: 'Read', key: 'age' });
-    node.appendChild(put(el('table', 'acct'), headRow(cols), body));
+    columns.push({ label: 'Read', key: 'age' });
+    node.appendChild(put(el('table', 'acct'), cols(withWindows ? W_CODEX : W_AGY), headRow(columns), body));
     return node;
   }
   function noneUnit(items) {
@@ -425,8 +466,8 @@ const SCRIPT = `
   }
 
   // ───── User ─────
-  function userCell(row, label) {
-    var cell = td(label);
+  function userCell(row, label, tool) {
+    var cell = td(label, 'tb-' + tool);
     if (row === null) {
       cell.appendChild(el('div', 'muted dash', '—'));
       return cell;
@@ -437,7 +478,7 @@ const SCRIPT = `
       return cell;
     }
     var line = el('div', 'usage');
-    put(line, cellNode(row.five, row.tool === 'codex'), cellNode(row.week, row.tool === 'codex'));
+    put(line, cellNode(row.five, row.tool === 'codex', true), cellNode(row.week, row.tool === 'codex', false));
     cell.appendChild(line);
     row.models.forEach(function (one) { cell.appendChild(namedLine(one)); });
     row.others.forEach(function (one) { cell.appendChild(namedLine(one)); });
@@ -460,7 +501,7 @@ const SCRIPT = `
       none.appendChild(el('div', 'muted', row.line));
       tr.appendChild(none);
     } else {
-      put(tr, userCell(row.cells['claude-code'], 'Claude Code'), userCell(row.cells.codex, 'Codex'), userCell(row.cells.agy, 'Antigravity'));
+      put(tr, userCell(row.cells['claude-code'], 'Claude Code', 'claude-code'), userCell(row.cells.codex, 'Codex', 'codex'), userCell(row.cells.agy, 'Antigravity', 'agy'));
     }
     return tr;
   }
@@ -486,7 +527,7 @@ const SCRIPT = `
   function userTable(rows) {
     var body = el('tbody');
     rows.forEach(function (row) { body.appendChild(row); });
-    return put(el('table', 'acct'), headRow([
+    return put(el('table', 'acct'), cols(W_USER), headRow([
       { label: 'Place', key: 'name' }, { label: 'Read', key: 'age' },
       { label: 'Claude Code', key: 'left5h', tool: 'claude-code' }, { label: 'Codex', key: 'left5h', tool: 'codex' }, { label: 'Antigravity', key: 'left5h', tool: 'agy' },
     ]), body);

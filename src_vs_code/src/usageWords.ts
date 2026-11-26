@@ -126,3 +126,16 @@ const codexPart = (window: CodexWindowLike, nowMs: number): string =>
 
 /** Codex's windows, each by its length with its own reset: `5h 90% left · resets in 1h 5m · week 86% left · resets in 4d 23h`. */
 export const codexLine = (windows: readonly CodexWindowLike[], nowMs: number): string => windows.map((one) => codexPart(one, nowMs)).join(' · ');
+
+/**
+ * A reset that is a day or more away, as a date in the viewer's own zone: `Nov 30, 14:00` (the mod's week reset names the day; the tab adds the time).
+ *
+ * <p>EMBEDDED in the accounts page by its own source text, like `resetText`: no module constant, no helper outside, no template literal.</p>
+ */
+export function resetDate(resetsAtMs: number): string {
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const two = (n: number): string => (n < 10 ? '0' + n : String(n));
+  const at = new Date(resetsAtMs);
+
+  return months[at.getMonth()] + ' ' + at.getDate() + ', ' + two(at.getHours()) + ':' + two(at.getMinutes());
+}

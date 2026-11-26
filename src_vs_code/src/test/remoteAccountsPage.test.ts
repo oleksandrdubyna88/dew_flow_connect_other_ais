@@ -6,7 +6,7 @@ import { INSTALL_JQ } from '../remoteAccountsRows';
 import { accountsHtml } from '../remoteAccountsPage';
 import { tableModel } from '../remoteAccountsTable';
 import type { TableInput, TableModel } from '../remoteAccountsTable';
-import { minutesLeft, resetText, windowLabel } from '../usageWords';
+import { minutesLeft, resetDate, resetText, windowLabel } from '../usageWords';
 import { stylesheet } from './cssRules';
 import { bundledAccountsModule, pageScriptOf, runAccountsPage, tagCounts } from './accountsPageHarness';
 import type { AccountsPage } from './accountsPageHarness';
@@ -240,7 +240,7 @@ test('E2S3-T6: the narrow width — the stylesheet stacks the columns and shows 
 
 // ───────────────── T7 ─────────────────
 
-const EMBEDDED = ['compareRows', 'viewOf', 'viewState', 'minutesLeft', 'resetText', 'agoWords'];
+const EMBEDDED = ['compareRows', 'viewOf', 'viewState', 'minutesLeft', 'resetText', 'resetDate', 'agoWords'];
 
 test('E2S3-T7: the bundled page defines every embedded function, and its words equal usageWords\' and agoWords\' on their own cases', () => {
   const html = bundledAccountsModule().accountsHtml(NONCE);
@@ -258,7 +258,7 @@ test('E2S3-T7: the bundled page defines every embedded function, and its words e
     const text = run.text();
 
     for (const [index, m] of minutes.entries()) {
-      const want = `resets in ${resetText(minutesLeft(NOW + min(m) + 1_000, NOW))}`;
+      const want = m >= 1440 ? `resets ${resetDate(NOW + min(m) + 1_000)}` : `resets in ${resetText(minutesLeft(NOW + min(m) + 1_000, NOW))}`;
       assert.ok(text.includes(want), `${label}: "${want}" is not on the page for ${m} minutes`);
       assert.ok(text.includes(`${agoWords(min(1 + index * 7))} (`), `${label}: the age ${agoWords(min(1 + index * 7))} is not on the page`);
     }
@@ -388,7 +388,7 @@ test('E2S3-F3: the User grouping draws a Codex window that is neither 5-hour nor
   assert.ok(viewHtml(run).includes(label), 'the Server grouping does not draw the odd window');
   choose(run, 'group', 'user');
   assert.ok(viewHtml(run).includes(label), 'the User grouping drops the odd window');
-  assert.ok(viewHtml(run).includes('60% left'), 'its figure is not drawn');
+  assert.ok(viewHtml(run).includes('60%'), 'its figure is not drawn');
 });
 
 test('E2S3-N1: no attribute of the page holds an account of a VM — the units of the Claude account grouping are numbered', () => {
@@ -397,4 +397,94 @@ test('E2S3-N1: no attribute of the page holds an account of a VM — the units o
   const units = run.document.querySelectorAll('[data-unit]').map((one) => one.getAttribute('data-unit') ?? '');
   assert.ok(units.length > 0, 'the grouping drew no unit');
   assert.ok(units.every((unit) => !unit.includes('@') && !unit.includes(ORG)), `a unit is named by an account: ${units.join(' | ')}`);
+});
+
+// ───────────────── the owner's look: columns, tool colours, the mod's colours, the 24-hour rule ─────────────────
+
+const RAW_CSS = /<style[^>]*>([\s\S]*?)<\/style>/u.exec(HTML)?.[1] ?? '';
+
+const claudeAt = (usedPercent: number | null, resetsInMin: number, email = 'u@example.test'): ReturnType<typeof claude> =>
+  claude({ email, usage: { state: 'read', unmatched: 0, windows: [{ name: '5h', usedPercent, resetsAtMs: NOW + min(resetsInMin) }, { name: 'week', usedPercent, resetsAtMs: NOW + min(resetsInMin) }] } });
+
+const classesOf = (run: AccountsPage, selector: string): string[] => run.document.querySelectorAll(selector).map((one) => one.className);
+
+test('E2S3-L1: every table of a grouping has the same colgroup widths, so the blocks line up', () => {
+  const two = tableModel(inputOf({ hosts: ['a', 'b', 'c'], memory: memoryOf(
+    ['a', seen(reading({ claude: claudeAt(10, 100), codex: codexOf(), agy: agyOf() }), 1)],
+    ['b', seen(reading({ claude: claudeAt(50, 100, 'v@example.test'), codex: codexOf(), agy: agyOf() }), 2)],
+    ['c', seen(reading({ claude: claudeAt(20, 100, 'w@example.test') }), 3)],
+  ) }));
+  const run = page(two);
+  for (const groupBy of GROUPS) {
+    choose(run, 'group', groupBy);
+    const widths = run.document.querySelectorAll('table').map((table) => table.querySelectorAll('col').map((col) => col.getAttribute('width') ?? '').join(','));
+    assert.ok(widths.length >= 2 || groupBy !== 'server', groupBy + ': too few tables to compare');
+    assert.ok(widths.every((one) => one.length > 0), groupBy + ': a table has no colgroup');
+    if (groupBy === 'server') {
+      assert.equal(new Set(widths).size, 1, 'the Server tables do not share one width set: ' + widths.join(' | '));
+    }
+  }
+  const css = RAW_CSS;
+  assert.match(css, /table-layout:\s*fixed/u, 'the tables are not fixed');
+  assert.match(css, /overflow-wrap:\s*anywhere/u);
+});
+
+test('E2S3-L2: each tool has its colour on its name and a border on its row; none comes from a value of a VM', () => {
+  const model = tableModel(inputOf({ hosts: ['a'], memory: memoryOf(['a', seen(reading({ claude: claudeAt(30, 100), codex: codexOf(), agy: agyOf() }), 1)]) }));
+  const run = page(model);
+  const names = classesOf(run, 'strong');
+  for (const tool of ['claude-code', 'codex', 'agy']) {
+    assert.ok(names.some((one) => one.includes('tn-' + tool)), tool + ' has no coloured name');
+    assert.ok(classesOf(run, 'td').some((one) => one.includes('tb-' + tool)), tool + ' has no bordered cell');
+  }
+  const css = RAW_CSS;
+  for (const hex of ['#d97757', '#38bdf8', '#a78bfa']) {
+    assert.ok(css.includes(hex), hex + ' is not in the stylesheet');
+  }
+  assert.ok(css.includes('body.vscode-light'), 'no light-theme colours');
+});
+
+test('E2S3-L3: the percent left has the mod\'s colour by its number — 61 green, 60 orange, 10 orange, 9 red — only the number, never a dash', () => {
+  const left = (usedPercent: number | null): string[] => {
+    const model = tableModel(inputOf({ hosts: ['a'], memory: memoryOf(['a', seen(reading({ claude: claudeAt(usedPercent, 40_000) }), 1)]) }));
+    const run = page(model);
+
+    return run.document.querySelectorAll('span').filter((one) => /^pct-/u.test(one.className)).map((one) => one.className + ':' + one.textContent);
+  };
+  assert.deepEqual(left(39).slice(0, 1), ['pct-g:61%']);
+  assert.deepEqual(left(40).slice(0, 1), ['pct-o:60%']);
+  assert.deepEqual(left(90).slice(0, 1), ['pct-o:10%']);
+  assert.deepEqual(left(91).slice(0, 1), ['pct-r:9%']);
+  assert.deepEqual(left(null), [], 'a dash has a colour class');
+  assert.ok(RAW_CSS.includes('#22c55e') && RAW_CSS.includes('#f97316') && RAW_CSS.includes('#ef4444'));
+});
+
+test('E2S3-L4: the 5-hour countdown is coloured by minutes left — 9 green, 10 and 30 orange, 31 red; the weekly one is plain', () => {
+  const colour = (minutes: number): string[] => {
+    const model = tableModel(inputOf({ hosts: ['a'], memory: memoryOf(['a', seen(reading({ claude: claudeAt(30, minutes) }), 1)]) }));
+    const run = page(model);
+
+    return run.document.querySelectorAll('span').filter((one) => /^rs-/u.test(one.className)).map((one) => one.className + ':' + one.textContent);
+  };
+  // The model's reset is an instant; the page reads minutes with a floor, so a minute is added for the exact boundary.
+  assert.deepEqual(colour(9), ['rs-g:9m']);
+  assert.deepEqual(colour(10), ['rs-o:10m']);
+  assert.deepEqual(colour(30), ['rs-o:30m']);
+  assert.deepEqual(colour(31), ['rs-r:31m']);
+  assert.equal(colour(31).length, 1, 'the weekly reset is coloured too');
+});
+
+test('E2S3-L5: under 24 hours the reset is a countdown, from 24 hours on it is the local date and time, plain — 23h59m, 24h, 4d12h', () => {
+  const said = (minutes: number): string => {
+    const model = tableModel(inputOf({ hosts: ['a'], memory: memoryOf(['a', seen(reading({ claude: claudeAt(30, minutes) }), 1)]) }));
+
+    return page(model).text();
+  };
+  assert.ok(said(23 * 60 + 59).includes('resets in 23h 59m'));
+  assert.ok(!said(23 * 60 + 59).includes('resets Nov'));
+  const day = said(24 * 60);
+  assert.ok(day.includes('resets ' + resetDate(NOW + min(24 * 60))), 'at 24 h: ' + day);
+  assert.ok(!day.includes('resets in 1d'));
+  assert.ok(said(4 * 1440 + 12 * 60).includes('resets ' + resetDate(NOW + min(4 * 1440 + 12 * 60))));
+  assert.match(resetDate(NOW + min(4 * 1440 + 12 * 60)), /^[A-Z][a-z]{2} \d{1,2}, \d{2}:\d{2}$/u);
 });
