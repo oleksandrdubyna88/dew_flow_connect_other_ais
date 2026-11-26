@@ -218,7 +218,7 @@ internal sealed class CoderFixLoop(IRoleRun run, GitHistory git, CoderOsLayer la
             return new Committed(string.Empty, new CoderLoopEnd.Halted(new RoleWorkOutcome.Failed("coder-commit", "the claude key of this session cannot be read, so the files the coder wrote could not be searched for it; nothing was committed")));
         }
 
-        var made = await CoderCommits.CommitAsync(git, tree, message, ct, secret);
+        var made = await CoderCommits.CommitAsync(git, tree, message, ct, secret, layer.SignInTokens());
         if (made.Failure is { } failure)
         {
             if (failure.Stop == RoleStopWords.KeyInOutput)

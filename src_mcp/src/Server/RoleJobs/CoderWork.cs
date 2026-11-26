@@ -133,6 +133,9 @@ internal sealed class CoderWork : IRoleWork
         }
         finally
         {
+            // The sign-in copies were made for this job and are not kept after it.
+            layer.RemoveSignInCopies();
+
             // The work is over, checks included: nothing reads a mount's source any more. A runner that lost the job leaves them — the job may be running again in another one.
             if (run.StillWriter())
             {
@@ -230,7 +233,14 @@ internal sealed class CoderWork : IRoleWork
             return new RoleWorkOutcome.Stopped();
         }
 
-        var json = new CoderEnvelope(run.Request.JobId, prepared.BaseSha, end.Head, prepared.Branch, end.Report is not null, end.FixTurns, changes, end.Report, layer.Evidence, checks) { Instructions = instructions, Prompt = prompt, Cli = cli }.ToJson();
+        // The real sign-in files, before and after (s7 t6 d4): a hash and a time each; a difference is a notice to the person.
+        var signIn = layer.SignInRecords();
+        foreach (var changed in signIn.Where(record => record.Changed))
+        {
+            run.Notice(RoleJobNotices.SignInFileChanged(run.Job, changed, run.Clock.GetUtcNow().UtcDateTime));
+        }
+
+        var json = new CoderEnvelope(run.Request.JobId, prepared.BaseSha, end.Head, prepared.Branch, end.Report is not null, end.FixTurns, changes, end.Report, layer.Evidence, checks) { Instructions = instructions, Prompt = prompt, Cli = cli, SignIn = signIn }.ToJson();
 
         return end.Stop.Length == 0 ? new RoleWorkOutcome.Succeeded(json) : new RoleWorkOutcome.Failed(end.Stop, end.Reason, json);
     }

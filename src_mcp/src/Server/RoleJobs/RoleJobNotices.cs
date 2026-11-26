@@ -59,6 +59,21 @@ internal static class RoleJobNotices
         Repo = job.Repo,
     };
 
+    /// <summary>The real sign-in file of a vendor differs between the start and the end of a coder job: coai never writes it, so the person is told that something else did. Names the vendor and the two modification times; no text, no hash.</summary>
+    public static ServerNotice SignInFileChanged(RoleJobRecord job, CoderSignInRecord record, DateTime nowUtc) => new()
+    {
+        Utc = ServerNotice.Iso(nowUtc),
+        Class = "outcome",
+        Source = Source,
+        Code = ServerNoticeCodes.SignInFileChanged,
+        Subject = job.JobId,
+        Title = $"Role job {job.JobId} ({job.Role}): the {record.Vendor} sign-in file changed while the job ran",
+        Detail = $"The file was changed at {(record.BeforeModifiedUtc.Length > 0 ? record.BeforeModifiedUtc : "(absent)")} before the job and at {(record.AfterModifiedUtc.Length > 0 ? record.AfterModifiedUtc : "(absent)")} after it. The job worked on a copy and never wrote the real file; its envelope holds both hashes.",
+        Cure = "Nothing is needed when you used the vendor's own CLI meanwhile. If you did not, look at who wrote the file.",
+        Role = job.Role,
+        Repo = job.Repo,
+    };
+
     /// <summary>A job that ended <c>failed</c>: its stop and its reason, the way <c>role_status</c> shows them.</summary>
     public static ServerNotice Failed(RoleJobRecord job, DateTime nowUtc) => new()
     {

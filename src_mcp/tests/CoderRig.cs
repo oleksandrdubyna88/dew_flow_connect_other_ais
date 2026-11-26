@@ -60,6 +60,13 @@ internal sealed class CoderRig : IAsyncDisposable
     internal string Base { get; private set; } = string.Empty;
 
     /// <summary>The machine as the OS layer sees it: this host, the stand-in as the person's home, no PATH to look programs up in.</summary>
+    /// <summary>Writes a file into the stand-in for the person's real home (a sign-in file of a vendor that signs in with one).</summary>
+    internal void RealHomeFile(string relative, string text)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.Combine(_home.Path, relative))!);
+        File.WriteAllText(Path.Combine(_home.Path, relative), text);
+    }
+
     internal BoundaryHost Host => OnHost(BoundaryHost.Current() with { RealHome = _home.Path, NuGetPackages = string.Empty, Path = string.Empty });
 
     /// <summary>The vendors a coder of the job may be launched on: the product's set, or a test's own table with its own test vendor (epoch 3 E3 s7 t2). Read when the job's work is made.</summary>

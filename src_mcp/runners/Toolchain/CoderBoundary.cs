@@ -75,6 +75,79 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
         request.Environment.TryGetValue(CoaiMcp.Runners.Consultation.ClaudeConsultant.KeyVariable, out var value) && !string.IsNullOrEmpty(value);
 
     /// <summary>
+    /// The sign-in of the vendor, made for THIS launch when its recipe is a copy for the job (epoch 3 E3 s7 t6): a fresh copy for every turn when the recipe says so (agy), else one for the job; from the real file, or — when the recipe has a refresh step and the real file's access token has
+    /// no margin — from the file a refresh unit rewrote in a scratch home, which is deleted before this returns; then the GATE of the recipe on the copy as it is (<c>expiry &gt;= now + the unit's end + the margin</c>), asked before EVERY launch. Empty when the launch may start, else the sentence — a
+    /// launch that cannot have the margin is never started on less. A vendor whose sign-in is not a copy (claude's bind) has nothing to prepare.
+    /// </summary>
+    internal async Task<string> PrepareSignInAsync(BoundaryJob job, string executable, TimeSpan runtimeMax, SignInJobs states, DateTime nowUtc, CancellationToken ct)
+    {
+        if (Vendor.SignIn is not CoderSignInRecipe.CopyForJob recipe)
+        {
+            return string.Empty;
+        }
+
+        var real = Path.Combine(host.RealHome, recipe.RealRelativePath.Length > 0 ? recipe.RealRelativePath : recipe.RelativePath);
+        var state = states.Of(Vendor.Id, () => new SignInJobState(Vendor.Id, recipe, Vendor.Home(job).SignInFile, real));
+        state.Before ??= SignInCopy.Snapshot(real);
+        if (!state.Before.Exists)
+        {
+            return $"the {Vendor.Id} sign-in file was not found where its CLI keeps it, so the coder has no sign-in to be given a copy of; start {Vendor.Id} once yourself to sign in, then start the coder again";
+        }
+
+        if (recipe.FreshForEveryTurn || !File.Exists(state.CopyFile))
+        {
+            var made = await MakeCopyAsync(job, executable, runtimeMax, recipe, state, nowUtc, ct);
+            if (made.Length > 0)
+            {
+                return made;
+            }
+        }
+
+        state.Remember();
+
+        return SignInCopy.Gate(recipe, SignInCopy.ExpiryOfFile(recipe, state.CopyFile), nowUtc, runtimeMax, Vendor.Id);
+    }
+
+    private async Task<string> MakeCopyAsync(BoundaryJob job, string executable, TimeSpan runtimeMax, CoderSignInRecipe.CopyForJob recipe, SignInJobState state, DateTime nowUtc, CancellationToken ct)
+    {
+        var source = state.RealFile;
+        var scratch = string.Empty;
+        try
+        {
+            var realExpiry = SignInCopy.ExpiryOfFile(recipe, state.RealFile);
+            if (recipe.RefreshArgv.Count > 0 && recipe.ExpiryField.Length > 0 && (realExpiry is null || realExpiry.Value - nowUtc < runtimeMax + recipe.Margin))
+            {
+                // The access token of the real file has no margin: ONE refresh in a unit of its own, on a scratch home that holds the full copy. It runs only now, and only when the margin is missing; a real file that has it is cut into the copy as it is.
+                var program = Vendor.Program(executable, host.Path, job);
+                if (program.Problem.Length > 0)
+                {
+                    return $"the sign-in of {Vendor.Id} needs a refresh and its program cannot be run in a unit: {program.Problem}";
+                }
+
+                scratch = job.JobRoot.TrimEnd(Path.DirectorySeparatorChar) + ".refresh";
+                state.Refreshes++;
+                var unit = BoundaryUnit.UnitName(job, $"refresh{state.Refreshes}");
+                var refreshed = await new SignInRefresh(launcher, host).RunAsync(job, state.RealFile, scratch, recipe.RealRelativePath.Length > 0 ? recipe.RealRelativePath : recipe.RelativePath, program, recipe.RefreshArgv, [new("PATH", BoundaryHost.SystemPath), new("HOME", scratch), new("LANG", "C.UTF-8"), new("TERM", "dumb"), new("NO_COLOR", "1")], unit, Degrade, ct);
+                if (refreshed is SignInRefreshResult.Failed failed)
+                {
+                    return failed.Sentence;
+                }
+
+                source = ((SignInRefreshResult.Refreshed)refreshed).File;
+            }
+
+            return SignInCopy.Make(recipe, source, state.CopyFile, job.CoderHomeFolder) is SignInCopyResult.Refused refused ? refused.Sentence : string.Empty;
+        }
+        finally
+        {
+            if (scratch.Length > 0)
+            {
+                SignInRefresh.Delete(scratch);
+            }
+        }
+    }
+
+    /// <summary>
     /// The preflight, before the launch: makes the coder's folders, then runs the exact property set once and asks the OS every item of <see cref="BoundaryPreflight.CoderItems"/>. A wrong answer anywhere refuses the launch with a sentence;
     /// nothing but the preflight has run, and the coder has not been started.
     /// </summary>

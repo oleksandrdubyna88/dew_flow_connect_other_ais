@@ -24,11 +24,22 @@ internal static class CoderCommits
     /// The key the turn ran on, when it ran on a pool key (epoch 3 E2 s7): the files are searched for its exact text BEFORE <c>git add</c> (so a leak's blob is never written) and the STAGED BLOBS — what git will commit, after any
     /// <c>.gitattributes</c> conversion — and the file names are searched again before the commit. A hit means no commit and the job fails <c>key-in-output</c>. A search that cannot be made (git said no, the output was cut) is a failure too, never a pass.
     /// </param>
-    public static async Task<(string Head, RoleWorkOutcome.Failed? Failure)> CommitAsync(GitHistory git, CoderTree tree, string message, CancellationToken ct, ClaudeKeySecret? secret = null)
+    /// <param name="tokens">
+    /// The token texts of the job's sign-in copies (s7 t6, judgement S4, id K3): the files are searched for each, the same way and at the same two places, and a hit is <c>coder-boundary</c> naming the copy's id, never the text. Nothing is committed.
+    /// </param>
+    public static async Task<(string Head, RoleWorkOutcome.Failed? Failure)> CommitAsync(GitHistory git, CoderTree tree, string message, CancellationToken ct, ClaudeKeySecret? secret = null, IReadOnlyList<ClaudeKeySecret>? tokens = null)
     {
         if (secret is not null && await SearchWorkingTreeAsync(git, tree, secret, ct) is { } before)
         {
             return (string.Empty, before);
+        }
+
+        foreach (var token in tokens ?? [])
+        {
+            if (await SearchWorkingTreeAsync(git, tree, token, ct, TokenHit) is { } leaked)
+            {
+                return (string.Empty, leaked);
+            }
         }
 
         // Git does not see a file written inside the empty folder of a gitlink (it takes the folder for a submodule's own and ignores what is in it), so the folders are looked at on the disk BEFORE anything is staged.
@@ -60,6 +71,17 @@ internal static class CoderCommits
         if (secret is not null && pending.Out.Length > 0 && await SearchStagedAsync(git, tree, pending.Out, secret, ct) is { } after)
         {
             return (string.Empty, after);
+        }
+
+        foreach (var token in pending.Out.Length > 0 ? tokens ?? [] : [])
+        {
+            if (await SearchStagedAsync(git, tree, pending.Out, token, ct, TokenHit) is { } leaked)
+            {
+                // What was staged is unstaged again: nothing of the turn is committed, and the worktree stays as the coder left it.
+                await git.InCoderTreeAsync(tree, ["reset", "-q"], ct);
+
+                return (string.Empty, leaked);
+            }
         }
 
         if (pending.Out.Length > 0)
@@ -103,13 +125,17 @@ internal static class CoderCommits
     private static RoleWorkOutcome.Failed Exposed() =>
         new(RoleStopWords.KeyInOutput, "the exact text of the turn's claude key is in what the coder wrote, so nothing was committed, the key is dead (exposed) and the job stops; revoke the key at the vendor");
 
+    /// <summary>A token of a sign-in copy is in what the coder wrote (K3): the job ends <c>coder-boundary</c>, nothing is committed. The sentence names the copy and says nothing of the text.</summary>
+    private static RoleWorkOutcome.Failed TokenHit() =>
+        new(RoleStopWords.CoderBoundary, "a token of the sign-in copy made for this job is in what the coder wrote, so nothing was committed and the job stops; the copy was made for the job and is deleted with it, so the token the vendor gave is short-lived or a placeholder, but the coder's change is not committed");
+
     private static RoleWorkOutcome.Failed Unsearchable(string why) =>
         new("coder-commit", $"the files the coder wrote could not be searched for the turn's claude key ({why}), so nothing was committed");
 
     /// <summary>
     /// The files git would add (modified and new, not ignored — git's own list) searched as they are on disk, BEFORE anything is staged. A link is not followed: what git commits is the link, not what it points at. Null when nothing was found.
     /// </summary>
-    private static async Task<RoleWorkOutcome.Failed?> SearchWorkingTreeAsync(GitHistory git, CoderTree tree, ClaudeKeySecret secret, CancellationToken ct)
+    private static async Task<RoleWorkOutcome.Failed?> SearchWorkingTreeAsync(GitHistory git, CoderTree tree, ClaudeKeySecret secret, CancellationToken ct, Func<RoleWorkOutcome.Failed>? hit = null)
     {
         var listed = await git.InCoderTreeAsync(tree, ["ls-files", "-z", "--others", "--modified", "--exclude-standard"], ct);
         if (!listed.Ran || !listed.Ok || listed.Truncated)
@@ -117,17 +143,17 @@ internal static class CoderCommits
             return Unsearchable("git could not list the changed files");
         }
 
-        return HoldsTheKey(tree.Root, listed.Out, secret) ? Exposed() : null;
+        return HoldsTheKey(tree.Root, listed.Out, secret) ? (hit ?? Exposed)() : null;
     }
 
     /// <summary>
     /// What is STAGED, searched as git will commit it (the working-tree bytes can differ: <c>working-tree-encoding</c>, a clean filter): the whole staged diff as text in one command, and when its output was cut, each staged blob by its id. The names are searched too.
     /// </summary>
-    private static async Task<RoleWorkOutcome.Failed?> SearchStagedAsync(GitHistory git, CoderTree tree, string namesZ, ClaudeKeySecret secret, CancellationToken ct)
+    private static async Task<RoleWorkOutcome.Failed?> SearchStagedAsync(GitHistory git, CoderTree tree, string namesZ, ClaudeKeySecret secret, CancellationToken ct, Func<RoleWorkOutcome.Failed>? hit = null)
     {
         if (secret.IsIn(System.Text.Encoding.UTF8.GetBytes(namesZ)))
         {
-            return Exposed();
+            return (hit ?? Exposed)();
         }
 
         var diff = await git.InCoderTreeAsync(tree, ["diff", "--cached", "--text", "--no-textconv", "--no-ext-diff", "--no-renames"], ct);
@@ -138,7 +164,7 @@ internal static class CoderCommits
 
         if (!diff.Truncated)
         {
-            return secret.IsIn(System.Text.Encoding.UTF8.GetBytes(diff.Out)) ? Exposed() : null;
+            return secret.IsIn(System.Text.Encoding.UTF8.GetBytes(diff.Out)) ? (hit ?? Exposed)() : null;
         }
 
         // Too much to read in one piece: every staged blob on its own, by id.
@@ -158,7 +184,7 @@ internal static class CoderCommits
 
             if (secret.IsIn(System.Text.Encoding.UTF8.GetBytes(blob.Out)))
             {
-                return Exposed();
+                return (hit ?? Exposed)();
             }
         }
 

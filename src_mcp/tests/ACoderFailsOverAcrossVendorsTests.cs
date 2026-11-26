@@ -109,6 +109,10 @@ public sealed class ACoderFailsOverAcrossVendorsTests
         rig.Vendors = set;
         rig.Rig.Setting("COAI_ROLE_CODEX_CLI", RoleJobWorld.FakeCli).Setting("COAI_ROLE_AGY_CLI", RoleJobWorld.FakeCli);
 
+        // A vendor that signs in with a file is given a copy of the person's own file (s7 t6): the stand-in for the real home holds one for each, with nothing in it the recipe of these stand-ins keeps.
+        rig.RealHomeFile(".codex/auth.json", "{}");
+        rig.RealHomeFile(".agy/auth.json", "{}");
+
         return rig;
     }
 
@@ -424,10 +428,10 @@ public sealed class ACoderFailsOverAcrossVendorsTests
         ended.State.Should().Be(RoleJobStates.Succeeded, ended.Reason);
         var reads = ReadsOf(rig, job);
         reads.Should().HaveCount(2);
-        reads[0][CopyPath(rig, job, "codex")].Saw.Should().Be("absent", "the first launch of codex finds no copy of its own yet: the test vendor makes it while it runs (CONTROL: the next read would see it)");
+        reads[0][CopyPath(rig, job, "codex")].Saw.Should().Be("read", "the first launch of codex finds the copy coai made for it from the real file (s7 t6)");
         reads[1][CopyPath(rig, job, "codex")].Saw.Should().Be("absent", "the copy codex's unit left in the job's home is deleted before agy's unit starts");
         File.Exists(CopyPath(rig, job, "codex")).Should().BeFalse();
-        File.ReadAllText(CopyPath(rig, job, "agy")).Should().Contain(AgyCopy, "the copy of the vendor that is running is not touched");
+        File.Exists(CopyPath(rig, job, "agy")).Should().BeFalse("the copy of the vendor that ran last is deleted when the job ends (s7 t6): no sign-in copy is kept after a job");
     }
 
     [Fact]
@@ -437,7 +441,7 @@ public sealed class ACoderFailsOverAcrossVendorsTests
         await using var rig = await RigAsync(set);
         var job = rig.NewJob(route: ["codex/terra", $"agy/{Argon}"]);
         // The vendor leaves a FOLDER where its copy belongs: coai cannot delete it as a file, and the next vendor must not start with it there.
-        rig.Says("terra", Falls("terra", [], new Dictionary<string, string> { [".codex/auth.json/inner"] = CodexCopy })).Says(Argon, Writes(CoderRig.Green, AgyLast, []));
+        rig.Says("terra", Falls("terra", [], new Dictionary<string, string> { [".codex/auth.json#folder"] = CodexCopy })).Says(Argon, Writes(CoderRig.Green, AgyLast, []));
 
         var (_, ended) = await rig.RunAsync(job);
 

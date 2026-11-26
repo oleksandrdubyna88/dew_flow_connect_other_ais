@@ -29,6 +29,41 @@ internal static class CoderVerbs
     }
 
     /// <summary>
+    /// <c>set-json-field &lt;file&gt; &lt;field&gt; &lt;value&gt;</c>: what a vendor's own refresh step does to its sign-in file, as a verb — reads the JSON object at <paramref name="file"/>, sets the string at the <c>/</c>-separated path <paramref name="field"/> to
+    /// <paramref name="value"/> and writes it back. Exit 0; 1 with a line on stderr that names no value when the file cannot be read as an object.
+    /// </summary>
+    internal static int SetJsonField(string file, string field, string value)
+    {
+        try
+        {
+            if (System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(file)) is not System.Text.Json.Nodes.JsonObject root)
+            {
+                Console.Error.WriteLine("fake-cli: the file is not a JSON object");
+
+                return 1;
+            }
+
+            var parts = field.Split('/', StringSplitOptions.RemoveEmptyEntries);
+            var at = root;
+            foreach (var part in parts[..^1])
+            {
+                at = at[part] as System.Text.Json.Nodes.JsonObject ?? (System.Text.Json.Nodes.JsonObject)(at[part] = new System.Text.Json.Nodes.JsonObject());
+            }
+
+            at[parts[^1]] = value;
+            File.WriteAllText(file, root.ToJsonString());
+
+            return 0;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+        {
+            Console.Error.WriteLine($"fake-cli: could not set the field ({e.GetType().Name})");
+
+            return 1;
+        }
+    }
+
+    /// <summary>
     /// The model map's <c>tryWriteFiles</c>: a JSON array of absolute paths, each tried; ONE line on stderr for every one the OS refused (the same line as <see cref="WriteFiles"/>) and NOTHING on stdout — the vendor answer that follows must stay the only thing there.
     /// </summary>
     internal static void TryWrite(string json)

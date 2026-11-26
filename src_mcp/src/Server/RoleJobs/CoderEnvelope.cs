@@ -44,6 +44,31 @@ internal sealed record CoderCliRecord(string Vendor, string Installed, string La
     }
 }
 
+/// <summary>The real sign-in file of a vendor that signs in with a file, before and after the job (s7 t6 d4): a sha256 and a modification time each — a hash, never text — and whether they differ. coai opens that file for reading only, so a difference is something else's doing.</summary>
+internal sealed record CoderSignInRecord(string Vendor, string BeforeSha256, string BeforeModifiedUtc, string AfterSha256, string AfterModifiedUtc, bool Changed)
+{
+    public static CoderSignInRecord Of(string vendor, RealSignInState before, RealSignInState after) =>
+        new(vendor, before.Sha256, Stamp(before.ModifiedUtc), after.Sha256, Stamp(after.ModifiedUtc), before.Sha256 != after.Sha256 || before.ModifiedUtc != after.ModifiedUtc);
+
+    private static string Stamp(DateTime? time) => time is { } at ? at.ToString("yyyy-MM-ddTHH:mm:ss.fffZ", System.Globalization.CultureInfo.InvariantCulture) : string.Empty;
+
+    public void Write(Utf8JsonWriter json)
+    {
+        json.WriteStartObject();
+        json.WriteString("vendor", Vendor);
+        json.WriteStartObject("before");
+        json.WriteString("sha256", BeforeSha256);
+        json.WriteString("modifiedUtc", BeforeModifiedUtc);
+        json.WriteEndObject();
+        json.WriteStartObject("after");
+        json.WriteString("sha256", AfterSha256);
+        json.WriteString("modifiedUtc", AfterModifiedUtc);
+        json.WriteEndObject();
+        json.WriteBoolean("changed", Changed);
+        json.WriteEndObject();
+    }
+}
+
 /// <summary>One path of the coder's change, as <c>git diff --name-status</c> says it: <c>A</c> added, <c>M</c> modified, <c>D</c> deleted, <c>T</c> type changed.</summary>
 internal sealed record CoderFileChange(string Status, string Path);
 
@@ -73,6 +98,9 @@ internal sealed record CoderEnvelope(string JobId, string BaseSha, string HeadSh
     /// <summary>The CLI release of the model that produced the result, beside the last measured one. Written as <c>cli</c> when there is one.</summary>
     public CoderCliRecord Cli { get; init; } = CoderCliRecord.None;
 
+    /// <summary>The real sign-in files of the vendors that were given a copy, before and after the job. Written as <c>signIn</c> when there is one.</summary>
+    public IReadOnlyList<CoderSignInRecord> SignIn { get; init; } = [];
+
     public string ToJson()
     {
         using var buffer = new MemoryStream();
@@ -101,6 +129,16 @@ internal sealed record CoderEnvelope(string JobId, string BaseSha, string HeadSh
             Instructions.Write(json);
             Prompt.Write(json);
             Cli.Write(json);
+            if (SignIn.Count > 0)
+            {
+                json.WriteStartArray("signIn");
+                foreach (var record in SignIn)
+                {
+                    record.Write(json);
+                }
+
+                json.WriteEndArray();
+            }
             json.WriteEndObject();
         }
 

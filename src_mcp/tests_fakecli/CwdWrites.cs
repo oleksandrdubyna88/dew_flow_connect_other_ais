@@ -11,6 +11,9 @@ internal static class CwdWrites
 {
     private const string Utf16Suffix = "#utf16le";
 
+    /// <summary>A name ending in <c>#folder</c> makes a FOLDER of that name — a file already there is removed first — and writes the text into a file <c>inner</c> in it (a coder that leaves a folder where a sign-in copy belongs).</summary>
+    private const string FolderSuffix = "#folder";
+
     /// <summary>Writes every entry; answers the sentence that says why one was not written, or empty when all were.</summary>
     public static string Apply(string json, string folder)
     {
@@ -24,7 +27,8 @@ internal static class CwdWrites
         {
             // A name ending in `#utf16le` is written in UTF-16LE with no mark (the file a .gitattributes `working-tree-encoding=UTF-16LE` expects): the bytes on disk are NOT the text git commits.
             var utf16 = entry.Name.EndsWith(Utf16Suffix, StringComparison.Ordinal);
-            var name = utf16 ? entry.Name[..^Utf16Suffix.Length] : entry.Name;
+            var folderEntry = entry.Name.EndsWith(FolderSuffix, StringComparison.Ordinal);
+            var name = utf16 ? entry.Name[..^Utf16Suffix.Length] : folderEntry ? entry.Name[..^FolderSuffix.Length] : entry.Name;
             var target = Path.GetFullPath(Path.Combine(folder, name));
             var below = Path.GetRelativePath(folder, target);
             if (Path.IsPathRooted(name) || below == ".." || below.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal))
@@ -34,7 +38,13 @@ internal static class CwdWrites
 
             Directory.CreateDirectory(Path.GetDirectoryName(target)!);
             var text = entry.Value.GetString() ?? string.Empty;
-            if (utf16)
+            if (folderEntry)
+            {
+                File.Delete(target);
+                Directory.CreateDirectory(target);
+                File.WriteAllText(Path.Combine(target, "inner"), text);
+            }
+            else if (utf16)
             {
                 File.WriteAllBytes(target, System.Text.Encoding.Unicode.GetBytes(text));
             }

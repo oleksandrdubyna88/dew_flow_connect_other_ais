@@ -59,7 +59,32 @@ internal abstract record CoderSignInRecipe
     /// A COPY coai makes for the job (judgement S3): mode 0600 in a 0700 folder of the job's coder home, never a bind of the real file. <paramref name="Placeholders"/> says which field is replaced by a placeholder,
     /// <paramref name="RefreshStep"/> names a refresh with no model, and <paramref name="Gate"/> the id of the property asked before every launch. Acted on by s7 t6.
     /// </summary>
-    public sealed record CopyForJob(string RelativePath, IReadOnlyList<string> KeptFields, IReadOnlyDictionary<string, string> Placeholders, string RefreshStep, string Gate) : CoderSignInRecipe;
+    public sealed record CopyForJob(string RelativePath, IReadOnlyList<string> KeptFields, IReadOnlyDictionary<string, string> Placeholders, string RefreshStep, string Gate) : CoderSignInRecipe
+    {
+        /// <summary>Where the REAL file is, under the person's real home (<c>/</c>-separated); empty means <see cref="CopyForJob.RelativePath"/> is that place too.</summary>
+        public string RealRelativePath { get; init; } = string.Empty;
+
+        /// <summary>The field of the file that holds the access token's expiry, as a <c>/</c>-separated path (<c>tokens/access_token</c>, <c>token/expiry</c>); empty means the recipe has no expiry to gate on.</summary>
+        public string ExpiryField { get; init; } = string.Empty;
+
+        /// <summary>True when <see cref="ExpiryField"/> holds a JWT whose <c>exp</c> claim is the expiry (codex); false when it holds an RFC 3339 time (agy).</summary>
+        public bool ExpiryIsJwt { get; init; }
+
+        /// <summary>The time that must remain after the unit's own end: the launch needs <c>expiry &gt;= now + RuntimeMaxSec + this</c> (codex: 60 minutes, CX-R1; agy: 5 minutes, AG-R2).</summary>
+        public TimeSpan Margin { get; init; }
+
+        /// <summary>The fields whose texts are searched for in everything the coder commits (K3, judgement S4): the access token and the id token, never the placeholder.</summary>
+        public IReadOnlyList<string> TokenFields { get; init; } = [];
+
+        /// <summary>The argv of the refresh step with NO model (agy: <c>models</c>), run in a unit of its own on a scratch home that holds the full copy; empty means the sign-in cannot be refreshed by coai (codex: its refresh token is never in a job).</summary>
+        public IReadOnlyList<string> RefreshArgv { get; init; } = [];
+
+        /// <summary>The variable that names the vendor's home inside the unit, when the CLI reads it from one (codex: <c>CODEX_HOME</c>); empty means <c>HOME</c> is the home.</summary>
+        public string HomeVariable { get; init; } = string.Empty;
+
+        /// <summary>True when a fresh copy is made for EVERY turn (agy, which rewrites its file); false when one copy lives for the job.</summary>
+        public bool FreshForEveryTurn { get; init; }
+    }
 }
 
 /// <summary>

@@ -7,6 +7,7 @@
 //   stderr-exit <text> <code>            — text to stderr, exit <code>
 //   sleep <ms>                           — exit 0 after the delay
 //   emit-bytes <n>                       — n bytes of 'x' on stdout in lines of 99, no pause, exit 0 (a check step that is too chatty; epoch 3 E2 s1 t2)
+//   set-json-field <file> <field> <value> — set one string field (a '/'-separated path) of the JSON file; exit 0, or 1 with a line on stderr when the file is not JSON (the fake as a vendor's own refresh step, epoch 3 E3 s7 t6)
 //   write-files <path>...                — try to write each path; "wrote <path>" on stdout, "fake-cli: could not write <path>: <why>" on stderr; exit 0 (the fake as a coder, epoch 3 E2 s2 t5)
 //   hold-in <folder> <ms>                — write <folder>/ready, then wait <ms>, exit 0 (a coder that is working; a test waits for the file)
 //   emit-repeat <text> <times>           — <text> <times> times on stdout, exit 0 (output whose bytes outnumber its characters)
@@ -374,6 +375,8 @@ switch (args0)
         return 0;
 
     // Epoch 3 E2 s2 t5: the fake as a CODER. `write-files` tries each path and says which it could not write (the OS layer's answer, on stderr), exiting 0; `hold-in` says it is working by writing `ready` into a folder, then waits.
+    case ["set-json-field", var jsonFile, var jsonField, var jsonValue]:
+        return CoaiMcp.FakeCli.CoderVerbs.SetJsonField(jsonFile, jsonField, jsonValue);
     case ["write-files", .. var writePaths]:
         return CoaiMcp.FakeCli.CoderVerbs.WriteFiles(writePaths);
 

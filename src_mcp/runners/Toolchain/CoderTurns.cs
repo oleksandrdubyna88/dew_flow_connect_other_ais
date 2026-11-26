@@ -37,12 +37,18 @@ public sealed class CoderTurns(CoderBoundary boundary, FilesystemInvariant invar
     public Task<CoderTurnOutcome> RunAsync(BoundaryJob job, ProcessRequest request, string part, CancellationToken ct = default) => RunAsync(job, request, part, null, ct);
 
     /// <summary>Launches the coder of <paramref name="vendor"/> (the boundary's own vendor when null — claude unless a test says otherwise): its unit properties, working directory and environment are the seam's.</summary>
-    internal async Task<CoderTurnOutcome> RunAsync(BoundaryJob job, ProcessRequest request, string part, ICoderVendor? vendor, CancellationToken ct = default)
+    internal async Task<CoderTurnOutcome> RunAsync(BoundaryJob job, ProcessRequest request, string part, ICoderVendor? vendor, CancellationToken ct = default, SignInJobs? signIns = null)
     {
         var bound = vendor is null ? boundary : boundary.For(vendor);
         if (WrongWorktree(bound.Vendor.WorkingDirectory(job), job, request) is { Length: > 0 } wrong)
         {
             return new CoderTurnOutcome.Refused(wrong, new BoundaryRecord(BoundaryRecord.UnitBoundary, [], "host", CoderBoundary.NetworkReason, []));
+        }
+
+        // The sign-in copy of a vendor that signs in with a file, made for this launch and gated (s7 t6): a launch that cannot have its margin is refused here, before anything of it starts.
+        if (signIns is not null && await bound.PrepareSignInAsync(job, request.Executable, request.Timeout + UnitControl.Backstop, signIns, DateTime.UtcNow, ct) is { Length: > 0 } unsigned)
+        {
+            return new CoderTurnOutcome.Refused(unsigned, new BoundaryRecord(BoundaryRecord.UnitBoundary, [], "host", CoderBoundary.NetworkReason, []));
         }
 
         var admission = await bound.AdmitAsync(job, request.Executable, ct, CoderBoundary.CarriesKey(request));
