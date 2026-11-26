@@ -1,18 +1,13 @@
 # PLAN — the terminal panel shows the AI accounts of the open ssh hosts, and their usage
 
 > Status: **In progress, 2026-11-26 — epoch 4 is approved by the owner; E1 and the cut are merged; E2 may start.**
-> Epic E1 is merged (#1047, `d0241e45`): a read-only round every 10 minutes and a list, with the Claude usage read
-> off. The owner's real-window check of its pre-release VSIX 2.0.901 gave the ledger entries 2.2 and 2.3, which
-> stopped the plan on 2026-11-25. This text is the revision which that stop ordered (step 4 of *The full stop*,
-> `plan-change-control.md`). **The owner approved it as epoch 3 on 2026-11-26**, with three answers that belong to
-> the approved baseline and are no ledger entry: root of a WSL distro is read too, as itself (*Owner decisions*,
-> 24); Q4 is "yes"; and the go for the measurements W6, W7 and W9, which were run that day. **Epoch 3 then took
-> two changes, 3.1 and 3.2** — the edges of a withdrawal, found by the security spec of E2.S1 — **and the second
-> stopped it. The owner approved epoch 4 the same day, at once, with NO re-review** (*Re-review for epoch 4* says
-> what was not run), and with one more answer, which is baseline: **the login session that WSL opens for a user
-> it reads is accepted** (decision 25; § 5). Epoch 4 has no change yet. The cut that step 6
+> How the plan came here is in the ledger below: E1 merged (#1047), the stop at 2.2 and 2.3, epoch 3 approved by
+> the owner, its stop at 3.1 and 3.2, and **epoch 4 approved the same day with NO re-review** (*Re-review for
+> epoch 4* says what was not run). The status as it said so: the appendix, § K.24, word for word.
+> **Epoch 4 has one change, 4.1** (the owner: the tab's table is grouped
+> by server, by Claude account or by user, and every column sorts); one more stops the plan. The cut that step 6
 > of the stop ordered is merged (#1051, `b1ec467c`): no build from main reads a host by itself. **E2 may start**;
-> no code of E2 to E6 is written yet. Scope: `src_vs_code` only — the icon in the terminal panel's title bar; ONE permission to read, asked once; a tab with a table, by host, of the Claude Code, Codex and
+> no code of E2 to E6 is written yet. Scope: `src_vs_code` only — the icon in the terminal panel's title bar; ONE permission to read, asked once; a tab with a table — by host, or by Claude account or by user (4.1) — of the Claude Code, Codex and
 > Antigravity accounts and their limits; a round every 10 minutes over the hosts of the open
 > `Creds: <host> / <session>` terminals, over ssh, and over the Linux users of the WSL distros of this PC, root
 > among them. The epics E2 to E5 only read; the install of `jq` (owner decision 17, under a "yes" of its own) is the last epic, E6. No change to
@@ -192,6 +187,14 @@ Narrowed: no — nothing left the scope, the Definition of Done, the merge condi
 
 > Epoch 4 · approved 2026-11-26 · by owner · state: open
 
+- 4.1 · 2026-11-26 · owner · scope, contract — the tab's table is grouped by server, by Claude account or by user, by a switch, and every column header sorts
+  (The owner, after seeing the picture of the tab — § 1; the appendix, § K.8 — in Russian, translated: "let the
+  webview open, with proper tables, and so that it can be sorted — by Claude accounts, by servers, by users."
+  What it changes: § 1 gains the switch *Group by*, the sorting headers and the tab's own state for both; so
+  do E2.S2, E2.S3 and E3.S3, the test plan, the Definition of Done, R15 and R13. Nothing is removed: the tab,
+  the default view by server and every rule of the page stay. The first change of epoch 4: one more stops
+  the plan.)
+
 ## The goal
 
 The owner, 2026-11-19 (in Russian, translated): *"Next I want to add an icon, like the chats one. It should show a list
@@ -235,14 +238,10 @@ replace or change: the appendix, § K.21, word for word, with the gloss of the o
     `systemd=false` there is none. The owner was shown it (W9) and chose to accept it, not to read fewer users.
     So a read is named for what it is: the permission's text (§ 3) and *Security* say it.
 
-**The owner's answers, 2026-11-25 evening:** Q1 **yes** (one "yes" for everything read from a host, the chat's
-session read included); Q2 **not started** (a stopped distro is never started for a read); Q3 **one more one-time
-"yes"** for "install `jq` where it is missing", asked once for all hosts; without rights the command is shown. Q4 was
-not asked that evening. The owner also gave the go for the cut of *Build order* step 1, over the PR cap.
-
-**The owner's answers, 2026-11-26, with the approval of epoch 3:** root is read too (24); Q4 **yes** — the owner
-checks a VSIX built from the head of each of E2, E3 and E4 in a real window BEFORE that epic merges (merge
-condition 5); and **the go for the measurements** W9, on this PC, and W6 and W7, on a VM (§ 5).
+**The owner's answers** of 2026-11-25 evening and of 2026-11-26, word for word: the appendix, § K.25. In short:
+Q1 **yes** — one "yes" for everything read from a host, the chat's session read included; Q2 a stopped distro
+is **not started**; Q3 **one more one-time "yes"** for the install of `jq`; Q4 **yes** — merge condition 5;
+root is read (24); the go for the cut of *Build order* step 1 and for W6, W7 and W9.
 
 The four questions as they were asked, with the line the text took for each, are in the appendix, § J.
 
@@ -267,12 +266,14 @@ scope host; a reading, its time and its failure are of the place.
   terminal panel at `navigation@91`, always visible (decisions 1 and 11), and in the command palette.
 - **It opens an editor tab, not a QuickPick** (both question consultants, `7315feb0`): ONE `WebviewPanel` for each
   window, on the pattern of `RoundsLogPanel`. A second press reveals the tab that is open. `enableFindWidget` gives
-  Ctrl+F. `retainContextWhenHidden` keeps the scroll place; the page keeps no other state. The QuickPick of E1, its
-  rows and its item buttons are removed.
-- **The page is grouped by HOST.** A toolbar, then one block for each scope host of the live `Creds:` terminals, in
+  Ctrl+F. `retainContextWhenHidden` keeps the scroll place; the page keeps no other state but the grouping and
+  the sort (entry 4.1, below). The QuickPick of E1, its rows and its item buttons are removed.
+- **The page is grouped by HOST** — the grouping *Server*, the default of the switch below. A toolbar, then one
+  block for each scope host of the live `Creds:` terminals, in
   name order. The block of `wsl` is headed *wsl — this PC* with the count of its distros; under it one line or
   table for each distro and user (*Ubuntu · user-a*), and a distro that is not running has the line *not
-  running, so not read*. **The picture of the page: the appendix, § K.8.**
+  running, so not read*. **The picture of the page: the appendix, § K.8** — it shows *Server*; the stories
+  document of E2 draws the other two groupings.
 - **A host's heading** holds the host's name and its latest read result, one of: *read <age> (<clock time>)*;
   *never read*; *not allowed*, with the reason; the failure IN FULL — the runner's own sentence — with its age; or
   the missing-`jq` explanation. *Not this host* is on the heading of every host that is not refused; *Read this
@@ -295,18 +296,45 @@ scope host; a reading, its time and its failure are of the place.
   - *Usage that was not read* spans both window cells and says why: *Usage not read: CoAI does not ask Claude Code
     for usage in this build*; *Usage unavailable: Claude Code 2.1.326 printed no usage line this version
     understands*; *agy states no usage*. It is never a row of dashes with no reason.
-- **The toolbar**: *Refresh now*; *Stop the round* (it becomes *Start the round* while stopped); and the summary
+- **Group by: Server | Claude account | User** (the owner, entry 4.1): a switch in the toolbar, default
+  *Server*. Each grouping shows the SAME readings in real tables (`<table>`, a header row); none hides a place,
+  a tool, an account or a failure.
+  - *Server:* the blocks and rows above.
+  - *Claude account:* one block for each Claude account, headed by the account text as read; one that cannot
+    be told apart is a block of its own (the rule of *shared across N*). Its usage — the two windows, or the
+    sentence why they were not read — stands ONCE, on the block: it is the account's, not a place's. Under it,
+    a row for each place where it is signed in (*host-a*, *Ubuntu · user-a*) with the age of that read; a place
+    whose last read failed stays under the account of its older read, with the failure and that read's time.
+    Then two sections, *Codex* and *Antigravity*, a row for each place that has the tool: their accounts
+    cannot be told apart, so none is joined. Last, *no Claude account*: every place that is in no Claude
+    block, with what its heading says.
+  - *User:* ONE table, a row for each place, a column for each tool with its account and its windows. A WSL
+    place is *distro · user*; an ssh host is one Linux user of a VM and is named by its host — the script
+    prints no user name, and this entry adds none.
+- **Every column header sorts**: one click ascending, a second descending, and the header shows which
+  (`aria-sort`). The keys: name, account, % left, reset time, age of the read. Rows are sorted inside their
+  block, and blocks by their own value of the key where they have one (a host's name and age; an account's
+  text, % left and reset), else by their first row. **A dash — a missing number — sorts LAST in both
+  directions, never as a zero** (decision 5). Equal keys keep the name order; the sections keep their places.
+- **The grouping and the sort are of this tab only**: in the page's own webview state, and in no message,
+  file, `globalState` key, setting or log. A state that names an unknown grouping or column is read as
+  *Server*, by name. **The three groupings and the order rule are ONE pure module, tested without a browser**;
+  the stories document decides whether it runs in the host, which then posts all three, or in the page,
+  bundled as the word rules are.
+- **The toolbar**: *Group by*; *Refresh now*; *Stop the round* (it becomes *Start the round* while stopped); and the summary
   *last round <age> (<clock time>) · <k> of <n> read*, or *reading host-c… 5 of 16* while a round runs.
 - **Without the permission the page holds one block**: what would be read, and the one button *Allow reading…*
   (§ 3). With it, a last line says when it was given and has *Withdraw the permission*.
 - **Each place is drawn when its call lands**, not at the end of the round: the host posts that place's part of the
-  model, and the page changes that block only, so a reader's scroll place and the find bar stay.
+  model, and the page changes that block only — in the other groupings the rows of that place and the blocks
+  that hold them — so a reader's scroll place and the find bar stay, and so do the grouping and the sort.
 - **Times stay true while the tab is open.** The model carries every time as an absolute instant. The page writes
   the ages and the *resets in* texts itself and writes them again every 15 s from its own clock, so an age grows
   with no message from the host. The clock time of the last read is always on the heading; a hover over an age or
   a reset shows the exact local date and time. The pure word rules (`usageWords.ts`, `agoWords`) are bundled into
   the page; there is one copy of them.
-- **Narrow widths**: under a width fixed in the spec the four columns stack, each field with its label.
+- **Narrow widths**: under a width fixed in the spec the columns stack, each field with its label, in every
+  grouping; the switch and a way to choose the sort stay on the page.
 - **Nothing from a VM can become markup.** The page is built by its script from the model: every value that came
   from a VM, from WSL or from a terminal's name is set as `textContent`. No HTML is assembled from data, and a
   `$(name)` is plain text. The CSP is strict: `default-src 'none'`, a script and a style by nonce only, no remote
@@ -314,7 +342,7 @@ scope host; a reading, its time and its failure are of the place.
   characters out, the length cut) stays in front of the model.
 - **A message from the page names, it does not carry.** `ready`, `refresh`, `stop`, `start`, `allow`, `withdraw`,
   `save-now`, `refuse <scope host>`, `read-again <scope host>`, `copy-install <place>`. The host checks every name
-  against its own model and drops a message it does not know. **The two messages that widen what is read,
+  against its own model and drops a message it does not know. The switch and the headers post none. **The two messages that widen what is read,
   `allow` and `read-again`, change nothing by themselves:** each raises a modal question in the extension host,
   and only the person's answer there gives the permission or lifts the refusal. `refuse`, `stop` and `withdraw`
   only narrow, and act at once. **The clipboard is written by the extension host**
@@ -369,10 +397,8 @@ What E1 built stays unless a line here changes it (the appendix, § I, *2. The r
   first call reads no Claude usage; the first place of the round that answers with an account whose usage is due
   is called once more, with `claude-usage`. A WSL user and an ssh host with the same account share one usage read.
   **No usage call is ever made for an account whose usage was read in this round.**
-- **The usage call names the account it is for, and the SCRIPT checks it** (the plan round's finding 2; § 4). The
-  call carries a digest of the account the first reply named. The script reads the account again and runs the
-  usage command only when the digest is the same; else it answers *account changed* and runs no usage command.
-  So a place that changed to an account already read in this round cannot ask for it a second time.
+- **The usage call names the account it is for, and the SCRIPT checks it** (the plan round's finding 2):
+  § 4, item 3.
 - **The round JOINS two replies** — the usage call reads Claude only (§ 4), and today a place's whole reading is
   replaced by its last reply (`publishedState`). The join is E3.S2's. The Codex and agy parts of the first reply
   stay. *The same account:* its usage is shown and counted for it. *Account changed:* the Claude part is the
@@ -459,14 +485,10 @@ the appendix, § I, *3. The consent*, the S1 spec, and the short list in § K.12
   `damaged`. The session door and the tab then say: *A “Not this host”, a stop or a withdrawal is not saved yet on
   this side, so nothing was read. Choose “Save now”.* The sentence "the list cannot be read" is for a list that
   cannot be read.
-- **What is retired** (each is in main since #1047 and in no release): the automatic "yes" and the write of it; the
-  cap rule that drops an automatic row; the timer's use of a "yes" that was given for a session read; the setting
-  `coai.terminalAccountsAllowNewHosts` in the manifest, `SAFETY_KEYS` (`src/modelKeys.ts`), `NEVER_TRANSFERRED`
-  (`src/configTransfer.ts`), `src/sideConfig.ts`, the words of `src/remoteHostsSaid.ts` and the help; the row *This workspace sets …*; the daily notice `accounts-hosts-allowed`; the
-  first-round notice `accounts-read-every-ten-minutes`; the fields `toldUtc` and `lastAutoNoticeUtc` of the state
-  row; the door answers `not-asked` and `full` for a new host; the per-host question and its *Read* button, in
-  the road and in the hosts list, which keeps *Not this host* and *Read this host again*. The parser still KNOWS a
-  "yes" row and `how: 'auto'`, so a list that holds one is not damaged; neither is an answer.
+- **What is retired** (each is in main since #1047 and in no release): the automatic "yes" with its cap rule,
+  its setting, its two notices and its fields; the timer's use of a session "yes"; the door answers for a new
+  host; the per-host question and its *Read* button. The parser still KNOWS a "yes" row and `how: 'auto'`: a
+  list that holds one is not damaged, and neither is an answer. Every key, file and field: the appendix, § K.26.
 - **The upgrade starts with NO permission, whatever is stored.**
 
   | Stored before | After the upgrade |
@@ -481,12 +503,7 @@ the appendix, § I, *3. The consent*, the S1 spec, and the short list in § K.12
   own question. A withdrawal is not of one side: its copy in `globalState` stops every side that reads it, and
   each such side writes it into its own folder. A copy never gives a permission. The owner uses a second side for the chat only (2026-11-24): the first press of a chat door there
   asks the one question once, for that side.
-- **What a person can and cannot choose.** One "yes" for everything read; a "no" for any one host; a stop of the
-  round; a withdrawal, which stops both doors. Not: the session read without the permission; a withdrawal on one
-  side of the machine only; the accounts read on
-  a few hosts only, without refusing each of the others; and not the session read of one host without its
-  accounts read while the round reads the other hosts — *Stop the round* stops the accounts read of every host
-  and keeps the session read.
+- **What a person can and cannot choose** follows from these rules; the list: the appendix, § K.27.
 
 ### 4. The scripts — revision 2, and the users script
 
@@ -518,17 +535,10 @@ pinned text with one new sha256** (E3.S2, the cornerstone):
    that machine. What is left is an account that changes between the script's own two commands, a second apart.
 4. **The time table counts the KILL second (T46).** A vendor command gets a TERM at its limit and a KILL one
    second later (`timeout -k 1`). Where the reader's limit equals the vendor's — the two version commands — that
-   second is added:
-
-   | Mode | The stages, at their latest | Sum | With ssh's 5 s to connect |
-   |---|---|---|---|
-   | `no-claude-usage` | account 4 s; version 2 + 1 s; the Codex files 1 + 1 + 3 s; `agy` 4 + 1 s | 17 s | **22 s** |
-   | `claude-usage` | account 4 s; version 2 + 1 s; usage 9 s | 16 s | **21 s** |
-
-   Both are 8 s or more under the runner's ceiling of 30 s, and no limit is shortened. **The test sums, for each
-   mode, every stage's reader limit, one KILL second for each stage that can outlive its reader, and the connect
-   time, and asserts the total is at most the ceiling minus 2 s**; and a run with a vendor program that ignores
-   TERM ends inside that sum. What was not taken: the appendix, § K.4.
+   second is added: 17 s and 16 s for the two modes, 22 s and 21 s with ssh's 5 s to connect — 8 s or more
+   under the ceiling of 30 s, no limit shortened — and a test holds each sum to at most the ceiling minus 2 s
+   (the test plan). The table, stage by stage, and the test as worded: the appendix, § K.29.
+   What was not taken: the appendix, § K.4.
 
 **The users script** (new; E3.S1, the security spec): a second fixed text with its own sha256, in the same shape
 — one function, called only at its end, a begin line `COAI-USERS 1` and an end line. It opens `/etc/passwd` and no
@@ -652,7 +662,8 @@ or an operand. Five things are named, not prevented:
   the keyboard. The owner accepted it, and the permission's text says it.
 
 **The tab.** Its rules are those of § 1: text only, a strict CSP, messages that name, a modal question in the
-extension host for the two buttons that widen what is read, a fixed string for the clipboard. The judgement
+extension host for the two buttons that widen what is read, a fixed string for the clipboard. The grouping
+and the sort (entry 4.1) change what is drawn, never what is read: they post no message, and no judge has read them. The judgement
 on it: the appendix, § K.10, word for word.
 
 **What an attacker gains**: the list of the stopped plan holds (the appendix, § I, *Security*), with the
@@ -666,39 +677,20 @@ runner's own last line; a script's stderr goes to `/dev/null`; stdout is never l
 **Residuals.** Those of the stopped plan hold (the appendix, § I, *Security*: a person's `ControlMaster`; a login
 every 10 minutes on every host of an open terminal; an email on screen; what Claude Code does on a start; a reset
 in another zone shown as a dash; and the eight residuals of the refusals file), but for the third of the file: a
-person's "yes" that a stale write puts back allows nothing any more. **The spec of E2.S1 holds the eight as they stand after its story (its
-§ P14), and gate E2-G1 added a case to two:** 5(b) — the stale rename of a former holder that was an *Allow*
-can put a grant above the withdrawal of a window that had not seen the copy, and it stands when the *Allow*'s
-window ends before its read-back; 7 — a file made by hand with a stamp at the top of the count restarts the
-count, and across that restart an older, higher grant beats a later withdrawal. New:
+person's "yes" that a stale write puts back allows nothing any more.
+**The spec of E2.S1 holds the eight as they stand after its story (its § P14); gate E2-G1 added a case to 5(b)
+and to 7.** New are residuals 9 to 13. All of it in full: the appendix, § K.28, word for word. In short:
 
-9. **A withdrawal is files on one disk.** A stale writer of `refused.json` cannot undo it (§ 3). What can: a disk
-   that takes no withdrawal file (then it holds in the window that took the press and as its copy, as residual
-   5d of the file, and the notice says so), and a program that deletes files as the person. R12 runs the stale
-   writer. **And two windows that both end** (gate E2-G1): a withdrawal of a window that had not seen the copy,
-   made while another window's *Allow* was being written, is below that grant until one of the two read-backs
-   has run. When the *Allow*'s window ends after its write AND the withdrawing window ends before its read-back
-   is final — its door said `waiting` until then — the grant stands, and nobody is told.
-10. **The permission is GIVEN for one side, and a withdrawal reaches every side that sees its copy.** An *Allow*
-    on one side allows nothing on another. A withdrawal on one side stops each other side at that side's next
-    read of the shared state, and that side reads again only after an *Allow* pressed there. What is left: a
-    stale write of the shared state that lowers or erases the copy — after the withdrawal and before the other
-    side has read it, or before the withdrawal while the other side has not read since (as residual 2 for a
-    refusal). That side then reads on until the copy is put back by a read of the withdrawing side, or until
-    it is withdrawn there.
-11. **20 hosts are 20 logins every 10 minutes**, and 40 with the usage on and no shared account; two windows
-    double it (candidate C6).
-12. **A stopped distro is never shown with numbers** (Q2). Any call to a stopped distro starts it (W9f), so the
-    running list is read right before every call; a distro that stops between that list call and the call is
-    started by it, in 3 to 5 s, and stops again about 15 s after its last call.
-13. **What the check before a start as UID 0 leaves** (decision 24). A program that root itself put in root's
-    `~/.local/bin` or in a system folder runs as root: root's own choice, and nobody's raised right. A distro
-    where a file or a folder on a tool's path is another user's, or open to group or others, is refused for
-    that tool, not read. The check itself stands on `/bin/sh`, which WSL or sshd starts before any line of
-    ours, and on the tool it reads owners and modes with (the spec of E3.S1 names it). And root's tools run
-    with full rights every round: a fault of one is a fault as root. **The login session is outside the
-    check** (decision 25): a profile that another user can write runs with its owner's rights at our first
-    read after the distro starts — root's as root — as at any login of that owner.
+9. **A withdrawal is files on one disk.** What can undo it: a disk that takes no withdrawal file, a program
+   that deletes files as the person, and two windows that both end while an *Allow* is written (gate E2-G1).
+10. **The permission is GIVEN for one side, and a withdrawal reaches every side that sees its copy** — but for
+    a stale write of the shared state that lowers or erases the copy before that side has read it.
+11. **20 hosts are 20 logins every 10 minutes**, 40 with the usage on; two windows double it (candidate C6).
+12. **A stopped distro is never shown with numbers** (Q2); one that stops between the list call and its call
+    is started by that call (W9f).
+13. **What the check before a start as UID 0 leaves** (decision 24): root's own programs run as root, and the
+    check stands on `/bin/sh` and on the tool it reads modes with. **The login session is outside the check**
+    (decision 25).
 
 **Judgements.** Those of 2026-11-25 are in the appendix, § K.5, and the one on root as a place, of 2026-11-26,
 in § K.9, both word for word. The judge's conditions are rules above: the detail of the question (§ 3); root
@@ -706,11 +698,7 @@ reads only as itself, with its own `HOME`; nothing that another user can write i
 permission's text says it. **On the login session (decision 25) no judge was asked**: its text here is the
 planner's.
 
-`SECURITY.md`: the section on the extension's ssh calls is rewritten by E2 — its sentence *"A host is contacted
-unless the person refused it"* becomes *"No host is contacted before the person's one permission"* — and gains the
-permission, where it is kept and what it covers, the tab and its CSP; by E3 the WSL road, who runs as whom, root's
-own place with what is started as root, the login session of a read, and the interop residual; by E4 what W6
-and W7 showed.
+`SECURITY.md` is rewritten by E2, E3 and E4, each for what it builds; the list: the appendix, § K.32.
 
 ## Growth surfaces
 
@@ -729,8 +717,8 @@ and W7 showed.
   person's answers; automatic rows of the pre-release go at the next write.
 - **The state row**: the copy of the Stop, the time the one notice was shown, the time the question was first
   asked and the copy of the newest withdrawal stamp; under 150 bytes.
-- **The tab**: one webview for each window, kept while it is open; its model is the readings. One 15 s interval of
-  the page, gone with the tab.
+- **The tab**: one webview for each window, kept while it is open; its model is the readings; its state
+  is one grouping and one sort. One 15 s interval of the page, gone with the tab.
 - **Children**: one `ssh` or `wsl.exe` alive at a time for each window, killed at 30 s, stdout capped at 64 KiB.
   For `wsl` in a round: 2 list calls, one users call for each running distro, one or two calls for each user,
   root among them, and one list call more before each of these.
@@ -755,20 +743,15 @@ the terminal-door plan** (shipped in 0.87.0; § 3, *The upgrade*) and keeps its 
 is changed in the plan of the timed-out ssh call, in the gauge of coai's own rounds or in the agent-models
 mod, whose word rules are carried over and tested against its cases.
 
-The three todo files say on their side that this revision takes them up and that epoch 3 is approved
-(2026-11-26); each is built by the story that closes it.
+The todo files' own side: the appendix, § K.33.
 
 ## Build order
 
-1. **The cut, during the stop** (*The full stop*, step 6: merged work that contradicts the revised plan is
-   corrected in a new pull request; the owner gave the go on 2026-11-25). **Done: merged as #1051,
-   `b1ec467c`.** Its four parts as they were planned: the appendix, § K.6, word for word.
-2. **The owner approves epoch 3**, with the answer to Q4, after the re-review round of this text. **Done,
-   2026-11-26:** with Q4 "yes", root read too (decision 24) and the go for W6, W7 and W9.
+1. **The cut** — done: merged as #1051, `b1ec467c`. (Steps 1, 2 and 4 as written: the appendix, § K.30.)
+2. **The owner approves epoch 3** — done, 2026-11-26.
 3. **E2 — the permission and the table.** Its stories by Opus; the security spec of E2.S1 by Fable before its
    code; the code gate; a VSIX from the pull request's head; the owner's rows; merged.
-4. **Alongside E2 and E3, by hand, each with the owner's go:** W9 on this PC — before the spec of E3.S1 is final —
-   and W6, W7 and W8 on a VM. **All four were run on 2026-11-26** (§ 5).
+4. **W9 on this PC, and W6, W7 and W8 on a VM, by hand** — all four run on 2026-11-26 (§ 5).
 5. **E3 — WSL on this PC, and revision 2 of the script.** E3.S2 — the script, its parser and the round's join of
    the two replies, together — may merge as its own pull request first, so that E4 waits for nothing else of E3.
 6. **E4 — the Claude usage on.** Only when revision 2 is merged, W7 passed and W6 selected the policy. When W7
@@ -847,14 +830,23 @@ they hold:** the tests of the automatic "yes", of the cap's eviction, of the set
   left`, a dash with no `% left`, `resets in —`, a Codex window by its length, the model sub-lines; each "not
   read" and "unavailable" sentence spans the cells; a failed host keeps its older table with its time; the
   summary's counts; for a host without `jq`, the copied string is the fixed one of the table for its manager
-  word, and **a test fails if any text of a reply is part of it**.
+  word, and **a test fails if any text of a reply is part of it**. **The three groupings (entry 4.1)**, from
+  one set of readings: *Claude account* — two places of one account are one block with its usage once; an
+  account that is not known is a block of its own; a failed place stays under its older account; *Codex* and *Antigravity* join nothing; a place with no
+  Claude account, a refused and a never-read one are in the last block with their sentence; *User* — a row
+  for each place; **and a count: every place and every tool reading of the input is in each grouping.** **The
+  order rule**: each key both ways; a dash last in both, never a zero; equal keys in name order; an unknown
+  grouping or column gives *Server* by name.
 - **The page, by RUNNING it** (`bundledPage.test.ts`, the DOM shim; no assertion over page source for behaviour).
   A model whose values hold `<img src=x onerror=…>`, `$(account)` and 10 KB of text: every one is the text of a
   node, and no element exists that the model did not order. Each button posts its message and nothing else.
   **The owner's observation as a test:** the clock of the shim goes on 10 minutes with no message from the host,
   and the heading reads *read 10 min ago*; the clock time on it does not change. A place's update changes that
   block only. A message the host does not know is dropped; `copy-install` for a place with no manager word copies
-  nothing. The CSP and the nonce are held by a source assertion, which is legitimate there.
+  nothing. The CSP and the nonce are held by a source assertion, which is legitimate there. **The switch and
+  the headers (entry 4.1):** each grouping is drawn, and *Server* again gives the first tree; a header click
+  sorts and a second reverses, the dash last both times; neither posts a message; the webview state holds both
+  and a page built again reads them; the hostile values are text in each grouping; a place's update keeps both.
 - **Host scenario** (`npm run test:host`): the icon opens the tab; a second press reveals the same tab; with the
   call replaced through the test door and the permission given through the keeper, two terminals of two hosts are
   one call each, and the tab's model holds both.
@@ -882,11 +874,14 @@ they hold:** the tests of the automatic "yes", of the cap's eviction, of the set
 - [ ] **A withdrawal cannot be undone by a stale writer**: it is a file of its own with a higher stamp; the test
       "withdraw, close the window, a stale rename, reload" ends withdrawn, and R12 (d) runs it.
 - [ ] The session door asks before every spawn and has its own sentence for a change that waits (T9, T8).
-- [ ] **The tab can be read.** The icon opens ONE tab, grouped by host: for each host its latest read result with
+- [ ] **The tab can be read.** The icon opens ONE tab, grouped by host by default: for each host its latest read result with
       its clock time, and one row for each installed tool with the account, the 5-hour window and the weekly
       window as "% left" with its reset; a shared account says so; usage that was not read says why; a failed
       host says the failure in full; a host without `jq` has the command and a copy button. Ages change while the
       tab stays open. Ctrl+F works. Every value from a VM is text, under a strict CSP.
+- [ ] **The table can be grouped and sorted** (entry 4.1): *Group by* shows the same readings by server, by
+      Claude account — its usage once, its places under it — and by user, and none hides a reading; every
+      column header sorts both ways, a dash always last; the choice is in the tab's own state and nowhere else.
 - [ ] **WSL is read on this PC**: every running distro and every Linux user in it, root among them, each as that
       user, each a reading of its own. **Root is read as itself** (decision 24): with its own `HOME`, never for
       another user; as root, of ours, only the users script and root's own read run, and our script starts
@@ -930,8 +925,7 @@ they hold:** the tests of the automatic "yes", of the cap's eviction, of the set
 6. `SECURITY.md` and the help say what the head does.
 
 **For E4 also:** W6 and W7 are recorded, W7 passed, and revision 2 of the script is on main.
-**For the cut of step 1:** conditions 2 to 4 and 6, a test that no runner is called by a tick or by a press, and a
-test that the session door asks its question for a host whose only row is an automatic one.
+**For the cut of step 1** (merged, #1051): the appendix, § K.33.
 **For the release:** E5's rows recorded; **the gates R7, R12 and R18 passed on the head that is tagged** — E6's
 build, or E5's when E6 is not in the release; `review_feature` resolved; no extension release from main between #1047 and the cut.
 
@@ -977,8 +971,9 @@ What is kept, reworked and retired of it: *Re-review for epoch 3*, above.
 - **Depends on.** The cut merged; epoch 3 approved. Both hold.
 - **Stories** (named here; written by Opus). **E2.S1 — the permission (SECURITY SPEC by Fable, outside the
   quota):** the record in the file, the withdrawal files and their stamps, the one door for the round and for the
-  session read, the per-host "yes" and its question retired, the upgrade, T8 and T9. **E2.S2 — the table's model** (pure). **E2.S3 — the tab:** the
-  panel, the page run by its tests, the messages, the ages that tick, the clipboard. **E2.S4 — the round under
+  session read, the per-host "yes" and its question retired, the upgrade, T8 and T9. **E2.S2 — the table's model** (pure): the three groupings and the order rule (entry 4.1). **E2.S3 — the tab:** the
+  panel, the page run by its tests, the messages, the ages that tick, the clipboard, the switch *Group by* and
+  the sorting headers with their state. **E2.S4 — the round under
   the permission.** **E2.S5 — the documents.**
 - **Done when.** The merge conditions hold, with these rows in the owner's window, on the owner's ssh hosts:
 
@@ -986,7 +981,7 @@ What is kept, reworked and retired of it: *Re-review for epoch 3*, above.
 |---|---|---|
 | R1 | The icon | It sits beside *Ask other AI* and opens ONE tab; a second press shows the same tab; Ctrl+F finds a host; with no `Creds:` terminal the tab says so |
 | R14 | **The permission.** The profile holds a person's "yes", the automatic rows of 2.0.901 and one *Not this host*; the owner's terminals are open | Before the permission: **0** ssh logins on any host in 20 minutes (the VMs' ssh logs). The question is asked once. After *Allow reading*: the first login within 60 s; and when the toolbar says the round has ended — one host at a time, up to 30 s each — exactly 1 login on each host that is not refused and 0 on the refused one. A chat door pressed before the permission, on the host with the "yes": the question, and 0 logins. A terminal of a new host, opened later: read in the next round, no question. *Withdraw*: 0 logins in 20 minutes, by the round or by a chat door, also after a reload |
-| R15 | **The table.** At least 3 hosts, one of them with a Codex record | For each host the owner reads, without help: the host, its tools, each account, the two windows with "% left" and the reset. The Codex figure equals the record on that VM. A Claude account says why its usage is not read. **The tab stays open 12 minutes untouched: the age of each read grows and matches the clock time beside it.** A hover shows the exact time. A narrow tab stacks the fields |
+| R15 | **The table.** At least 3 hosts, one of them with a Codex record | For each host the owner reads, without help: the host, its tools, each account, the two windows with "% left" and the reset. The Codex figure equals the record on that VM. A Claude account says why its usage is not read. **The tab stays open 12 minutes untouched: the age of each read grows and matches the clock time beside it.** A hover shows the exact time. A narrow tab stacks the fields. **Entry 4.1:** *Group by* is switched to *Claude account*, to *User* and back to *Server*: each shows every host and account, and an account on 2 hosts has its usage once, both hosts under it. A sort by "% left" with a dash present: the dash is last, both ways. Each grouping stays readable in a narrow tab |
 | R5 | A host that cannot be reached | Its failure in full under its heading within 30 s; the other hosts are read in that round |
 | R6 | Stopping | Every `Creds:` terminal closed: 0 logins in the next 20 minutes. *Stop the round*: 0 logins in 20 minutes, also after a reload; started again, a round follows within 60 s |
 | R8 | The session door | *Take the question* works with the permission and asks no per-host question. *Not this host* on a heading: 0 logins to that host in 20 minutes, also after a reload, and the chat door there refuses. *Read this host again*: read in the next round |
@@ -1014,12 +1009,12 @@ What is kept, reworked and retired of it: *Re-review for epoch 3*, above.
   `publishedState`; § 2) — the script and the join are one pull request, never two; it may merge first, as its own
   pull request, on merge conditions 1 to 4 and 6 — it has no row of its own, and R9a runs with the rest of E3.
   **E3.S3 — places:** the identity, the memory, the sharing of an account across places, the `wsl`
-  block of the table. **E3.S4 — the documents.**
+  block of the table, the WSL places in the three groupings (entry 4.1). **E3.S4 — the documents.**
 - **Done when.** The merge conditions hold, with these rows in the owner's window on this PC:
 
 | # | What is run | Pass |
 |---|---|---|
-| R13 | **Two WSL users, and root.** A distro with two Linux users, each signed in to a tool, and a distro whose root is signed in to a tool; a `Creds: wsl / …` terminal | Both users are under `wsl`, each with its own tools and accounts, and each account is the one that user is signed in to. **Root is listed under its distro, read as root, with the account root is signed in to**; in a distro where root has no tool there is no line for root. A second running distro is listed with its users; one that is not running says so and stays stopped. No ssh login to a host `wsl` is tried |
+| R13 | **Two WSL users, and root.** A distro with two Linux users, each signed in to a tool, and a distro whose root is signed in to a tool; a `Creds: wsl / …` terminal | Both users are under `wsl`, each with its own tools and accounts, and each account is the one that user is signed in to. **Root is listed under its distro, read as root, with the account root is signed in to**; in a distro where root has no tool there is no line for root. A second running distro is listed with its users; one that is not running says so and stays stopped. No ssh login to a host `wsl` is tried. Each of them is a place of its own in *Claude account* and in *User* (entry 4.1) |
 | R16 | **A known sample** (the consultants' criterion) | One figure whose value the owner knows from the tool itself — a Codex window, or a Claude window once E4 is in — shows that value; a window with no reading says why; the age of the read stays true while the tab is open |
 | R17 | *Not this host* on `wsl` | No `wsl.exe` call of this window in 20 minutes, watched on the PC by the method the stories document fixes; also after a reload |
 | R9a | The time of a read, 10 calls for each place, ssh and WSL | None is killed at 30 s; the slowest is under 20 s; the medians are recorded |

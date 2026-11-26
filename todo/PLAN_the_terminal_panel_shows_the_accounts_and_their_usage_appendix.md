@@ -14,7 +14,8 @@
 > of the revised plan, moved word for word to keep the plan under 100 KB: what the code does on `d0241e45`.
 > **§ K (2026-11-26)** is six more passages, moved word for word when the approval of epoch 3 added the read of
 > root, and ten more (K.7 to K.16), moved later that day when W9 was run; § J also holds, marked as added, the
-> owner's answers of that day.
+> owner's answers of that day. Seven more (K.17 to K.23) were moved with the approval of epoch 4, and ten more
+> (K.24 to K.33) with the ledger entry 4.1, both on 2026-11-26.
 
 | § | What it holds | Why it is not in the plan |
 |---|---|---|
@@ -2580,3 +2581,153 @@ place. (3) On a usage read, a start of
 Claude Code there, which calls Anthropic with that user's own login (off until E4). (4) In every round, a start of
 `agy` for its version. (5) Text from a VM or a distro drawn in a webview. E6 adds a sixth, a call that changes a
 machine.
+
+### K.24 to K.33 — ten more passages, moved with entry 4.1 on 2026-11-26
+
+These ten were moved from the plan as it stood at `ec8c7aab`, word for word, in the commit that records the
+ledger entry 4.1: the owner's word that the tab's table is grouped by server, by Claude account or by user,
+and that every column sorts. The plan needed room for that design, and it stays under 100 KB. As above, none
+is a rule of its own: each is a record of how the plan came to epoch 4, the owner's answers as they were
+written down, a list of what is retired with every key and file, a summary of rules that § 3 keeps, the
+text of residuals of which the plan keeps the number and the statement, a table of which the plan keeps the
+sums and the rule, three steps of the build order that are done, a bullet of § 2 that says in short what
+§ 4 says in full, the list of what `SECURITY.md` gains, or a record of a pull request that is merged and of
+three todo files. The plan says in a line or two what each passage holds. Where the plan of today says
+something else, the plan of today holds.
+
+### K.24 — The status block: how the plan came to epoch 4
+
+It stood in the status block, between its first line and "Epoch 4 has no change yet."
+
+> Epic E1 is merged (#1047, `d0241e45`): a read-only round every 10 minutes and a list, with the Claude usage read
+> off. The owner's real-window check of its pre-release VSIX 2.0.901 gave the ledger entries 2.2 and 2.3, which
+> stopped the plan on 2026-11-25. This text is the revision which that stop ordered (step 4 of *The full stop*,
+> `plan-change-control.md`). **The owner approved it as epoch 3 on 2026-11-26**, with three answers that belong to
+> the approved baseline and are no ledger entry: root of a WSL distro is read too, as itself (*Owner decisions*,
+> 24); Q4 is "yes"; and the go for the measurements W6, W7 and W9, which were run that day. **Epoch 3 then took
+> two changes, 3.1 and 3.2** — the edges of a withdrawal, found by the security spec of E2.S1 — **and the second
+> stopped it. The owner approved epoch 4 the same day, at once, with NO re-review** (*Re-review for epoch 4* says
+> what was not run), and with one more answer, which is baseline: **the login session that WSL opens for a user
+> it reads is accepted** (decision 25; § 5).
+
+### K.25 — *Owner decisions*: the owner's answers of 2026-11-25 and of 2026-11-26
+
+They stood after decision 25.
+
+**The owner's answers, 2026-11-25 evening:** Q1 **yes** (one "yes" for everything read from a host, the chat's
+session read included); Q2 **not started** (a stopped distro is never started for a read); Q3 **one more one-time
+"yes"** for "install `jq` where it is missing", asked once for all hosts; without rights the command is shown. Q4 was
+not asked that evening. The owner also gave the go for the cut of *Build order* step 1, over the PR cap.
+
+**The owner's answers, 2026-11-26, with the approval of epoch 3:** root is read too (24); Q4 **yes** — the owner
+checks a VSIX built from the head of each of E2, E3 and E4 in a real window BEFORE that epic merges (merge
+condition 5); and **the go for the measurements** W9, on this PC, and W6 and W7, on a VM (§ 5).
+
+### K.26 — § 3: what is retired
+
+- **What is retired** (each is in main since #1047 and in no release): the automatic "yes" and the write of it; the
+  cap rule that drops an automatic row; the timer's use of a "yes" that was given for a session read; the setting
+  `coai.terminalAccountsAllowNewHosts` in the manifest, `SAFETY_KEYS` (`src/modelKeys.ts`), `NEVER_TRANSFERRED`
+  (`src/configTransfer.ts`), `src/sideConfig.ts`, the words of `src/remoteHostsSaid.ts` and the help; the row *This workspace sets …*; the daily notice `accounts-hosts-allowed`; the
+  first-round notice `accounts-read-every-ten-minutes`; the fields `toldUtc` and `lastAutoNoticeUtc` of the state
+  row; the door answers `not-asked` and `full` for a new host; the per-host question and its *Read* button, in
+  the road and in the hosts list, which keeps *Not this host* and *Read this host again*. The parser still KNOWS a
+  "yes" row and `how: 'auto'`, so a list that holds one is not damaged; neither is an answer.
+
+### K.27 — § 3: what a person can and cannot choose
+
+- **What a person can and cannot choose.** One "yes" for everything read; a "no" for any one host; a stop of the
+  round; a withdrawal, which stops both doors. Not: the session read without the permission; a withdrawal on one
+  side of the machine only; the accounts read on
+  a few hosts only, without refusing each of the others; and not the session read of one host without its
+  accounts read while the round reads the other hosts — *Stop the round* stops the accounts read of every host
+  and keeps the session read.
+
+### K.28 — *Security*, *Residuals*: the two cases that gate E2-G1 added, and residuals 9 to 13 in full
+
+It stood in the paragraph *Residuals*, after "allows nothing any more."
+
+**The spec of E2.S1 holds the eight as they stand after its story (its
+§ P14), and gate E2-G1 added a case to two:** 5(b) — the stale rename of a former holder that was an *Allow*
+can put a grant above the withdrawal of a window that had not seen the copy, and it stands when the *Allow*'s
+window ends before its read-back; 7 — a file made by hand with a stamp at the top of the count restarts the
+count, and across that restart an older, higher grant beats a later withdrawal. New:
+
+9. **A withdrawal is files on one disk.** A stale writer of `refused.json` cannot undo it (§ 3). What can: a disk
+   that takes no withdrawal file (then it holds in the window that took the press and as its copy, as residual
+   5d of the file, and the notice says so), and a program that deletes files as the person. R12 runs the stale
+   writer. **And two windows that both end** (gate E2-G1): a withdrawal of a window that had not seen the copy,
+   made while another window's *Allow* was being written, is below that grant until one of the two read-backs
+   has run. When the *Allow*'s window ends after its write AND the withdrawing window ends before its read-back
+   is final — its door said `waiting` until then — the grant stands, and nobody is told.
+10. **The permission is GIVEN for one side, and a withdrawal reaches every side that sees its copy.** An *Allow*
+    on one side allows nothing on another. A withdrawal on one side stops each other side at that side's next
+    read of the shared state, and that side reads again only after an *Allow* pressed there. What is left: a
+    stale write of the shared state that lowers or erases the copy — after the withdrawal and before the other
+    side has read it, or before the withdrawal while the other side has not read since (as residual 2 for a
+    refusal). That side then reads on until the copy is put back by a read of the withdrawing side, or until
+    it is withdrawn there.
+11. **20 hosts are 20 logins every 10 minutes**, and 40 with the usage on and no shared account; two windows
+    double it (candidate C6).
+12. **A stopped distro is never shown with numbers** (Q2). Any call to a stopped distro starts it (W9f), so the
+    running list is read right before every call; a distro that stops between that list call and the call is
+    started by it, in 3 to 5 s, and stops again about 15 s after its last call.
+13. **What the check before a start as UID 0 leaves** (decision 24). A program that root itself put in root's
+    `~/.local/bin` or in a system folder runs as root: root's own choice, and nobody's raised right. A distro
+    where a file or a folder on a tool's path is another user's, or open to group or others, is refused for
+    that tool, not read. The check itself stands on `/bin/sh`, which WSL or sshd starts before any line of
+    ours, and on the tool it reads owners and modes with (the spec of E3.S1 names it). And root's tools run
+    with full rights every round: a fault of one is a fault as root. **The login session is outside the
+    check** (decision 25): a profile that another user can write runs with its owner's rights at our first
+    read after the distro starts — root's as root — as at any login of that owner.
+
+### K.29 — § 4, item 4: the time table of revision 2, and the test as worded
+
+It stood in item 4 (T46), after "that second is added:".
+
+   | Mode | The stages, at their latest | Sum | With ssh's 5 s to connect |
+   |---|---|---|---|
+   | `no-claude-usage` | account 4 s; version 2 + 1 s; the Codex files 1 + 1 + 3 s; `agy` 4 + 1 s | 17 s | **22 s** |
+   | `claude-usage` | account 4 s; version 2 + 1 s; usage 9 s | 16 s | **21 s** |
+
+   Both are 8 s or more under the runner's ceiling of 30 s, and no limit is shortened. **The test sums, for each
+   mode, every stage's reader limit, one KILL second for each stage that can outlive its reader, and the connect
+   time, and asserts the total is at most the ceiling minus 2 s**; and a run with a vendor program that ignores
+   TERM ends inside that sum.
+
+### K.30 — *Build order*: steps 1, 2 and 4, which are done
+
+1. **The cut, during the stop** (*The full stop*, step 6: merged work that contradicts the revised plan is
+   corrected in a new pull request; the owner gave the go on 2026-11-25). **Done: merged as #1051,
+   `b1ec467c`.** Its four parts as they were planned: the appendix, § K.6, word for word.
+2. **The owner approves epoch 3**, with the answer to Q4, after the re-review round of this text. **Done,
+   2026-11-26:** with Q4 "yes", root read too (decision 24) and the go for W6, W7 and W9.
+4. **Alongside E2 and E3, by hand, each with the owner's go:** W9 on this PC — before the spec of E3.S1 is final —
+   and W6, W7 and W8 on a VM. **All four were run on 2026-11-26** (§ 5).
+
+### K.31 — § 2: the usage call names its account
+
+It stood before *The round JOINS two replies*; § 4, item 3, holds the rule in full.
+
+- **The usage call names the account it is for, and the SCRIPT checks it** (the plan round's finding 2; § 4). The
+  call carries a digest of the account the first reply named. The script reads the account again and runs the
+  usage command only when the digest is the same; else it answers *account changed* and runs no usage command.
+  So a place that changed to an account already read in this round cannot ask for it a second time.
+
+### K.32 — *Security*: what `SECURITY.md` gains, epic by epic
+
+`SECURITY.md`: the section on the extension's ssh calls is rewritten by E2 — its sentence *"A host is contacted
+unless the person refused it"* becomes *"No host is contacted before the person's one permission"* — and gains the
+permission, where it is kept and what it covers, the tab and its CSP; by E3 the WSL road, who runs as whom, root's
+own place with what is started as root, the login session of a read, and the interop residual; by E4 what W6
+and W7 showed.
+
+### K.33 — Two records: the merge condition of the cut, and the todo files
+
+The first stood in *Merge conditions*, the second at the end of *Boundaries with other plans*.
+
+**For the cut of step 1:** conditions 2 to 4 and 6, a test that no runner is called by a tick or by a press, and a
+test that the session door asks its question for a host whose only row is an automatic one.
+
+The three todo files say on their side that this revision takes them up and that epoch 3 is approved
+(2026-11-26); each is built by the story that closes it.
