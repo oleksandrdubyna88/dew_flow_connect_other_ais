@@ -259,7 +259,7 @@ public static class DotnetDetector
             new("tests", tests.Count == 0 ? "none" : ProjectGraph.Number(tests.Count)),
         };
 
-        return new Planned(new DetectedProject("dotnet", unit.Path, unit.Folder.Length == 0 ? "." : unit.Folder, steps, facts, notes, TestsNone: tests.Count == 0), string.Empty);
+        return new Planned(new DetectedProject("dotnet", unit.Path, unit.Folder.Length == 0 ? "." : unit.Folder, steps, facts, notes, TestsNone: tests.Count == 0) { OwnedPaths = [.. owned.Select(project => project.Path).Order(StringComparer.Ordinal)], TestPaths = [.. tests.Select(test => test.Project.Path)] }, string.Empty);
     }
 
     /// <summary>The runner of a project as the measured facts say: <c>mtp</c>, <c>vstest</c>, empty for a test project whose runner cannot be told, null for a project that is not a test project.</summary>

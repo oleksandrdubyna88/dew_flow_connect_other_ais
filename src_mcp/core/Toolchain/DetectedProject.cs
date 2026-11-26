@@ -30,6 +30,12 @@ public sealed record DetectedProject(
     IReadOnlyList<string> Notes,
     bool TestsNone)
 {
+    /// <summary>The project files of a .NET unit, as paths (never cut at a comma: a path may hold one); empty for any other stack.</summary>
+    public IReadOnlyList<string> OwnedPaths { get; init; } = [];
+
+    /// <summary>The test project files of a .NET unit, as paths, in step order.</summary>
+    public IReadOnlyList<string> TestPaths { get; init; } = [];
+
     /// <summary>The value of a fact, or empty.</summary>
     public string Fact(string name) => Facts.FirstOrDefault(pair => pair.Key == name).Value ?? string.Empty;
 }

@@ -52,25 +52,58 @@ public sealed class ChecksAtBase(GitHistory history, CheckRunner runner)
 
         var change = Compare(atBase.File, tree.Read(ToolchainTables.FilePath, ToolchainTables.MaxBytes));
         var file = ToolchainFile.Read(atBase.File);
+        var headSha = string.Empty;
+        if (request.Job is { } coderJob)
+        {
+            // The interim gate (INTERIM, the owner decides): the whole tree of the head against the base, before ANY step, for detected and stated commands alike.
+            var gate = await FrozenGateAsync(coderJob, baseSha, ct);
+            if (gate.Refusal.Length > 0)
+            {
+                return new CheckResult(CheckState.ToolchainRefused, [], gate.Refusal) with { ToolchainChange = change };
+            }
+
+            headSha = gate.HeadSha;
+        }
+
         var result = request.Job is { } job && file is not ToolchainRead.Refused
-            ? await RunDetectedAsync(file, job, baseSha, request, ct)
+            ? await RunDetectedAsync(file, job, baseSha, headSha, request, ct)
             : await runner.RunAsync(file, request, ct);
 
         return result with { ToolchainChange = change, Note = result.Note + Reported(change, baseSha) };
+    }
+
+    private sealed record Gate(string Refusal, string HeadSha);
+
+    /// <summary>
+    /// The head commit of the worktree (read through the hardened coder-tree door, <c>--no-replace-objects</c>) and the verdict of <see cref="FrozenDefinitions"/> on what it changed against the base, read from the MAIN repository's objects. An unreadable head or listing refuses: no partial list decides.
+    /// </summary>
+    private async Task<Gate> FrozenGateAsync(BoundaryJob job, string baseSha, CancellationToken ct)
+    {
+        var head = await git.InCoderTreeAsync(job.Tree, ["--no-replace-objects", "rev-parse", "HEAD"], ct);
+        var headSha = head.Ran && head.Ok ? head.Out.Trim() : string.Empty;
+        if (!GitHistory.IsCommitish(headSha))
+        {
+            return new Gate("the head commit of the worktree could not be read, so whether it changed a frozen build definition is not known and nothing was run (interim rule: the owner decides)", string.Empty);
+        }
+
+        var raw = await git.RawChangesAsync(job.Tree.MainCheckout, baseSha, headSha, FrozenDefinitions.MaxChars, ct);
+        var changes = raw.Ran && raw.Ok ? FrozenDefinitions.ParseRaw(raw.Out) : null;
+
+        return new Gate(FrozenDefinitions.Refusal(changes, raw.Truncated, ToolchainDefaults.Current), headSha);
     }
 
     /// <summary>
     /// What the checks of a CODER job are (epoch 3 E4 s3 t3; SPEC §A): the file at the base wins; with none, or for a project that names no command, the manifests of the BASE commit and of the HEAD commit — the commit coai made, read from the MAIN repository's objects through the
     /// hardened reads, never from the worktree: an untracked or ignored manifest in the worktree changes nothing — resolve into steps by <see cref="ToolchainResolve"/>. The manifests are read only when the answer needs them: a file that states every command needs neither.
     /// </summary>
-    private async Task<CheckResult> RunDetectedAsync(ToolchainRead file, BoundaryJob job, string baseSha, CheckRequest request, CancellationToken ct)
+    private async Task<CheckResult> RunDetectedAsync(ToolchainRead file, BoundaryJob job, string baseSha, string headSha, CheckRequest request, CancellationToken ct)
     {
-        var read = await ResolveAsync(file, job, baseSha, ct);
+        var read = await ResolveAsync(file, job, baseSha, headSha, ct);
         AffectedSelection? selection = null;
         if (read.Resolution is ToolchainResolution.Resolved resolved && read.AtBase is not null && read.AtHead is not null)
         {
-            // Level one of the selection (SPEC §E): a project is left out only when the diff is shown not to reach it; impact unknown runs everything.
-            var diff = await git.InCoderTreeAsync(job.Tree, ["diff", "--name-status", "-z", "-M", baseSha, read.HeadSha], ct);
+            // Level one of the selection (SPEC §E), INFORMATION ONLY in this version (M13 of the verify): every detected unit runs, and the envelope says what the selection would have left out. The diff is read from the main repository through the hardened reads.
+            var diff = await git.NameStatusAsync(job.Tree.MainCheckout, baseSha, read.HeadSha, 4 * 1024 * 1024, ct);
             selection = AffectedProjects.Select(resolved.Toolchain, diff.Ran && diff.Ok && !diff.Truncated ? AffectedProjects.ParseNameStatus(diff.Out) : null, read.AtBase, read.AtHead);
         }
 
@@ -79,23 +112,15 @@ public sealed class ChecksAtBase(GitHistory history, CheckRunner runner)
 
     private sealed record Read(ToolchainResolution Resolution, ManifestSet? AtBase, ManifestSet? AtHead, string HeadSha);
 
-    private async Task<Read> ResolveAsync(ToolchainRead file, BoundaryJob job, string baseSha, CancellationToken ct)
+    private async Task<Read> ResolveAsync(ToolchainRead file, BoundaryJob job, string baseSha, string headSha, CancellationToken ct)
     {
         var setting = Environment(ToolchainResolve.DetectVariable);
         var detect = ToolchainResolve.DetectOn(setting, []);
         var needs = detect && file is not ToolchainRead.Refused && (file is not ToolchainRead.Configured configured || configured.Toolchain.Projects.Any(project => !project.StatesACommand));
         ManifestRead atBase = new ManifestRead.Refused("the manifests of the base commit were not read");
         ManifestRead atHead = new ManifestRead.Refused("the manifests of the head commit were not read");
-        var headSha = string.Empty;
         if (needs)
         {
-            var head = await git.InCoderTreeAsync(job.Tree, ["rev-parse", "HEAD"], ct);
-            headSha = head.Ran && head.Ok ? head.Out.Trim() : string.Empty;
-            if (!GitHistory.IsCommitish(headSha))
-            {
-                return new Read(new ToolchainResolution.Refused("the head commit of the worktree could not be read, so the checks of a repository with no commands in its file were not decided"), null, null, string.Empty);
-            }
-
             var manifests = new ManifestsAtCommit(git);
             atBase = await manifests.ReadAsync(job.Tree.MainCheckout, baseSha, ToolchainDefaults.Current, ct);
             atHead = await manifests.ReadAsync(job.Tree.MainCheckout, headSha, ToolchainDefaults.Current, ct);

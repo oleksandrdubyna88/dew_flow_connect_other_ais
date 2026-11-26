@@ -16,7 +16,7 @@ internal static class CoderGit
     private static readonly string[] Flags = ["-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false"];
 
     /// <summary>The only options the readers of this product put before a verb. Anything else that starts with a dash is refused.</summary>
-    private static readonly string[] AllowedBeforeTheVerb = ["--no-optional-locks", "--literal-pathspecs"];
+    private static readonly string[] AllowedBeforeTheVerb = ["--no-optional-locks", "--literal-pathspecs", "--no-replace-objects"];
 
     /// <summary>The names git reads to decide which repository, index and objects it works on. Taken out of the environment of every coder-tree command.</summary>
     internal static readonly string[] Moving =

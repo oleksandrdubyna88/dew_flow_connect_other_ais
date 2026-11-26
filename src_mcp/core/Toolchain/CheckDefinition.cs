@@ -9,7 +9,14 @@ namespace CoaiMcp.Core.Toolchain;
 /// One member of a check definition: a name a person can read in a refusal, the values it holds, and how a head may differ from the base. <see cref="AllowAdditions"/>: the base's values must all still be there, more are fine (a test project added); otherwise the values must be EQUAL.
 /// <see cref="IgnoreWhenNew"/>: a member only the head has says nothing when it is empty or belongs to a project file the head added (such a project has its own definition, <c>definedByHead</c>).
 /// </summary>
-public sealed record DefinitionMember(string Name, IReadOnlyList<string> Values, bool AllowAdditions = false, bool IgnoreWhenNew = false);
+public sealed record DefinitionMember(string Name, IReadOnlyList<string> Values, bool AllowAdditions = false, bool IgnoreWhenNew = false)
+{
+    /// <summary>What a sentence says for this member; null: the name. <b>The name is the KEY</b> and may hold a raw path or a raw script name of the head (two paths of one spelling are two keys, M11 of the verify); only <see cref="Shown"/> is ever put in a sentence.</summary>
+    public string? Label { get; init; }
+
+    /// <summary>The words of a sentence.</summary>
+    public string Shown => Label ?? Name;
+}
 
 /// <summary>
 /// <b>The check definition of a detected or defaulted project</b> (epoch 3 E4 s3 t5; SPEC §A4, decision 11): what decides WHICH commands a default step runs and what they run. A coder's work is checked by commands coai chose from the base's manifests; if the head could change the manifest members those commands read — replace
@@ -55,11 +62,11 @@ public static partial class CheckDefinition
             var same = member.AllowAdditions ? member.Values.All(value => headValues.Contains(value, StringComparer.Ordinal)) : member.Values.SequenceEqual(headValues, StringComparer.Ordinal);
             if (!same)
             {
-                changed.Add(member.Name);
+                changed.Add(member.Shown);
             }
         }
 
-        changed.AddRange(atHead.Where(member => !member.IgnoreWhenNew && member.Values.Count > 0 && atBase.All(candidate => candidate.Name != member.Name)).Select(member => member.Name));
+        changed.AddRange(atHead.Where(member => !member.IgnoreWhenNew && member.Values.Count > 0 && atBase.All(candidate => candidate.Name != member.Name)).Select(member => member.Shown));
 
         return changed;
     }
@@ -86,7 +93,7 @@ public static partial class CheckDefinition
         {
             using var document = JsonDocument.Parse(package.Text, new JsonDocumentOptions { MaxDepth = 32 });
             var root = document.RootElement;
-            members.AddRange(ScriptsOf(root, string.Empty));
+            members.AddRange(ScriptsOf(root, (string.Empty, string.Empty)));
             foreach (var name in NodeConfigMembers)
             {
                 members.Add(new DefinitionMember($"package.json {name}", root.TryGetProperty(name, out var value) ? [Compact(value)] : []));
@@ -104,11 +111,11 @@ public static partial class CheckDefinition
                     try
                     {
                         using var memberDocument = JsonDocument.Parse(member.Text, new JsonDocumentOptions { MaxDepth = 32 });
-                        members.AddRange(ScriptsOf(memberDocument.RootElement, $" of {PathSpelling.Bare(member.Path)}"));
+                        members.AddRange(ScriptsOf(memberDocument.RootElement, ($" of {member.Path}", $" of {PathSpelling.Bare(member.Path)}")));
                     }
                     catch (JsonException)
                     {
-                        members.Add(new DefinitionMember($"package.json of {PathSpelling.Bare(member.Path)}", ["unreadable"]));
+                        members.Add(new DefinitionMember($"package.json of {member.Path}", ["unreadable"]) { Label = $"package.json of {PathSpelling.Bare(member.Path)}" });
                     }
                 }
             }
@@ -118,15 +125,21 @@ public static partial class CheckDefinition
             members.Add(new DefinitionMember("package.json", ["unreadable"]));
         }
 
-        members.Add(new DefinitionMember($"the configuration files of {PathSpelling.Bare(project.Id)}", NodeConfigFiles(project, set, folder)));
+        members.Add(new DefinitionMember($"the configuration files of {project.Id}", NodeConfigFiles(project, set, folder)) { Label = $"the configuration files of {PathSpelling.Bare(project.Id)}" });
 
         return members;
     }
 
-    private static IEnumerable<DefinitionMember> ScriptsOf(JsonElement root, string suffix) =>
+    private static IEnumerable<DefinitionMember> ScriptsOf(JsonElement root, (string Key, string Shown) suffix) =>
         root.TryGetProperty("scripts", out var scripts) && scripts.ValueKind == JsonValueKind.Object
-            ? scripts.EnumerateObject().OrderBy(property => property.Name, StringComparer.Ordinal).Select(property => new DefinitionMember($"scripts.{property.Name}{suffix}", [property.Value.ValueKind == JsonValueKind.String ? property.Value.GetString()! : property.Value.GetRawText()])).ToList()
+            ? scripts.EnumerateObject().OrderBy(property => property.Name, StringComparer.Ordinal).Select(property => new DefinitionMember($"scripts.{property.Name}{suffix.Key}", [property.Value.ValueKind == JsonValueKind.String ? property.Value.GetString()! : property.Value.GetRawText()]) { Label = $"scripts.{ScriptName(property.Name)}{suffix.Shown}" }).ToList()
             : [];
+
+    /// <summary>A script's name, spelled only when it has the shape of a real one; the head wrote it, and a sentence is read by a person and by a model (M14 of the verify).</summary>
+    private static string ScriptName(string name) => ScriptNameShape().IsMatch(name) ? name : "a script with an unusual name";
+
+    [GeneratedRegex("^[A-Za-z0-9:._-]{1,64}$", RegexOptions.CultureInvariant)]
+    private static partial Regex ScriptNameShape();
 
     private static string Compact(JsonElement value) => value.GetRawText().Replace(" ", string.Empty, StringComparison.Ordinal).Replace("\n", string.Empty, StringComparison.Ordinal).Replace("\r", string.Empty, StringComparison.Ordinal).Replace("\t", string.Empty, StringComparison.Ordinal);
 
@@ -156,7 +169,7 @@ public static partial class CheckDefinition
         var folder = project.Folder == "." ? string.Empty : project.Folder;
         var members = new List<DefinitionMember>();
         var props = set.Files.Where(file => file.Stack == "dotnet" && file.Kind == ManifestKind.Definition && file.Path.Split('/')[^1] == "Directory.Build.props").ToDictionary(file => ProjectGraph.Folder(file.Path), file => file.Text, StringComparer.Ordinal);
-        var owned = project.Fact("projects").Split(',', StringSplitOptions.RemoveEmptyEntries);
+        var owned = project.OwnedPaths.ToArray();
         var tests = new List<string>();
         foreach (var path in owned)
         {
@@ -170,31 +183,31 @@ public static partial class CheckDefinition
             if (facts is not null && DotnetDetector.RunnerOf(facts) is { Length: > 0 } runner)
             {
                 tests.Add(path);
-                members.Add(new DefinitionMember($"the runner of {PathSpelling.Bare(path)}", [runner], IgnoreWhenNew: true));
+                members.Add(new DefinitionMember($"the runner of {path}", [runner], IgnoreWhenNew: true) { Label = $"the runner of {PathSpelling.Bare(path)}" });
             }
         }
 
-        members.Insert(0, new DefinitionMember("the test projects of " + PathSpelling.Bare(project.Id), tests, AllowAdditions: true));
+        members.Insert(0, new DefinitionMember("the test projects of " + project.Id, tests, AllowAdditions: true) { Label = "the test projects of " + PathSpelling.Bare(project.Id) });
         var solution = set.Files.FirstOrDefault(file => file.Path == project.Id && file.Kind == ManifestKind.Manifest && (file.Path.EndsWith(".slnx", StringComparison.Ordinal) || file.Path.EndsWith(".sln", StringComparison.Ordinal)));
         if (solution is not null)
         {
             var named = SolutionProjects(solution);
-            members.Insert(1, new DefinitionMember($"the test projects {PathSpelling.Bare(project.Id)} names", [.. tests.Where(test => named.Contains(test, StringComparer.Ordinal))], AllowAdditions: true));
+            members.Insert(1, new DefinitionMember($"the test projects {project.Id} names", [.. tests.Where(test => named.Contains(test, StringComparer.Ordinal))], AllowAdditions: true) { Label = $"the test projects {PathSpelling.Bare(project.Id)} names" });
         }
 
         var globals = set.Files.Where(file => file.Stack == "dotnet" && file.Kind == ManifestKind.Definition && string.Equals(file.Path.Split('/')[^1], "global.json", StringComparison.OrdinalIgnoreCase) && AtOrAround(file.Path, folder)).OrderBy(file => file.Path, StringComparer.Ordinal).ToList();
         members.Add(new DefinitionMember("the test member of global.json", [GlobalTest(globals.FirstOrDefault(file => file.Path == "global.json"))]));
-        members.Add(new DefinitionMember("the global.json files at or above " + PathSpelling.Bare(project.Id), [.. globals.Select(file => $"{file.Path}@{file.Oid}")]));
+        members.Add(new DefinitionMember("the global.json files at or above " + project.Id, [.. globals.Select(file => $"{file.Path}@{file.Oid}")]) { Label = "the global.json files at or above " + PathSpelling.Bare(project.Id) });
         foreach (var file in set.Files.Where(file => file.Stack == "dotnet" && file.Kind is ManifestKind.Manifest or ManifestKind.Definition && Applies(file.Path, folder, owned)))
         {
             var isProject = file.Kind == ManifestKind.Manifest;
             var label = PathSpelling.Bare(file.Path);
-            members.Add(new DefinitionMember($"the Targets, Imports and UsingTasks of {label}", ProjectGraph.BuildElements(file.Text) ?? ["unreadable"], IgnoreWhenNew: isProject));
-            members.Add(new DefinitionMember($"the test-fact elements of {label}", ProjectGraph.TestFactElements(file.Text) ?? ["unreadable"], IgnoreWhenNew: isProject));
+            members.Add(new DefinitionMember($"the Targets, Imports and UsingTasks of {file.Path}", ProjectGraph.BuildElements(file.Text) ?? ["unreadable"], IgnoreWhenNew: isProject) { Label = $"the Targets, Imports and UsingTasks of {label}" });
+            members.Add(new DefinitionMember($"the test-fact elements of {file.Path}", ProjectGraph.TestFactElements(file.Text) ?? ["unreadable"], IgnoreWhenNew: isProject) { Label = $"the test-fact elements of {label}" });
         }
 
-        members.Add(new DefinitionMember($"the configuration files of {PathSpelling.Bare(project.Id)}", [.. set.Files.Where(file => file.Stack == "dotnet" && file.Kind == ManifestKind.Present && IsDotnetConfig(file.Path.Split('/')[^1]) && AtOrAround(file.Path, folder)).OrderBy(file => file.Path, StringComparer.Ordinal).Select(file => $"{file.Path}@{file.Oid}")]));
-        members.Add(new DefinitionMember($"the .props and .targets files in obj folders of {PathSpelling.Bare(project.Id)}", [.. set.Files.Where(file => file.Kind == ManifestKind.Present && ManifestSearch.IsGeneratedImport(file.Path) && ProjectGraph.Under(folder, file.Path)).OrderBy(file => file.Path, StringComparer.Ordinal).Select(file => $"{file.Path}@{file.Oid}")]));
+        members.Add(new DefinitionMember($"the configuration files of {project.Id}", [.. set.Files.Where(file => file.Stack == "dotnet" && file.Kind == ManifestKind.Present && IsDotnetConfig(file.Path.Split('/')[^1]) && AtOrAround(file.Path, folder)).OrderBy(file => file.Path, StringComparer.Ordinal).Select(file => $"{file.Path}@{file.Oid}")]) { Label = $"the configuration files of {PathSpelling.Bare(project.Id)}" });
+        members.Add(new DefinitionMember($"the .props and .targets files in obj folders of {project.Id}", [.. set.Files.Where(file => file.Kind == ManifestKind.Present && ManifestSearch.IsGeneratedImport(file.Path) && ProjectGraph.Under(folder, file.Path)).OrderBy(file => file.Path, StringComparer.Ordinal).Select(file => $"{file.Path}@{file.Oid}")]) { Label = $"the .props and .targets files in obj folders of {PathSpelling.Bare(project.Id)}" });
 
         return members;
     }

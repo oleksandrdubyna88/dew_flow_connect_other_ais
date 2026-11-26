@@ -120,7 +120,7 @@ public static class AffectedProjects
                 continue;
             }
 
-            var owned = detected.Fact("projects").Split(',', StringSplitOptions.RemoveEmptyEntries);
+            var owned = detected.OwnedPaths;
             var folder = FolderOf(project);
             var reachesAChangedUnit = unitsWithChanges.Contains(project.Id) || owned.Any(path => Reach(path, graph).Any(other => dotnet.Any(unit => unit.Id != project.Id && unitsWithChanges.Contains(unit.Id) && OwnedBy(unit, other))));
             var leaving = owned.Select(path => (Path: path, File: atHead.Files.FirstOrDefault(file => file.Path == path))).FirstOrDefault(item => item.File is not null && ProjectGraph.PathsLeaving(item.File.Text, item.Path, folder) > 0);
@@ -143,7 +143,7 @@ public static class AffectedProjects
             if (unitInfo.Tests is { } selected)
             {
                 tests[project.Id] = selected;
-                left.AddRange(detected.Fact("testProjects").Split(',', StringSplitOptions.RemoveEmptyEntries).Where(test => !selected.Contains(test)).Select(test => new LeftOut(test, "it reaches no changed project through the reverse ProjectReference graph of the head")));
+                left.AddRange(detected.TestPaths.Where(test => !selected.Contains(test)).Select(test => new LeftOut(test, "it reaches no changed project through the reverse ProjectReference graph of the head")));
             }
         }
 
@@ -153,7 +153,7 @@ public static class AffectedProjects
     private static string FolderOf(ResolvedProject project) =>
         project.Detected is { } detected ? (detected.Folder == "." ? string.Empty : detected.Folder) : project.FileProject is { } file ? (file.Path == "." ? string.Empty : file.Path) : string.Empty;
 
-    private static bool OwnedBy(ResolvedProject unit, string projectPath) => unit.Detected!.Fact("projects").Split(',', StringSplitOptions.RemoveEmptyEntries).Contains(projectPath, StringComparer.Ordinal);
+    private static bool OwnedBy(ResolvedProject unit, string projectPath) => unit.Detected!.OwnedPaths.Contains(projectPath, StringComparer.Ordinal);
 
     private sealed record GraphRead(IReadOnlyDictionary<string, ProjectFacts> Projects, string Refusal);
 
@@ -212,9 +212,9 @@ public static class AffectedProjects
 
     private sealed record TestInfo(IReadOnlySet<string>? Tests, string Unknown);
 
-    private static TestInfo TestSelection(DetectedProject unit, string[] owned, List<string> changedPaths, string folder, GraphRead graph, GraphRead baseGraph, HashSet<string> changedProjects)
+    private static TestInfo TestSelection(DetectedProject unit, IReadOnlyList<string> owned, List<string> changedPaths, string folder, GraphRead graph, GraphRead baseGraph, HashSet<string> changedProjects)
     {
-        var testProjects = unit.Fact("testProjects").Split(',', StringSplitOptions.RemoveEmptyEntries);
+        var testProjects = unit.TestPaths;
         var inUnit = changedPaths.Where(path => ProjectGraph.Under(folder, path)).ToList();
         // The folders of the unit's projects at the head AND at the base: a project the head removed had a folder, and a change in it is shown to reach what referenced it.
         var projectFolders = owned.Concat(baseGraph.Projects.Keys.Where(path => ProjectGraph.Under(folder, path))).Select(path => ProjectGraph.Folder(path)).Distinct(StringComparer.Ordinal).ToList();

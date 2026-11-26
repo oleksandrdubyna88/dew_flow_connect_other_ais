@@ -76,6 +76,8 @@ internal sealed record CoderChecksReport(IReadOnlyList<CoderChecksRound> Rounds,
 
         json.WriteEndArray();
         json.WriteStartObject("selection");
+        json.WriteBoolean("applied", false);
+        json.WriteString("note", "information only in this version: every detected unit ran, whatever the selection would have left out");
         json.WriteBoolean("everything", selection is null || selection.Everything);
         json.WriteString("why", selection?.Why ?? string.Empty);
         json.WriteStartArray("leftOut");

@@ -203,7 +203,7 @@ public sealed class ACoderGitIsHardenedTests
         result.Green.Should().BeTrue(result.Note);
         var gitRequests = bed.Launcher.Requests.Skip(before).Where(request => request.Executable == "git").ToList();
         gitRequests.Should().NotBeEmpty("the toolchain was read with git");
-        gitRequests.Should().OnlyContain(request => request.WorkingDirectory == bed.Main, "every read of the base toolchain started in the main repository path");
+        gitRequests.Where(request => !request.Arguments.Contains("rev-parse")).Should().OnlyContain(request => request.WorkingDirectory == bed.Main, "every read of the base toolchain started in the main repository path; the one read of the worktree's own HEAD is the rev-parse");
         result.Steps.Should().HaveCount(2);
         result.Steps.Should().OnlyContain(step => step.Boundary.Bounded);
     }

@@ -70,19 +70,18 @@ public sealed class ACoderEnvelopeNamesItsToolchainTests
     }
 
     [Fact]
-    public async Task D1_ADetectedToolchainWhoseHeadChangedAFactThatIsNotADefinition_ListsItInChangedBetweenBaseAndHead()
+    public async Task D1_AHeadThatAddsAProjectFile_IsRefusedByTheFrozenGate_TheRoundSaysSoAndNoToolchainSectionClaimsAProject()
     {
         await using var rig = await CoderRig.CreateAsync(toolchain: string.Empty, extra: new Dictionary<string, string> { ["App.csproj"] = Library, [".gitignore"] = "bin/\nobj/\n" });
-        rig.Says("sonnet", new CoderRig.Launch(new Dictionary<string, string> { ["notes/state.txt"] = "x\n", ["tsconfig.json"] = "{}\n", ["Other.csproj"] = Library }, CoderRig.Report()));
+        rig.Says("sonnet", new CoderRig.Launch(new Dictionary<string, string> { ["notes/state.txt"] = "x\n", ["Other.csproj"] = Library }, CoderRig.Report()));
         var job = rig.NewJob();
 
         var (_, ended) = await rig.RunAsync(job);
 
-        ended.State.Should().Be(RoleJobStates.Succeeded, ended.Reason);
-        var head = rig.Envelope(job).GetProperty("headSha").GetString()!;
-        (await rig.GitAsync(rig.Repo, "ls-tree", "-r", "--name-only", head)).Should().Contain("Other.csproj", "the coder's file is in the head commit");
-        var toolchain = rig.Envelope(job).GetProperty("toolchain");
-        toolchain.GetProperty("projects").EnumerateArray().Select(project => (project.GetProperty("path").GetString(), project.GetProperty("definedByHead").GetBoolean())).Should().Equal(new (string?, bool)[] { ("App.csproj", false), ("Other.csproj", true) }, toolchain.GetRawText().Replace("{", "{{").Replace("}", "}}"));
+        (ended.State, ended.Stop).Should().Be((RoleJobStates.Failed, "toolchain-refused"), ended.Reason);
+        var envelope = rig.Envelope(job);
+        envelope.GetProperty("checks").GetArrayLength().Should().Be(0);
+        envelope.GetProperty("rounds").EnumerateArray().Should().ContainSingle().Which.GetProperty("state").GetString().Should().Be("toolchain_refused");
     }
 
     [Fact]

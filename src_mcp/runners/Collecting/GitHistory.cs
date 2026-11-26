@@ -362,6 +362,21 @@ public sealed partial class GitHistory(IProcessLauncher launcher)
             ? RunAsync(repoPath, ["--literal-pathspecs", "ls-tree", "-r", "-l", "-z", "--full-tree", sha], ct, maxChars)
             : Refused;
 
+    /// <summary>
+    /// What a commit changed against another, as RAW records with both modes and both ids — <c>git diff-tree -r -z --no-renames --raw</c> in the repository at <paramref name="repoPath"/> (the main checkout, through the hardened reads), never through a worktree's pointer (epoch 3 E4 s3, the frozen
+    /// build definitions). Parse it with <c>FrozenDefinitions.ParseRaw</c>. Both ids go through <see cref="IsCommitish"/>.
+    /// </summary>
+    public Task<GitAnswer> RawChangesAsync(string repoPath, string baseSha, string headSha, int maxChars, CancellationToken ct = default) =>
+        IsCommitish(baseSha) && IsCommitish(headSha)
+            ? RunAsync(repoPath, ["diff-tree", "-r", "-z", "--no-renames", "--raw", baseSha, headSha], ct, maxChars)
+            : Refused;
+
+    /// <summary>The paths two commits differ in, with the status letter and both sides of a rename: <c>git diff-tree -r -z -M --name-status</c>, a plumbing command that runs no diff program, from the main repository through the hardened reads.</summary>
+    public Task<GitAnswer> NameStatusAsync(string repoPath, string baseSha, string headSha, int maxChars, CancellationToken ct = default) =>
+        IsCommitish(baseSha) && IsCommitish(headSha)
+            ? RunAsync(repoPath, ["diff-tree", "-r", "-z", "-M", "--name-status", baseSha, headSha], ct, maxChars)
+            : Refused;
+
     /// <summary>A value git must never be handed: answered as "ran, and said no".</summary>
     /// <remarks>
     /// Not a failure — nothing broke — and not a silent pass. The candidate skips for the reason its

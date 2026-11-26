@@ -135,7 +135,7 @@ public sealed class ADetectedChecksOfACoderJobTests
         result.State.Should().Be(CheckState.ToolchainRefused);
         result.Steps.Should().BeEmpty();
         result.Green.Should().BeFalse();
-        result.Note.Should().Contain("the worktree removed test of package.json");
+        result.Note.Should().Contain("frozen build definition", "the interim gate refuses it before the name-level compare is asked (second layer: ACoderCannotChangeADetectedCheckTests)");
         UnitsStarted(bed).Should().Be(0);
     }
 
@@ -149,7 +149,7 @@ public sealed class ADetectedChecksOfACoderJobTests
         var result = await RunAsync(bed, Checks(bed));
 
         result.State.Should().Be(CheckState.ToolchainRefused);
-        result.Note.Should().Contain("the worktree changed scripts.test of package.json");
+        result.Note.Should().Contain("frozen build definition");
         result.Steps.Should().BeEmpty();
         UnitsStarted(bed).Should().Be(0);
     }
@@ -164,7 +164,7 @@ public sealed class ADetectedChecksOfACoderJobTests
         var result = await RunAsync(bed, Checks(bed));
 
         result.State.Should().Be(CheckState.ToolchainRefused);
-        result.Note.Should().Contain("no lock file");
+        result.Note.Should().Contain("frozen build definition");
         UnitsStarted(bed).Should().Be(0);
     }
 
@@ -179,7 +179,7 @@ public sealed class ADetectedChecksOfACoderJobTests
         var result = await RunAsync(bed, Checks(bed));
 
         result.State.Should().Be(CheckState.ToolchainRefused);
-        result.Note.Should().Contain("the worktree removed test (tests/T.csproj) of App.slnx");
+        result.Note.Should().Contain("frozen build definition");
         UnitsStarted(bed).Should().Be(0);
     }
 
@@ -197,7 +197,7 @@ public sealed class ADetectedChecksOfACoderJobTests
     }
 
     [Fact]
-    public async Task D3_AHeadThatAddsAToolchainFile_IsReportedAsAdded_AndTheDetectedStepsRun_NotTheNewFile()
+    public async Task D3_AHeadThatAddsAToolchainFile_IsReportedAsAdded_AndRefusedByTheFrozenGate_NothingRuns()
     {
         NeedAUserManager();
         await using var bed = await BoundaryBed.CreateAsync(files: new Dictionary<string, string> { ["App.csproj"] = Library, ["Class1.cs"] = "public class Class1 { }\n" });
@@ -206,14 +206,14 @@ public sealed class ADetectedChecksOfACoderJobTests
         var result = await RunAsync(bed, Checks(bed));
 
         result.ToolchainChange.Should().Be(ToolchainChange.Added);
-        result.Note.Should().Contain("added");
-        result.Green.Should().BeTrue(result.Note);
-        result.Steps.Select(step => step.Argv[0]).Should().OnlyContain(program => program == "dotnet");
+        result.State.Should().Be(CheckState.ToolchainRefused, result.Note);
+        result.Note.Should().Contain("frozen build definition");
+        result.Steps.Should().BeEmpty();
         File.Exists(Path.Combine(bed.Worktree, "the-new-file-ran")).Should().BeFalse();
     }
 
     [Fact]
-    public async Task D14_AProjectOnlyTheHeadHas_IsCheckedWithItsOwnDefinition_AndMarkedDefinedByHead()
+    public async Task D14_AProjectOnlyTheHeadHas_IsRefusedByTheFrozenGate_BeforeAnyStep()
     {
         NeedAUserManager();
         await using var bed = await BoundaryBed.CreateAsync(files: new Dictionary<string, string> { ["App.csproj"] = Library, ["Class1.cs"] = "public class Class1 { }\n", [".gitignore"] = "bin/\nobj/\n" });
@@ -221,9 +221,9 @@ public sealed class ADetectedChecksOfACoderJobTests
 
         var result = await RunAsync(bed, Checks(bed));
 
-        result.Green.Should().BeTrue(result.Note);
-        result.Toolchain!.Projects.Select(project => (project.Id, project.DefinedByHead)).Should().Equal(("App.csproj", false), ("Other.csproj", true));
-        result.Steps.Select(step => (step.Project, step.Step.Wire())).Should().Equal(("App.csproj", "restore"), ("App.csproj", "build"), ("Other.csproj", "restore"), ("Other.csproj", "build"));
+        result.State.Should().Be(CheckState.ToolchainRefused, result.Note);
+        result.Note.Should().Contain("frozen build definition");
+        result.Steps.Should().BeEmpty("nothing ran: the head added a project file, and that is a frozen build definition (interim rule, the owner decides)");
     }
 
     // ---- d3: the head is the COMMIT; nothing of the working tree is read ----

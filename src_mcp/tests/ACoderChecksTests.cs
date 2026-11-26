@@ -242,7 +242,7 @@ public sealed class ACoderChecksTests
     }
 
     [Fact]
-    public async Task D3_AToolchainTheCoderEdited_DoesNotRun_TheBaseFileDoes_AndTheChangeIsReported()
+    public async Task D3_AToolchainTheCoderEdited_IsRefusedByTheFrozenGate_NothingRuns_TheBaseFileIsTheOneThatDecides()
     {
         await using var rig = await CoderRig.CreateAsync();
         var skipEverything = ToolchainFixture.Shell("exit 0", "exit 0");
@@ -252,9 +252,9 @@ public sealed class ACoderChecksTests
 
         var (_, ended) = await rig.RunAsync(job);
 
-        (ended.State, ended.Stop).Should().Be((RoleJobStates.Failed, "not-green"), "the coder's own toolchain file would have passed; the one at the base is the one that ran");
+        (ended.State, ended.Stop).Should().Be((RoleJobStates.Failed, "toolchain-refused"), "the coder's own toolchain file would have passed; since pass 2 of the security verify the head cannot change a frozen build definition at all (interim, the owner decides)");
         var envelope = rig.Envelope(job);
-        envelope.GetProperty("checksNote").GetString().Should().Contain(".coai/toolchain.yaml").And.Contain("did not run");
-        StepsOf(envelope).Should().Equal("build:0", "test:1");
+        envelope.GetProperty("checksNote").GetString().Should().Contain("frozen build definition");
+        StepsOf(envelope).Should().BeEmpty();
     }
 }

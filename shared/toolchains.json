@@ -1,6 +1,12 @@
 {
   "version": 1,
   "comment": "The defaults coai uses for a repository that has no .coai/toolchain.yaml (epoch 3 E4, SPEC section A3). EMBEDDED in coai-mcp (src_mcp/core/Toolchain/ToolchainDefaults.cs): nothing reads this file from a repository or the data folder at run time. Every argv is started WITHOUT a shell. An argv item may hold only {jobs}, {unit} and, in a format step, {file}; no item is ever copied from a manifest. Every argv below is a command that story s1 saw work INSIDE the check unit of E2 (RESULTS_s1_dotnet.md, RESULTS_s1_node.md, RESULTS_s1_format.md); a step with the host network names the heading of the RESULTS file that measured why. There is no default testFor. A step that is null does not exist for the stack. presence names are recorded by name and object id and never read (a changed one is a change of the check definition: CheckDefinition compares them); definitionFiles are read because a change of one is a change of the checks. php, rust, python and java are known and not built: their manifests are refused by name.",
+  "frozen": {
+    "comment": "INTERIM, the owner decides (E4 s3 pass 2, 2026-11-26): the FROZEN BUILD DEFINITIONS. A coder job's checks are refused, before any step and for detected AND stated commands, when the head changed (added, deleted, modified, mode-changed) a path whose file name matches a pattern below, or any symlink or submodule anywhere, relative to the base. A pattern is matched against the file name WITHOUT case at any depth; a pattern with a '/' is matched against the last segments of the path; '*' stands for any run of characters inside one name. This is the one list: no code names these files.",
+    "dotnet": ["*.csproj", "*.fsproj", "*.vbproj", "*.props", "*.targets", "*.sln", "*.slnx", "*.slnf", "Directory.Build.*", "Directory.Packages.props", "global.json", "nuget.config", "packages.lock.json", ".config/dotnet-tools.json", "*.runsettings", "xunit.runner.json", "testconfig.json"],
+    "node": ["package.json", "package-lock.json", "npm-shrinkwrap.json", "yarn.lock", "pnpm-lock.yaml", "pnpm-workspace.yaml", ".npmrc", ".yarnrc*", "tsconfig*.json", "jest.config.*", "vitest.config.*", "babel.config.*", ".babelrc*", ".mocharc*", ".prettierrc*", "prettier.config.*"],
+    "coai-and-git": [".coai/toolchain.yaml", ".gitmodules", ".gitattributes"]
+  },
   "stacks": {
     "dotnet": {
       "built": true,

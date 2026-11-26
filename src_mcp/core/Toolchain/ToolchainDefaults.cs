@@ -76,7 +76,17 @@ public sealed class ToolchainDefaults
 
     private static readonly Lazy<ToolchainDefaults> Shipped = new(() => Parse(ReadSeed()));
 
-    private ToolchainDefaults(IReadOnlyDictionary<string, StackDefaults> stacks) => Stacks = stacks;
+    private ToolchainDefaults(IReadOnlyDictionary<string, StackDefaults> stacks, IReadOnlyDictionary<string, IReadOnlyList<string>> frozen)
+    {
+        Stacks = stacks;
+        Frozen = frozen;
+    }
+
+    /// <summary>The frozen build definitions (INTERIM, the owner decides): the patterns of file names, by group, whose change by a coder's head refuses the checks. See <see cref="FrozenDefinitions"/>.</summary>
+    public IReadOnlyDictionary<string, IReadOnlyList<string>> Frozen { get; }
+
+    /// <summary>Every frozen pattern of every group.</summary>
+    public IReadOnlyList<string> FrozenPatterns => [.. Frozen.Values.SelectMany(group => group).Distinct(StringComparer.OrdinalIgnoreCase)];
 
     /// <summary>The shipped table.</summary>
     public static ToolchainDefaults Current => Shipped.Value;
@@ -105,7 +115,7 @@ public sealed class ToolchainDefaults
 
         using (document)
         {
-            var root = Members(document.RootElement, "toolchains.json", ["version", "comment", "stacks"]);
+            var root = Members(document.RootElement, "toolchains.json", ["version", "comment", "frozen", "stacks"]);
             if (!root.TryGetValue("version", out var version) || version.ValueKind != JsonValueKind.Number || !version.TryGetInt32(out var number) || number != 1)
             {
                 throw new ToolchainDefaultsException("toolchains.json: 'version' must be 1");
@@ -117,7 +127,25 @@ public sealed class ToolchainDefaults
                 stacks[id] = Stack(id, element);
             }
 
-            return new ToolchainDefaults(stacks);
+            var frozen = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+            if (root.TryGetValue("frozen", out var frozenElement))
+            {
+                foreach (var (group, names) in Members(frozenElement, "frozen", null))
+                {
+                    if (group == "comment")
+                    {
+                        continue;
+                    }
+
+                    frozen[group] = Strings(names, $"frozen.{group}");
+                    if (frozen[group].Any(pattern => pattern.Length == 0 || pattern.Contains('\\') || pattern.StartsWith('/') || pattern.EndsWith('/') || pattern.Contains("//", StringComparison.Ordinal)))
+                    {
+                        throw new ToolchainDefaultsException($"frozen.{group}: a pattern is a non-empty name or a few names joined by '/', with no backslash and no empty segment");
+                    }
+                }
+            }
+
+            return new ToolchainDefaults(stacks, frozen);
         }
     }
 

@@ -63,7 +63,7 @@ public sealed class CheckRunner(IProcessLauncher launcher, CheckBoundary? bounda
 
         return resolution switch
         {
-            ToolchainResolution.Resolved resolved => (await RunPlanAsync(StepPlan.Of(resolved.Toolchain, ToolchainDefaults.Current, request.Jobs, selection), request, ct)) with { Toolchain = resolved.Toolchain, Selection = selection },
+            ToolchainResolution.Resolved resolved => (await RunPlanAsync(StepPlan.Of(resolved.Toolchain, ToolchainDefaults.Current, request.Jobs), request, ct)) with { Toolchain = resolved.Toolchain, Selection = selection },
             ToolchainResolution.Refused refused => new CheckResult(CheckState.ToolchainRefused, [], $"the toolchain is refused, so nothing was run: {refused.Sentence}"),
             ToolchainResolution.NotConfigured notConfigured => new CheckResult(CheckState.NotConfigured, [], notConfigured.Note),
             _ => throw new InvalidOperationException("a resolution is resolved, refused or not configured"),
@@ -92,6 +92,12 @@ public sealed class CheckRunner(IProcessLauncher launcher, CheckBoundary? bounda
                 : await RunStepAsync(step, number, request, ct);
             done.Add(record);
             request.StepFinished?.Invoke(record);
+            if (record.ExitCode == StepRecord.UnitSurvivedExitCode)
+            {
+                // A unit that could not be stopped may still hold a process that writes: no fix turn may start beside it (S17 of the verify; as E2 M7 does for the coder's own unit).
+                return new CheckResult(CheckState.BoundaryRefused, done, $"{Describe(record)}; the job ends here");
+            }
+
             if (!record.Passed)
             {
                 return new CheckResult(CheckState.Failed, done, $"{Describe(record)}; the steps after it were not run");
