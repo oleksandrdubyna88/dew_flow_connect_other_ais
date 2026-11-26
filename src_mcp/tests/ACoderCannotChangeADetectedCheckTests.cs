@@ -433,4 +433,23 @@ public sealed class ACoderCannotChangeADetectedCheckTests
 
         sentence.Should().Contain("a path with unusual characters").And.NotContain("\u2028");
     }
+
+    [Fact]
+    public void Item12_AnInitialTargetsAttributeAddedToAProject_IsAChange_BecauseRestoreEvaluatesTheProject()
+    {
+        var head = With(Dotnet, ("src/App.csproj", Proj().Replace("<Project Sdk=\"Microsoft.NET.Sdk\">", "<Project Sdk=\"Microsoft.NET.Sdk\" InitialTargets=\"Evil\">", StringComparison.Ordinal)));
+
+        Refused(Resolve(Dotnet, head)).Should().Contain("the Targets, Imports and UsingTasks of src/App.csproj").And.NotContain("Evil");
+    }
+
+    [Theory]
+    [InlineData("<target name=\"vstest\" />")]
+    [InlineData("<USINGTASK TaskName=\"x\" AssemblyFile=\"y.dll\" />")]
+    [InlineData("<IMPORT Project=\"z.targets\" />")]
+    public void M5_TargetImportAndUsingTaskInAnyCase_AreNamesOfTheDefinition(string element)
+    {
+        var head = With(Dotnet, ("tests/B.Tests/B.Tests.csproj", Mtp(top: element)));
+
+        Refused(Resolve(Dotnet, head)).Should().Contain("the Targets, Imports and UsingTasks of tests/B.Tests/B.Tests.csproj");
+    }
 }

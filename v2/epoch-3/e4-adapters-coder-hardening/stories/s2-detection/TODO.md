@@ -11,3 +11,17 @@ Items that do not read exactly as the dod says, or that a reviewer must look at:
 5. **A renamed folder that holds a test project is refused as a lost step** (the step's subject is the project path): `renames-a-folder` of the vstest and MTP trees. The sentence names the cure; the refusal is conservative by construction.
 6. **Workspace members** are the packages the patterns name (a folder, one `*` in a segment, `**`, a negated pattern). A segment with two stars does not match, so such a package is a project of its own rather than hidden.
 7. **The goldens were generated from the detector's output and then read** against SPEC §A and the measured facts; they are a regression net. `COAI_GOLDEN_OUT` regenerates them.
+
+## The shoulds of the Fable security verify of s2 (2026-11-26, f7fd401b) — state after the must-changes
+
+M1-M5 and S1 are fixed (commits 7d0a83e7, 1bff1660; tests `ADetectionHardeningTests`, `AManifestsAtACommitTests`). The others, by the report's numbers:
+
+- **S1** met: `GitHistory.Hardened` and `ForChecks()`; `ManifestsAtCommit` uses them. `ChecksAtBase` still reads the base toolchain with the plain reader: s3 t3 switches it.
+- **S2** (XML depth, `element.Value` recursion on a 1 MiB stack): not met. A depth limit of 64 while loading is a small change; not made.
+- **S3** met for the parts that touch the detector: a path that holds U+FFFD or another unusual character is refused, and a path listed twice is refused (`ManifestSearch.Select`).
+- **S4** met: the inert `MaxCharactersFromEntities = 0` line is gone.
+- **S5** not met: a submodule or a note that only the head has is named nowhere (`ToolchainResolve` takes the base's notes).
+- **S6** met: names are matched without case and an odd spelling of a manifest or definition name is refused (`S6_*`).
+- **S7** not met (memory of a 32 MiB listing: one string per record). **S8** not met (no deadline for one tree: up to 502 git processes, each with 30 s).
+- **S9** not met: the BOM and `encoding=` questions are not measured; the s3 t5 compare uses object ids for the files that are whole definitions (`global.json`, the configuration files).
+- **S10** open for the plan owner: see the limits in the todo of s3.

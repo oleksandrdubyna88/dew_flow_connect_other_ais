@@ -190,13 +190,21 @@ public static class ProjectGraph
             names.Add("Sdk:" + sdk.Trim());
         }
 
+        foreach (var attribute in new[] { "InitialTargets", "DefaultTargets" })
+        {
+            if (root.Attributes().FirstOrDefault(candidate => string.Equals(candidate.Name.LocalName, attribute, StringComparison.OrdinalIgnoreCase)) is { } found)
+            {
+                names.Add($"{attribute}:{found.Value.Trim()}");
+            }
+        }
+
         foreach (var element in root.Descendants())
         {
-            switch (element.Name.LocalName)
+            switch (element.Name.LocalName.ToLowerInvariant())
             {
-                case "Target": names.Add("Target:" + ((string?)element.Attribute("Name") ?? string.Empty).Trim()); break;
-                case "Import": names.Add("Import:" + ((string?)element.Attribute("Project") ?? string.Empty).Trim() + (element.Attribute("Sdk") is { } importSdk ? "@" + importSdk.Value.Trim() : string.Empty)); break;
-                case "UsingTask": names.Add("UsingTask:" + ((string?)element.Attribute("TaskName") ?? (string?)element.Attribute("AssemblyFile") ?? string.Empty).Trim()); break;
+                case "target": names.Add("Target:" + ((string?)element.Attribute("Name") ?? string.Empty).Trim().ToLowerInvariant()); break;
+                case "import": names.Add("Import:" + ((string?)element.Attribute("Project") ?? string.Empty).Trim() + (element.Attribute("Sdk") is { } importSdk ? "@" + importSdk.Value.Trim() : string.Empty)); break;
+                case "usingtask": names.Add("UsingTask:" + ((string?)element.Attribute("TaskName") ?? (string?)element.Attribute("AssemblyFile") ?? string.Empty).Trim()); break;
             }
         }
 
