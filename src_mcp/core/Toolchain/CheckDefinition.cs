@@ -19,8 +19,8 @@ public sealed record DefinitionMember(string Name, IReadOnlyList<string> Values,
 }
 
 /// <summary>
-/// <b>The check definition of a detected or defaulted project</b> (epoch 3 E4 s3 t5; SPEC §A4, decision 11): what decides WHICH commands a default step runs and what they run. A coder's work is checked by commands coai chose from the base's manifests; if the head could change the manifest members those commands read — replace
-/// <c>scripts.test</c> with <c>echo passed</c> — the checks would pass whatever the code did. So the definition of a project the base has must be the same at the head, or the job is refused before any step.
+/// <b>The check definition of a detected or defaulted project</b> (epoch 3 E4 s3 t5; SPEC §A4): what decides WHICH commands a default step runs and what they run. A coder's head can change the manifest members those commands read — replace
+/// <c>scripts.test</c> with <c>echo passed</c> — and the checks then pass whatever the code did. Since the owner's decision of 2026-11-26 the head's own definitions RUN and a difference from the base is REPORTED, never refused: <see cref="Changed"/> lists the members that differ, and the envelope says so (<c>definitionsChanged</c>).
 /// </summary>
 /// <remarks>
 /// <para><b>Node</b>: every member of <c>scripts</c> of the package and of every workspace member (a script ADDED is a change too), the name of the lock file, the members that configure a runner or a tool (<c>workspaces</c>, <c>overrides</c>, <c>jest</c>, <c>vitest</c>, <c>prettier</c>, <c>config</c>…), the version specifier of the packages a default command runs
@@ -28,8 +28,8 @@ public sealed record DefinitionMember(string Name, IReadOnlyList<string> Values,
 /// <para><b>.NET</b>: the test projects the solution file names; the runner of each test project; the <c>test</c> member of <c>global.json</c> and EVERY <c>global.json</c> at or above the unit by object id (<c>sdk</c> and <c>msbuild-sdks</c> choose the code that runs at restore); for each project file and each <c>.props</c> and <c>.targets</c> that applies: the names of every <c>Target</c>,
 /// <c>Import</c> and <c>UsingTask</c>, the <c>Sdk</c>, and the RAW test-fact elements with every condition around them and without case; the <c>.props</c> and <c>.targets</c> files in <c>obj</c> folders, which MSBuild imports by a wildcard of its own; and the files that configure the run (<c>nuget.config</c>,
 /// <c>Directory.Build.rsp</c>, <c>MSBuild.rsp</c>, <c>*.runsettings</c>, <c>testconfig.json</c>) by object id.</para>
-/// <para><b>Restore on the host network takes its addresses from these files</b> (a <c>nuget.config</c> source, an <c>.npmrc</c> registry, <c>msbuild-sdks</c>): a head that adds or changes one is refused. That is the interim decision for the owner (item 12 of the list of the s2 security verify); no wider policy is invented here.</para>
-/// <para><b>Not a definition</b> (D14): a new or changed source or test file, a new <c>PackageReference</c>, <c>ProjectReference</c> or <c>PackageVersion</c>, a new dependency in <c>package.json</c> with its lock file. <b>Stated limits:</b> what a script or a target runs INSIDE the tree (a script file, the test code) is the head's, as in E2 — the code gate reads the diff; a wildcard or property
+/// <para><b>Restore on the host network takes its addresses from these files</b> (a <c>nuget.config</c> source, an <c>.npmrc</c> registry, <c>msbuild-sdks</c>): a head that adds or changes one is REPORTED, and its own restore runs on the host network (owner decision 2026-11-26: no proxy and no address list).</para>
+/// <para><b>Not compared here</b> (D14): a new or changed source or test file, a new <c>PackageReference</c>, <c>ProjectReference</c> or <c>PackageVersion</c>, a new dependency in <c>package.json</c> with its lock file (the file that holds them is still counted as a changed definition file by <see cref="FrozenDefinitions.Classify"/>). <b>Stated limits:</b> what a script or a target runs INSIDE the tree (a script file, the test code) is the head's, as in E2 — the code gate reads the diff; a wildcard or property
 /// <c>Import</c> of the base can pull in a file the head adds in a place the search does not read; the contents of a lock file (its <c>resolved</c> addresses) are not compared.</para>
 /// </remarks>
 public static partial class CheckDefinition
@@ -53,7 +53,7 @@ public static partial class CheckDefinition
             var head = atHead.FirstOrDefault(candidate => candidate.Name == member.Name);
             if (head is null && member.IgnoreWhenNew)
             {
-                continue; // a project file the head removed: its own members go with it (a test project it removed is a lost step, refused before)
+                continue; // a project file the head removed: its own members go with it (a test project it removed is a lost step, reported)
             }
 
             var headValues = head?.Values ?? [];

@@ -86,13 +86,13 @@ public sealed class ToolchainDefaults
         ConfigName = configName;
     }
 
-    /// <summary>The frozen build definitions (INTERIM, the owner decides): the patterns of file names, by group, whose change by a coder's head refuses the checks. See <see cref="FrozenDefinitions"/>.</summary>
+    /// <summary>The lists of file names, by group, that classify what a coder's head changed (owner decision 2026-11-26: REPORTED, never refused): a changed path that matches one is called a definition or configuration file in the envelope and the job's record. See <see cref="FrozenDefinitions"/>.</summary>
     public IReadOnlyDictionary<string, IReadOnlyList<string>> Frozen { get; }
 
-    /// <summary>The extensions (lower case, with the dot) of the source files a coder's head may change (the allow list of the interim gate).</summary>
+    /// <summary>The extensions (lower case, with the dot) of the plain source files: a changed path with one of them, and a name that is not configuration-shaped, is not reported as a definition or configuration file.</summary>
     public IReadOnlyList<string> AllowedSourceExtensions { get; }
 
-    /// <summary>The regular expression (without case) of a configuration's file name: a file whose name matches it is never an allowed source file, whatever its extension.</summary>
+    /// <summary>The regular expression (without case) of a configuration's file name: a changed file whose name matches it is reported as a configuration file, whatever its extension.</summary>
     public string ConfigNamePattern { get; }
 
     /// <summary>The compiled <see cref="ConfigNamePattern"/>, with a timeout.</summary>

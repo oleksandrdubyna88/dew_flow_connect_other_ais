@@ -35,7 +35,7 @@ public static class FrozenDefinitions
 {
     /// <summary>
     /// <b>The classifier's allow list (pass 3, M15).</b> Whether this path is a plain source file — one a coder edits as a matter of course, and the report does not call a definition or configuration file: its extension (the last one, without case) is in <see cref="ToolchainDefaults.AllowedSourceExtensions"/>, its base name does not match <see cref="ToolchainDefaults.ConfigNamePattern"/>, and it is not a name of the frozen lists.
-    /// A name with no extension, a dot file, a trailing dot or space, a config-shaped name — each is NOT plain source. A regular expression that does not answer in time refuses too.
+    /// A name with no extension, a dot file, a trailing dot or space, a config-shaped name — each is NOT plain source. A regular expression that does not answer in time counts as NOT plain source.
     /// </summary>
     public static bool IsAllowedChange(string path, ToolchainDefaults table)
     {
@@ -77,7 +77,7 @@ public static class FrozenDefinitions
             || stem.EndsWith("Tests", StringComparison.OrdinalIgnoreCase) || stem.EndsWith("Test", StringComparison.OrdinalIgnoreCase) || stem.EndsWith("Spec", StringComparison.OrdinalIgnoreCase);
     }
 
-    /// <summary>The most characters of a raw listing read; a longer one is cut and refused (a head that changed that many paths is not decided by a partial list).</summary>
+    /// <summary>The most characters of a raw listing read; a longer one is cut, and the report then says it could not read the head's changes (no counts are invented).</summary>
     public const int MaxChars = 8 * 1024 * 1024;
 
     /// <summary>Reads <c>git diff-tree -r -z --no-renames --raw</c> output (<c>:oldmode newmode oldid newid STATUS NUL path NUL</c>). Anything that does not read exactly gives null: the caller refuses.</summary>
