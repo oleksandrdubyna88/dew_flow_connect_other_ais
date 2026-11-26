@@ -1,5 +1,6 @@
 import type { Claim } from './chatStoreLock';
 import type { Committed } from './remoteHosts';
+import { Allowed, Grant, Withdrawal, Withdrawn, grantOf, stampOf } from './remotePermission';
 
 /**
  * The refusals file of one side of the machine (E1.S1, the parent's entry 1.2): the persons "no" for a host and the Stop of the
@@ -29,11 +30,13 @@ export const UNSURE_MAX = 32;
 /** One marker; a larger one is `torn`. */
 export const UNSURE_BYTES_MAX = 1024;
 
-const CLAIM_PAUSE_MS = 200;
-const READ_PAUSE_MS = 20;
-const READ_TRIES = 3;
+export const CLAIM_PAUSE_MS = 200;
+export const READ_PAUSE_MS = 20;
+export const READ_TRIES = 3;
 /** Restarts at step 1 that are not a lost change (a stale claim, a lock taken over): bounded so a writer never spins. */
-const RESTARTS_MAX = 5;
+export const RESTARTS_MAX = 5;
+/** A withdrawal that an *Allow* wrote under, or whose read-back met a claim, goes again from its step 4 this often. */
+export const WITHDRAW_ROUNDS = 3;
 
 export interface Refusal {
   readonly host: string;
@@ -52,6 +55,11 @@ export interface RefusalsFile {
   readonly refused: readonly Refusal[];
   /** Present while the accounts round is stopped. */
   readonly stop?: { readonly utc: string };
+  /**
+   * The permission of this side (E2.S1, § P3), typed `unknown` ON PURPOSE: the file carries the value as it is stored, and only `grantOf` of
+   * `remotePermission.ts` turns it into a `Grant`. A value that is malformed is no grant, and is kept through every write but a `mend`.
+   */
+  readonly grant?: unknown;
 }
 
 /** The file that was never written. */
@@ -68,7 +76,12 @@ export type RefusalChange =
   /** A file that went back: what this window remembers of the newest file it read. Adds only; `gen` ends above both. */
   | { readonly kind: 'regain'; readonly gen: number; readonly rows: readonly Refusal[]; readonly stop?: { readonly utc: string } }
   /** A persons answer over a DAMAGED file: the new file. It always leaves the round stopped. */
-  | { readonly kind: 'mend'; readonly gen: number; readonly rows: readonly Refusal[]; readonly utc: string };
+  | { readonly kind: 'mend'; readonly gen: number; readonly rows: readonly Refusal[]; readonly utc: string }
+  /** The permission, sent ONLY by the store's `allow` (§ P6): `commit` cannot send it. A `stamp` that is not above `floor` is refused (`low`). */
+  | { readonly kind: 'grant'; readonly utc: string; readonly stamp: number; readonly floor: number };
+
+/** What `commit` may send: every change but the grant. */
+export type PlainChange = Exclude<RefusalChange, { readonly kind: 'grant' }>;
 
 /** What one marker holds: a refusal or a Stop that the file did not take. `torn` is a marker that cannot be read. */
 export type Waiting =
@@ -81,8 +94,14 @@ export type Unsure = { readonly kind: 'refuse'; readonly host: string; readonly 
 
 /** The side as it was just read from the disk, or the fact that the file or its folder cannot be read. */
 export type RefusalsRead =
-  | { readonly kind: 'file'; readonly file: RefusalsFile; readonly waiting: readonly Waiting[] }
+  | { readonly kind: 'file'; readonly file: RefusalsFile; readonly waiting: readonly Waiting[]; readonly withdrawn: WithdrawnSeen }
   | { readonly kind: 'damaged' };
+
+/** The withdrawal files of the folder as they were read; `crowded`: more names than were read, which count as one unreadable withdrawal. */
+export interface WithdrawnSeen {
+  readonly files: readonly Withdrawal[];
+  readonly crowded: boolean;
+}
 
 // ─────────────────────────────── Reading ───────────────────────────────
 
@@ -207,10 +226,13 @@ export const textOf = (file: RefusalsFile): string => JSON.stringify(file);
 export type Changed =
   | { readonly kind: 'written'; readonly file: RefusalsFile }
   | { readonly kind: 'kept' }
+  /** A grant whose stamp is not above its floor: nothing is written. Only a `grant` change gets it. */
+  | { readonly kind: 'low' }
   | { readonly kind: 'full' }
   | { readonly kind: 'damaged' };
 
 const KEPT: Changed = { kind: 'kept' };
+const LOW: Changed = { kind: 'low' };
 const FULL: Changed = { kind: 'full' };
 
 const hostsOf = (rows: readonly Refusal[]): ReadonlySet<string> => new Set(rows.map((one) => one.host));
@@ -287,8 +309,21 @@ const regained = (file: RefusalsFile, change: Extract<RefusalChange, { kind: 're
 /** The Stop a regain carries, when the file has none. */
 const stopToAdd = (file: RefusalsFile, stop: { readonly utc: string } | undefined): { readonly utc: string } | undefined => (file.stop === undefined ? stop : undefined);
 
+/** The permission (§ P3): refused when its stamp is not above the floor; kept when the file holds a well-made grant at that stamp or higher. */
+const lowGrant = (change: Extract<RefusalChange, { readonly kind: 'grant' }>): boolean => stampOf(change.stamp) === undefined || change.stamp <= change.floor;
+
+const grantHeld = (file: RefusalsFile, change: Extract<RefusalChange, { readonly kind: 'grant' }>): boolean => (grantOf(file)?.stamp ?? 0) >= change.stamp;
+
+const grant: Merger<'grant'> = (file, change, by) => {
+  if (lowGrant(change)) {
+    return LOW;
+  }
+
+  return grantHeld(file, change) ? KEPT : next(file, by, { grant: { utc: change.utc, stamp: change.stamp } satisfies Grant });
+};
+
 const MERGERS: { readonly [K in RefusalChange['kind']]: Merger<K> | undefined } = {
-  refuse, lift, stop, start, migrate, regain, mend: undefined,
+  refuse, lift, stop, start, migrate, regain, mend: undefined, grant,
 };
 
 /** The new file of a `mend`: only over a damaged file. */
@@ -337,6 +372,7 @@ const HOLDS: { readonly [K in RefusalChange['kind']]: Holds<K> } = {
   migrate: (change, _before, after) => addable(after, change.rows).missing === 0,
   regain: (change, _before, after) => addable(after, change.rows).missing === 0 && (change.stop === undefined || after.stop !== undefined),
   mend: (_change, _before, after) => after.migratedUtc !== undefined,
+  grant: (change, _before, after) => (grantOf(after)?.stamp ?? 0) >= change.stamp,
 };
 
 /** Whether a change is in the file as it now is — step 8 when another writer wrote since. `before` is the file the change was merged into. */
@@ -363,172 +399,40 @@ export interface RefusalsDisk {
   readonly marks: () => Promise<readonly { readonly name: string; readonly text: string | undefined }[] | 'failed'>;
   /** Removes one marker by its name. Never throws. */
   readonly unmark: (name: string) => Promise<void>;
+  /**
+   * Every withdrawal file of the folder, read NOW (§ P4): the names that fit the grammar first, the highest stamp first, then the rest in code-unit
+   * order; the first `WITHDRAWN_READ_MAX` are read and the names of the others are `rest`. `failed`: the folder could not be listed, three times.
+   */
+  readonly withdrawals: () => Promise<{ readonly seen: readonly { readonly name: string; readonly text: string | undefined }[]; readonly rest: readonly string[] } | 'failed'>;
+  /** An EXCLUSIVE CREATE of one withdrawal file, no claim. `there`: the name exists. `refused`: the disk refused. */
+  readonly withdrawn: (name: string, text: string) => Promise<'made' | 'there' | 'refused'>;
+  /** Removes one withdrawal file by its name. `false`: it could not be removed. Never throws. */
+  readonly unwithdraw: (name: string) => Promise<boolean>;
+  /** The prefix this disk was bound with (`DiskNames.withdrawnPrefix`). The store hands it to `withdrawalName` and `withdrawalOf`. */
+  readonly withdrawnPrefix: string;
+  /**
+   * The lock as it is NOW, read with NO claim; it makes, takes over and removes nothing. `free`: there is no lock. `gone`: the rule a claim asks
+   * (`ownerGone`) says its owner is gone — never its age. `held`: every other case, a note that cannot be read among them.
+   */
+  readonly lockNow: () => Promise<'free' | 'held' | 'gone'>;
 }
 
 export interface RefusalsStore {
-  /** The file and the markers, read from the disk NOW. No claim. Never a value kept from an earlier read. */
+  /** The file, the withdrawal files and the markers, read from the disk NOW. No claim. Never a value kept from an earlier read. */
   readonly read: () => Promise<RefusalsRead>;
-  /** One change, under the claim, verified by a read-back. */
-  readonly commit: (change: RefusalChange, take?: 'person') => Promise<Committed>;
+  /** One change, under the claim, verified by a read-back. A `grant` cannot be sent through it: only `allow` writes one. */
+  readonly commit: (change: PlainChange, take?: 'person') => Promise<Committed>;
   /** One marker for a change that was `unwritten`. `false`: no marker could be made. */
   readonly mark: (waiting: Unsure) => Promise<boolean>;
   readonly unmark: (name: string) => Promise<void>;
+  /** A person's *Allow* (§ P6). `copy` reads the row's copy NOW, each time it is called. */
+  readonly allow: (input: { readonly utc: string; readonly copy: () => number | 'unreadable' | undefined }) => Promise<Allowed>;
+  /** A person's *Withdraw* (§ P7). `above`: the highest stamp the pressing window knew; the withdrawal's stamp is at least one ABOVE it. */
+  readonly withdraw: (input: { readonly utc: string; readonly above: number }) => Promise<Withdrawn>;
+  /** The copy-in: one withdrawal file for a copy that is above the folder. */
+  readonly copyIn: (stamp: number, utc: string) => Promise<'written' | 'kept' | 'unwritten'>;
+  /** A PERSON'S PRESS ONLY (`saveWaiting`): one claim with `take: 'person'`, released at once. Writes nothing. */
+  readonly free: () => Promise<void>;
 }
 
-const realSleep = (ms: number): Promise<void> => new Promise((resolve) => { setTimeout(resolve, ms); });
-
-/** `restart`: the claim went stale or was taken over, so nothing was written. `lost`: the write is not in the file at the read-back. */
-type Step = 'restart' | 'lost' | Committed;
-
-const KEPT_STEP: Step = { kind: 'kept', row: undefined };
-const WROTE_STEP: Step = { kind: 'written', row: undefined, evicted: [] };
-const unwritten = (why: 'busy' | 'disk' | 'lost'): Step => ({ kind: 'unwritten', why });
-
-/** Nothing was kept: the write did not stay, or the claim kept going stale. */
-const giveUp = (lost: number): Committed => unwritten(lost > 0 ? 'lost' : 'busy') as Committed;
-
-const sameWrite = (now: RefusalsFile, wrote: RefusalsFile): boolean => now.gen === wrote.gen && now.by === wrote.by;
-
-/** The writer over a disk. */
-class Writer {
-  constructor(private readonly disk: RefusalsDisk, private readonly clock: () => number, private readonly sleep: (ms: number) => Promise<void>) {}
-
-  /** One try of the file's read: the file, `undefined` when it cannot be read, or `retry` when the read failed. */
-  private async readOnce(): Promise<RefusalsFile | undefined | 'retry'> {
-    const got = await this.disk.read();
-
-    return got.kind === 'absent' ? EMPTY_FILE : got.kind === 'text' ? refusalsOf(got.text) : 'retry';
-  }
-
-  /** The file, or `undefined` when it cannot be read; `absent` is the empty file. A failing read is asked again twice. */
-  async readFile(): Promise<RefusalsFile | undefined> {
-    for (let tries = 1; tries <= READ_TRIES; tries += 1) {
-      const one = await this.readOnce();
-      if (one !== 'retry') {
-        return one;
-      }
-      await this.sleep(READ_PAUSE_MS);
-    }
-
-    return undefined;
-  }
-
-  async read(): Promise<RefusalsRead> {
-    // The markers first: a marker that is removed after its change landed is then covered by the file read that comes after it.
-    const marks = await this.disk.marks();
-    const file = await this.readFile();
-    if (file === undefined || marks === 'failed') {
-      return { kind: 'damaged' };
-    }
-
-    return { kind: 'file', file, waiting: marks.map((one) => waitingOf(one.name, one.text)) };
-  }
-
-  private async claimed(doing: string, take: 'person' | undefined): Promise<Claim> {
-    let got: Claim = { kind: 'held' };
-    for (let round = 1; round <= CLAIM_ROUNDS; round += 1) {
-      got = await this.disk.claim(doing, take);
-      if (got.kind !== 'held') {
-        break;
-      }
-      await this.sleep(CLAIM_PAUSE_MS);
-    }
-
-    return got;
-  }
-
-  private async released(claim: Extract<Claim, { kind: 'claimed' }>, step: Step): Promise<Step> {
-    await claim.release();
-
-    return step;
-  }
-
-  /** Step 5: the claim is younger than `CLAIM_FRESH_MS` by this window's clock and still on the disk. */
-  private async stale(claim: Extract<Claim, { kind: 'claimed' }>, began: number): Promise<boolean> {
-    return this.clock() - began >= CLAIM_FRESH_MS || !(await this.disk.stillOurs(claim));
-  }
-
-  /** Step 6: the file replaced; `false` when the disk refused. */
-  private async replaced(text: string): Promise<boolean> {
-    try {
-      await this.disk.replace(text);
-
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  /** Steps 2 and 3 under a claim that is ours; then the rest. */
-  private async underClaim(change: RefusalChange, claim: Extract<Claim, { kind: 'claimed' }>, began: number): Promise<Step> {
-    const before = (await this.readFile()) ?? 'damaged';
-    const merged = withChange(before, change, claim.token);
-    if (merged.kind !== 'written') {
-      return this.released(claim, merged.kind === 'kept' ? KEPT_STEP : merged);
-    }
-
-    return this.writeIt(change, claim, { began, before, file: merged.file });
-  }
-
-  /** Steps 4 to 8. */
-  private async writeIt(change: RefusalChange, claim: Extract<Claim, { kind: 'claimed' }>, at: { readonly began: number; readonly before: RefusalsFile | 'damaged'; readonly file: RefusalsFile }): Promise<Step> {
-    await this.disk.sweep(BESIDE_STALE_MS);
-    if (await this.stale(claim, at.began)) {
-      return this.released(claim, 'restart');
-    }
-    if (!(await this.replaced(textOf(at.file)))) {
-      return this.released(claim, unwritten('disk'));
-    }
-    const ours = await this.disk.stillOurs(claim);
-    await claim.release();
-
-    return ours ? this.readBack(change, at.before, at.file) : 'restart';
-  }
-
-  /** Step 8: the file as it now is shows this write, or this change. */
-  private async readBack(change: RefusalChange, before: RefusalsFile | 'damaged', wrote: RefusalsFile): Promise<Step> {
-    const now = await this.readFile();
-    if (now === undefined) {
-      return 'lost';
-    }
-
-    return sameWrite(now, wrote) || holds(change, before, now) ? WROTE_STEP : 'lost';
-  }
-
-  private async attempt(change: RefusalChange, take: 'person' | undefined): Promise<Step> {
-    const claim = await this.claimed(change.kind, take);
-    if (claim.kind !== 'claimed') {
-      return unwritten(claim.kind === 'held' ? 'busy' : 'disk');
-    }
-
-    return this.underClaim(change, claim, this.clock());
-  }
-
-  async commit(change: RefusalChange, take?: 'person'): Promise<Committed> {
-    const tally = { restart: 0, lost: 0 };
-    for (let round = 0; round < RESTARTS_MAX + WRITE_ROUNDS; round += 1) {
-      const step = await this.attempt(change, take);
-      if (typeof step !== 'string') {
-        return step;
-      }
-      tally[step] += 1;
-      if (tally.lost >= WRITE_ROUNDS) {
-        break;
-      }
-    }
-
-    return giveUp(tally.lost);
-  }
-}
-
-/** The writer over a disk. `sleep` is the pause between tries; a test hands in one that does not wait. */
-export function refusalsStore(disk: RefusalsDisk, clock: () => number, sleep: (ms: number) => Promise<void> = realSleep): RefusalsStore {
-  const writer = new Writer(disk, clock, sleep);
-
-  return {
-    read: () => writer.read(),
-    commit: (change, take) => writer.commit(change, take),
-    mark: async (waiting) => (await disk.mark(JSON.stringify({ v: 1, ...waiting }))) !== undefined,
-    unmark: (name) => disk.unmark(name),
-  };
-}
+export type { Allowed, Withdrawn };

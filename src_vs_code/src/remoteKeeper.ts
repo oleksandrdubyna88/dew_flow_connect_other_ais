@@ -1,5 +1,7 @@
-import { Admission, AutomaticAllow, Committed, Consent, HOSTS_MAX, HostAnswer, HostChange, HostStanding, Merge, autoCounts, commit, consentOf, hostMerge, readableOf, standingsOf } from './remoteHosts';
-import type { RefusalChange, RefusalsFile, RefusalsRead, RefusalsStore, Unsure, Waiting } from './remoteRefusals';
+import { Committed, HOSTS_MAX, HostAnswer, HostChange, HostStanding, Merge, commit, consentOf, hostMerge, readableOf, standingsOf } from './remoteHosts';
+import { Door, PermissionRow } from './remoteKeeperDoor';
+import type { Allowed, Asker, DoorAnswer, Permission, Withdrew } from './remotePermission';
+import type { PlainChange, RefusalsFile, RefusalsRead, RefusalsStore, Unsure, Waiting } from './remoteRefusals';
 import type { KeyValueStore } from './sideSettings';
 
 /**
@@ -21,22 +23,27 @@ export interface KeeperSeams {
   readonly refusals: RefusalsStore;
   /** UTC ISO. */
   readonly now: () => string;
-  /** `coai.terminalAccountsAllowNewHosts`, read afresh at every call. */
-  readonly allowNew: () => boolean;
-  /** Whether an automatic "yes" counts at all: the build's constant `AUTOMATIC_ALLOW` unless a test of the module hands one in. */
-  readonly automatic?: AutomaticAllow;
+  /** The copy of the newest withdrawal's stamp and the Stop's copy, in the state row of the profile's `globalState` (E2.S1, § P5). */
+  readonly row: PermissionRow;
   /** After every commit that wrote. */
   readonly changed: () => void;
   /** The notice of a refusal or Stop the file did not take. `host` `undefined` is the Stop. `marked` false: no marker could be made. */
   readonly unkept: (host: string | undefined, why: 'busy' | 'disk' | 'lost' | 'elsewhere', marked: boolean) => void;
+  /** The notice of a withdrawal the disk did not take (W9's third title), with *Save now*. */
+  readonly unkeptWithdrawal: (why: 'busy' | 'disk' | 'lost') => void;
 }
 
 export interface HostKeeper {
   readonly stored: () => unknown;
   readonly commit: (change: HostChange) => Promise<Committed>;
   readonly commitKey: <C, R>(key: string, change: C, merge: Merge<C, R>) => Promise<R>;
-  readonly admit: (host: string) => Promise<Admission>;
-  readonly consent: (host: string) => Promise<Consent>;
+  /** The ONE door (E2.S1, § P8): asked by the round before every call and by the session road before EVERY spawn. It never asks a person. */
+  readonly may: (who: Asker, host: string) => Promise<DoorAnswer>;
+  /** A person's *Allow* (§ P6), called by the question's modal and the test door only. */
+  readonly allow: () => Promise<Allowed>;
+  /** A person's *Withdraw* (§ P7): narrows at once. */
+  readonly withdraw: () => Promise<Withdrew>;
+  readonly permission: () => Promise<Permission>;
   /** The Stop, in the file. */
   readonly stopRound: () => Promise<Committed>;
   readonly startRound: () => Promise<Committed>;
@@ -68,7 +75,7 @@ interface Held {
 
 const keyOf = (one: { readonly kind: 'refuse' | 'stop'; readonly host?: string }): string => (one.kind === 'stop' ? 'stop' : `refuse:${one.host}`);
 
-const changeOf = (one: Held): RefusalChange => (one.kind === 'stop' ? { kind: 'stop', utc: one.utc } : { kind: 'refuse', host: one.host, utc: one.utc });
+const changeOf = (one: Held): PlainChange => (one.kind === 'stop' ? { kind: 'stop', utc: one.utc } : { kind: 'refuse', host: one.host, utc: one.utc });
 
 const isLanded = (result: Committed): boolean => result.kind === 'written' || result.kind === 'kept';
 
@@ -91,7 +98,7 @@ const asHeld = (one: Waiting): Held | undefined => {
   return one.kind === 'stop' ? { kind: 'stop', host: '', utc: one.utc } : { kind: 'refuse', host: one.host, utc: one.utc };
 };
 
-const regainOf = (had: RefusalsFile): RefusalChange =>
+const regainOf = (had: RefusalsFile): PlainChange =>
   ({ kind: 'regain', gen: had.gen, rows: had.refused, ...(had.stop === undefined ? {} : { stop: had.stop }) });
 
 const heldOfFile = (had: RefusalsFile): readonly Held[] => [
@@ -117,8 +124,6 @@ const missingNo = (file: RefusalsFile, rows: readonly HostAnswer[], now: string)
 };
 
 const refusalOfMarker = (one: Waiting): readonly { readonly host: string; readonly utc: string }[] => (one.kind === 'refuse' ? [{ host: one.host, utc: one.utc }] : []);
-
-const NOT_READ: Readonly<Record<Exclude<Consent, 'yes'>, Admission>> = { no: { kind: 'refused' }, damaged: { kind: 'damaged' }, ask: { kind: 'not-asked' } };
 
 /** Nothing was done: the list or the file did not need a mend. */
 const NOTHING: Committed = { kind: 'kept', row: undefined };
@@ -148,7 +153,28 @@ class Keeper implements HostKeeper {
   private readonly told = new Set<string>();
   private tornRemoved = false;
 
-  constructor(private readonly seams: KeeperSeams) {}
+  private readonly door: Door;
+
+  constructor(private readonly seams: KeeperSeams) {
+    this.door = new Door(this.sideOf());
+  }
+
+  /** The narrow view the door has of this keeper. */
+  private sideOf(): ConstructorParameters<typeof Door>[0] {
+    return {
+      refusals: this.seams.refusals,
+      row: this.seams.row,
+      now: this.seams.now,
+      changed: this.seams.changed,
+      unkeptWithdrawal: this.seams.unkeptWithdrawal,
+      queued: (work) => this.queued(work),
+      synced: () => this.syncRefusals(),
+      look: () => this.look(),
+      standing: (read, host) => this.standingOf(read, host),
+      anyWaiting: (read) => this.anyWaiting(read),
+      stoppedIn: (read) => this.stoppedIn(read),
+    };
+  }
 
   // ───────────── the queue ─────────────
 
@@ -335,8 +361,13 @@ class Keeper implements HostKeeper {
     }
   }
 
-  /** The side as one decision needs it: read, with what waits landed, and the copy-in done. */
-  private async sync(): Promise<RefusalsRead> {
+  /** The side as one decision needs it: the refusals' part (E1) and then the permission's (the copy of a withdrawal, a withdrawal that waits). */
+  private sync(): Promise<RefusalsRead> {
+    return this.door.read();
+  }
+
+  /** E1's sync: read, with what waits landed, and the copy-in of the "no" rows done. */
+  private async syncRefusals(): Promise<RefusalsRead> {
     let read = await this.look();
     await this.dropLanded(read);
     if (this.anyWaiting(read)) {
@@ -347,6 +378,13 @@ class Keeper implements HostKeeper {
     return this.anyWaiting(read) ? read : this.copyIn(read);
   }
 
+  /** The refusal half of the door for one host: refused (in the file, as a row, held here or in a marker that waits), damaged, or open. */
+  private standingOf(read: RefusalsRead, host: string): 'no' | 'damaged' | 'open' {
+    const consent = consentOf(read, this.stored(), host);
+
+    return consent === 'no' || this.namedByWaiting(read, host) ? 'no' : consent;
+  }
+
   private namedByWaiting(read: RefusalsRead, host: string): boolean {
     return [...this.memory.values()].some((one) => one.item.kind === 'refuse' && one.item.host === host)
       || this.waiting(read).some((one) => one.kind === 'refuse' && one.host === host);
@@ -354,55 +392,21 @@ class Keeper implements HostKeeper {
 
   // ───────────── the doors ─────────────
 
-  admit(host: string): Promise<Admission> {
-    return this.queued(async () => {
-      const read = await this.sync();
-
-      return this.anyWaiting(read) ? { kind: 'unwritten' } : this.decide(read, host);
-    });
+  may(who: Asker, host: string): Promise<DoorAnswer> {
+    return this.door.may(who, host);
   }
 
-  private consentOf(read: RefusalsRead, host: string): Consent {
-    return consentOf(read, this.stored(), host, this.seams.allowNew(), this.seams.automatic);
+  allow(): Promise<Allowed> {
+    return this.door.allow();
   }
 
-  private async decide(read: RefusalsRead, host: string): Promise<Admission> {
-    const consent = this.consentOf(read, host);
-
-    return consent === 'ask' && autoCounts(this.seams.allowNew(), this.seams.automatic) ? this.automatic(host) : this.answered(consent, host, false);
+  withdraw(): Promise<Withdrew> {
+    return this.door.withdraw();
   }
 
-  private howOf = (host: string): 'person' | 'auto' => standingsOf(this.stored()).find((one) => one.host === host)?.how ?? 'person';
-
-  private answered(consent: Consent, host: string, allowedNow: boolean): Admission {
-    return consent === 'yes' ? { kind: 'read', how: this.howOf(host), allowedNow } : NOT_READ[consent];
+  permission(): Promise<Permission> {
+    return this.door.permission();
   }
-
-  /** An automatic "yes", written before the call can be spawned; then the file and the list are read once more. */
-  private async automatic(host: string): Promise<Admission> {
-    const result = await commit(this.seams.state, this.seams.key, { kind: 'auto', host } satisfies HostChange, hostMerge(this.seams.now()));
-    if (result.kind === 'full' || result.kind === 'damaged') {
-      return result;
-    }
-
-    return this.afterAuto(host, this.written(result));
-  }
-
-  private async afterAuto(host: string, result: Committed): Promise<Admission> {
-    const read = await this.look();
-
-    return this.anyWaiting(read) ? { kind: 'unwritten' } : this.answered(this.consentOf(read, host), host, result.kind === 'written');
-  }
-
-  consent(host: string): Promise<Consent> {
-    return this.queued(async () => {
-      const read = await this.sync();
-
-      return this.anyWaiting(read) ? this.waitingConsent(read, host) : this.consentOf(read, host);
-    });
-  }
-
-  private waitingConsent = (read: RefusalsRead, host: string): Consent => (this.namedByWaiting(read, host) ? 'no' : 'damaged');
 
   // ───────────── the changes ─────────────
 
@@ -454,7 +458,7 @@ class Keeper implements HostKeeper {
   }
 
   private async apply(change: HostChange): Promise<Committed> {
-    return change.kind === 'auto' ? this.plain(change) : change.kind === 'mend' ? this.mend(change) : this.lifted(change);
+    return change.kind === 'mend' ? this.mend(change) : this.lifted(change);
   }
 
   /** The list's own merge for this change, and the change signal when it wrote. */
@@ -626,6 +630,9 @@ class Keeper implements HostKeeper {
         const held = asHeld(one);
         keys.add(held === undefined ? `torn:${one.name}` : keyOf(held));
       }
+      if (this.door.waits()) {
+        keys.add('withdrawal');
+      }
 
       return keys.size;
     });
@@ -636,7 +643,9 @@ class Keeper implements HostKeeper {
     return this.queued(async () => {
       this.tornRemoved = false;
       const read = await this.look();
+      const claims = this.todo(read).size;
       const last = await this.landAll(read, 'person');
+      await this.freed(claims);
       const torn = this.waiting(read).filter((one) => one.kind === 'torn');
       if (last !== undefined) {
         return last;
@@ -644,6 +653,17 @@ class Keeper implements HostKeeper {
 
       return torn.length > 0 ? this.stopAfterTorn(torn) : { kind: 'written', row: undefined, evicted: [] };
     });
+  }
+
+  /**
+   * J3: with nothing waiting no claim was made, so ONE claim with `take: 'person'` frees a lock whose owner cannot be shown to be gone; and LAST a
+   * withdrawal that waits is landed — its read-back is not final over a held lock, so it is made after the press took the lock.
+   */
+  private async freed(claims: number): Promise<void> {
+    if (claims === 0) {
+      await this.seams.refusals.free();
+    }
+    await this.door.landUnsaved(true);
   }
 
   /** The Stop is committed FIRST; the torn notes go, and the press says so, only when the file took it. Else the Stop is held like any other. */
@@ -674,6 +694,7 @@ class Keeper implements HostKeeper {
     this.memory.clear();
     this.told.clear();
     this.remembered = undefined;
+    this.door.forget();
   };
 }
 
@@ -685,8 +706,10 @@ export function hostKeeper(seams: KeeperSeams): HostKeeper {
     stored: keeper.stored,
     commit: (change) => keeper.commit(change),
     commitKey: keeper.commitKey,
-    admit: (host) => keeper.admit(host),
-    consent: (host) => keeper.consent(host),
+    may: (who, host) => keeper.may(who, host),
+    allow: () => keeper.allow(),
+    withdraw: () => keeper.withdraw(),
+    permission: () => keeper.permission(),
     stopRound: () => keeper.stopRound(),
     startRound: () => keeper.startRound(),
     roundStop: () => keeper.roundStop(),

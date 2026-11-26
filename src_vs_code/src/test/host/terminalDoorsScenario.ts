@@ -59,10 +59,8 @@ export async function theTerminalItemsFollowTheActiveTerminalAndTheAnswer(): Pro
   const creds = vscode.window.createTerminal({ name: `Creds: ${HOST} / ${SESSION}` });
   const plain = vscode.window.createTerminal({ name: 'plain shell' });
   try {
-    await door.commit({ kind: 'person', host: HOST, answer: 'yes' });
-
     await front(creds);
-    await until(() => door.readsKey() === true, 'a Creds terminal whose host said yes does not show the items');
+    await until(() => door.readsKey() === true, 'a Creds terminal whose host is not refused does not show the items');
     await front(plain);
     await until(() => door.readsKey() === false, 'the items are still shown after the active terminal changed to a plain one (the onDidChangeActiveTerminal listener)');
     await front(creds);
@@ -71,8 +69,8 @@ export async function theTerminalItemsFollowTheActiveTerminalAndTheAnswer(): Pro
     // An answer written to the real globalState changes the key without the active terminal changing.
     await door.commit({ kind: 'person', host: HOST, answer: 'no' });
     await until(() => door.readsKey() === false, 'a "no" for the host is written and the items are still shown (the key is not set after an answer is written)');
-    await door.commit({ kind: 'person', host: HOST, answer: 'yes' });
-    await until(() => door.readsKey() === true, 'a "yes" for the host is written and the items are still hidden');
+    await door.commit({ kind: 'forget', host: HOST });
+    await until(() => door.readsKey() === true, 'a "Read this host again" for the host is written and the items are still hidden');
   } finally {
     await door.restore(before);
     creds.dispose();
@@ -92,7 +90,7 @@ export async function aPressOnACredsTerminalReachesTheBoundRoadOnce(): Promise<v
   });
   const terminal = vscode.window.createTerminal({ name: `Creds: ${HOST} / ${SESSION}` });
   try {
-    await door.commit({ kind: 'person', host: HOST, answer: 'yes' });
+    await door.allow();
     await front(terminal);
     const refusals = ledgerRows('no-question-from-terminal', REFUSAL);
     const notReady = ledgerRows('chat-not-ready', '');

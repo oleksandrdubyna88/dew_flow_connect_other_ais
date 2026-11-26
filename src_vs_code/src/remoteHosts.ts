@@ -1,9 +1,10 @@
 import { byCodeUnit } from './codeUnitOrder';
+import type { DoorAnswer } from './remotePermission';
 import type { KeyValueStore } from './sideSettings';
 
 /**
- * The store of the hosts the extension may read over ssh (E1.S1): one pure module holds the rows, the ONE function that says whether
- * a host may be contacted (`consentOf`), and the ONE write (`commit`) with its merge and its cap. It exports no function that takes a
+ * The store of the hosts the extension may read over ssh (E1.S1): one pure module holds the rows, the refusal half of the one door (`consentOf`;
+ * the door itself is the keeper's `may`, E2.S1), and the ONE write (`commit`) with its merge and its cap. It exports no function that takes a
  * list to write: what it exports reads a value, commits a CHANGE for one host, or says words.
  *
  * <p>A "no" is a person's refusal and nothing automatic changes it. The file of refusals (`remoteRefusals.ts`) is where a side keeps
@@ -11,13 +12,16 @@ import type { KeyValueStore } from './sideSettings';
  * value: it contacts nobody and is never written over, except by a person's own answer (`mend`).</p>
  */
 
-/** One host's row, as it is kept in `globalState` under `coai.terminalHosts`. */
+/**
+ * One host's row, as it is kept in `globalState` under `coai.terminalHosts`. A "yes" row (a person's of 0.87.0 to 2.0.0, or an automatic one of the
+ * pre-release) is still READ, so a list that holds one is not damaged, and it is NEVER an answer: no function builds one and none reads one as consent.
+ */
 export interface HostAnswer {
   readonly host: string;
   readonly answer: 'yes' | 'no';
-  /** UTC ISO; for an automatic row, the instant the round wrote it. */
+  /** UTC ISO. */
   readonly askedUtc: string;
-  /** Only on a "yes" the round's door wrote. A person's row has no `how`. */
+  /** Only on an automatic "yes" of the pre-release. A person's row has no `how`. */
   readonly how?: 'auto';
 }
 
@@ -29,17 +33,17 @@ export type SideSeen =
   | { readonly kind: 'file'; readonly file: { readonly refused: readonly { readonly host: string }[] } }
   | { readonly kind: 'damaged' };
 
-export type Consent = 'yes' | 'no' | 'ask' | 'damaged';
+/** The refusal half of the door: `open` is every answer that is not a refusal and not damage — a "yes" row and no row alike. */
+export type Consent = 'no' | 'damaged' | 'open';
 
 /** The most hosts the list keeps. */
 export const HOSTS_MAX = 100;
 
-/** A change for ONE host, never a list. `mend` is sent only by the change question, over a damaged list or a damaged file. */
+/** A change for ONE host, never a list. `mend` is sent only by the change question, over a damaged list or a damaged file. No change writes a "yes". */
 export type HostChange =
-  | { readonly kind: 'person'; readonly host: string; readonly answer: 'yes' | 'no' }
+  | { readonly kind: 'person'; readonly host: string; readonly answer: 'no' }
   | { readonly kind: 'forget'; readonly host: string }
-  | { readonly kind: 'auto'; readonly host: string }
-  | { readonly kind: 'mend'; readonly host: string; readonly answer: 'yes' | 'no' | 'forget' };
+  | { readonly kind: 'mend'; readonly host: string; readonly answer: 'no' | 'forget' };
 
 export type Committed =
   | { readonly kind: 'written'; readonly row: HostAnswer | undefined; readonly evicted: readonly string[] }
@@ -49,7 +53,10 @@ export type Committed =
   /** The refusals file did not take the change. `why` is one of three fixed words. */
   | { readonly kind: 'unwritten'; readonly why: 'busy' | 'disk' | 'lost' };
 
-/** The answer of the round's door, called just before every accounts call. */
+/**
+ * The round's OLD view of the door, called just before every accounts call; deleted by E2.S4 with the round's own door call. The door is
+ * the keeper's `may` (`remotePermission.ts`) and `admissionOf` maps its answer to this type while the round still reads it.
+ */
 export type Admission =
   | { readonly kind: 'read'; readonly how: 'person' | 'auto'; readonly allowedNow: boolean }
   | { readonly kind: 'refused' }
@@ -58,6 +65,20 @@ export type Admission =
   | { readonly kind: 'damaged' }
   /** A "no" or a Stop is not in the file yet: no host is contacted. */
   | { readonly kind: 'unwritten' };
+
+/** The door's answer as the round's old view (the bridge of E2.S1, deleted by E2.S4 with `Admission`). */
+export function admissionOf(answer: DoorAnswer): Admission {
+  return ADMISSION_OF[answer];
+}
+
+const ADMISSION_OF: Readonly<Record<DoorAnswer, Admission>> = {
+  'yes': { kind: 'read', how: 'person', allowedNow: false },
+  'no': { kind: 'refused' },
+  'damaged': { kind: 'damaged' },
+  'waiting': { kind: 'unwritten' },
+  'no-permission': { kind: 'not-asked' },
+  'stopped': { kind: 'unwritten' },
+};
 
 export interface HostStanding {
   readonly host: string;
@@ -119,48 +140,26 @@ function strongest(rows: readonly HostAnswer[], host: string): HostAnswer | unde
 }
 
 /**
- * Whether this host may be contacted. The ONE function that says so; a host is contacted only on `yes`. `file` is the side as it was
- * just read from the disk. In this order: a refusal in the file or a readable "no" in the list is `no`; a file or a list that cannot
- * be read is `damaged`; a person's "yes" is `yes`; an automatic "yes" is `yes` only when `allowNew` AND `automatic` is `on` (the cut: it is
- * `off` in this build, so the row is `ask`); no row is `ask`.
+ * The refusal half of the door (E2.S1, § P8): whether this host is refused or the side cannot be read. `file` is the side as it was just read
+ * from the disk. In this order: a refusal in the file or a readable "no" in the list is `no`; a file or a list that cannot be read is `damaged`;
+ * everything else — a "yes" row, an automatic row, no row — is `open`, like no row: a per-host "yes" is never an answer.
  */
-export function consentOf(file: SideSeen, value: unknown, host: string, allowNew: boolean, automatic: AutomaticAllow = AUTOMATIC_ALLOW): Consent {
+export function consentOf(file: SideSeen, value: unknown, host: string): Consent {
   const list = hostsOf(value);
-  const row = strongest(list.rows, host);
-  if (isRefused(file, row, host)) {
+  if (isRefused(file, strongest(list.rows, host), host)) {
     return 'no';
   }
-  if (cannotRead(file, list)) {
-    return 'damaged';
-  }
 
-  return rowConsent(row, autoCounts(allowNew, automatic));
+  return cannotRead(file, list) ? 'damaged' : 'open';
 }
-
-const rowConsent = (row: HostAnswer | undefined, autoCounts: boolean): Consent => (row === undefined ? 'ask' : yesOf(row, autoCounts));
-
-/** Whether an automatic "yes" is an answer at all. */
-export type AutomaticAllow = 'off' | 'on';
-
-/**
- * The cut of the accounts plan's stop: the build asks the person as it did before the accounts feature. An automatic "yes" counts as no answer
- * at every door and the accounts door writes none, whatever `coai.terminalAccountsAllowNewHosts` says (the setting has no effect in this build).
- * A person's "yes" and every "no" are as they were. A later build sets this to `on` only when the plan says so.
- */
-export const AUTOMATIC_ALLOW: AutomaticAllow = 'off';
-
-/** Whether the accounts door may write an automatic "yes" now, and whether one counts: the setting AND the build's constant. */
-export const autoCounts = (allowNew: boolean, automatic: AutomaticAllow = AUTOMATIC_ALLOW): boolean => allowNew && automatic === 'on';
 
 const isRefused = (file: SideSeen, row: HostAnswer | undefined, host: string): boolean =>
   row?.answer === 'no' || (file.kind === 'file' && file.file.refused.some((one) => one.host === host));
 
 const cannotRead = (file: SideSeen, list: Hosts): boolean => file.kind === 'damaged' || list.damaged;
 
-const yesOf = (row: HostAnswer, autoCounts: boolean): Consent => (row.how === 'auto' && !autoCounts ? 'ask' : 'yes');
-
 /** Whether the terminal's two overflow items are shown: a host that is not answered "no". Used with a read file. */
-export const refusedBy = (file: SideSeen, value: unknown, host: string): boolean => consentOf(file, value, host, true) === 'no';
+export const refusedBy = (file: SideSeen, value: unknown, host: string): boolean => consentOf(file, value, host) === 'no';
 
 const byAsked = (a: HostAnswer, b: HostAnswer): number => Number(a.askedUtc > b.askedUtc) - Number(a.askedUtc < b.askedUtc) || Number(a.host > b.host) - Number(a.host < b.host);
 
@@ -186,15 +185,12 @@ export function dayOf(askedUtc: string): string {
 }
 
 /**
- * The hosts the *CoAI: hosts read over ssh* list shows: the hosts with a readable answer; over a damaged list also the hosts of the
- * live `Creds:` terminals that have none, so a list in which no answer can be read is still mended from there.
+ * The hosts the *CoAI: hosts read over ssh* list shows (E2.S1, § P10): the hosts with a readable answer and the hosts of the live `Creds:`
+ * terminals that have none — so a person can refuse a host here before anything is read, and a list in which no answer can be read is still mended
+ * from there. The refused hosts of the file join them in `choicesOf`.
  */
 export function listedHosts(value: unknown, liveHosts: readonly string[]): readonly { readonly host: string; readonly standing: HostStanding | undefined }[] {
-  const list = hostsOf(value);
   const known = standingsOf(value).map((standing) => ({ host: standing.host, standing }));
-  if (!list.damaged) {
-    return known;
-  }
   const have = new Set(known.map((one) => one.host));
   const extra = [...new Set(liveHosts)].filter((host) => !have.has(host)).sort(byCodeUnit).map((host) => ({ host, standing: undefined }));
 
@@ -250,15 +246,16 @@ interface Rows {
   readonly evicted: readonly string[];
 }
 
-/** The rows with `row` put in, the cap kept: the oldest automatic row goes, else (a person's change) the oldest person's "yes", else nothing fits. */
-function fitted(others: readonly HostAnswer[], row: HostAnswer, personal: boolean): Rows | undefined {
+/** A write of the list leaves out every automatic row of the pre-release (J7): such a row allows nothing, so losing one loses nothing. Every other row is kept by reference. */
+const withoutAuto = (rows: readonly HostAnswer[]): readonly HostAnswer[] => rows.filter((one) => one.how !== 'auto');
+
+/** The rows with `row` put in, the cap kept: the oldest "yes" row goes, never a "no"; with nothing to drop the list is full. */
+function fitted(others: readonly HostAnswer[], row: HostAnswer): Rows | undefined {
   const over = others.length + 1 - HOSTS_MAX;
   if (over <= 0) {
     return { rows: [...others, row], evicted: [] };
   }
-  const dropOrder = [...others].filter((one) => one.how === 'auto').sort(byAsked);
-  const people = personal ? [...others].filter((one) => one.answer === 'yes' && one.how !== 'auto').sort(byAsked) : [];
-  const drop = [...dropOrder, ...people].slice(0, over);
+  const drop = others.filter((one) => one.answer === 'yes').sort(byAsked).slice(0, over);
 
   return drop.length < over ? undefined : { rows: [...others.filter((one) => !drop.includes(one)), row], evicted: drop.map((one) => one.host) };
 }
@@ -275,30 +272,22 @@ function writtenOf(rows: Rows | undefined, row: HostAnswer | undefined): Outcome
 
 const without = (rows: readonly HostAnswer[], host: string): readonly HostAnswer[] => rows.filter((one) => one.host !== host);
 
-function personal(rows: readonly HostAnswer[], host: string, answer: 'yes' | 'no', now: string): Outcome {
-  const row: HostAnswer = { host, answer, askedUtc: stampFor(now, rows.filter((one) => one.host === host)) };
+/** A person's "no": the only row any function builds. */
+function personal(rows: readonly HostAnswer[], host: string, now: string): Outcome {
+  const row: HostAnswer = { host, answer: 'no', askedUtc: stampFor(now, rows.filter((one) => one.host === host)) };
 
-  return writtenOf(fitted(without(rows, host), row, true), row);
+  return writtenOf(fitted(without(withoutAuto(rows), host), row), row);
 }
 
 function forgotten(rows: readonly HostAnswer[], host: string): Outcome {
   const had = rows.some((one) => one.host === host);
 
-  return had ? { next: { value: without(rows, host) }, result: { kind: 'written', row: undefined, evicted: [] } } : keptOf(undefined);
-}
-
-function automatic(rows: readonly HostAnswer[], host: string, now: string): Outcome {
-  const fresh = strongest(rows, host);
-  if (fresh !== undefined) {
-    return keptOf(fresh);
-  }
-  const row: HostAnswer = { host, answer: 'yes', askedUtc: now, how: 'auto' };
-
-  return writtenOf(fitted(rows, row, false), row);
+  return had ? { next: { value: without(withoutAuto(rows), host) }, result: { kind: 'written', row: undefined, evicted: [] } } : keptOf(undefined);
 }
 
 /** The readable rows of a damaged list, one for each host, at most `HOSTS_MAX`, the refusals first. */
-function mendedRows(rows: readonly HostAnswer[]): readonly HostAnswer[] {
+function mendedRows(readable: readonly HostAnswer[]): readonly HostAnswer[] {
+  const rows = withoutAuto(readable);
   const hosts = [...new Set(rows.map((row) => row.host))];
   const one = hosts.map((host) => strongest(rows, host) as HostAnswer);
 
@@ -309,10 +298,9 @@ type Of<K extends HostChange['kind']> = Extract<HostChange, { readonly kind: K }
 type Apply = (rows: readonly HostAnswer[], change: HostChange, now: string) => Outcome;
 
 const APPLY: { readonly [K in HostChange['kind']]: (rows: readonly HostAnswer[], change: Of<K>, now: string) => Outcome } = {
-  person: (rows, change, now) => personal(rows, change.host, change.answer, now),
+  person: (rows, change, now) => personal(rows, change.host, now),
   forget: (rows, change) => forgotten(rows, change.host),
-  auto: (rows, change, now) => automatic(rows, change.host, now),
-  mend: (rows, change, now) => (change.answer === 'forget' ? forgotten(rows, change.host) : personal(rows, change.host, change.answer, now)),
+  mend: (rows, change, now) => (change.answer === 'forget' ? forgotten(rows, change.host) : personal(rows, change.host, now)),
 };
 
 const appliedTo: Apply = (rows, change, now) => (APPLY[change.kind] as Apply)(rows, change, now);
@@ -333,3 +321,32 @@ export const hostMerge = (now: string): Merge<HostChange, Committed> => (stored,
 
   return change.kind === 'mend' ? mended(list.rows, change, now) : DAMAGED;
 };
+
+// ─────────────────────────────── The change question's buttons (§ P10) ───────────────────────────────
+
+/** The three choices a host can have; each is offered only where it does something, and there is no *Read*. */
+export type HostButton = 'not-this-host' | 'read-again' | 'forget';
+
+/**
+ * The buttons of the change question for one host: a refused host has *Read this host again*; a host that is not refused has *Not this host*, and *Forget*
+ * too when an older "yes" row is stored; over a list or a file that cannot be read the two answers that can each be the person's for a host whose
+ * standing cannot be read. `refused`: the host is refused in the file, as a row, held or in a marker.
+ */
+const storedYes = (standing: HostStanding | undefined): boolean => standing?.answer === 'yes';
+
+export function buttonsOf(standing: HostStanding | undefined, refused: boolean, damaged: boolean): readonly HostButton[] {
+  if (damaged) {
+    return ['not-this-host', 'read-again'];
+  }
+
+  return refused ? ['read-again'] : storedYes(standing) ? ['not-this-host', 'forget'] : ['not-this-host'];
+}
+
+/** The change a button sends. Over damage a `mend` (it writes no "yes"), else a plain change; *Read this host again* lifts the refusal. */
+export function changeOfButton(button: HostButton, host: string, damaged: boolean): HostChange {
+  if (damaged) {
+    return { kind: 'mend', host, answer: button === 'not-this-host' ? 'no' : 'forget' };
+  }
+
+  return button === 'not-this-host' ? { kind: 'person', host, answer: 'no' } : { kind: 'forget', host };
+}

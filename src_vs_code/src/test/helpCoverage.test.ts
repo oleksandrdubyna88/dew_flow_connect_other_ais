@@ -468,8 +468,6 @@ const SETTING_ALIAS: Record<string, string> = {
   'coai.vibeHomesDirectory': 'vibe and kimi homes folder',
   // E6 of PLAN_kimi_and_vibe_on_linux.md (DL6): the Kimi card's tick-box, by its own label, said in the choose-reviewers article.
   'coai.kimiAllowNetworkSignIn': 'allow a kimi sign-in on network storage',
-  // E1.S1 of the accounts plan: the accounts round's own switch, said in the remote paragraph of the chat article.
-  'coai.terminalAccountsAllowNewHosts': 'allow new hosts by themselves',
   'coai.qconsultRowMinutes': 'minutes one row may run',
   'coai.qconsultQuestionsPerSession': 'questions per session',
   // The storage pair (issue #115). Their article is the one a person reaches for after reinstalling

@@ -299,7 +299,9 @@ test('a `code` belongs to a notice, and an object that merely has a `code` prope
 // 177 -> 179 on 2026-11-24 (E1.S4 of todo/PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E1.md), two sites of the accounts list's window: the daily notice of the
 // hosts the round allowed by itself (`accounts-hosts-allowed`, one action Open settings) and the first-round notice that the hosts a person allowed are now read every
 // 10 minutes (`accounts-read-every-ten-minutes`).
-const PLACES_THIS_SPEAKS = 179;
+// 179 -> 180 on 2026-11-26 (E2.S1 of todo/PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E2_S1_spec.md), three codes: the per-host question `read-remote-session` goes, the one
+// question `read-accounts-permission` (a modal) and the notice of an Allow that the file did not take `accounts-permission-not-kept` (a warning with the action Save now) come.
+const PLACES_THIS_SPEAKS = 180;
 
 test('A4-T18: the two notices of the accounts list are in the inventory by their codes', () => {
   const { codes } = count();

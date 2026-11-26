@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import { byCodeUnit } from './codeUnitOrder';
 import { textCopier } from './copyText';
-import { ALLOW_NEW_HOSTS_KEY } from './modelKeys';
 import { notify, notifyThen } from './notify';
 import { oneAtATime } from './oneAtATime';
 import { readAccounts } from './remoteAccountsReply';
@@ -10,6 +9,7 @@ import {
   ROUND_GAP_MS, memoryAfter, nextAfterRound, openStarts, refreshAnswer, refusedHosts, runRound, settleRound, standingsBump, startTheRound, stateMerge, stopTheRound, timerFor, unreadHost, withRefusals,
 } from './remoteAccountsRound';
 import { AccountsView, ChooseSeams, NoticeSeams, Row, accountsRows, choose, copyDecisionFor, tellAfterRound } from './remoteAccountsRows';
+import { admissionOf } from './remoteHosts';
 import type { RemoteSessions } from './remoteSessionHost';
 import { ACCOUNTS_LIMITS, defaultRemoteSeams, runAccounts } from './remoteSsh';
 import { registerCommand } from './shellBridge';
@@ -137,7 +137,7 @@ class AccountsWindow implements TerminalAccounts {
       live: windowTerminals,
       stopped: () => this.stoppedNow(),
       // While the reading is off no host is admitted, so the door writes no automatic "yes" row for one.
-      admit: (host) => (ACCOUNTS_READING === 'off' ? Promise.resolve({ kind: 'not-asked' }) : this.sessions.admitHost(host)),
+      admit: (host) => (ACCOUNTS_READING === 'off' ? Promise.resolve({ kind: 'not-asked' }) : this.sessions.may('round', host).then(admissionOf)),
       call: async (host, mode) => {
         const run = await callFor(this.test, real, this.replaced)(host, mode);
         if (run.kind === 'answered') {
@@ -339,8 +339,8 @@ class AccountsWindow implements TerminalAccounts {
       memory: this.memoryNow,
       standings: await this.sessions.hostStandings(),
       hosts,
-      ignored: this.sessions.ignoredLayer(),
-      allowNew: this.sessions.allowsNewHosts(),
+      ignored: undefined,
+      allowNew: false,
       damagedFile: (await this.sessions.roundStop()) === 'damaged',
       startUnwritten: extra.startUnwritten,
       floor: extra.floor,
@@ -376,7 +376,8 @@ export function bindTerminalAccounts(context: vscode.ExtensionContext, sessions:
 
 // ───────────────── the notices ─────────────────
 
-const SETTING = `coai.${ALLOW_NEW_HOSTS_KEY}`;
+/** The retired key, named only in the two notices that E2.S4 deletes with this line (X6 of the stories document). */
+const SETTING = 'coai.terminalAccountsAllowNewHosts';
 const OPEN_SETTINGS = 'Open settings';
 const LIST_FAILED_LINE = 'ConnectOtherAIs: the accounts list could not finish a press';
 
@@ -442,7 +443,7 @@ const shownOf = (item: ListItem): ShownItem =>
 function chooseSeamsOf(sessions: RemoteSessions, accounts: TerminalAccounts): ChooseSeams {
   return {
     change: (host) => sessions.changeHost(host),
-    ask: (host) => sessions.askHost(host),
+    ask: (host) => sessions.changeHost(host),
     save: () => sessions.saveWaiting(),
     start: () => accounts.start(),
     refresh: () => accounts.refresh(),

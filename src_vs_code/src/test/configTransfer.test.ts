@@ -326,3 +326,16 @@ test('the declared settings are read from the manifest with their defaults', () 
     { x: { default: 3, type: 'number' }, y: { default: 1, type: undefined } },
   );
 });
+
+test('E2S1-T17: the setting of the hosts is gone — not in the manifest, not in the never-transferred list, and an import that holds it is refused as unknown to this build', () => {
+  const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8')) as { contributes: { configuration: { properties: Record<string, unknown> } } };
+  assert.equal(Object.hasOwn(manifest.contributes.configuration.properties, 'coai.terminalAccountsAllowNewHosts'), false, 'the setting is still declared by the manifest');
+  assert.equal(Object.hasOwn(NEVER_TRANSFERRED, 'terminalAccountsAllowNewHosts'), false, 'the setting is still in the never-transferred list');
+  const back = importedConfig(JSON.stringify({
+    format: CONFIG_FORMAT, version: CONFIG_VERSION, prompts: {}, settings: { terminalAccountsAllowNewHosts: true },
+  }), declared);
+
+  assert.ok(back.ok);
+  assert.deepEqual(back.settings, {});
+  assert.deepEqual(back.refused, [{ name: 'terminalAccountsAllowNewHosts', why: 'unknown to this build' }]);
+});
