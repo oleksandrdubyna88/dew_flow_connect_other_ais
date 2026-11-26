@@ -21,7 +21,7 @@ const T2 = '2026-11-24T11:00:00.000Z';
 const stateOf = (w: Window): unknown => w.view.get(STATE_KEY);
 const stoppedIn = (w: Window): Promise<boolean> => isStopped(w.keeper, () => stateOf(w));
 /** What the timer decides for a window with an eligible host and nothing armed, given whether the round is stopped. */
-const armWhen = (stopped: boolean): string => armFor({ eligible: true, armed: false, stopped, running: false });
+const armWhen = (stopped: boolean): string => armFor({ eligible: true, permitted: true, armed: false, stopped, running: false });
 const whole = (backing: Backing, disk: FakeDisk): Window => windowOver(backing, disk, { mode: 'whole-state' });
 
 /** A round in window `w`: its own `stopped` seam, the keeper's own door counted; a fake call that answers one account. */
@@ -32,7 +32,7 @@ function roundIn(w: Window): { readonly seams: RoundSeams; readonly admitted: st
   const seams: RoundSeams = {
     ...base.seams,
     stopped: () => stoppedIn(w),
-    admit: (host) => { admitted.push(host); return admit(w, host); },
+    may: (host) => { admitted.push(host); return w.keeper.may('round', host); },
     call: (host, mode) => { called.push(`${host} ${mode}`); return base.seams.call(host, mode); },
   };
 
@@ -48,12 +48,12 @@ test('A3-T23: the Stop holds against a stale window\'s view, and survives a relo
   await stopTheRound(a.keeper, T);
   assert.equal(await stoppedIn(a), true);
   // B was not synced: its own stale copy is what `stateMerge` is handed, and its write puts that whole copy back.
-  await b.keeper.commitKey(STATE_KEY, { autoNoticed: T2 }, stateMerge);
+  await b.keeper.commitKey(STATE_KEY, { canBeShown: T2 }, stateMerge);
   assert.equal((backing.values.get(STATE_KEY) as { stoppedUtc?: string }).stoppedUtc, undefined, 'the fixture did not lose the copy, so this test proves nothing');
 
   assert.equal(await stoppedIn(b), true, 'a stale window\'s notice write started a stopped round');
   const round = roundIn(b);
-  await runRound(round.seams, new Map(), 0, 'timer', OFF, 'on');
+  await runRound(round.seams, new Map(), 0, 'timer', OFF);
   assert.deepEqual([round.called, round.admitted], [[], []], 'a stale window\'s notice write started a stopped round');
   assert.equal(armWhen(await stoppedIn(b)), 'clear');
 
@@ -127,9 +127,9 @@ test('A3-T23: stopped() is asked before EVERY call: a Stop written to the file b
     hosts: ['a', 'b'],
     hold: async (host) => { if (host === 'a') { await other.keeper.stopRound(); } },
   });
-  const seams: RoundSeams = { ...base.seams, stopped: () => stoppedIn(mine), admit: (host) => admit(mine, host) };
+  const seams: RoundSeams = { ...base.seams, stopped: () => stoppedIn(mine), may: (host) => mine.keeper.may('round', host) };
 
-  const result = await runRound(seams, new Map(), 0, 'timer', OFF, 'on');
+  const result = await runRound(seams, new Map(), 0, 'timer', OFF);
 
   assert.deepEqual(base.calls.map((call) => call.host), ['a'], 'a stopped round made one more call');
   assert.equal(result.abandoned, true);
@@ -146,12 +146,11 @@ test('A3-T23: a state row that cannot be read is a stop, and only a person\'s pr
     assert.equal(stoppedOf(damaged), true, `${name}: a state row that could not be read let the round run`);
     assert.equal(await stoppedIn(w), true, `${name}: a state row that could not be read let the round run`);
     const round = roundIn(w);
-    await runRound(round.seams, new Map(), 0, 'timer', OFF, 'on');
+    await runRound(round.seams, new Map(), 0, 'timer', OFF);
     assert.deepEqual([round.called, round.admitted], [[], []], `${name}: a state row that could not be read let the round run`);
     assert.equal(armWhen(await stoppedIn(w)), 'clear');
-    // `told` and `autoNoticed` write nothing.
-    await w.keeper.commitKey(STATE_KEY, { told: T }, stateMerge);
-    await w.keeper.commitKey(STATE_KEY, { autoNoticed: T }, stateMerge);
+    // `canBeShown` writes nothing.
+    await w.keeper.commitKey(STATE_KEY, { canBeShown: T }, stateMerge);
     assert.deepEqual(backing.values.get(STATE_KEY), damaged, `${name}: a notice time was written over a row that could not be read`);
     assert.deepEqual(w.view.updates.filter((one) => one.key === STATE_KEY), [], `${name}: an update was made`);
 
@@ -162,7 +161,7 @@ test('A3-T23: a state row that cannot be read is a stop, and only a person\'s pr
     assert.equal(await stoppedIn(started), false);
     await started.keeper.allow();
     const next = roundIn(started);
-    await runRound(next.seams, new Map(), 0, 'timer', OFF, 'on');
+    await runRound(next.seams, new Map(), 0, 'timer', OFF);
     assert.equal(next.called.length, 2, `${name}: after a start the round did not run`);
 
     const damagedAgain = new Backing();
@@ -193,10 +192,8 @@ test('A3-T23: the state row — what it reads, and each change', () => {
 
     return { next: next?.value, result };
   };
-  assert.deepEqual(merged({ toldUtc: T }, { told: T2 }).next, undefined, 'told was overwritten: told twice must keep the first');
-  assert.deepEqual(merged(undefined, { told: T }).next, { toldUtc: T });
-  assert.deepEqual(merged({ lastAutoNoticeUtc: T2 }, { autoNoticed: T }).next, undefined, 'autoNoticed went back in time');
-  assert.deepEqual(merged({ lastAutoNoticeUtc: T }, { autoNoticed: T2 }).next, { lastAutoNoticeUtc: T2 });
+  assert.deepEqual(merged({ canBeShownUtc: T }, { canBeShown: T2 }).next, undefined, 'the notice time was overwritten: the first stays, it is once for each installation');
+  assert.deepEqual(merged(undefined, { canBeShown: T }).next, { canBeShownUtc: T });
   assert.deepEqual(merged({ toldUtc: T, extra: 1 }, { stop: T2 }).next, { toldUtc: T, extra: 1, stoppedUtc: T2 });
   assert.deepEqual(merged({ stoppedUtc: T, toldUtc: T }, { start: true }).next, { toldUtc: T });
   assert.equal(merged({ toldUtc: T }, { start: true }).next, undefined, 'a start with nothing to clear wrote');
@@ -208,11 +205,11 @@ test('A3-T24: nothing of a reading is stored', async () => {
   const w = whole(backing, disk);
   await w.keeper.allow();
   const base = world({ hosts: ['a', 'b'], reply: (_host, mode) => claudeFound('secret-mark@example.test', { org: 'secret-org-mark', usage: mode === 'claude-usage' ? { state: 'read', windows: [], unmatched: 0 } : undefined }) });
-  const seams: RoundSeams = { ...base.seams, admit: (host) => admit(w, host), stopped: () => stoppedIn(w) };
+  const seams: RoundSeams = { ...base.seams, may: (host) => w.keeper.may('round', host), stopped: () => stoppedIn(w) };
 
   let memory = new Map();
   for (let round = 0; round < 3; round += 1) {
-    memory = new Map((await runRound(seams, memory, round, 'timer', { kind: 'every-round' }, 'on')).memory);
+    memory = new Map((await runRound(seams, memory, round, 'timer', { kind: 'every-round' })).memory);
   }
   assert.ok(memory.size === 2, 'the rounds did not run, so the store assertions below see nothing');
   // The window DOES hold the marks (in memory only): a reading that carried none would make the store checks below pass over nothing.

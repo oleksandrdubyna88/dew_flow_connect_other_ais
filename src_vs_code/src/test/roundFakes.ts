@@ -3,7 +3,7 @@ import type { ClaudeUsage } from '../remoteAccountsUsage';
 import type { AccountsMode } from '../remoteAccountsScript';
 import type { HostMemory, Memory, RoundResult, RoundSeams, Trigger, UsagePolicy } from '../remoteAccountsRound';
 import { claudeAccountKey, runRound } from '../remoteAccountsRound';
-import type { Admission } from '../remoteHosts';
+import type { DoorAnswer } from '../remotePermission';
 import type { LiveTerminal } from '../terminalSource';
 
 /**
@@ -18,7 +18,7 @@ export const EVERY_ROUND: UsagePolicy = { kind: 'every-round' };
 export const HOURLY: UsagePolicy = { kind: 'hourly' };
 export const ON_PRESS: UsagePolicy = { kind: 'on-press' };
 export const OFF: UsagePolicy = { kind: 'off' };
-export const READ_OK: Admission = { kind: 'read', how: 'auto', allowedNow: false };
+export const READ_OK: DoorAnswer = 'yes';
 
 /** A reading with a Claude account found; the other two vendors are absent. */
 type Reading = Extract<AccountsRead, { kind: 'read' }>;
@@ -60,7 +60,7 @@ export interface Options {
   /** What the host answers: a reading, or `down` for an ssh that did not answer. `nth`: how many calls this host had before. */
   readonly reply?: (host: string, mode: AccountsMode, nth: number) => AccountsRead | 'down';
   /** The door's answer; `asked` is how many times it was asked about this host before. */
-  readonly door?: (host: string, asked: number, world: World) => Admission;
+  readonly door?: (host: string, asked: number, world: World) => DoorAnswer;
   /** Awaited inside the call, before it answers. */
   readonly hold?: (host: string, mode: AccountsMode, world: World) => Promise<void> | undefined;
   readonly stopped?: (world: World) => Promise<boolean>;
@@ -98,7 +98,7 @@ export function world(options: Options = {}): World {
   const seams: RoundSeams = {
     live: () => control.terminals,
     stopped: () => (options.stopped === undefined ? Promise.resolve(control.stopped) : options.stopped(self.current as World)),
-    admit: (host) => {
+    may: (host) => {
       admits.push(host);
       const before = asked.get(host) ?? 0;
       asked.set(host, before + 1);
@@ -140,7 +140,7 @@ export function world(options: Options = {}): World {
 
 /** A round over a world, with the policy the test gives. */
 export const roundOf = (w: World, memory: Memory = new Map(), round = 0, trigger: Trigger = 'timer', policy: UsagePolicy = EVERY_ROUND): Promise<RoundResult> =>
-  runRound(w.seams, memory, round, trigger, policy, 'on');
+  runRound(w.seams, memory, round, trigger, policy);
 
 /** Each call as `a N` (no usage) or `a U` (usage), so a red shows the order. */
 export const callsOf = (w: World): readonly string[] => w.calls.map((call) => `${call.host} ${call.mode === 'claude-usage' ? 'U' : 'N'}`);

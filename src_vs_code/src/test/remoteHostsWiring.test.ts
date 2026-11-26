@@ -65,7 +65,7 @@ test('E2S1-T9 (the scan): one reader of the grant and of the withdrawal files, o
   assert.equal(countIn(host, /keeper\.allow\(/gu), 2, 'companion: the binding of permissionAsker and testDoorOf are the two callers');
   assert.deepEqual(filesWith(/\bnotifyAndAsk\([^)]*read-accounts-permission|code: 'read-accounts-permission'/u), ['remoteSessionHost.ts']);
   // a tick and the keeper never ask: no seam of either holds a way to raise the question
-  for (const file of ['remoteAccountsRound.ts', 'remoteKeeper.ts', 'remoteKeeperDoor.ts']) {
+  for (const file of ['remoteAccountsRound.ts', 'remoteAccountsDriver.ts', 'remoteAccountsHost.ts', 'remoteKeeper.ts', 'remoteKeeperDoor.ts']) {
     assert.ok(!/\braise\b|askPermission|permissionAsker/u.test(sourceOf(file)), `${file} can reach the question`);
   }
 });
@@ -81,10 +81,9 @@ test('E2S1-T14 (the host): the one question is the modal of W14 with its two but
   assert.ok(!census.codes.includes('read-remote-session') && census.codes.includes('read-accounts-permission') && census.codes.includes('accounts-permission-not-kept'));
 });
 
-test('E2S1-T17 (the scan): the setting is gone — the key\'s text is in the one bridge line, W10\'s constant and the five help files, and nobody reads it', () => {
+test('E2S1-T17 (the scan): the setting is gone — the key\'s text is in W10\'s constant and the five help files, and nobody reads it', () => {
   const where = [...filesWith(/terminalAccountsAllowNewHosts/u)].sort();
-  assert.deepEqual(where, ['helpContent.ts', 'helpDe.ts', 'helpEs.ts', 'helpRu.ts', 'helpUk.ts', 'remoteAccountsHost.ts', 'remoteHostsSaid.ts'], 'the key is named in a file the spec does not allow, or one it allows is missing');
-  assert.equal(countIn(sourceOf('remoteAccountsHost.ts'), /terminalAccountsAllowNewHosts/gu), 1, 'the bridge line is more than one line');
+  assert.deepEqual(where, ['helpContent.ts', 'helpDe.ts', 'helpEs.ts', 'helpRu.ts', 'helpUk.ts', 'remoteHostsSaid.ts'], 'the key is named in a file the spec does not allow, or one it allows is missing');
   const said = sourceOf('remoteHostsSaid.ts');
   assert.equal(countIn(said, /terminalAccountsAllowNewHosts/gu), 1, 'the constant KEY is more than one line');
   assert.equal(countIn(said, /\$\{KEY\}/gu), 2, 'companion: W10\'s two sentences are the only users of KEY');

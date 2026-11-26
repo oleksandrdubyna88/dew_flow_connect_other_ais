@@ -22,7 +22,7 @@ import { aStillMissingPathIsSaidOnceAcrossSettingsChanges } from './missingPathS
 import { activationStampsThisSideInARealEditor } from './sideSeenScenario';
 import { aTerminalPressTakesTheCopiedTextAndLeavesTheClipboard, theSkipListDefaultHoldsTheTerminalDoor } from './terminalCaptureScenario';
 import { aPressOnACredsTerminalReachesTheBoundRoadOnce, theTerminalItemsFollowTheActiveTerminalAndTheAnswer } from './terminalDoorsScenario';
-import { theAccountsListSaysTheReadingIsOff, theAccountsRoundReadsNoHostWhileTheReadingIsOff } from './terminalAccountsScenario';
+import { theAccountsRoundRunsOnlyUnderThePermission } from './terminalAccountsScenario';
 import { theConsentOfAHostIsKeptInTheRealGlobalState, theHostsStoreWritesTheListAndTheRefusalsFile, thePermissionIsGivenAndWithdrawnThroughTheRealStores } from './terminalHostsScenario';
 import { theSkipListAddAppendsToTheUserSettingOnce } from './skipShellScenario';
 import { twoCliPathFieldsKeepThisSidesValueInARealEditor } from './twoPathFieldsScenario';
@@ -996,16 +996,9 @@ const SCENARIOS: readonly Scenario[] = [
     run: thePermissionIsGivenAndWithdrawnThroughTheRealStores,
   },
   {
-    // A3-H1 (E1.S3, as the cut leaves it): the accounts round in a real editor with the reading off — three terminals open, a timer tick and two presses run no round, the replaced call is never made,
-    // the store holds no automatic yes, the memory holds no host and no timer would be armed. CI only: it cannot start here.
-    name: 'the accounts round reads no host while the reading is off: no call, no yes row, no timer',
-    run: theAccountsRoundReadsNoHostWhileTheReadingIsOff,
-  },
-  {
-    // A4-H1 (E1.S4, as the cut leaves it): the list in a real editor with the reading off — the command exists, the items handed to the list are the one row that says the reading is off in this build,
-    // and opening the list calls no host. CI only: it cannot start here.
-    name: 'the accounts command is registered and its list is the one row that says the reading is off',
-    run: theAccountsListSaysTheReadingIsOff,
+    // E2S4-H1 (E2.S4): the round under the permission in a real editor — with no permission four terminals, a tick and two presses call nothing and arm no timer; after an Allow through the keeper one call for each of two hosts and none for wsl. CI only: it cannot start here.
+    name: 'the accounts round calls nothing and arms no timer without the permission, and after an Allow reads each host once and never wsl',
+    run: theAccountsRoundRunsOnlyUnderThePermission,
   },
   {
     // S3-H1 of the E3 stories document (the chat opens from a terminal): through the test door of the BOUND skip-shell check, with the offer replaced by a

@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { ACCOUNTS_UNREADABLE_SAID, ACCOUNTS_SECONDS, MANAGER_WORDS, readAccounts } from '../remoteAccountsReply';
 import type { AccountsRead, ClaudeUsage, CodexUsage } from '../remoteAccountsReply';
-import type { AccountsState, HostMemory, Memory } from '../remoteAccountsRound';
-import { INSTALL_JQ, NO_MANAGER_SAID, USAGE_OFF_SAID, accountsRows, forList, noticesDue } from '../remoteAccountsRows';
+import type { HostMemory, Memory } from '../remoteAccountsRound';
+import { INSTALL_JQ, NO_MANAGER_SAID, USAGE_OFF_SAID, accountsRows, forList } from '../remoteAccountsRows';
 import type { AccountsView, Row } from '../remoteAccountsRows';
 import { HOSTS_SAID } from '../remoteHostsSaid';
 import { dayOf } from '../remoteHosts';
@@ -52,7 +52,7 @@ const memoryOf = (...entries: readonly (readonly [string, HostMemory])[]): Memor
 const person = (host: string, answer: 'yes' | 'no' = 'yes'): HostStanding => ({ host, answer, how: 'person', askedUtc: '2026-11-20T10:00:00.000Z' });
 const auto = (host: string, askedUtc = '2026-11-21T09:00:00.000Z'): HostStanding => ({ host, answer: 'yes', how: 'auto', askedUtc });
 
-const rowsOf = (over: Partial<AccountsView>, nowMs = NOW): readonly Row[] => accountsRows(view(over), nowMs, 'on');
+const rowsOf = (over: Partial<AccountsView>, nowMs = NOW): readonly Row[] => accountsRows(view(over), nowMs);
 const labelsOf = (rows: readonly Row[]): readonly string[] => rows.map((row) => row.label);
 const separators = (rows: readonly Row[]): readonly string[] => rows.filter((row) => row.kind === 'separator').map((row) => row.label);
 const usageRows = (rows: readonly Row[]): readonly Extract<Row, { kind: 'usage' }>[] => rows.filter((row): row is Extract<Row, { kind: 'usage' }> => row.kind === 'usage');
@@ -554,44 +554,6 @@ test('A4-T12 (scan companions): the scan finds a bare field, a field inside forL
   assert.ok(forListSpans(source).length >= 6, 'the scan found no forList( call in the module, so it looked at nothing');
   assert.ok(/forList\([^)]*\.sentence/u.test(source), 'the failure sentence does not pass forList(');
   assert.ok(/forList\([^)]*\.email/u.test(source), 'the email does not pass forList(');
-});
-
-// ───────────────── A4-T13: the notices ─────────────────
-
-const state = (over: Partial<AccountsState> = {}): AccountsState => over;
-const iso = (ms: number): string => new Date(ms).toISOString();
-
-test('A4-T13: the first automatic host is told at once; two hours later nobody is; after 25 hours only the hosts allowed since', () => {
-  const standings = [auto('hA', iso(NOW - min(5)))];
-  const first = noticesDue(state(), standings, true, NOW);
-  assert.deepEqual(first.autoHosts, ['hA']);
-
-  const told = state({ lastAutoNoticeUtc: iso(NOW) });
-  assert.deepEqual(noticesDue(told, standings, true, NOW + hour(2)).autoHosts, [], 'the person was told 6 times an hour');
-  const more = [...standings, auto('hB', iso(NOW + hour(1)))];
-  assert.deepEqual(noticesDue(told, more, true, NOW + hour(2)).autoHosts, [], 'a new host inside the day was told at once');
-  assert.deepEqual(noticesDue(told, more, true, NOW + hour(25)).autoHosts, ['hB'], 'a host that was already told about was told again');
-});
-
-test('A4-T13: no host allowed by itself means no notice, and a person\'s own "yes" is not an automatic one', () => {
-  assert.deepEqual(noticesDue(state(), [], true, NOW).autoHosts, []);
-  assert.deepEqual(noticesDue(state(), [person('hA'), person('hB', 'no')], true, NOW).autoHosts, []);
-});
-
-test('A4-T13 (F3): the first-round notice names only the "yes" rows older than the round that just ended', () => {
-  const start = NOW;
-  const old = { host: 'hOld', answer: 'yes', how: 'person', askedUtc: iso(start - hour(5)) } as const;
-  const during = { host: 'hNew', answer: 'yes', how: 'person', askedUtc: iso(start + min(2)) } as const;
-
-  assert.deepEqual(noticesDue(state(), [old, during], true, start + min(10), start).first, ['hOld'], 'a "yes" given during the round was told as one from before');
-});
-
-test('A4-T13: the first-round notice names the person\'s "yes" rows once, while it was never told', () => {
-  const standings = [person('hA'), person('hB'), person('hC', 'no'), auto('hD')];
-
-  assert.deepEqual(noticesDue(state(), standings, true, NOW).first, ['hA', 'hB']);
-  assert.deepEqual(noticesDue(state(), standings, false, NOW).first, [], 'told before the first round ended');
-  assert.deepEqual(noticesDue(state({ toldUtc: iso(NOW - hour(1)) }), standings, true, NOW).first, [], 'told again after a told');
 });
 
 // ───────────────── A4-T14: the stopped list and the empty list ─────────────────

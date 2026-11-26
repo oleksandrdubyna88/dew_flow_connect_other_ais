@@ -5,7 +5,8 @@ import { hostKeeper } from '../remoteKeeper';
 import type { PermissionRow } from '../remoteKeeperDoor';
 import { WITHDRAWN_READ_MAX, nameStamp } from '../remotePermission';
 import { STATE_KEY, permissionRowOf, stateMerge } from '../remoteAccountsRound';
-import { Admission, admissionOf, commit } from '../remoteHosts';
+import { commit } from '../remoteHosts';
+import type { DoorAnswer } from '../remotePermission';
 import type { RefusalsDisk } from '../remoteRefusals';
 import { refusalsStore } from '../remoteRefusalsStore';
 import type { KeyValueStore } from '../sideSettings';
@@ -296,8 +297,22 @@ export async function consent(w: Window, host: string): Promise<'yes' | 'no' | '
   return answer === 'yes' ? 'yes' : answer === 'no' ? 'no' : answer === 'no-permission' ? 'ask' : 'damaged';
 }
 
-/** The door as the round's old view reads it: `may('round', host)` mapped by `admissionOf`. */
-export const admit = (w: Window, host: string): Promise<Admission> => w.keeper.may('round', host).then(admissionOf);
+/** What the keeper's tests read of the round's door: E1's names for C2's answers (the kind of the old view), so the rule tests keep their words. */
+export type Seen =
+  | { readonly kind: 'read'; readonly how: 'person'; readonly allowedNow: false }
+  | { readonly kind: 'refused' | 'not-asked' | 'damaged' | 'unwritten' };
+
+const SEEN_OF: Readonly<Record<DoorAnswer, Seen>> = {
+  yes: { kind: 'read', how: 'person', allowedNow: false },
+  no: { kind: 'refused' },
+  damaged: { kind: 'damaged' },
+  waiting: { kind: 'unwritten' },
+  'no-permission': { kind: 'not-asked' },
+  stopped: { kind: 'unwritten' },
+};
+
+/** The door of the round, `may('round', host)`, named as the tests that hold a refusal rule read it. */
+export const admit = (w: Window, host: string): Promise<Seen> => w.keeper.may('round', host).then((answer) => SEEN_OF[answer]);
 
 export const row = (host: string, answer: 'yes' | 'no', askedUtc = '2026-11-01T00:00:00.000Z', how?: 'auto'): Record<string, unknown> =>
   ({ host, answer, askedUtc, ...(how === undefined ? {} : { how }) });

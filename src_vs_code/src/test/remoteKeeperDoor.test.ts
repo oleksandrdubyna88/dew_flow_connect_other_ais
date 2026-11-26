@@ -2,7 +2,6 @@ import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { STATE_KEY, runRound } from '../remoteAccountsRound';
-import { admissionOf } from '../remoteHosts';
 import { readsKey } from '../remoteRead';
 import type { DoorAnswer } from '../remotePermission';
 import { STAMP_MAX, withdrawalName, withdrawalText } from '../remotePermission';
@@ -487,10 +486,10 @@ test('E2S1-T9 (carried CUT-D2, CUT-D3, CUT-D4): the round over the door — an a
     const backing = new Backing();
     backing.values.set(KEY, rows[kind]);
     const w = windowOver(backing, new FakeDisk());
-    assert.equal(admissionOf(await w.keeper.may('round', H)).kind, kind === 'no' ? 'refused' : 'not-asked', `${kind}: the door admitted a row with no permission`);
+    assert.equal(await w.keeper.may('round', H), kind === 'no' ? 'no' : 'no-permission', `${kind}: the door admitted a row with no permission`);
     await w.keeper.allow();
     const round = world({ hosts: [H] });
-    await runRound({ ...round.seams, admit: (host) => w.keeper.may('round', host).then(admissionOf) }, new Map(), 0, 'timer', undefined, 'on');
+    await runRound({ ...round.seams, may: (host) => w.keeper.may('round', host) }, new Map(), 0, 'timer', undefined);
     assert.deepEqual(callsOf(round), kind === 'no' ? [] : [`${H} N`], `${kind}: the round over the door called the wrong hosts`);
   }
   // CUT-D4: the terminal items' key follows "answered no" only
