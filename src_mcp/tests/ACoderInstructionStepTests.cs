@@ -426,7 +426,7 @@ public sealed class ACoderInstructionStepRunTests
         await using var rig = await CoderRig.CreateAsync(toolchain: With(Script));
         rig.Says("sonnet", Green());
         var job = rig.NewJob();
-        var canary = Path.Combine(rig.JobFolder(job), "coder", "home", ".claude", ".credentials.json");
+        var canary = Path.Combine(rig.JobFolder(job), "coder", "claude", "home", ".claude", ".credentials.json");
         Directory.CreateDirectory(Path.GetDirectoryName(canary)!);
         await File.WriteAllTextAsync(canary, "a stand-in sign-in copy\n", TestContext.Current.CancellationToken);
 

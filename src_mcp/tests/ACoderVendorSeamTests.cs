@@ -68,7 +68,7 @@ public sealed class ACoderVendorSeamTests
         string[] e2 =
         [
             "ProtectSystem=strict", "ProtectHome=tmpfs", "TemporaryFileSystem=/run/user", "TemporaryFileSystem=/mnt", "TemporaryFileSystem=/dev/shm", "InaccessiblePaths=-/run/WSL",
-            $"BindReadOnlyPaths={M}", "BindReadOnlyPaths=/w", $"BindPaths={W}", $"BindReadOnlyPaths={W}/.git", $"TemporaryFileSystem={J}:ro", $"BindPaths={J}/coder", $"BindPaths={J}/coder/tmp:{BoundaryUnit.UnitTemp}", $"BindPaths={J}/coder/vartmp:{BoundaryUnit.UnitVarTemp}",
+            $"BindReadOnlyPaths={M}", "BindReadOnlyPaths=/w", $"BindPaths={W}", $"BindReadOnlyPaths={W}/.git", $"TemporaryFileSystem={J}:ro", $"BindPaths={J}/coder/claude", $"BindPaths={J}/coder/tmp:{BoundaryUnit.UnitTemp}", $"BindPaths={J}/coder/vartmp:{BoundaryUnit.UnitVarTemp}",
             "NoNewPrivileges=yes", "PrivateUsers=yes", "RestrictSUIDSGID=yes", "LockPersonality=yes", "ProtectKernelTunables=yes", "ProtectControlGroups=yes", "Nice=10", "LimitCORE=0",
             "PrivateNetwork=no",
             "RuntimeMaxSec=300", "TimeoutStopSec=10", "MemoryMax=2000M", "MemorySwapMax=0",
@@ -80,7 +80,7 @@ public sealed class ACoderVendorSeamTests
         claude.Environment(NoHome(), TheJob()).Select(pair => pair.Key).Should().Equal("PATH", "HOME", "TMPDIR", "LANG", "TERM", "NO_COLOR", "GIT_TERMINAL_PROMPT");
         claude.Environment(NoHome(), TheJob()).Should().Equal(CoderUnit.Environment(NoHome(), TheJob()));
         var home = claude.Home(TheJob());
-        (home.Home, home.SignInFile).Should().Be(($"{J}/coder/home", $"{J}/coder/home/.claude/.credentials.json"));
+        (home.Home, home.SignInFile).Should().Be(($"{J}/coder/claude/home", $"{J}/coder/claude/home/.claude/.credentials.json"));
         home.Folders.Should().Equal(TheJob().CoderFolders);
         claude.SignIn.Should().Be(new CoderSignInRecipe.BindRealFile(".claude/.credentials.json"));
         claude.PromptId.Should().Be("coder");

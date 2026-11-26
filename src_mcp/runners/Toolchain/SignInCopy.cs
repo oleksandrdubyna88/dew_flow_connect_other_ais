@@ -177,32 +177,61 @@ internal static class SignInCopy
         }
     }
 
+    /// <summary>
+    /// The sentence that says the coder's home is not a real folder at its own real path, or empty (the fourth security verify of s7 t6, M8): a coder with a shell can rename its home and put a link at its name, and every check after it would resolve through the link, so a copy is never made
+    /// into, and never deleted from, a home that is not what coai made. Asked before <see cref="Make"/> and in the delete.
+    /// </summary>
+    public static string HomeProblem(string home)
+    {
+        var path = Path.TrimEndingDirectorySeparator(home);
+        if (RealPath.Lstat(path).Kind != EntryKind.Directory)
+        {
+            return "the coder's home is not a real folder (a link or another kind of entry stands at its name), so no sign-in copy was made or deleted there";
+        }
+
+        var real = RealPath.Resolve(path);
+
+        return real.Ok && string.Equals(Path.TrimEndingDirectorySeparator(real.Path), path, StringComparison.Ordinal)
+            ? string.Empty
+            : "the coder's home is not at its own real path (a link stands in the path to it), so no sign-in copy was made or deleted there";
+    }
+
     private static string Write(string copyFile, string text, string home)
     {
         try
         {
+            if (HomeProblem(home) is { Length: > 0 } homeProblem)
+            {
+                return $"{homeProblem}; the launch was not started";
+            }
+
             var folder = Path.GetDirectoryName(copyFile)!;
-
-            // The coder writes into its home: a link it made where the folder belongs must not lead the copy out of the home (SPEC E7). The folder is a real directory inside the home, or it is not there yet.
-            var kind = RealPath.Lstat(folder).Kind;
-            if (kind is not (EntryKind.Missing or EntryKind.Directory))
+            var relative = Path.GetRelativePath(home, folder);
+            if (Path.IsPathRooted(relative) || relative == ".." || relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal))
             {
-                return "what stands where the folder of the sign-in copy belongs is not a folder, so the launch was not started";
+                return "the folder of the sign-in copy is not inside the job's home, so the launch was not started";
             }
 
-            if (kind == EntryKind.Directory && !IsInside(home, folder))
+            // One level at a time, and a link at ANY level refuses: a coder can put a link where a folder that is not there yet belongs (agy's file is two names deep), and a make of the whole path would follow it.
+            var level = Path.TrimEndingDirectorySeparator(home);
+            foreach (var name in relative == "." ? [] : relative.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries))
             {
-                return "the folder of the sign-in copy leads out of the job's home, so the launch was not started";
-            }
+                level = Path.Combine(level, name);
+                switch (RealPath.Lstat(level).Kind)
+                {
+                    case EntryKind.Directory:
+                        break;
+                    case EntryKind.Missing:
+                        MakeFolder(level);
+                        if (RealPath.Lstat(level).Kind != EntryKind.Directory)
+                        {
+                            return "a folder of the sign-in copy could not be made as a real folder, so the launch was not started";
+                        }
 
-            if (!OperatingSystem.IsWindows())
-            {
-                Directory.CreateDirectory(folder, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-                File.SetUnixFileMode(folder, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-            }
-            else
-            {
-                Directory.CreateDirectory(folder);
+                        break;
+                    default:
+                        return "what stands where a folder of the sign-in copy belongs is a link or not a folder, so the launch was not started";
+                }
             }
 
             if (RealPath.Lstat(copyFile).Kind is EntryKind.File or EntryKind.Link)
@@ -227,12 +256,18 @@ internal static class SignInCopy
         }
     }
 
-    private static bool IsInside(string home, string folder)
+    /// <summary>Makes ONE folder (its parent is there and was looked at), mode 0700.</summary>
+    private static void MakeFolder(string folder)
     {
-        var realHome = RealPath.Resolve(home);
-        var realFolder = RealPath.Resolve(folder);
-
-        return realHome.Ok && realFolder.Ok && (realFolder.Path == realHome.Path || realFolder.Path.StartsWith(realHome.Path.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, StringComparison.Ordinal));
+        if (!OperatingSystem.IsWindows())
+        {
+            Directory.CreateDirectory(folder, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            File.SetUnixFileMode(folder, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+        else
+        {
+            Directory.CreateDirectory(folder);
+        }
     }
 
     private static JsonNode? At(JsonObject root, string path)
@@ -298,7 +333,7 @@ internal static class SignInCopy
 /// What the job keeps of ONE vendor's sign-in copy (s7 t6): the state of the real file when the job first looked at it, the token texts of every copy it made (C2 of the pass-3 verify: every vendor binds the same coder home, so a token text that the left vendor's copy held is searched for in every
 /// later commit of the job, whether or not its file is still there), and the number of refresh units run. Memory only: nothing here is written anywhere.
 /// </summary>
-internal sealed class SignInJobState(string vendor, CoderSignInRecipe.CopyForJob recipe, string copyFile, string realFile)
+internal sealed class SignInJobState(string vendor, CoderSignInRecipe.CopyForJob recipe, string copyFile, string realFile, string home)
 {
     private readonly HashSet<string> _tokens = new(StringComparer.Ordinal);
 
@@ -311,6 +346,9 @@ internal sealed class SignInJobState(string vendor, CoderSignInRecipe.CopyForJob
 
     /// <summary>Where the real file is.</summary>
     public string RealFile => realFile;
+
+    /// <summary>The home of this vendor's coder in the job: the folder the copy lies in, and the one a delete never leaves.</summary>
+    public string Home => home;
 
     /// <summary>The real file as the job first saw it; null until it did.</summary>
     public RealSignInState? Before { get; set; }

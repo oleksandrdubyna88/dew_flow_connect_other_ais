@@ -132,11 +132,11 @@ public sealed class ACoderFailsOverAcrossVendorsTests
         _ => null,
     };
 
-    private static string Home(CoderRig rig, RoleJobRecord job) => Path.Combine(rig.JobFolder(job), "coder", "home");
+    private static string Home(CoderRig rig, RoleJobRecord job, string vendor = "claude") => Path.Combine(rig.JobFolder(job), "coder", vendor, "home");
 
     private static string CredentialsInUnit(CoderRig rig, RoleJobRecord job) => Path.Combine(Home(rig, job), ".claude", ".credentials.json");
 
-    private static string CopyPath(CoderRig rig, RoleJobRecord job, string vendor) => Path.Combine(Home(rig, job), $".{vendor}", "auth.json");
+    private static string CopyPath(CoderRig rig, RoleJobRecord job, string vendor) => Path.Combine(Home(rig, job, vendor), $".{vendor}", "auth.json");
 
     /// <summary>What FakeCli tried to read inside each unit, launch by launch: path, what it saw (<c>read</c>, <c>absent</c>, <c>denied</c>) and the first characters.</summary>
     private static IReadOnlyList<IReadOnlyDictionary<string, (string Saw, string Text)>> ReadsOf(CoderRig rig, RoleJobRecord job)
@@ -657,11 +657,33 @@ public sealed class ACoderFailsOverAcrossVendorsTests
         rig.Launches(job).Select(ModelOf).Should().Equal("sonnet", "terra", Argon);
     }
 
+    [Fact]
+    public async Task M9_ATokenOfTheCopy_PrintedInTheAnswer_EndsTheJobCoderBoundary_NamesAnId_AndIsInNoFileOfTheJobsRecord()
+    {
+        const string Token = "made-up-printed-access-token-xyz";
+        var recipe = new CoderSignInRecipe.CopyForJob(".codex/auth.json", ["tokens/access_token"], new Dictionary<string, string>(), string.Empty, "gate") { TokenFields = ["tokens/access_token"] };
+        var codexVendor = new CrossVendor("codex", recipe);
+        var set = Set(Verdict.Ship, Verdict.Refuse, codexVendor, new CrossVendor("agy"));
+        await using var rig = await RigAsync(set);
+        rig.RealHomeFile(".codex/auth.json", $"{{\"tokens\":{{\"access_token\":\"{Token}\"}}}}");
+        var job = rig.NewJob(route: ["codex/terra"]);
+        // The coder reads its own copy and puts the token into the notes of an otherwise valid report.
+        rig.Says("terra", new CoderRig.Launch(new Dictionary<string, string> { [CoderRig.StateFile] = CoderRig.Green + "\n" }, CoderRig.Report(notes: "debug: " + Token), Session: CodexLast));
+
+        var (_, ended) = await rig.RunAsync(job);
+
+        (ended.State, ended.Stop).Should().Be((RoleJobStates.Failed, RoleStopWords.CoderBoundary), ended.Reason);
+        ended.Reason.Should().Contain("sign-in-codex-1").And.NotContain(Token);
+        var stored = string.Concat(Directory.EnumerateFiles(rig.World.Store.FolderOf(job.JobId)!.Location, "*", SearchOption.AllDirectories).Select(File.ReadAllText));
+        stored.Should().NotContain(Token, "the token is in no file of the job's record: not a turn file, not the envelope, not the result");
+        stored.Should().Contain("[claude key sign-in-codex-1]", "the mark names the copy, so the record says whose token was printed");
+    }
+
     /// <summary>
     /// A vendor that stands in for a real one, with an id the route knows: claude's argv, probe and unit (FakeCli answers as claude), a prompt of its own, a variable NAME of its own in the unit's environment (<c>&lt;ID&gt;_AUTH_FILE</c>, the path of the sign-in copy it would
     /// keep in the job's home), a recipe that says it is a COPY for the job, and a check of its stream that records the session every turn was expected to continue.
     /// </summary>
-    private sealed class CrossVendor(string id) : ICoderVendor
+    private sealed class CrossVendor(string id, CoderSignInRecipe? recipe = null) : ICoderVendor
     {
         public List<string> Expected { get; } = [];
 
@@ -671,7 +693,7 @@ public sealed class ACoderFailsOverAcrossVendorsTests
 
         public string PromptResource => CoderVendors.Claude.PromptResource;
 
-        public CoderSignInRecipe SignIn => new CoderSignInRecipe.CopyForJob($".{id}/auth.json", [], new Dictionary<string, string>(), string.Empty, "gate");
+        public CoderSignInRecipe SignIn => recipe ?? new CoderSignInRecipe.CopyForJob($".{id}/auth.json", [], new Dictionary<string, string>(), string.Empty, "gate");
 
         public IConsultantRuntime Runtime => new ClaudeConsultant(new ClaudeRuntime(), id);
 
@@ -693,15 +715,15 @@ public sealed class ACoderFailsOverAcrossVendorsTests
 
         public IReadOnlyList<string> ResumedArgv(string model, string worktree, string sessionId) => CoderVendors.Claude.ResumedArgv(model, worktree, sessionId);
 
-        public IReadOnlyList<string> UnitProperties(CoaiMcp.Runners.Toolchain.BoundaryHost host, CoaiMcp.Runners.Toolchain.BoundaryJob job, CoaiMcp.Runners.Toolchain.CoderProgram program, TimeSpan runtimeMax) => CoderVendors.Claude.UnitProperties(host, job, program, runtimeMax);
+        public IReadOnlyList<string> UnitProperties(CoaiMcp.Runners.Toolchain.BoundaryHost host, CoaiMcp.Runners.Toolchain.BoundaryJob job, CoaiMcp.Runners.Toolchain.CoderProgram program, TimeSpan runtimeMax) => CoaiMcp.Runners.Toolchain.CoderUnit.Properties(host, job, program, runtimeMax, id); //erties(host, job, program, runtimeMax);
 
         public string WorkingDirectory(CoaiMcp.Runners.Toolchain.BoundaryJob job) => CoderVendors.Claude.WorkingDirectory(job);
 
         public IReadOnlyList<KeyValuePair<string, string>> Environment(CoaiMcp.Runners.Toolchain.BoundaryHost host, CoaiMcp.Runners.Toolchain.BoundaryJob job) =>
-            [.. CoderVendors.Claude.Environment(host, job), new($"{id.ToUpperInvariant()}_AUTH_FILE", Path.Combine(job.CoderHomeFolder, $".{id}", "auth.json"))];
+            [.. CoaiMcp.Runners.Toolchain.CoderUnit.Environment(host, job, id), new($"{id.ToUpperInvariant()}_AUTH_FILE", Path.Combine(job.CoderHomeOf(id), $".{id}", "auth.json"))];
 
         public CoderHomeLayout Home(CoaiMcp.Runners.Toolchain.BoundaryJob job) =>
-            new(job.CoderHomeFolder, Path.Combine(job.CoderHomeFolder, $".{id}", "auth.json"), [.. job.CoderFolders, Path.Combine(job.CoderHomeFolder, $".{id}")]);
+            new(job.CoderHomeOf(id), Path.Combine(job.CoderHomeOf(id), $".{id}", "auth.json"), [.. job.CoderFoldersOf(id), Path.Combine(job.CoderHomeOf(id), $".{id}")]);
 
         public CoaiMcp.Runners.Toolchain.CoderProgram Program(string executable, string path, CoaiMcp.Runners.Toolchain.BoundaryJob job) => CoderVendors.Claude.Program(executable, path, job);
     }

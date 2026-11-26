@@ -87,6 +87,7 @@ public sealed class ASignInCopyTests
         File.WriteAllText(real, CodexFile(Now.AddHours(3)));
         var copy = Path.Combine(dir.Path, "home", ".probe", "auth.json");
 
+        Directory.CreateDirectory(Path.Combine(dir.Path, "home"));
         var made = SignInCopy.Make(CodexLike(), real, copy, Path.Combine(dir.Path, "home"));
 
         made.Should().BeOfType<SignInCopyResult.Made>();
@@ -108,6 +109,7 @@ public sealed class ASignInCopyTests
         File.WriteAllText(real, AgyFile(Now.AddHours(3)));
         var copy = Path.Combine(dir.Path, "home", ".probe", "auth.json");
 
+        Directory.CreateDirectory(Path.Combine(dir.Path, "home"));
         SignInCopy.Make(AgyLike(), real, copy, Path.Combine(dir.Path, "home")).Should().BeOfType<SignInCopyResult.Made>();
 
         var text = File.ReadAllText(copy);
@@ -125,6 +127,7 @@ public sealed class ASignInCopyTests
         File.SetUnixFileMode(real, UnixFileMode.UserRead);
         var before = SignInCopy.Snapshot(real);
 
+        Directory.CreateDirectory(Path.Combine(dir.Path, "home"));
         SignInCopy.Make(CodexLike(), real, Path.Combine(dir.Path, "home", ".probe", "auth.json"), Path.Combine(dir.Path, "home")).Should().BeOfType<SignInCopyResult.Made>();
 
         before.Exists.Should().BeTrue();
@@ -210,6 +213,7 @@ public sealed class ASignInCopyTests
         var real = Path.Combine(dir.Path, "real.json");
         File.WriteAllText(real, CodexFile(Now.AddHours(3), access: "made-up-access-text"));
         var copy = Path.Combine(dir.Path, "home", ".probe", "auth.json");
+        Directory.CreateDirectory(Path.Combine(dir.Path, "home"));
         SignInCopy.Make(CodexLike(), real, copy, Path.Combine(dir.Path, "home"));
 
         SignInCopy.TokensOf(CodexLike(), copy).Should().BeEquivalentTo(["made-up-access-text", IdToken]);
@@ -252,7 +256,7 @@ public sealed class ASignInCopyTests
 
         said.Should().BeEmpty();
         states.All().Single().Refreshes.Should().Be(0);
-        File.ReadAllText(Path.Combine(bed.Job.CoderHomeFolder, ".probe", "auth.json")).Should().Contain(Access).And.NotContain(Refresh);
+        File.ReadAllText(Path.Combine(bed.Job.CoderHomeOf("probe"), ".probe", "auth.json")).Should().Contain(Access).And.NotContain(Refresh);
         SignInCopy.Snapshot(RealFile(bed)).Should().Be(before);
         bed.Launcher.Requests.Should().NotContain(request => request.Arguments.Any(argument => argument.Contains("refresh", StringComparison.Ordinal) && argument.StartsWith("--unit", StringComparison.Ordinal)), "no unit of the refresh was started");
     }
@@ -262,7 +266,8 @@ public sealed class ASignInCopyTests
     {
         NeedAUserManager();
         await using var bed = await CoderBed.CreateAsync();
-        var scratch = bed.Job.JobRoot.TrimEnd(Path.DirectorySeparatorChar) + ".refresh";
+        bed.Inner.UseJobsFolderWithAnotherJob();
+        var scratch = bed.Job.RefreshFolder;
         var fresh = DateTime.UtcNow.AddHours(5).ToString("O");
         var vendor = new CopyVendor("probe", AgyLike("set-json-field", Path.Combine(scratch, ".probe", "auth.json"), "token/expiry", fresh));
         Write(bed, AgyFile(DateTime.UtcNow.AddMinutes(1)));
@@ -274,7 +279,7 @@ public sealed class ASignInCopyTests
         said.Should().BeEmpty("the refreshed file has the margin");
         states.All().Single().Refreshes.Should().Be(1);
         Directory.Exists(scratch).Should().BeFalse("the full copy is deleted before any coder starts");
-        var copy = JsonNode.Parse(File.ReadAllText(Path.Combine(bed.Job.CoderHomeFolder, ".probe", "auth.json")))!;
+        var copy = JsonNode.Parse(File.ReadAllText(Path.Combine(bed.Job.CoderHomeOf("probe"), ".probe", "auth.json")))!;
         copy["token"]!["expiry"]!.GetValue<string>().Should().Be(fresh);
         copy["token"]!["refresh_token"].Should().BeNull("the coder's copy of the refreshed file has no refresh token either");
         SignInCopy.Snapshot(RealFile(bed)).Should().Be(before, "the refresh ran on a copy; the person's own file was only read");
@@ -285,7 +290,8 @@ public sealed class ASignInCopyTests
     {
         NeedAUserManager();
         await using var bed = await CoderBed.CreateAsync();
-        var scratch = bed.Job.JobRoot.TrimEnd(Path.DirectorySeparatorChar) + ".refresh";
+        bed.Inner.UseJobsFolderWithAnotherJob();
+        var scratch = bed.Job.RefreshFolder;
         var vendor = new CopyVendor("probe", AgyLike("set-json-field", Path.Combine(scratch, "no-such-file.json"), "token/expiry", "x"));
         Write(bed, AgyFile(DateTime.UtcNow.AddMinutes(1)));
 
@@ -293,7 +299,7 @@ public sealed class ASignInCopyTests
 
         said.Should().Contain("exited 1").And.NotContain(Refresh).And.NotContain(Access);
         Directory.Exists(scratch).Should().BeFalse();
-        File.Exists(Path.Combine(bed.Job.CoderHomeFolder, ".probe", "auth.json")).Should().BeFalse("no copy is left to launch with");
+        File.Exists(Path.Combine(bed.Job.CoderHomeOf("probe"), ".probe", "auth.json")).Should().BeFalse("no copy is left to launch with");
     }
 
     [Fact]
@@ -329,7 +335,7 @@ public sealed class ASignInCopyTests
     {
         using var dir = TempDir.For("sic-");
         var job = new BoundaryJob("job-x", new CoaiMcp.Runners.Worktrees.CoderTree(Path.Combine(dir.Path, "wt"), Path.Combine(dir.Path, "main"), string.Empty), Path.Combine(dir.Path, "jobs", "job-x"), NetworkChoice.None("t"), NetworkChoice.None("t"), 100);
-        var scratch = job.JobRoot + ".refresh";
+        var scratch = job.RefreshFolder;
         var program = new CoderProgram("/usr/bin/true", string.Empty, string.Empty);
 
         var properties = SignInRefresh.Properties(BoundaryHost.Current() with { RealHome = "/nonexistent/coai-real-home" }, job, scratch, program);
@@ -346,7 +352,7 @@ public sealed class ASignInCopyTests
         NeedAUserManager();
         await using var bed = await CoderBed.CreateAsync();
         var others = bed.Inner.UseJobsFolderWithAnotherJob();
-        var scratch = bed.Job.JobRoot.TrimEnd(Path.DirectorySeparatorChar) + ".refresh";
+        var scratch = bed.Job.RefreshFolder;
         Directory.CreateDirectory(scratch);
         await File.WriteAllTextAsync(Path.Combine(scratch, "full-copy.json"), "made-up-full-copy\n", TestContext.Current.CancellationToken);
 
@@ -440,7 +446,7 @@ public sealed class ASignInCopyTests
         Write(bed, AgyFile(Now.AddHours(5)));
         var layer = new CoderOsLayer(bed.Job, bed.Turns(), bed.Launcher);
         (await bed.Boundary().For(vendor).PrepareSignInAsync(bed.Job, FakeCliInvocations.Exe, TimeSpan.FromMinutes(30), layer.SignIns, Now, TestContext.Current.CancellationToken)).Should().BeEmpty();
-        var copy = Path.Combine(bed.Job.CoderHomeFolder, ".probe", "auth.json");
+        var copy = Path.Combine(bed.Job.CoderHomeOf("probe"), ".probe", "auth.json");
         // agy rewrites its file during a turn: a new access token, a new refresh token — a name the real file never held.
         File.WriteAllText(copy, AgyFile(Now.AddHours(5), access: "made-up-rewritten-access"));
 
@@ -464,7 +470,7 @@ public sealed class ASignInCopyTests
 
         layer.RemoveSignInCopies();
 
-        File.Exists(Path.Combine(bed.Job.CoderHomeFolder, ".probe", "auth.json")).Should().BeFalse();
+        File.Exists(Path.Combine(bed.Job.CoderHomeOf("probe"), ".probe", "auth.json")).Should().BeFalse();
         var record = layer.SignInRecords().Single();
         record.Vendor.Should().Be("probe");
         record.Changed.Should().BeFalse();
@@ -484,6 +490,142 @@ public sealed class ASignInCopyTests
         Write(bed, AgyFile(Now.AddHours(9)));
 
         layer.SignInRecords().Single().Changed.Should().BeTrue("the person's own CLI rewrote the file meanwhile; coai did not");
+    }
+
+    // ---------- the fourth security verify (M8, M10, C3) ----------
+
+    [Fact]
+    [SupportedOSPlatform("linux")]
+    public void ALinkTwoNamesAbove_AFolderThatIsNotThereYet_DoesNotLeadTheCopyOutOfTheHome()
+    {
+        // agy's file is two names deep (.gemini/antigravity-cli/...): the link is at the FIRST name, and the second folder is not there yet, so a make of the whole path would follow the link.
+        using var dir = TempDir.For("sic-");
+        var real = Path.Combine(dir.Path, "real.json");
+        File.WriteAllText(real, AgyFile(Now.AddHours(3)));
+        var home = Path.Combine(dir.Path, "home");
+        var outside = Path.Combine(dir.Path, "outside");
+        Directory.CreateDirectory(home);
+        Directory.CreateDirectory(outside);
+        Directory.CreateSymbolicLink(Path.Combine(home, ".gemini"), outside);
+
+        var made = SignInCopy.Make(AgyLike(), real, Path.Combine(home, ".gemini", "antigravity-cli", "token.json"), home);
+
+        made.Should().BeOfType<SignInCopyResult.Refused>();
+        Directory.GetFileSystemEntries(outside).Should().BeEmpty("no folder and no file was made through the link");
+    }
+
+    [Fact]
+    [SupportedOSPlatform("linux")]
+    public void AHomeThatIsALink_IsRefused_ForTheCopy_AndForTheDelete_AndNothingIsWrittenOrDeletedThroughIt()
+    {
+        using var dir = TempDir.For("sic-");
+        var real = Path.Combine(dir.Path, "real.json");
+        File.WriteAllText(real, CodexFile(Now.AddHours(3)));
+        var target = Path.Combine(dir.Path, "elsewhere");
+        Directory.CreateDirectory(Path.Combine(target, ".probe"));
+        File.WriteAllText(Path.Combine(target, ".probe", "auth.json"), "made-up-file-of-another-folder");
+        var home = Path.Combine(dir.Path, "home");
+        Directory.CreateSymbolicLink(home, target);
+
+        SignInCopy.HomeProblem(home).Should().Contain("not a real folder");
+        SignInCopy.Make(CodexLike(), real, Path.Combine(home, ".probe", "auth.json"), home).Should().BeOfType<SignInCopyResult.Refused>().Which.Sentence.Should().Contain("home");
+        CoderSignInCopy.Remove(home, Path.Combine(home, ".probe", "auth.json")).Should().Contain("not a real folder");
+
+        File.ReadAllText(Path.Combine(target, ".probe", "auth.json")).Should().Be("made-up-file-of-another-folder", "the file behind the link was neither overwritten nor deleted");
+    }
+
+    [Fact]
+    [SupportedOSPlatform("linux")]
+    public void AHomeWhoseParentIsALink_IsNotAtItsOwnRealPath_AndIsRefused()
+    {
+        using var dir = TempDir.For("sic-");
+        var real = Path.Combine(dir.Path, "real");
+        Directory.CreateDirectory(Path.Combine(real, "home"));
+        var parent = Path.Combine(dir.Path, "parent");
+        Directory.CreateSymbolicLink(parent, real);
+
+        SignInCopy.HomeProblem(Path.Combine(parent, "home")).Should().Contain("real path");
+        SignInCopy.HomeProblem(Path.Combine(real, "home")).Should().BeEmpty("the control: the same folder by its real path is a home");
+    }
+
+    [Fact]
+    [SupportedOSPlatform("linux")]
+    public async Task ACodersPreflight_OnAHomeThatIsALink_RefusesTheLaunch_AndTheFolderBehindTheLinkIsNotWritten()
+    {
+        NeedAUserManager();
+        await using var bed = await CoderBed.CreateAsync();
+        var behind = Path.Combine(bed.RealHome, "behind-the-link");
+        Directory.CreateDirectory(behind);
+        Directory.CreateDirectory(bed.Job.CoderVendorFolder("claude"));
+        Directory.CreateSymbolicLink(bed.Job.CoderHomeOf("claude"), behind);
+
+        var admission = await bed.Boundary().AdmitAsync(bed.Job, FakeCliInvocations.Exe, TestContext.Current.CancellationToken);
+
+        admission.Should().BeOfType<BoundaryAdmission.Refused>("a unit is never started on a home that is a link");
+        Directory.GetFileSystemEntries(behind).Select(Path.GetFileName).Should().NotContain(name => name!.StartsWith(".coai-", StringComparison.Ordinal), "nothing of the preflight was left behind the link");
+    }
+
+    [Fact]
+    public void TheHomesOfTwoVendors_AreTwoFolders_AndEachUnitBindsItsOwnVendorFolderAndNotTheOthers()
+    {
+        using var dir = TempDir.For("sic-");
+        var job = new BoundaryJob("job-x", new CoaiMcp.Runners.Worktrees.CoderTree(Path.Combine(dir.Path, "wt"), Path.Combine(dir.Path, "main"), string.Empty), Path.Combine(dir.Path, "jobs", "job-x"), NetworkChoice.None("t"), NetworkChoice.None("t"), 100);
+        var host = BoundaryHost.Current() with { RealHome = "/nonexistent/coai-real-home" };
+        var program = new CoderProgram("/usr/bin/true", string.Empty, string.Empty);
+
+        job.CoderHomeOf("codex").Should().Be(Path.Combine(job.JobRoot, "coder", "codex", "home"));
+        job.CoderHomeOf("agy").Should().Be(Path.Combine(job.JobRoot, "coder", "agy", "home"));
+        job.CoderHomeFolder.Should().Be(Path.Combine(job.JobRoot, "coder", "claude", "home"));
+        var codex = CoderUnit.Properties(host, job, program, TimeSpan.FromMinutes(5), "codex");
+        var agy = CoderUnit.Properties(host, job, program, TimeSpan.FromMinutes(5), "agy");
+
+        codex.Should().Contain($"BindPaths={job.CoderVendorFolder("codex")}").And.NotContain(property => property.Contains(job.CoderVendorFolder("agy"), StringComparison.Ordinal));
+        agy.Should().Contain($"BindPaths={job.CoderVendorFolder("agy")}").And.NotContain(property => property.Contains(job.CoderVendorFolder("codex"), StringComparison.Ordinal));
+        codex.Should().NotContain($"BindPaths={job.CoderFolder}", "the whole coder folder of the job is bound by no unit");
+        CoderUnit.Environment(host, job, "codex").Should().Contain(new KeyValuePair<string, string>("HOME", job.CoderHomeOf("codex")));
+        CoderUnit.Environment(host, job, "agy").Should().Contain(new KeyValuePair<string, string>("HOME", job.CoderHomeOf("agy")));
+    }
+
+    [Fact]
+    public void TheRefreshFolder_IsInsideTheJobFolder_ByTheName_Refresh()
+    {
+        using var dir = TempDir.For("sic-");
+        var job = new BoundaryJob("job-x", new CoaiMcp.Runners.Worktrees.CoderTree(Path.Combine(dir.Path, "wt"), Path.Combine(dir.Path, "main"), string.Empty), Path.Combine(dir.Path, "jobs", "job-x"), NetworkChoice.None("t"), NetworkChoice.None("t"), 100);
+
+        job.RefreshFolder.Should().Be(Path.Combine(job.JobRoot, "refresh"));
+    }
+
+    [Fact]
+    public async Task WhereTheJobFolderIsItsOwnCover_NoRefreshIsRun_TheLaunchIsRefusedWithASentence_AndNoUnitIsStarted()
+    {
+        NeedAUserManager();
+        await using var bed = await CoderBed.CreateAsync();
+        bed.Job.IsItsOwnCover.Should().BeTrue("the control: this layout is the own-cover one");
+        var vendor = new CopyVendor("probe", AgyLike("set-json-field", "x", "y", "z"));
+        Write(bed, AgyFile(DateTime.UtcNow.AddMinutes(1)));
+        var requests = bed.Launcher.Requests.Count;
+
+        var said = await bed.Boundary().For(vendor).PrepareSignInAsync(bed.Job, FakeCliInvocations.Exe, TimeSpan.FromMinutes(30), new SignInJobs(), DateTime.UtcNow, TestContext.Current.CancellationToken);
+
+        said.Should().Contain("cannot be hidden").And.Contain("start probe once yourself").And.NotContain(Refresh).And.NotContain(Access);
+        bed.Launcher.Requests.Count.Should().Be(requests, "no refresh unit was started");
+        Directory.Exists(bed.Job.RefreshFolder).Should().BeFalse("no full copy was made");
+    }
+
+    [Fact]
+    public async Task AFullCopyAKilledRunnerLeft_IsDeletedAtTheNextStart_BeforeAnythingElseIsAsked()
+    {
+        NeedAUserManager();
+        await using var bed = await CoderBed.CreateAsync();
+        var vendor = new CopyVendor("probe", AgyLike("set-json-field", "x", "y", "z"));
+        Write(bed, AgyFile(Now.AddHours(5)));
+        Directory.CreateDirectory(bed.Job.RefreshFolder);
+        await File.WriteAllTextAsync(Path.Combine(bed.Job.RefreshFolder, "auth.json"), AgyFile(Now.AddHours(5)), TestContext.Current.CancellationToken);
+
+        var said = await bed.Boundary().For(vendor).PrepareSignInAsync(bed.Job, FakeCliInvocations.Exe, TimeSpan.FromMinutes(30), new SignInJobs(), Now, TestContext.Current.CancellationToken);
+
+        said.Should().BeEmpty();
+        Directory.Exists(bed.Job.RefreshFolder).Should().BeFalse("the folder with the owner's full sign-in did not wait for the retention");
     }
 
     // ---------- helpers ----------
@@ -537,13 +679,13 @@ public sealed class ASignInCopyTests
 
         public IReadOnlyList<string> ResumedArgv(string model, string worktree, string sessionId) => CoderVendors.Claude.ResumedArgv(model, worktree, sessionId);
 
-        public IReadOnlyList<string> UnitProperties(BoundaryHost host, BoundaryJob job, CoderProgram program, TimeSpan runtimeMax) => CoderVendors.Claude.UnitProperties(host, job, program, runtimeMax);
+        public IReadOnlyList<string> UnitProperties(BoundaryHost host, BoundaryJob job, CoderProgram program, TimeSpan runtimeMax) => CoderUnit.Properties(host, job, program, runtimeMax, id);
 
         public string WorkingDirectory(BoundaryJob job) => CoderVendors.Claude.WorkingDirectory(job);
 
-        public IReadOnlyList<KeyValuePair<string, string>> Environment(BoundaryHost host, BoundaryJob job) => CoderVendors.Claude.Environment(host, job);
+        public IReadOnlyList<KeyValuePair<string, string>> Environment(BoundaryHost host, BoundaryJob job) => CoderUnit.Environment(host, job, id);
 
-        public CoderHomeLayout Home(BoundaryJob job) => new(job.CoderHomeFolder, Path.Combine(job.CoderHomeFolder, ".probe", "auth.json"), [.. job.CoderFolders, Path.Combine(job.CoderHomeFolder, ".probe")]);
+        public CoderHomeLayout Home(BoundaryJob job) => new(job.CoderHomeOf(id), Path.Combine(job.CoderHomeOf(id), ".probe", "auth.json"), [.. job.CoderFoldersOf(id), Path.Combine(job.CoderHomeOf(id), ".probe")]);
 
         public CoderProgram Program(string executable, string path, BoundaryJob job) => CoderVendors.Claude.Program(executable, path, job);
     }

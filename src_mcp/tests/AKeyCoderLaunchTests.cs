@@ -87,7 +87,7 @@ public sealed class AKeyCoderLaunchTests
         await using var rig = await CoderRig.CreateAsync();
         KeyRig.AddKeys(rig.World.DataDir, "a");
         var job = rig.NewJob();
-        var bind = $"BindReadOnlyPaths={rig.Host.SignInFile}:{Path.Combine(rig.JobFolder(job), "coder", "home", ".claude", ".credentials.json")}";
+        var bind = $"BindReadOnlyPaths={rig.Host.SignInFile}:{Path.Combine(rig.JobFolder(job), "coder", "claude", "home", ".claude", ".credentials.json")}";
         rig.Degrade = arguments => arguments.Contains("NoNewPrivileges=yes") ? PutBefore(arguments, "NoNewPrivileges=yes", bind) : arguments;
         rig.Says("sonnet", CoderRig.Edits("src/thing.cs"), CoderRig.Report());
 

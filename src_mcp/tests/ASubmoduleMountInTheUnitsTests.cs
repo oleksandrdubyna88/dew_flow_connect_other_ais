@@ -182,7 +182,7 @@ public sealed class ASubmoduleMountInTheUnitsTests
         string[] e2 =
         [
             .. E2Isolation,
-            $"BindReadOnlyPaths={M}", "BindReadOnlyPaths=/w", $"BindPaths={W}", $"BindReadOnlyPaths={W}/.git", $"TemporaryFileSystem={J}:ro", $"BindPaths={J}/coder", $"BindPaths={J}/coder/{TempName}:{BoundaryUnit.UnitTemp}", $"BindPaths={J}/coder/vartmp:{BoundaryUnit.UnitVarTemp}",
+            $"BindReadOnlyPaths={M}", "BindReadOnlyPaths=/w", $"BindPaths={W}", $"BindReadOnlyPaths={W}/.git", $"TemporaryFileSystem={J}:ro", $"BindPaths={J}/coder/claude", $"BindPaths={J}/coder/{TempName}:{BoundaryUnit.UnitTemp}", $"BindPaths={J}/coder/vartmp:{BoundaryUnit.UnitVarTemp}",
             .. E2Hardening,
             "PrivateNetwork=no",
             .. E2Limits,

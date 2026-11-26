@@ -151,10 +151,16 @@ internal sealed partial class RoleModelLauncher(Func<string, string?> settings, 
         var turn = new CoderTurnLauncher(Layer!, outputDir, vendor);
         var finished = await new ReviewerExecutor(turn).LaunchOnceAsync(invocation, ct);
         var stop = turn.Outcome is { } outcome ? CoderOsLayer.StopOf(outcome) : null;
-        var scrubbed = secret is null ? new Scrubbed(finished, false, []) : Scrub(finished, secret);
+        var keyScrubbed = secret is null ? new Scrubbed(finished, false, []) : Scrub(finished, secret);
+        // The tokens of the job's sign-in copies are scrubbed the way a pool key is (M9); a token printed ends the job, whatever else the turn did.
+        var (tokenScrubbed, tokenHits) = ScrubTokens(keyScrubbed.Launch, Layer!.SignInTokens());
+        var scrubbed = keyScrubbed with { Launch = tokenScrubbed };
+        stop = tokenHits.Count > 0
+            ? new CoderOsStop("sign-in-token-printed", $"the coder printed the token of the sign-in copy made for this job ({string.Join(", ", tokenHits)}), so nothing of the turn was kept and the job stops; the copy is deleted with the job and the vendor's own sign-in is the person's", Started: true)
+            : stop;
         var handle = scrubbed.Launch.Process is { } process ? runtime.ReadHandle(process) : string.Empty;
         var job = Layer!.Job;
-        var inHome = secret is not null && HoldsTheKey(secret, job.CoderHomeFolder, job.CoderTempFolder, job.CoderVarTempFolder);
+        var inHome = secret is not null && HoldsTheKey(secret, vendor.Home(job).Home, job.CoderTempFolder, job.CoderVarTempFolder);
 
         return new RoleLaunched(stop is { Started: false } ? null : scrubbed.Launch, null, runtime, WithoutCredential(invocation), handle, stop, KeyId: keyId, KeyExposed: scrubbed.OwnFound || inHome) { ExposedIds = scrubbed.OtherIds };
     }
@@ -200,27 +206,66 @@ internal sealed partial class RoleModelLauncher(Func<string, string?> settings, 
             });
         }
 
-        var process = launch.Process is { } raw ? raw with { StdOut = Clean(raw.StdOut), StdErr = Clean(raw.StdErr) } : null;
+        var rewritten = Rewrite(launch, Clean);
+
+        return new Scrubbed(rewritten, own, [.. others.Where(id => !string.Equals(id, secret.Id, StringComparison.Ordinal))]);
+    }
+
+    /// <summary>The launch with <paramref name="clean"/> applied to every text of it a person or the record could read: the answer, the evidence, both streams, and the words of the outcome.</summary>
+    private static ReviewerLaunch Rewrite(ReviewerLaunch launch, Func<string, string> clean)
+    {
+        var process = launch.Process is { } raw ? raw with { StdOut = clean(raw.StdOut), StdErr = clean(raw.StdErr) } : null;
         var terminal = launch.Terminal switch
         {
-            ReviewerOutcome.NonZeroExit exit => exit with { StdErrTail = Clean(exit.StdErrTail), FailureReason = Clean(exit.FailureReason) },
-            ReviewerOutcome.Unparseable unparseable => unparseable with { Reason = Clean(unparseable.Reason) },
-            ReviewerOutcome.RateLimited limited => limited with { Reason = Clean(limited.Reason) },
-            ReviewerOutcome.NotStarted notStarted => notStarted with { Reason = Clean(notStarted.Reason) },
-            ReviewerOutcome.StoodDown stoodDown => stoodDown with { Reason = Clean(stoodDown.Reason) },
+            ReviewerOutcome.NonZeroExit exit => exit with { StdErrTail = clean(exit.StdErrTail), FailureReason = clean(exit.FailureReason) },
+            ReviewerOutcome.Unparseable unparseable => unparseable with { Reason = clean(unparseable.Reason) },
+            ReviewerOutcome.RateLimited limited => limited with { Reason = clean(limited.Reason) },
+            ReviewerOutcome.NotStarted notStarted => notStarted with { Reason = clean(notStarted.Reason) },
+            ReviewerOutcome.StoodDown stoodDown => stoodDown with { Reason = clean(stoodDown.Reason) },
             var other => other,
         };
-        var cleaned = launch with
+
+        return launch with
         {
-            Answer = launch.Answer is null ? null : Clean(launch.Answer),
-            Evidence = Clean(launch.Evidence),
-            NotApplied = Clean(launch.NotApplied),
-            Warning = Clean(launch.Warning),
+            Answer = launch.Answer is null ? null : clean(launch.Answer),
+            Evidence = clean(launch.Evidence),
+            NotApplied = clean(launch.NotApplied),
+            Warning = clean(launch.Warning),
             Process = process,
             Terminal = terminal,
         };
+    }
 
-        return new Scrubbed(cleaned, own, [.. others.Where(id => !string.Equals(id, secret.Id, StringComparison.Ordinal))]);
+    /// <summary>
+    /// What the launch printed with the exact text of every token of the job's sign-in copies (<see cref="CoderOsLayer.SignInTokens"/>) replaced by a mark that names the copy's id, and the ids found (the fourth security verify of s7 t6, M9): the same scrub a pool key gets, applied before anything of the turn is
+    /// stored, read or committed. A hit says a coder printed its copy's token; the job ends <c>coder-boundary</c>.
+    /// </summary>
+    private static (ReviewerLaunch Launch, IReadOnlyList<string> Hits) ScrubTokens(ReviewerLaunch launch, IReadOnlyList<ClaudeKeySecret> tokens)
+    {
+        if (tokens.Count == 0)
+        {
+            return (launch, []);
+        }
+
+        var hits = new List<string>();
+
+        string Clean(string text)
+        {
+            foreach (var token in tokens)
+            {
+                var cleaned = token.Scrub(text);
+                if (!string.Equals(cleaned, text, StringComparison.Ordinal) && !hits.Contains(token.Id, StringComparer.Ordinal))
+                {
+                    hits.Add(token.Id);
+                }
+
+                text = cleaned;
+            }
+
+            return text;
+        }
+
+        return (Rewrite(launch, Clean), hits);
     }
 
     /// <summary>The consultant runtime of a vendor and the runtime name its install cure is read by.</summary>
