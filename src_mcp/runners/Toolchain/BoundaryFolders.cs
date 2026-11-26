@@ -23,9 +23,9 @@ internal static class BoundaryFolders
                 Directory.CreateDirectory(folder);
             }
 
-            File.WriteAllText(Path.Combine(temp, BoundaryPreflight.MarkerName(job)), string.Empty);
-            File.WriteAllText(Path.Combine(varTemp, BoundaryPreflight.MarkerName(job)), string.Empty);
-            File.WriteAllText(Path.Combine(job.Tree.Root, BoundaryPreflight.MarkerName(job)), string.Empty);
+            WriteOwnFile(Path.Combine(temp, BoundaryPreflight.MarkerName(job)), source: null, executable: false);
+            WriteOwnFile(Path.Combine(varTemp, BoundaryPreflight.MarkerName(job)), source: null, executable: false);
+            WriteOwnFile(Path.Combine(job.Tree.Root, BoundaryPreflight.MarkerName(job)), source: null, executable: false);
 
             return (string.Empty, CopyProgram(host, job));
         }
@@ -43,13 +43,50 @@ internal static class BoundaryFolders
         }
 
         var copy = Path.Combine(job.Tree.Root, BoundaryPreflight.ProgramCopyName);
-        File.Copy(host.WindowsProgram, copy, overwrite: true);
-        if (!OperatingSystem.IsWindows())
-        {
-            File.SetUnixFileMode(copy, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-        }
+        WriteOwnFile(copy, host.WindowsProgram, executable: true);
 
         return copy;
+    }
+
+    /// <summary>
+    /// Makes a file of coai's own, on the host, in a folder that a unit can write (the unit's temp folders, the worktree): the name is looked at WITHOUT following it, a file or a link at it is deleted by its own name (that removes a link, never its
+    /// target), a folder or anything else is a stop, and the file is made with <see cref="FileMode.CreateNew"/> — a link planted between the delete and the create makes the create fail, and is never followed (verify M15: a link at the name used to
+    /// truncate, or fill, any host file the person could write, or to make one that was not there).
+    /// </summary>
+    /// <param name="path">The file's path.</param>
+    /// <param name="source">The file whose bytes are copied in; <c>null</c>: an empty file.</param>
+    /// <param name="executable">Whether the file is made mode 0700 (the program's copy) — on the open handle, never by path.</param>
+    private static void WriteOwnFile(string path, string? source, bool executable)
+    {
+        switch (Files.RealPath.Lstat(path).Kind)
+        {
+            case Files.EntryKind.File or Files.EntryKind.Link:
+                File.Delete(path);
+                break;
+            case Files.EntryKind.Directory:
+                throw new IOException("a folder stands at the name of a file of coai's own, so it was not written");
+        }
+
+        var options = new FileStreamOptions { Mode = FileMode.CreateNew, Access = FileAccess.Write, Share = FileShare.None };
+        if (!OperatingSystem.IsWindows())
+        {
+            options.UnixCreateMode = executable
+                ? UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
+                : UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupRead | UnixFileMode.OtherRead;
+        }
+
+        using var stream = new FileStream(path, options);
+        if (source is not null)
+        {
+            using var from = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read);
+            from.CopyTo(stream);
+        }
+
+        if (executable && !OperatingSystem.IsWindows())
+        {
+            // The creation mode is cut by the umask; the handle is the file just made, so this cannot reach another.
+            File.SetUnixFileMode(stream.SafeFileHandle, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
     }
 
     /// <summary>Removes the Windows program's copy and the three markers, as soon as the preflight unit has ended.</summary>
