@@ -102,3 +102,16 @@ test('an input keeps what was typed, and focus is the document\'s', () => {
   assert.equal(input.value, 'typed');
   assert.equal(doc.activeElement, input);
 });
+
+test('a created element is in no tree until it is appended, and it carries the text and attributes it was given', () => {
+  const doc = new DomDocument(PAGE);
+  const made = doc.createElement('SPAN');
+  made.textContent = 'x < y';
+  made.setAttribute('data-k', 'v');
+
+  assert.equal(made.tag, 'span');
+  assert.equal(doc.querySelectorAll('span').length, 0, 'it is in the page only once appended');
+  doc.getElementById('a')!.appendChild(made);
+  assert.equal(doc.querySelectorAll('span[data-k="v"]').length, 1);
+  assert.equal(made.innerHTML, 'x &lt; y');
+});

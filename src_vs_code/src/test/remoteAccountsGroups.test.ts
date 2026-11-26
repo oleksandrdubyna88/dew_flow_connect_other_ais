@@ -8,7 +8,7 @@ import { tableModel } from '../remoteAccountsTable';
 import type { TableInput, TableModel } from '../remoteAccountsTable';
 import type { HostMemory } from '../remoteAccountsRound';
 import {
-  NOW, agyOf, claude, codexOf, codexUsage, inputOf, memoryOf, min, reading, refused, seen, usageOf,
+  NOW, agyOf, bigInput, claude, codexOf, codexUsage, inputOf, memoryOf, min, reading, refused, seen, usageOf,
 } from './accountsTableFixtures';
 
 /**
@@ -19,24 +19,6 @@ import {
 const compare = compareRows as unknown as Compare;
 const state = (groupBy: ViewState['groupBy'] = 'server', key: ViewState['sort']['key'] = 'name', dir: ViewState['sort']['dir'] = 'asc', tool: ViewState['sort']['tool'] = 'claude-code'): ViewState =>
   ({ v: 1, groupBy, sort: { key, dir, tool } });
-
-const OTHER = 'other@example.test';
-
-/** The tab of the plan's pictures: two places of one account, a failed one, another account, a refused, a `jq`-less, wsl, an unknown account, signed out. */
-function bigInput(): TableInput {
-  const memory = memoryOf(
-    ['host-a', seen(reading({ claude: claude({ usage: usageOf(56, 77, 49) }), codex: codexOf(), agy: agyOf() }), 3)],
-    ['host-e', seen(reading({ claude: claude({ usage: { state: 'skipped' } }) }), 4)],
-    ['host-b', { failure: { sentence: '“host-b” did not answer over ssh within 30 s.', atMs: NOW - min(3) }, ...seen(reading({ claude: claude({ usage: usageOf(56, 77, 49) }) }), 25) }],
-    ['host-f', seen(reading({ claude: claude({ email: OTHER, org: 'Other Org', plan: 'max', usage: { state: 'skipped' } }) }), 3)],
-    ['host-d', seen(reading({ jqMissing: 'apt-get' }), 3)],
-    ['host-g', seen(reading({ claude: claude({ email: '', org: null, usage: usageOf(10, 20, 30) }), codex: codexOf() }), 6)],
-    ['host-h', seen(reading({ claude: { state: 'signed-out' } }), 7)],
-    ['host-i', seen(reading({ codex: codexOf(codexUsage({ windows: [{ minutes: 300, usedPercent: 40, resetsAtMs: null }] })) }), 8)],
-  );
-
-  return inputOf({ hosts: ['host-a', 'host-b', 'host-c', 'host-d', 'host-e', 'host-f', 'host-g', 'host-h', 'host-i', 'wsl'], memory, standings: [refused('host-c')] });
-}
 
 const BIG: TableModel = tableModel(bigInput());
 

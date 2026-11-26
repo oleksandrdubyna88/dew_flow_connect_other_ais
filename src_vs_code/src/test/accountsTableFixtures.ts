@@ -54,3 +54,19 @@ export const inputOf = (over: Partial<TableInput> = {}): TableInput => ({
   windows: true,
   ...over,
 });
+
+/** The tab of the plan's pictures: two places of one account, a failed one, another account, a refused, a `jq`-less, wsl, an unknown account, signed out. */
+export function bigInput(): TableInput {
+  const memory = memoryOf(
+    ['host-a', seen(reading({ claude: claude({ usage: usageOf(56, 77, 49) }), codex: codexOf(), agy: agyOf() }), 3)],
+    ['host-e', seen(reading({ claude: claude({ usage: { state: 'skipped' } }) }), 4)],
+    ['host-b', { failure: { sentence: '“host-b” did not answer over ssh within 30 s.', atMs: NOW - min(3) }, ...seen(reading({ claude: claude({ usage: usageOf(56, 77, 49) }) }), 25) }],
+    ['host-f', seen(reading({ claude: claude({ email: 'other@example.test', org: 'Other Org', plan: 'max', usage: { state: 'skipped' } }) }), 3)],
+    ['host-d', seen(reading({ jqMissing: 'apt-get' }), 3)],
+    ['host-g', seen(reading({ claude: claude({ email: '', org: null, usage: usageOf(10, 20, 30) }), codex: codexOf() }), 6)],
+    ['host-h', seen(reading({ claude: { state: 'signed-out' } }), 7)],
+    ['host-i', seen(reading({ codex: codexOf(codexUsage({ windows: [{ minutes: 300, usedPercent: 40, resetsAtMs: null }] })) }), 8)],
+  );
+
+  return inputOf({ hosts: ['host-a', 'host-b', 'host-c', 'host-d', 'host-e', 'host-f', 'host-g', 'host-h', 'host-i', 'wsl'], memory, standings: [refused('host-c')] });
+}
