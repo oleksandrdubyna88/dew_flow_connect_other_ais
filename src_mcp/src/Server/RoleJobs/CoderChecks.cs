@@ -89,9 +89,9 @@ internal sealed class CoderChecks(IRoleRun run, GitHistory git, CoderOsLayer lay
 
         var logs = Path.Combine(run.Folder, "checks", $"round-{turn}");
         var result = await new ChecksAtBase(git, new CheckRunner(layer.Launcher, layer.ChecksBoundary()))
-            .RunCoderJobAsync(new DiskWorkFolder(tree.Root), baseSha, layer.Job, logs, Jobs, ct);
+            .RunCoderJobAsync(new DiskWorkFolder(tree.Root), baseSha, layer.Job, logs, Jobs, ct, step => RecordStep(logs, step));
+        RecordRefusal(result, logs);
         ct.ThrowIfCancellationRequested();
-        RecordUnits(result, logs);
         var after = await StateAsync(ct);
         if (Moved(before, after) is { Length: > 0 } moved)
         {
@@ -102,23 +102,35 @@ internal sealed class CoderChecks(IRoleRun run, GitHistory git, CoderOsLayer lay
     }
 
     /// <summary>
-    /// The record of each check unit, beside its log, the way the coder's own launches are recorded (<see cref="CoderUnitRecord"/>): <c>unit-s&lt;n&gt;.json</c> for step n of the round — the unit's properties, its network and the rows of its preflight — and
-    /// <c>unit-preflight.json</c> when the preflight refused the checks and no unit of a step ran. A record that cannot be written is not a fault of the checks.
+    /// The record of a check unit, beside its log, the way the coder's own launches are recorded (<see cref="CoderUnitRecord"/>): <c>unit-s&lt;n&gt;.json</c> for step n of the round — the unit's properties, its network and the rows of its preflight — written the moment the step
+    /// has ended, before the next one starts, so a cancel or a hang in a later step keeps the records of the steps that ran. The number is the one the runner gave the step (<see cref="StepRecord.Number"/>), not one read back from a file name.
+    /// A record that cannot be written is not a fault of the checks: it is one warning line in the runner's log, naming the part and no content.
     /// </summary>
-    private void RecordUnits(CheckResult result, string logs)
+    private void RecordStep(string logs, StepRecord step)
     {
-        foreach (var step in result.Steps.Where(step => step.Boundary.Boundary == BoundaryRecord.UnitBoundary))
+        if (step.Boundary.Boundary != BoundaryRecord.UnitBoundary || step.Number <= 0)
         {
-            var number = int.TryParse(Path.GetFileName(step.LogPath).Split('-')[0], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var n) ? n : 0;
-            if (number > 0)
-            {
-                CoderUnitRecord.Write(logs, $"s{number}", CoderUnitRecord.CheckUnitName(layer.Job, $"s{number}"), step.Boundary, layer.Mounts, step.Started, $"{step.Project} {(step.Step == CheckStep.Build ? "build" : "test")}");
-            }
+            return;
         }
 
+        var part = $"s{step.Number}";
+        Record(logs, part, CoderUnitRecord.CheckUnitName(layer.Job, part), step.Boundary, step.Started, $"{step.Project} {(step.Step == CheckStep.Build ? "build" : "test")}");
+    }
+
+    /// <summary><c>unit-preflight.json</c> when the preflight refused the checks and no unit of a step ran.</summary>
+    private void RecordRefusal(CheckResult result, string logs)
+    {
         if (result.State == CheckState.BoundaryRefused && result.Boundary.Boundary == BoundaryRecord.UnitBoundary)
         {
-            CoderUnitRecord.Write(logs, "preflight", CoderUnitRecord.CheckUnitName(layer.Job, "pre"), result.Boundary, layer.Mounts, started: false, "the preflight of the checks");
+            Record(logs, "preflight", CoderUnitRecord.CheckUnitName(layer.Job, "pre"), result.Boundary, started: false, "the preflight of the checks");
+        }
+    }
+
+    private void Record(string logs, string part, string unit, BoundaryRecord record, bool started, string what)
+    {
+        if (!CoderUnitRecord.Write(logs, part, unit, record, layer.Mounts, started, what))
+        {
+            run.Log.Warning("role job {JobId}: the record of the check unit {Part} could not be written", run.Request.JobId, part);
         }
     }
 
