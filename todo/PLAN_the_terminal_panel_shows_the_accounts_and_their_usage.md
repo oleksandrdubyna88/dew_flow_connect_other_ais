@@ -527,7 +527,9 @@ from a distro is ever an operand as it is; a distro's and a user's name are argu
 ### 5. What is still to be measured
 
 Each needs the owner's go for its exact commands. **W9, W6 and W7 have the owner's go (2026-11-26); W8 has none
-yet.** **W-numbers here are measurements** (the S1 spec uses W-numbers for its sentences).
+yet.** **W-numbers here are measurements** (the S1 spec uses W-numbers for its sentences). **Run 2026-11-26:** W7
+passed, W6 selected "every round", W8 recorded (run with W7 before its go; the owner was told) —
+[RESULTS § 13](../research/RESULTS_accounts_and_usage_on_a_vm.md).
 
 | # | What is measured, and where | What the result does |
 |---|---|---|

@@ -420,3 +420,55 @@ They are kept as written; this section says what replaced them.
   has no rights, the list shows the command to run. **Nothing of that was measured here**: this host has `jq`, and no
   package manager was run in any of the five calls. **What was built (E1):** E1 and E2 install nothing; the list shows the
   command to run there, and the installer comes after E2 (parent decision 17).
+
+## 13. W6, W7 and W8 — measured 2026-11-26
+
+Another VM than § 1–11: the host of the vault entries `ai1-…`, Linux user `dev3`, Claude Code **2.1.332**, agy
+**1.5.17**, `strace`, `jq` and `timeout` present. Each through `creds_exec`, which ends a call at 30 s. The same user had
+about six live Claude Code sessions running the whole time. The owner gave the go for W6, W7 and W9 on 2026-11-26.
+**W8 was run together with W7 before it had a go of its own** (it starts only `agy --version`, which the shipped
+script starts every round, decision 16); the owner was told.
+
+The usage read in every run below: `cd / && TZ=UTC timeout -k 1 <s> claude -p "/usage" --output-format json
+--no-session-persistence --strict-mcp-config --setting-sources "" </dev/null`, its output sent to `/dev/null`.
+
+### W7 — every program start of one usage read: PASSED
+
+Run under `strace -f -qq -e trace=execve`, twice (the second with `-s 200` for the full argv). Exit 0; 5652 ms under
+strace; 6 processes traced. The programs started:
+
+- `timeout`; `~/.local/bin/claude` → `~/.local/share/claude/versions/2.1.332`, twice (Claude Code itself);
+- the same binary with argv0 `rg`: `rg --version`, and `rg --no-config --files --hidden --no-ignore --max-depth 4
+  --glob .orphaned_at ~/.claude/plugins/cache` — Claude Code's own ripgrep, looking for orphaned plugin caches;
+- `/bin/sh -c "ps -o command= -p <pid>"`, where the pid was one of this user's live `claude` processes: Claude Code
+  reads the command line of another live session. Read-only.
+
+No hook command, no MCP server, no plugin process. Two seconds after the read, the user's processes younger than 40 s
+were the ssh session, its `bash`, `ps` and `awk` only: nothing outlived the read. **Verdict: nothing was started that
+is not Claude Code's own; W7 passes.**
+
+### W6 — what a usage read writes: a fixed number of backups → "every round"
+
+**Not as the plan wrote it**: the plan asks for a user with no live session, and every VM user with Claude Code that
+the vault opens (`ai1-dev2`, `ai1-dev3`, `ai2-root`) has live sessions. The owner chose `dev3` with control windows.
+
+- Control A, 20 s with no read: `~/.claude.json` changed 0 times (its time polled once a second).
+- 12 reads from `/`, 11:09:50–11:11:25 UTC, three calls: every one exit 0, 2493–3065 ms (the first 3043 ms, the rest
+  about 2.5–2.7 s). `~/.claude.json` changed after read 1 and read 11 only — 2 of 12.
+- Control B, 20 s with no read: 0 changes.
+- `~/.claude.json` has no project entry for `/` before or after (`.projects | has("/")` is `false`).
+- **The backups are dot files**, `~/.claude/backups/.claude.json.backup.<epoch ms>`; a first count with a plain `ls`
+  said 0 and was wrong. With `ls -A`: **5 files**, stamped 09:13:53, 09:50:18, 10:35:58, 11:06:59 and 11:10:26 UTC,
+  176–180 KB each. The first three are before any read of ours (live sessions); 11:06:59 is near the W7 reads;
+  11:10:26 is inside the read window, but no read around it changed `~/.claude.json` (reads 4–8 reported no change),
+  so who wrote it is not proven.
+
+**Decided by it.** Weeks of live sessions leave exactly five backups, so Claude Code keeps a fixed number — this is
+inferred from the count; a deletion was not seen happen. The row of § 5 that holds: **"Claude Code keeps a fixed
+number → every round"**. To confirm: the count is five again on a later day.
+
+### W8 — `agy --version`: a record
+
+`cd / && timeout -k 1 25 agy --version </dev/null`: printed `1.5.17`, exit 0, **886 ms**. The program's size was
+278 438 600 bytes before and after; nothing under `~/.gemini` and not the program was newer than a marker made just
+before; no process was left.
