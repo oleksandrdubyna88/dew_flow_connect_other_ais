@@ -98,6 +98,17 @@ public static class GitScratch
         {
             File.SetAttributes(dir, attributes & ~FileAttributes.ReadOnly);
         }
+
+        // Unix: a folder a step of the checks made with mode 000 cannot be listed, so nothing in it could be deleted and its job's record would be kept for ever. The owner's read, write and search are given back to the folder about to be deleted.
+        if (!OperatingSystem.IsWindows())
+        {
+            const UnixFileMode owner = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
+            var mode = File.GetUnixFileMode(dir);
+            if ((mode & owner) != owner)
+            {
+                File.SetUnixFileMode(dir, mode | owner);
+            }
+        }
     }
 
     /// <summary>

@@ -151,3 +151,5 @@ Done: M1 (a job folder must be its own real path; refused in both admissions), M
 - Where a job's folders were made is not in its record (R4): two machines on one data folder, or a changed `COAI_CODER_JOBS`, leave them.
 - What ends a coder worktree and its `coder/<jobId>` branch.
 - The one window of the HeldFile fix (a child between its fork and its exec).
+
+Second pass of the verify (M3, done): the key folder, the keys file and the person's home are resolved once where they are made, so a data folder or a home spelled through a link is hidden at its real path and the rows read the real path; the keys row no longer expands a glob character in a key path; a folder of mode 000 made by a check no longer keeps its job's record. Still open from that pass: S1 can be redone with `KillSignal=SIGKILL` on the unit (a stop is then immediate) and the step's pids read from outside; the fall-back cover (see above) wants, for E3, a refusal or a canary row.

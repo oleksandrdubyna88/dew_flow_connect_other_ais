@@ -144,10 +144,29 @@ public sealed record BoundaryJob(
     /// The folder of the claude key pool of this device (<c>&lt;data&gt;/keys</c>), when the job runs on it (epoch 3 E2 s7): a coder launch with a pool key gets <c>InaccessiblePaths=</c> of it, and its preflight proves a read of it fails from inside the unit. Empty
     /// when there is none to hide (a job started without a data folder, in a test of the boundary alone).
     /// </summary>
-    public string KeysFolder { get; init; } = string.Empty;
+    public string KeysFolder
+    {
+        get => _keysFolder;
+        init => _keysFolder = RealOrSpelled(value);
+    }
 
-    /// <summary>The keys FILE the person named (<c>COAI_CLAUDE_KEYS_FILE</c> or the device setting <c>keysFile</c>), wherever it lies: hidden from a keyed coder's unit as the key folder is (second judgement) — a file outside <c>/home</c> would otherwise be readable there. Empty when none.</summary>
-    public string KeysFile { get; init; } = string.Empty;
+    private readonly string _keysFolder = string.Empty;
+
+    /// <summary>The keys FILE the person named (<c>COAI_CLAUDE_KEYS_FILE</c> or the device setting <c>keysFile</c>), by its real path: hidden from a keyed coder's unit as the key folder is (second judgement) — a file outside <c>/home</c> would otherwise be readable there. Empty when none.</summary>
+    public string KeysFile
+    {
+        get => _keysFile;
+        init => _keysFile = RealOrSpelled(value);
+    }
+
+    private readonly string _keysFile = string.Empty;
+
+    /// <summary>
+    /// The real path of a key path, resolved ONCE where the job is made: a data folder, a keys file or a home spelled through a link would otherwise be put into <c>InaccessiblePaths=-</c> and into the rows as the spelling, which inside a unit whose <c>/home</c> is an
+    /// empty tmpfs is a path the link is not at — the real keys would stay readable and the rows would say hidden. A path that cannot be resolved stays as spelled.
+    /// </summary>
+    internal static string RealOrSpelled(string path) =>
+        path.Length > 0 && Files.RealPath.Resolve(path) is { Ok: true } real ? real.Path : path;
 
     /// <summary>The sentence that says the keys folder cannot be hidden from a unit — it is spelled into <c>InaccessiblePaths=</c>, whose value is split at a space, so a path with a space, a colon, a backslash or a control character is refused — or empty.</summary>
     public string KeysFolderProblem() =>

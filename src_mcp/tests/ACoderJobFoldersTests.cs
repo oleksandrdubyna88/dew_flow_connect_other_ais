@@ -117,6 +117,32 @@ public sealed class ACoderJobFoldersTests : IDisposable
     }
 
     [Fact]
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    public void AFolderOfModeZeroMadeByACheck_IsRemoved_NotKeptWithItsRecordForEver()
+    {
+        Assert.SkipUnless(FolderHolds.CanMakeOneUndeletable, "a privileged Unix process ignores the mode");
+        var locked = Path.Combine(Make(Job), "coder", "home", "locked");
+        Directory.CreateDirectory(Path.Combine(locked, "inner"));
+        File.WriteAllText(Path.Combine(locked, "inner", "f.txt"), "x\n");
+        File.SetUnixFileMode(Path.Combine(locked, "inner"), UnixFileMode.None);
+        File.SetUnixFileMode(locked, UnixFileMode.None);
+
+        try
+        {
+            CoderJobFolders.RemoveOf(Settings, Job, _failures.AsFailureSink()).Should().BeTrue(string.Join("; ", _failures));
+        }
+        finally
+        {
+            if (Directory.Exists(locked))
+            {
+                File.SetUnixFileMode(locked, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            }
+        }
+
+        Directory.Exists(Folder(Job)).Should().BeFalse();
+    }
+
+    [Fact]
     public void AFolderThatCannotBeRemoved_StaysAndIsSaid_AndIsRemovedWhenItCan()
     {
         Assert.SkipUnless(FolderHolds.CanMakeOneUndeletable, "a privileged Unix process ignores the mode that makes a folder undeletable");

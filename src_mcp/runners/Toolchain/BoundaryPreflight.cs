@@ -136,12 +136,14 @@ internal static class BoundaryPreflight
         coderdir=$8; keylist=$9
         """;
 
-    /// <summary>A check unit holds no key material: the key folder and the keys file (the pool's, wherever they lie) cannot be read from it. Not named: nothing to hide.</summary>
+    /// <summary>A check unit holds no key material: the key folder and the keys file (the pool's, at their real paths) cannot be read from it. Not named: nothing to hide.</summary>
     private const string CheckKeysRow = """
         if [ -z "$keylist" ]; then row keys-folder-hidden ok "no key folder or keys file is named for this job, so there is none to hide"
         else
           seen=
+          set -f
           for k in $keylist; do if [ -r "$k" ] && { ls -A "$k" >/dev/null 2>&1 || head -c 1 "$k" >/dev/null 2>&1; }; then seen="$seen $k;"; fi; done
+          set +f
           if [ -z "$seen" ]; then row keys-folder-hidden ok "the claude key folder and the keys file cannot be read from inside the check's unit"; else row keys-folder-hidden bad "key material can be read from inside the check's unit:$seen"; fi
         fi
         """;
@@ -232,14 +234,14 @@ internal static class BoundaryPreflight
 
     /// <summary>The command of the preflight unit.</summary>
     internal static IReadOnlyList<string> Command(BoundaryJob job, BoundaryHost host, CheckNetwork network, string program) =>
-        ["/bin/sh", "-c", ScriptFor(job), "coai-preflight", job.Tree.Root, job.Tree.MainCheckout, host.RealHome, network == CheckNetwork.Private ? "none" : "host", job.JobId, program, network == CheckNetwork.Host ? host.ResolverFile : string.Empty, job.CoderFolder, string.Join(' ', new[] { job.KeysFolder, job.KeysFile }.Where(path => path.Length > 0)), .. MountArguments(job)];
+        ["/bin/sh", "-c", ScriptFor(job), "coai-preflight", job.Tree.Root, job.Tree.MainCheckout, host.ResolvedHome, network == CheckNetwork.Private ? "none" : "host", job.JobId, program, network == CheckNetwork.Host ? host.ResolverFile : string.Empty, job.CoderFolder, string.Join(' ', new[] { job.KeysFolder, job.KeysFile }.Where(path => path.Length > 0)), .. MountArguments(job)];
 
     /// <summary>
     /// The command of the coder's preflight unit: the program of the launch, the copy of the Windows program to try, the sign-in file as the unit sees it (empty when the launch binds none) and the resolver file, as the launch itself gets them. The network is the host's — the CLI
     /// talks to its vendor — so the network row only says so.
     /// </summary>
     internal static IReadOnlyList<string> CoderCommand(BoundaryJob job, BoundaryHost host, CoderProgram program, string windowsCopy, string signInInUnit) =>
-        ["/bin/sh", "-c", CoderScriptFor(job), "coai-preflight", job.Tree.Root, job.Tree.MainCheckout, host.RealHome, "host", job.JobId, windowsCopy, host.ResolverFile, job.CoderRoot, signInInUnit, program.Real, host.BindSignIn ? "bound" : "keyed", host.BindSignIn ? string.Empty : job.KeysFolder, job.CoderSignInFile, .. MountArguments(job)];
+        ["/bin/sh", "-c", CoderScriptFor(job), "coai-preflight", job.Tree.Root, job.Tree.MainCheckout, host.ResolvedHome, "host", job.JobId, windowsCopy, host.ResolverFile, job.CoderRoot, signInInUnit, program.Real, host.BindSignIn ? "bound" : "keyed", host.BindSignIn ? string.Empty : job.KeysFolder, job.CoderSignInFile, .. MountArguments(job)];
 
     /// <summary>
     /// The rows of a preflight unit that ran: the client's own answer, then the rows the script printed — or, for a unit that did not run to its end, the one row that says why. A unit that did not start, did not finish in time or could not be stopped has no rows worth reading.
