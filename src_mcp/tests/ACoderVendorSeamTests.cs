@@ -71,7 +71,7 @@ public sealed class ACoderVendorSeamTests
             $"BindReadOnlyPaths={M}", "BindReadOnlyPaths=/w", $"BindPaths={W}", $"BindReadOnlyPaths={W}/.git", $"TemporaryFileSystem={J}:ro", $"BindPaths={J}/coder", $"BindPaths={J}/coder/tmp:{BoundaryUnit.UnitTemp}", $"BindPaths={J}/coder/vartmp:{BoundaryUnit.UnitVarTemp}",
             "NoNewPrivileges=yes", "PrivateUsers=yes", "RestrictSUIDSGID=yes", "LockPersonality=yes", "ProtectKernelTunables=yes", "ProtectControlGroups=yes", "Nice=10", "LimitCORE=0",
             "PrivateNetwork=no",
-            "RuntimeMaxSec=300", "MemoryMax=2000M", "MemorySwapMax=0",
+            "RuntimeMaxSec=300", "TimeoutStopSec=10", "MemoryMax=2000M", "MemorySwapMax=0",
         ];
 
         claude.UnitProperties(NoHome(), TheJob(), Program, TimeSpan.FromMinutes(5)).Should().Equal(e2);
