@@ -12,7 +12,9 @@
 > written 2026-11-26) **and the Opus review of
 > that spec** (gate E2-G1, § 6). **Gate E2-G1 ran on 2026-11-26: pass after fixes** — the spec settles every item of
 > § 5, E2.S1, and its rows X1–X12 are in §§ 4, 5, 9 and 10 below; one BLOCKING and seven FIX changes to the spec's
-> text (§ 6, *Gate E2-G1*) are made by its author before any S1 code. The parent's text A1–A8 that the spec names is
+> text (§ 6, *Gate E2-G1*) are made by its author before any S1 code. **The author made them (2026-11-26), and the
+> four rows that work added, X13–X16, are in §§ 4 and 5 too.** The question's words (W14) name the login session a
+> WSL read opens, by the owner's decision 25 of 2026-11-26 (§ 4, C3). The parent's text A1–A8 that the spec names is
 > taken as the owner decided (entries 3.1 and 3.2 of the parent, applied on another branch). It also takes up the two todo files T8 and T9, which say they are closed by this document: their findings
 > are scenarios of E2.S1 here, and the commit of E2.S1 that makes them green deletes both files and their rows.
 >
@@ -122,7 +124,8 @@ E1's § 3 holds, with these differences:
 ## 4. Shared contracts
 
 The names are the contract between the stories; the S1 spec may rename a member, and then this section changes in the
-same commit. **Gate E2-G1 (2026-11-26) wrote the S1 spec's names and rules in here** (its rows X1–X12, marked).
+same commit. **Gate E2-G1 (2026-11-26) wrote the S1 spec's names and rules in here** (its rows X1–X12, marked;
+X13–X16, added when the spec took the gate's changes, are marked the same way).
 
 - **C1 — the permission (S1 owns; the S1 spec, §§ P3–P7, fixes it).**
   - In `refused.json`, a record of the side: `grant: { utc, stamp }`, a stamp being a whole number from 1 to 10¹².
@@ -175,10 +178,24 @@ same commit. **Gate E2-G1 (2026-11-26) wrote the S1 spec's names and rules in he
   row of *CoAI: hosts read over ssh* (S1), and the first door of a chat-door press while there is no permission
   (S1) — that press reads nothing. **`sessions.askPermissionFirst()`** for the icon's press (S3): it asks only when
   the state row holds no `askedUtc` and the permission is not in force, and writes `askedUtc` BEFORE the modal; a
-  row that is lost asks once more. **`sessions.withdraw(): Promise<Withdrew>`**: a person's press, narrows at once.
+  row that is lost asks once more. **`sessions.withdraw(): Promise<Withdrew>`**: a person's press, narrows at once;
+  `Withdrew` is `'withdrawn' | { kind: 'unwritten', why: 'busy' | 'disk' | 'lost' }`. **`why: 'busy'`** (X14, the
+  spec's B1, § P7, step 9): the withdrawal's file is made, but its read-back is not final while another window holds
+  the claim; it is shown as every `unwritten` is — the door says `waiting`, W9 with *Save now* (S3 shows it).
   **`sessions.permission(): Promise<Permission>`**, `{ given: utc } | 'none' | 'waiting'`, from a fresh read of the
   disk, for the tab — a file that cannot be read is `'none'`, and each host's door says `damaged`. An *Allow* that was
   not kept says W16, and for `unwritten` raises the notice `accounts-permission-not-kept` with *Save now* (spec J4).
+  **The words of W14** (the spec's § P12 is their source, E2S1-T14 holds them; owner decision 25, 2026-11-26, made
+  them name the login session of a WSL read, and decision 24 root): title *Allow CoAI to read the hosts of your Creds
+  terminals?*; detail *“Allow reading” lets CoAI read every host of an open “Creds: <host> / <session>” terminal with
+  no further question — the ones open now and the ones you open later. It logs in over ssh with your own keys every
+  10 minutes while one is open. In a Windows window with a “Creds: wsl / …” terminal it also reads every Linux user
+  of each running WSL distro, root too; on a distro with systemd this opens a login session that runs the user’s
+  profile. It reads which of Claude Code, Codex and Antigravity are there, their accounts and usage; claude and agy,
+  as found there, are started (root’s as root), and Claude Code rewrites its cache files. Take or add the question
+  reads that terminal’s Claude session. CoAI itself installs and writes nothing there. To stop: “Not this host”,
+  “Stop the round”, or “Withdraw the permission” for all reads. The permission is for <side> only; another side asks
+  its own.* The words cover what the later epics read (the spec's J10), so E3 does not ask again for the WSL read.
 - **C4 — the model (S2 owns).** `tableModel(input): TableModel` and `blockOf(model, scopeHost)`, pure,
   JSON-serialisable, deterministic. Every time in it is an absolute instant (ms since the epoch), never an age. Every
   text that came from a VM, a distro or a terminal's name went through `forList` (and so `plainValue`) once. A host
@@ -214,7 +231,10 @@ then of the code). Depends on nothing in this epic; S3 and S4 depend on it. Serv
 - **Scope.** NEW pure `src/remotePermission.ts` (the stamp rule `inForce`, `grantOf`, the withdrawal file's grammar
   and parser, the door's and the question's types, `permissionAsker`; spec J9); `src/remoteRefusals.ts` (the grant record; the stamp rule; the grant-write that refuses a low stamp;
   `regain` carrying the grant unchanged); `src/remoteRefusalsDisk.ts` (the withdrawal files: exclusive create, list,
-  read, remove; their prefix named by the host half; the sweep never touches them); `src/remoteKeeper.ts` (the one
+  read, remove; their prefix named by the host half; the sweep never touches them; `lockNow`, the read of the lock as
+  it is); **ONE new export of `src/chatStoreLock.ts`** — its reader of a lock as it is, with no claim, that the disk's
+  `lockNow` reads through (X15; spec § P4, J11, N5): it makes, takes over and removes nothing, and no function or rule
+  of the lock that is there changes; `src/remoteKeeper.ts` (the one
   door of C2; `waiting`; `allow`, `withdraw`, `permission`; the copy of the withdrawal stamp; `allowNew` and `automatic`
   out of `KeeperSeams`); `src/remoteHosts.ts` (`consentOf` without the per-host "yes"; `Consent` and `Admission`
   narrowed to C2); `src/remoteRead.ts` (the door before EVERY spawn; `no-permission` asks the one question and reads
@@ -235,7 +255,8 @@ then of the code). Depends on nothing in this epic; S3 and S4 depend on it. Serv
   host), `read.how` and `allowedNow` (**not by S1**: the first exception below); `waitingConsent`'s `damaged` (`:405`, T8); the per-host question `askQuestion`
   with its code `read-remote-session` and its *Read* button (`remoteSessionHost.ts:54-66`), `askHostOf` (`:243`), the
   road's `ask` seam and `asked` door (`remoteRead.ts:281`, `:313`, `:330`); `allowsNewHosts` and `ignoredLayer` of
-  `RemoteSessions` (`:119-120`, `:320-321`); W2 `ASKED_DETAIL`, `KEY`, `forgetSaid`'s "allowed again by itself",
+  `RemoteSessions` (`:119-120`, `:320-321`); W2 `ASKED_DETAIL`, `KEY` (**not by S1**: W10 is built from it, the third
+  exception below; X13), `forgetSaid`'s "allowed again by itself",
   `rowDescription`'s automatic arms, `emptyOn`, W7's sentence on the setting, W10 `ignoredWorkspace`/`ignoredFolder`
   (`remoteHostsSaid.ts:19-104`; W10 **by S2**, the third exception below); the setting `coai.terminalAccountsAllowNewHosts` (`package.json:637-641`),
   `ALLOW_NEW_HOSTS_KEY`, its place in `SAFETY_KEYS`, `allowNewHostsFrom` and `ignoredLayerOf` (`modelKeys.ts:27`, `:41`,
@@ -258,7 +279,10 @@ then of the code). Depends on nothing in this epic; S3 and S4 depend on it. Serv
     (`:4`) for `SETTING` (`:379`), the text of the two notices S4 deletes; S1 drops the import and writes the string
     literal there. The key's text also stays in the five help files until S5 rewrites them (gate E2-G1, F1).
   - **W10 stays** (X7): `ignoredWorkspace` and `ignoredFolder` are read by `remoteAccountsRows.ts:391` (`ignoredRows`);
-    S2 deletes them with the row.
+    S2 deletes them with the row. **So does the constant `KEY` of `remoteHostsSaid.ts:21`** (X13, the gate's F1), from
+    which W10's two sentences are built (`:94-95`): it is the THIRD place where the key's text stays in `src/`, and
+    E2S1-T17's scan allows that one line by name, with a companion that only W10's two sentences use it. The commit
+    that deletes W10 (with `ignoredRows`: § 5, E2.S2, *When each goes*) deletes `KEY` and removes that allowance.
   - The other bridge lines: `remoteAccountsHost.ts:342-343` become `ignored: undefined`, `allowNew: false`, and `:445`
     becomes `ask: (host) => sessions.changeHost(host)` — S3 deletes both with the QuickPick. **While
     `ACCOUNTS_READING` is `off` no build executes the bridge**; S1 does not touch that constant.
@@ -307,7 +331,9 @@ then of the code). Depends on nothing in this epic; S3 and S4 depend on it. Serv
   T1–T18 and H1 and adds **T19** (K4: a withdrawal file that cannot be read, and an *Allow* that removes it), **T20**
   (a withdrawal wins over generated histories, and the invariant I1), **T21** (a copy that is not a stamp; the top of
   the count), **T22** (*Save now* frees a hanging lock when nothing waits, J3) and **T23** (the list after the "yes":
-  `how: 'auto'` rows go at the next write; the cap) — its § P15 is the full table, its § P16 the break-its R1–R30.
+  `how: 'auto'` rows go at the next write; the cap) — its § P15 is the full table, its § P16 the break-its R1–R33 (X16: R31 is
+  the gate's B1 — a withdrawal's read-back that ignores a held claim; R32 is F6 — the floor file made after the
+  removals; R33 holds the start-again sentence of the spec's § P6, step 9).
 
 | # | What must be shown (RED first) |
 |---|---|
@@ -327,7 +353,7 @@ then of the code). Depends on nothing in this epic; S3 and S4 depend on it. Serv
 | E2S1-T14 | The question: raised by the icon's first press and not by its second; a lost state row asks once more; **a tick never asks** (the ask seam throws from a tick); its code, title, detail and two buttons are the spec's words; `read-remote-session` is in no source file and not in `notification-sites.json` |
 | E2S1-T15 | The hosts list: the first row is the permission, in its four states (*Allow reading…*; *Withdraw the permission*, with its time; *Save now*; the damage row: W18); a host's choices are the spec's three, **each offered only where it does something** (§ P10's table); no *Read* button for a host; no change can carry `answer: 'yes'` |
 | E2S1-T16 | The sides (K5, as the spec settles it): a grant of one side is not one of another and is never copied; a withdrawal on one side stops another side at its next read, which copies it into its own folder; an *Allow* on one side does not give the other back |
-| E2S1-T17 | The setting is gone: not in the manifest; `SAFETY_KEYS` is `['kimiAllowNetworkSignIn']`; not in `NEVER_TRANSFERRED`, and an imported file that holds it is refused *unknown to this build*; no source reads it (the key-read scan of `modelKeysAreReadOnce.test.ts`); a user layer holding `true` writes no row and allows no host. The key's text is in `src/` only in the ONE bridge line of `remoteAccountsHost.ts` (X6, removed by E2S4-T9) and in the five help files (removed by E2S5-T2) |
+| E2S1-T17 | The setting is gone: not in the manifest; `SAFETY_KEYS` is `['kimiAllowNetworkSignIn']`; not in `NEVER_TRANSFERRED`, and an imported file that holds it is refused *unknown to this build*; no source reads it (the key-read scan of `modelKeysAreReadOnce.test.ts`); a user layer holding `true` writes no row and allows no host. The key's text is in `src/` only in the ONE bridge line of `remoteAccountsHost.ts` (X6, removed by E2S4-T9), in the five help files (removed by E2S5-T2), and in the ONE line of `remoteHostsSaid.ts` that holds the constant `KEY` (`:21`), which W10's two sentences are built from (X13; the scan allows that line by name, a companion holds that only W10 uses it, and the commit that deletes W10 removes the allowance) |
 | E2S1-T18 | Retired code is gone and stays gone: no `kind: 'auto'` change can be built (a type test), no `AUTOMATIC_ALLOW` or `autoCounts` exists, and the parser still reads `how: 'auto'` |
 | E2S1-H1 | Host scenario (CI's real-editor job): through the real `globalState` and the real folder — no permission → the door answers `no-permission`; an *Allow* through the keeper; a withdrawal → a `withdrawn-*.json` on the disk and the door answers `no-permission`; everything restored in a `finally` |
 
@@ -540,7 +566,9 @@ describes what they built). Serves merge condition 6 and the owner's reading of 
 3. **Gate E2-G1** — Opus reviews the S1 spec against the parent and against this document; any change to C1–C3 goes
    into § 4 and into the briefs of S3 and S4 in the same commit, before they are coded. **Verdict, 2026-11-26: pass
    after fixes** (below). The rows X1–X12 are in §§ 4, 5, 9 and 10; S1's code starts when the spec's author has made
-   B1 and F1–F7 in the spec and the caller has checked them against this list.
+   B1 and F1–F7 in the spec and the caller has checked them against this list. **Made, and X13–X16 taken in
+   (2026-11-26):** X13 in § 5, E2.S1 (*Removed*, *W10 stays*, E2S1-T17); X14 in § 4, C3 (`Withdrew`'s `busy`, which
+   S3 shows); X15 in § 5, E2.S1, *Scope*; X16 in § 5, E2.S1, the scenarios' line (R1–R33).
 
 ### Gate E2-G1 — the review of the S1 spec (Opus, 2026-11-26)
 
@@ -636,6 +664,8 @@ dead code while `ACCOUNTS_READING` is `off` (`remoteAccountsHost.ts:140`).
   lock's rule (§ 6, step 2).
 - N6. W14 is long (about 150 words) and names reads E2 does not do (WSL, the usage: J10, residual 19); the owner
   should know that before R14.
+  (Answered 2026-11-26: with the owner's decision 25, W14 was rewritten shorter and names the login session a WSL
+  read opens and root's read; its words are in § 4, C3. The owner still sees the words before R14.)
 - N7. The parent's entries 3.1 and 3.2 "with no stop": `plan-lifecycle.mjs` is red when the current epoch holds two
   entries and is not `stopped` (`plan-change-control.md`, *The check*). The planner's commit records it as one cause
   (the spec's own reading, A1–A6) or records the stop.
