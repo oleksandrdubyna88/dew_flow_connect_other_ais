@@ -1,0 +1,45 @@
+# mtp-solution: a solution with MTP projects and a global.json that names the runner
+
+== base
+resolved: source Detected
+project Svc.sln [dotnet] origin detected definedByHead False folder . testsNone False
+  fact kind = solution
+  fact projects = src/Svc/Svc.csproj,tests/Svc.More/Svc.More.csproj,tests/Svc.Tests/Svc.Tests.csproj
+  fact testProjects = tests/Svc.More/Svc.More.csproj,tests/Svc.Tests/Svc.Tests.csproj
+  fact runner = mtp
+  fact mtpOptIn = true
+  fact editorconfig = true
+  fact tests = 2
+  step restore network Host cwd . subject Svc.sln: dotnet restore Svc.sln
+  step format network None cwd . subject Svc.sln extensions .cs: dotnet format whitespace . --folder --include {file}
+  step build network None cwd . subject Svc.sln: dotnet build Svc.sln -c Debug --no-restore -m:{jobs}
+  step test network None cwd . subject tests/Svc.More/Svc.More.csproj: dotnet test --project tests/Svc.More/Svc.More.csproj --no-build -c Debug
+  step test network None cwd . subject tests/Svc.Tests/Svc.Tests.csproj: dotnet test --project tests/Svc.Tests/Svc.Tests.csproj --no-build -c Debug
+
+== head: adds-a-project
+resolved: source Detected
+project Svc.sln [dotnet] origin detected definedByHead False folder . testsNone False
+  fact kind = solution
+  fact projects = src/Svc/Svc.csproj,tests/Svc.More/Svc.More.csproj,tests/Svc.Tests/Svc.Tests.csproj
+  fact testProjects = tests/Svc.More/Svc.More.csproj,tests/Svc.Tests/Svc.Tests.csproj
+  fact runner = mtp
+  fact mtpOptIn = true
+  fact editorconfig = true
+  fact tests = 2
+  step restore network Host cwd . subject Svc.sln: dotnet restore Svc.sln
+  step format network None cwd . subject Svc.sln extensions .cs: dotnet format whitespace . --folder --include {file}
+  step build network None cwd . subject Svc.sln: dotnet build Svc.sln -c Debug --no-restore -m:{jobs}
+  step test network None cwd . subject tests/Svc.More/Svc.More.csproj: dotnet test --project tests/Svc.More/Svc.More.csproj --no-build -c Debug
+  step test network None cwd . subject tests/Svc.Tests/Svc.Tests.csproj: dotnet test --project tests/Svc.Tests/Svc.Tests.csproj --no-build -c Debug
+difference: Svc.sln: projects was 'src/Svc/Svc.csproj,tests/Svc.More/Svc.More.csproj,tests/Svc.Tests/Svc.Tests.csproj' at the base and is 'src/Svc/Svc.csproj,tests/Svc.More/Svc.More.csproj,tests/Svc.Tests/Svc.Tests.csproj,tests/Svc.Third/Svc.Third.csproj' at the head
+difference: Svc.sln: testProjects was 'tests/Svc.More/Svc.More.csproj,tests/Svc.Tests/Svc.Tests.csproj' at the base and is 'tests/Svc.More/Svc.More.csproj,tests/Svc.Tests/Svc.Tests.csproj,tests/Svc.Third/Svc.Third.csproj' at the head
+difference: Svc.sln: tests was '2' at the base and is '3' at the head
+
+== head: removes-the-test-project
+toolchain_refused: the worktree removed test (tests/Svc.More/Svc.More.csproj) of Svc.sln; a step the base commit had is never lost at the head, so nothing was run. Land the change in a commit of its own, or name the commands in .coai/toolchain.yaml
+
+== head: adds-a-cargo-toml
+toolchain_refused: 'Cargo.toml' is a rust manifest at the head commit; rust is a known stack with no adapter yet, so a repository that holds one is not checked by guessing; name the commands in .coai/toolchain.yaml
+
+== head: renames-a-folder
+toolchain_refused: the worktree removed test (tests/Svc.More/Svc.More.csproj) of Svc.sln; a step the base commit had is never lost at the head, so nothing was run. Land the change in a commit of its own, or name the commands in .coai/toolchain.yaml

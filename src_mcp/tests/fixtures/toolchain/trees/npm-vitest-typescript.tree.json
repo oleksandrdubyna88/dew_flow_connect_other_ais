@@ -1,0 +1,40 @@
+{
+  "description": "an npm package with vitest and TypeScript",
+  "base": {
+    "web/package.json": "{\n  \"name\": \"web\",\n  \"version\": \"1.0.0\",\n  \"private\": true,\n  \"scripts\": {\n    \"build\": \"tsc -p .\",\n    \"typecheck\": \"tsc --noEmit\",\n    \"test\": \"vitest run\"\n  },\n  \"devDependencies\": {\n    \"vitest\": \"^3.0.0\",\n    \"typescript\": \"^5.0.0\",\n    \"prettier\": \"^3.0.0\"\n  }\n}\n",
+    "web/package-lock.json": "{\n  \"name\": \"web\",\n  \"version\": \"1.0.0\",\n  \"lockfileVersion\": 3,\n  \"requires\": true,\n  \"packages\": {}\n}\n",
+    "web/tsconfig.json": "{}\n",
+    "web/.prettierrc": "{}\n",
+    "web/src/index.ts": "export {};\n"
+  },
+  "heads": [
+    {
+      "name": "adds-a-project",
+      "write": {
+        "docs/package.json": "{\n  \"name\": \"docs\",\n  \"version\": \"1.0.0\",\n  \"private\": true,\n  \"scripts\": {\n    \"build\": \"node docs.js\"\n  },\n  \"devDependencies\": {}\n}\n",
+        "docs/package-lock.json": "{\n  \"name\": \"docs\",\n  \"version\": \"1.0.0\",\n  \"lockfileVersion\": 3,\n  \"requires\": true,\n  \"packages\": {}\n}\n"
+      }
+    },
+    {
+      "name": "removes-the-test-script",
+      "write": {
+        "web/package.json": "{\n  \"name\": \"web\",\n  \"version\": \"1.0.0\",\n  \"private\": true,\n  \"scripts\": {\n    \"build\": \"tsc -p .\",\n    \"typecheck\": \"tsc --noEmit\"\n  },\n  \"devDependencies\": {\n    \"vitest\": \"^3.0.0\",\n    \"typescript\": \"^5.0.0\",\n    \"prettier\": \"^3.0.0\"\n  }\n}\n"
+      }
+    },
+    {
+      "name": "adds-a-cargo-toml",
+      "write": {
+        "web/Cargo.toml": "[package]\n"
+      }
+    },
+    {
+      "name": "renames-a-folder",
+      "rename": [
+        [
+          "web",
+          "site"
+        ]
+      ]
+    }
+  ]
+}

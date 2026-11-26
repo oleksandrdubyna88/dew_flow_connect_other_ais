@@ -1,0 +1,61 @@
+# npm-vitest-typescript: an npm package with vitest and TypeScript
+
+== base
+resolved: source Detected
+project web/package.json [node] origin detected definedByHead False folder web testsNone False
+  fact packageManager = npm
+  fact lock = package-lock.json
+  fact workspaces = false
+  fact build = script
+  fact typecheck = script
+  fact test = script
+  fact runner = vitest
+  fact tsconfig = true
+  fact prettier = true
+  fact unchecked = false
+  step restore network Host cwd web subject web/package.json: npm ci --ignore-scripts
+  step format network None cwd web subject web/package.json extensions .js,.mjs,.cjs,.jsx,.ts,.tsx,.json: npx --no-install prettier --write --ignore-unknown {file}
+  step build network None cwd web subject web/package.json: npm run build
+  step typecheck network None cwd web subject web/package.json: npm run typecheck
+  step test network None cwd web subject web/package.json: npm test
+
+== head: adds-a-project
+resolved: source Detected
+project docs/package.json [node] origin detected definedByHead True folder docs testsNone True
+  fact packageManager = npm
+  fact lock = package-lock.json
+  fact workspaces = false
+  fact build = script
+  fact typecheck = none
+  fact test = none
+  fact runner = none
+  fact tsconfig = false
+  fact prettier = false
+  fact unchecked = false
+  step restore network Host cwd docs subject docs/package.json: npm ci --ignore-scripts
+  step build network None cwd docs subject docs/package.json: npm run build
+project web/package.json [node] origin detected definedByHead False folder web testsNone False
+  fact packageManager = npm
+  fact lock = package-lock.json
+  fact workspaces = false
+  fact build = script
+  fact typecheck = script
+  fact test = script
+  fact runner = vitest
+  fact tsconfig = true
+  fact prettier = true
+  fact unchecked = false
+  step restore network Host cwd web subject web/package.json: npm ci --ignore-scripts
+  step format network None cwd web subject web/package.json extensions .js,.mjs,.cjs,.jsx,.ts,.tsx,.json: npx --no-install prettier --write --ignore-unknown {file}
+  step build network None cwd web subject web/package.json: npm run build
+  step typecheck network None cwd web subject web/package.json: npm run typecheck
+  step test network None cwd web subject web/package.json: npm test
+
+== head: removes-the-test-script
+toolchain_refused: the worktree removed test of web/package.json; a step the base commit had is never lost at the head, so nothing was run. Land the change in a commit of its own, or name the commands in .coai/toolchain.yaml
+
+== head: adds-a-cargo-toml
+toolchain_refused: 'web/Cargo.toml' is a rust manifest at the head commit; rust is a known stack with no adapter yet, so a repository that holds one is not checked by guessing; name the commands in .coai/toolchain.yaml
+
+== head: renames-a-folder
+toolchain_refused: the worktree removed restore of web/package.json; a step the base commit had is never lost at the head, so nothing was run. Land the change in a commit of its own, or name the commands in .coai/toolchain.yaml

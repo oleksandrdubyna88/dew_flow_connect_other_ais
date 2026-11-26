@@ -1,0 +1,39 @@
+# vstest-solution: a solution with a VSTest project
+
+== base
+resolved: source Detected
+project App.slnx [dotnet] origin detected definedByHead False folder . testsNone False
+  fact kind = solution
+  fact projects = src/App/App.csproj,tests/App.Tests/App.Tests.csproj
+  fact testProjects = tests/App.Tests/App.Tests.csproj
+  fact runner = vstest
+  fact mtpOptIn = false
+  fact editorconfig = false
+  fact tests = 1
+  step restore network Host cwd . subject App.slnx: dotnet restore App.slnx
+  step build network None cwd . subject App.slnx: dotnet build App.slnx -c Debug --no-restore -m:{jobs}
+  step test network None cwd . subject tests/App.Tests/App.Tests.csproj: dotnet test tests/App.Tests/App.Tests.csproj --no-build -c Debug
+
+== head: adds-a-project
+resolved: source Detected
+project App.slnx [dotnet] origin detected definedByHead False folder . testsNone False
+  fact kind = solution
+  fact projects = src/App/App.csproj,tests/App.Tests/App.Tests.csproj
+  fact testProjects = tests/App.Tests/App.Tests.csproj
+  fact runner = vstest
+  fact mtpOptIn = false
+  fact editorconfig = false
+  fact tests = 1
+  step restore network Host cwd . subject App.slnx: dotnet restore App.slnx
+  step build network None cwd . subject App.slnx: dotnet build App.slnx -c Debug --no-restore -m:{jobs}
+  step test network None cwd . subject tests/App.Tests/App.Tests.csproj: dotnet test tests/App.Tests/App.Tests.csproj --no-build -c Debug
+difference: App.slnx: projects was 'src/App/App.csproj,tests/App.Tests/App.Tests.csproj' at the base and is 'src/App/App.csproj,src/Extra/Extra.csproj,tests/App.Tests/App.Tests.csproj' at the head
+
+== head: removes-the-test-project
+toolchain_refused: the worktree removed test (tests/App.Tests/App.Tests.csproj) of App.slnx; a step the base commit had is never lost at the head, so nothing was run. Land the change in a commit of its own, or name the commands in .coai/toolchain.yaml
+
+== head: adds-a-cargo-toml
+toolchain_refused: 'native/Cargo.toml' is a rust manifest at the head commit; rust is a known stack with no adapter yet, so a repository that holds one is not checked by guessing; name the commands in .coai/toolchain.yaml
+
+== head: renames-a-folder
+toolchain_refused: the worktree removed test (tests/App.Tests/App.Tests.csproj) of App.slnx; a step the base commit had is never lost at the head, so nothing was run. Land the change in a commit of its own, or name the commands in .coai/toolchain.yaml

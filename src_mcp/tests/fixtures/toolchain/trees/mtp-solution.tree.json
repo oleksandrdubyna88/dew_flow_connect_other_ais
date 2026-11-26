@@ -1,0 +1,40 @@
+{
+  "description": "a solution with MTP projects and a global.json that names the runner",
+  "base": {
+    "Svc.sln": "Microsoft Visual Studio Solution File\n",
+    "global.json": "{ \"sdk\": { \"version\": \"10.0.100\", \"rollForward\": \"latestFeature\" }, \"test\": { \"runner\": \"Microsoft.Testing.Platform\" } }\n",
+    "src/Svc/Svc.csproj": "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup><ItemGroup></ItemGroup></Project>\n",
+    "tests/Svc.Tests/Svc.Tests.csproj": "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net10.0</TargetFramework><OutputType>Exe</OutputType><UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner></PropertyGroup><ItemGroup><ProjectReference Include=\"..\\..\\src\\Svc\\Svc.csproj\" /><PackageReference Include=\"xunit.v3\" Version=\"4.0.2\" /></ItemGroup></Project>\n",
+    "tests/Svc.More/Svc.More.csproj": "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net10.0</TargetFramework><OutputType>Exe</OutputType><UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner></PropertyGroup><ItemGroup><PackageReference Include=\"xunit.v3\" Version=\"4.0.2\" /></ItemGroup></Project>\n",
+    ".editorconfig": "root = true\n"
+  },
+  "heads": [
+    {
+      "name": "adds-a-project",
+      "write": {
+        "tests/Svc.Third/Svc.Third.csproj": "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net10.0</TargetFramework><OutputType>Exe</OutputType><UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner></PropertyGroup><ItemGroup><PackageReference Include=\"xunit.v3\" Version=\"4.0.2\" /></ItemGroup></Project>\n"
+      }
+    },
+    {
+      "name": "removes-the-test-project",
+      "remove": [
+        "tests/Svc.More/Svc.More.csproj"
+      ]
+    },
+    {
+      "name": "adds-a-cargo-toml",
+      "write": {
+        "Cargo.toml": "[package]\nname = \"x\"\n"
+      }
+    },
+    {
+      "name": "renames-a-folder",
+      "rename": [
+        [
+          "tests/Svc.More",
+          "tests/Svc.Extra"
+        ]
+      ]
+    }
+  ]
+}

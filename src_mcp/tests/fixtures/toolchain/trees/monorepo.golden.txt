@@ -1,0 +1,102 @@
+# monorepo: a monorepo with a solution and two packages
+
+== base
+resolved: source Detected
+project Api/Api.slnx [dotnet] origin detected definedByHead False folder Api testsNone False
+  fact kind = solution
+  fact projects = Api/src/Api.csproj,Api/tests/Api.Tests.csproj
+  fact testProjects = Api/tests/Api.Tests.csproj
+  fact runner = vstest
+  fact mtpOptIn = false
+  fact editorconfig = false
+  fact tests = 1
+  step restore network Host cwd . subject Api/Api.slnx: dotnet restore Api/Api.slnx
+  step build network None cwd . subject Api/Api.slnx: dotnet build Api/Api.slnx -c Debug --no-restore -m:{jobs}
+  step test network None cwd . subject Api/tests/Api.Tests.csproj: dotnet test Api/tests/Api.Tests.csproj --no-build -c Debug
+project admin/package.json [node] origin detected definedByHead False folder admin testsNone False
+  fact packageManager = npm
+  fact lock = package-lock.json
+  fact workspaces = false
+  fact build = none
+  fact typecheck = none
+  fact test = script
+  fact runner = jest
+  fact tsconfig = false
+  fact prettier = false
+  fact unchecked = false
+  step restore network Host cwd admin subject admin/package.json: npm ci --ignore-scripts
+  step test network None cwd admin subject admin/package.json: npm test
+project web/package.json [node] origin detected definedByHead False folder web testsNone False
+  fact packageManager = npm
+  fact lock = package-lock.json
+  fact workspaces = false
+  fact build = script
+  fact typecheck = none
+  fact test = script
+  fact runner = vitest
+  fact tsconfig = false
+  fact prettier = false
+  fact unchecked = false
+  step restore network Host cwd web subject web/package.json: npm ci --ignore-scripts
+  step build network None cwd web subject web/package.json: npm run build
+  step test network None cwd web subject web/package.json: npm test
+
+== head: adds-a-project
+resolved: source Detected
+project Api/Api.slnx [dotnet] origin detected definedByHead False folder Api testsNone False
+  fact kind = solution
+  fact projects = Api/src/Api.csproj,Api/tests/Api.Tests.csproj
+  fact testProjects = Api/tests/Api.Tests.csproj
+  fact runner = vstest
+  fact mtpOptIn = false
+  fact editorconfig = false
+  fact tests = 1
+  step restore network Host cwd . subject Api/Api.slnx: dotnet restore Api/Api.slnx
+  step build network None cwd . subject Api/Api.slnx: dotnet build Api/Api.slnx -c Debug --no-restore -m:{jobs}
+  step test network None cwd . subject Api/tests/Api.Tests.csproj: dotnet test Api/tests/Api.Tests.csproj --no-build -c Debug
+project admin/package.json [node] origin detected definedByHead False folder admin testsNone False
+  fact packageManager = npm
+  fact lock = package-lock.json
+  fact workspaces = false
+  fact build = none
+  fact typecheck = none
+  fact test = script
+  fact runner = jest
+  fact tsconfig = false
+  fact prettier = false
+  fact unchecked = false
+  step restore network Host cwd admin subject admin/package.json: npm ci --ignore-scripts
+  step test network None cwd admin subject admin/package.json: npm test
+project web/package.json [node] origin detected definedByHead False folder web testsNone False
+  fact packageManager = npm
+  fact lock = package-lock.json
+  fact workspaces = false
+  fact build = script
+  fact typecheck = none
+  fact test = script
+  fact runner = vitest
+  fact tsconfig = false
+  fact prettier = false
+  fact unchecked = false
+  step restore network Host cwd web subject web/package.json: npm ci --ignore-scripts
+  step build network None cwd web subject web/package.json: npm run build
+  step test network None cwd web subject web/package.json: npm test
+project worker/Worker.csproj [dotnet] origin detected definedByHead True folder worker testsNone True
+  fact kind = project
+  fact projects = worker/Worker.csproj
+  fact testProjects = 
+  fact runner = none
+  fact mtpOptIn = false
+  fact editorconfig = false
+  fact tests = none
+  step restore network Host cwd . subject worker/Worker.csproj: dotnet restore worker/Worker.csproj
+  step build network None cwd . subject worker/Worker.csproj: dotnet build worker/Worker.csproj -c Debug --no-restore -m:{jobs}
+
+== head: removes-the-test-script
+toolchain_refused: the worktree removed test of admin/package.json; a step the base commit had is never lost at the head, so nothing was run. Land the change in a commit of its own, or name the commands in .coai/toolchain.yaml
+
+== head: adds-a-cargo-toml
+toolchain_refused: 'native/Cargo.toml' is a rust manifest at the head commit; rust is a known stack with no adapter yet, so a repository that holds one is not checked by guessing; name the commands in .coai/toolchain.yaml
+
+== head: renames-a-folder
+toolchain_refused: the worktree removed restore of admin/package.json; a step the base commit had is never lost at the head, so nothing was run. Land the change in a commit of its own, or name the commands in .coai/toolchain.yaml

@@ -1,0 +1,39 @@
+{
+  "description": "a solution with a VSTest project",
+  "base": {
+    "App.slnx": "<Solution />\n",
+    "global.json": "{ \"sdk\": { \"version\": \"10.0.100\", \"rollForward\": \"latestFeature\" } }\n",
+    "src/App/App.csproj": "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup><ItemGroup></ItemGroup></Project>\n",
+    "tests/App.Tests/App.Tests.csproj": "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup><ItemGroup><PackageReference Include=\"Microsoft.NET.Test.Sdk\" Version=\"17.14.1\" /><PackageReference Include=\"xunit\" Version=\"2.9.3\" /><PackageReference Include=\"xunit.runner.visualstudio\" Version=\"3.1.4\" /></ItemGroup></Project>\n",
+    "tests/App.Tests/SampleTests.cs": "// test code\n"
+  },
+  "heads": [
+    {
+      "name": "adds-a-project",
+      "write": {
+        "src/Extra/Extra.csproj": "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup><ItemGroup></ItemGroup></Project>\n"
+      }
+    },
+    {
+      "name": "removes-the-test-project",
+      "remove": [
+        "tests/App.Tests/App.Tests.csproj"
+      ]
+    },
+    {
+      "name": "adds-a-cargo-toml",
+      "write": {
+        "native/Cargo.toml": "[package]\nname = \"native\"\n"
+      }
+    },
+    {
+      "name": "renames-a-folder",
+      "rename": [
+        [
+          "tests/App.Tests",
+          "tests/App.Unit"
+        ]
+      ]
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "description": "an npm package with jest",
+  "base": {
+    "package.json": "{\n  \"name\": \"app\",\n  \"version\": \"1.0.0\",\n  \"private\": true,\n  \"scripts\": {\n    \"test\": \"jest --ci\"\n  },\n  \"devDependencies\": {\n    \"jest\": \"^30.0.0\"\n  }\n}\n",
+    "package-lock.json": "{\n  \"name\": \"app\",\n  \"version\": \"1.0.0\",\n  \"lockfileVersion\": 3,\n  \"requires\": true,\n  \"packages\": {}\n}\n",
+    "src/app.js": "module.exports = 1;\n"
+  },
+  "heads": [
+    {
+      "name": "adds-a-project",
+      "write": {
+        "tools/package.json": "{\n  \"name\": \"tools\",\n  \"version\": \"1.0.0\",\n  \"private\": true,\n  \"scripts\": {\n    \"build\": \"node build.js\"\n  },\n  \"devDependencies\": {}\n}\n",
+        "tools/package-lock.json": "{\n  \"name\": \"tools\",\n  \"version\": \"1.0.0\",\n  \"lockfileVersion\": 3,\n  \"requires\": true,\n  \"packages\": {}\n}\n"
+      }
+    },
+    {
+      "name": "removes-the-test-script",
+      "write": {
+        "package.json": "{\n  \"name\": \"app\",\n  \"version\": \"1.0.0\",\n  \"private\": true,\n  \"scripts\": {\n    \"build\": \"node build.js\"\n  },\n  \"devDependencies\": {\n    \"jest\": \"^30.0.0\"\n  }\n}\n"
+      }
+    },
+    {
+      "name": "adds-a-cargo-toml",
+      "write": {
+        "Cargo.toml": "[package]\n"
+      }
+    },
+    {
+      "name": "renames-a-folder",
+      "rename": [
+        [
+          "src",
+          "lib"
+        ]
+      ]
+    }
+  ]
+}
