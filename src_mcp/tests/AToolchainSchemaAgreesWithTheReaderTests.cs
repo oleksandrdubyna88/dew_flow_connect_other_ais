@@ -107,6 +107,7 @@ public sealed class AToolchainSchemaAgreesWithTheReaderTests
 
         seconds.GetProperty("minimum").GetInt32().Should().Be(ToolchainTables.InstructionsTimeoutMin);
         seconds.GetProperty("maximum").GetInt32().Should().Be(ToolchainTables.InstructionsTimeoutMax);
+        Defs().GetProperty("instructions").GetProperty("properties").GetProperty("argv").GetProperty("minItems").GetInt32().Should().Be(1, "the reader refuses an empty argv, and so does the schema");
         ToolchainTables.InstructionsTimeoutDefault.Should().BeInRange(ToolchainTables.InstructionsTimeoutMin, ToolchainTables.InstructionsTimeoutMax);
     }
 }

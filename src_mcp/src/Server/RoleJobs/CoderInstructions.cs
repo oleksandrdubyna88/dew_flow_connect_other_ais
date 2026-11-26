@@ -92,6 +92,9 @@ internal sealed class CoderInstructions(IRoleRun run, GitHistory git, CoderOsLay
 
     private const int TailCharacters = 300;
 
+    /// <summary>The step's own network state: none. Its output becomes prompt text, so a network would let it bring in text that is not of the base commit and send out what it can read.</summary>
+    private static readonly NetworkChoice StepNetwork = NetworkChoice.None("the output of the instruction step becomes prompt text, so it has no network");
+
     private CoderInstructionsOutcome? _kept;
 
     /// <summary>Runs the step once; a second call answers what the first did, and runs nothing.</summary>
@@ -101,9 +104,10 @@ internal sealed class CoderInstructions(IRoleRun run, GitHistory git, CoderOsLay
     {
         run.Phase("instructions", 0);
         var read = await new ChecksAtBase(git, new CheckRunner(layer.Launcher, layer.ChecksBoundary())).ToolchainAtBaseAsync(tree.MainCheckout, baseSha, ct);
-        if (read is ToolchainRead.Refused { InstructionFaults.Count: > 0 } refused)
+        // Every refusal of the file at the base ends the job here, before any launch (security verify M2): a file the reader refuses for ANY reason can hide the key, so "no step declared" is never concluded from it.
+        if (read is ToolchainRead.Refused refused)
         {
-            return new CoderInstructionsOutcome.Failed("toolchain-refused", $"the 'instructions' key of {ToolchainTables.FilePath} at the base commit cannot be read, so no model was launched: {string.Join("; ", refused.InstructionFaults)}", new CoderInstructionsRecord(true, [], 0, 0, string.Empty, 0, []));
+            return new CoderInstructionsOutcome.Failed("toolchain-refused", $"{ToolchainTables.FilePath} at the base commit is refused, so whether it declares an instruction step is not known and no model was launched: {refused.Sentence}", new CoderInstructionsRecord(refused.InstructionFaults.Count > 0, [], 0, 0, string.Empty, 0, []));
         }
 
         if (read is not ToolchainRead.Configured { Toolchain.Instructions: { Declared: true } step })
@@ -118,12 +122,12 @@ internal sealed class CoderInstructions(IRoleRun run, GitHistory git, CoderOsLay
 
         var argv = step.ArgvFor(site.Files);
         var before = await CoderChecks.StateAsync(git, tree, ct);
-        if (before.Sentence.Length > 0)
+        if (before.Sentence.Length > 0 || before.Head != baseSha || before.Status.Length > 0)
         {
-            return Fail(argv, before.Sentence, 0, 0, string.Empty, 0, []);
+            return Fail(argv, before.Sentence.Length > 0 ? before.Sentence : "the worktree is not the base commit as it was made (another HEAD, or a file that is not committed), so the step would not run at the base", 0, 0, string.Empty, 0, []);
         }
 
-        var admitted = await layer.ChecksBoundary().AdmitAsync(layer.Job, [layer.Job.NetworkOf(CheckStep.Test).Mode], ct);
+        var admitted = await layer.ChecksBoundary().AdmitAsync(layer.Job, [CheckNetwork.Private], ct);
         if (admitted is BoundaryAdmission.Refused refusal)
         {
             return Fail(argv, $"the unit the step runs in could not be started: {refusal.Sentence}", 0, 0, string.Empty, 0, []);
@@ -133,7 +137,7 @@ internal sealed class CoderInstructions(IRoleRun run, GitHistory git, CoderOsLay
         BoundaryRun result;
         try
         {
-            result = await layer.ChecksBoundary().RunAsync((BoundaryAdmission.Admitted)admitted, layer.Job, layer.Job.NetworkOf(CheckStep.Test), "i1", [CheckRunner.Executable(argv[0], tree.Root), .. argv.Skip(1)], new Dictionary<string, string?>(), TimeSpan.FromSeconds(step.TimeoutSeconds), 4 * MostBytes, ct);
+            result = await layer.ChecksBoundary().RunAsync((BoundaryAdmission.Admitted)admitted, layer.Job, StepNetwork, "i1", [CheckRunner.Executable(argv[0], tree.Root), .. argv.Skip(1)], new Dictionary<string, string?>(), TimeSpan.FromSeconds(step.TimeoutSeconds), 4 * MostBytes, ct);
         }
         catch (ArgumentException e)
         {
@@ -181,8 +185,14 @@ internal sealed class CoderInstructions(IRoleRun run, GitHistory git, CoderOsLay
         { Truncated: true } => $"the step printed more than {MostBytes} bytes, and nothing is cut",
         _ when bytes > MostBytes => $"the step printed {bytes} bytes, more than {MostBytes}, and nothing is cut",
         _ when text.Contains('�', StringComparison.Ordinal) => "the step printed bytes that are not UTF-8",
+        _ when text.Any(IsControlButNotSpacing) => "the step printed a control character, so its output is not text",
+        // The text goes to the vendor of every model and into a file: the search the product makes of every text that goes to a hosted model (security verify M1). The class is named, never the text; prose that looks like a credential refuses the job.
+        _ when Redaction.FirstSecretClass(text) is { Length: > 0 } kind => $"the step printed text that looks like a credential ({kind}); nothing of it is kept or sent",
         _ => moved,
     };
+
+    /// <summary>A control character other than tab, line feed and carriage return, or DEL: not text a person reads in a terminal or a search of a text can be trusted with.</summary>
+    private static bool IsControlButNotSpacing(char c) => (c < ' ' && c is not ('\t' or '\n' or '\r')) || c == '\u007f';
 
     private CoderInstructionsOutcome.Failed Fail(IReadOnlyList<string> argv, string why, int exit, long bytes, string hash, long ms, IReadOnlyList<string> tail) =>
         new(RoleStopWords.InstructionsFailed, $"the instruction step of this repository could not run, so no model was launched: {why}", new CoderInstructionsRecord(true, argv, exit, bytes, hash, ms, tail));

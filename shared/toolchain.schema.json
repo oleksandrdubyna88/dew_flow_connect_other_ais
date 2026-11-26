@@ -45,7 +45,7 @@
       "required": ["argv"],
       "additionalProperties": false,
       "properties": {
-        "argv": { "$ref": "#/$defs/argv" },
+        "argv": { "$ref": "#/$defs/argv", "minItems": 1 },
         "perFile": { "$ref": "#/$defs/argv" },
         "timeoutSeconds": { "type": "integer", "minimum": 1, "maximum": 300 }
       }

@@ -254,9 +254,10 @@ internal sealed partial class ToolchainParse
             Fault($"line {inner.Find("argv")!.Line}: 'argv' of instructions is empty; the step needs a program to run");
         }
 
-        if (argv.Argv.FirstOrDefault(item => item.Contains(ToolchainTables.FilePlaceholder, StringComparison.Ordinal)) is { } misplaced)
+        if (argv.Argv.Select((item, at) => (item, at)).FirstOrDefault(pair => pair.item.Contains(ToolchainTables.FilePlaceholder, StringComparison.Ordinal)) is { item: not null } misplaced)
         {
-            Fault($"line {inner.Find("argv")!.Line}: 'argv' of instructions holds {ToolchainTables.FilePlaceholder} ('{misplaced}'); the placeholder belongs only in 'perFile'");
+            // The item is not repeated (security verify M3): it may be a typed credential with the placeholder in it. Its place says which.
+            Fault($"line {inner.Find("argv")!.Line}: 'argv' of instructions holds {ToolchainTables.FilePlaceholder} in its item {misplaced.at + 1} ({misplaced.item.Length} characters); the placeholder belongs only in 'perFile'");
         }
 
         var perFile = Command(inner, "perFile", "instructions");

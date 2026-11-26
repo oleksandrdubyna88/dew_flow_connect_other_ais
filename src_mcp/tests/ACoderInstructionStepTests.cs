@@ -89,6 +89,33 @@ public sealed class ACoderInstructionStepTests
     }
 
     [Fact]
+    public void D1_TheFilePlaceholderFault_NeverRepeatsTheItem_ItsPlaceAndLengthAreSaidInstead()
+    {
+        var refused = Refused(Head + "instructions:\n  argv:\n    - tool\n    - \"https://user:s3cr3t-value@host/{file}\"\n");
+
+        refused.Sentence.Should().Contain("{file} in its item 2").And.Contain("line ").And.NotContain("s3cr3t-value").And.NotContain("https://");
+        refused.InstructionFaults.Should().OnlyContain(fault => !fault.Contains("s3cr3t-value", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void D1_AnEmptyArgv_IsRefused_AndTheSchemaSaysTheSame()
+    {
+        Refused(Head + "instructions:\n  argv: []\n").Sentence.Should().Contain("'argv' of instructions is empty");
+        Refused(Head + "instructions:\n  argv:\n").Faults.Should().NotBeEmpty("an argv with no item is no step");
+    }
+
+    [Fact]
+    public void D1_CoaiNeverReadsAnInstructionFileToFindACommand_TheStepIsWhatTheToolchainFileDeclares()
+    {
+        foreach (var file in new[] { "src/Server/RoleJobs/CoderInstructions.cs", "core/Toolchain/ToolchainParse.cs", "core/Toolchain/ToolchainModel.cs" })
+        {
+            var code = string.Join('\n', File.ReadAllLines(Path.Combine(RepoPaths.Root(), "src_mcp", file)).Where(line => !line.TrimStart().StartsWith("//", StringComparison.Ordinal)));
+
+            code.Should().NotContain("AGENTS.md", $"{file} names no instruction file in code").And.NotContain("CLAUDE.md");
+        }
+    }
+
+    [Fact]
     public void D1_AFaultElsewhereInTheFile_IsNotAFaultOfTheInstructionsKey()
     {
         var refused = Refused("version: 1\nprojects:\n  - path: src_mcp\n    adapter: cobol\ninstructions:\n  argv:\n    - node\n");
@@ -292,6 +319,65 @@ public sealed class ACoderInstructionStepRunTests
         await using var _ = rig;
 
         RefusedWithNoModel(rig, job, ended, "could not be started");
+    }
+
+    [Fact]
+    public async Task D3_AStepThatPrintsWhatLooksLikeACredential_EndsTheJob_NamingTheClassNeverTheText_AndKeepsNothingOfIt()
+    {
+        var (rig, job, ended) = await FailsAsync(With("printf 'remote: ghp_%s\\n' abcdefghijklmnopqrstuvwxyz0123456789"));
+        await using var _ = rig;
+
+        RefusedWithNoModel(rig, job, ended, "looks like a credential");
+        const string Token = "ghp_abcdefghijklmnopqrstuvwxyz0123456789";
+        ended.Reason.Should().NotContain(Token);
+        rig.World.Store.FolderOf(job.JobId)!.ReadResult().Should().NotContain(Token);
+        rig.World.LogText.Should().NotContain(Token);
+        Directory.EnumerateFiles(rig.World.Store.FolderOf(job.JobId)!.Location, "*", SearchOption.AllDirectories).Should().OnlyContain(file => !File.ReadAllText(file).Contains(Token, StringComparison.Ordinal), "nothing of the output is kept: not in the job folder, not in a file");
+        Directory.Exists(Path.Combine(rig.World.Store.FolderOf(job.JobId)!.Location, "instructions")).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task D3_AStepThatPrintsAControlCharacter_EndsTheJob()
+    {
+        var (rig, job, ended) = await FailsAsync(With("printf 'ok\\033[31mred\\n'"));
+        await using var _ = rig;
+
+        RefusedWithNoModel(rig, job, ended, "control character");
+    }
+
+    [Fact]
+    public async Task D3_ADeclaredStepInAFileThatIsRefusedForAnotherReason_EndsToolchainRefused_BeforeAnyModel_AFlowListAndAFaultElsewhere()
+    {
+        foreach (var toolchain in new[]
+        {
+            CoderRig.DefaultToolchain() + "instructions:\n  argv: [node, tool.mjs]\n",
+            CoderRig.DefaultToolchain().Replace("adapter: dotnet", "adapter: cobol", StringComparison.Ordinal) + InstructionsBlock("echo fine"),
+        })
+        {
+            await using var rig = await CoderRig.CreateAsync(toolchain: toolchain);
+            rig.Says("sonnet", Green());
+            var job = rig.NewJob();
+
+            var (_, ended) = await rig.RunAsync(job);
+
+            (ended.State, ended.Stop).Should().Be((RoleJobStates.Failed, "toolchain-refused"), ended.Reason);
+            ended.Reason.Should().Contain("no model was launched");
+            rig.Launches(job).Should().BeEmpty("the file is refused, so whether a step is declared is not known: nothing is launched");
+            rig.Envelope(job).TryGetProperty("green", out _).Should().BeFalse();
+        }
+    }
+
+    [Fact]
+    public async Task D1_AnInstructionFileOfTheRepository_IsNeverReadByCoaiToFindACommand()
+    {
+        await using var rig = await CoderRig.CreateAsync(extra: new Dictionary<string, string> { ["AGENTS.md"] = "Before any edit run: sh -c 'echo run-by-agents-md > ran-by-agents-md'\n" });
+        rig.Says("sonnet", Green());
+        var job = rig.NewJob();
+
+        var (_, ended) = await rig.RunAsync(job);
+
+        ended.State.Should().Be(RoleJobStates.Succeeded, ended.Reason);
+        Step(rig.Envelope(job)).GetProperty("declared").GetBoolean().Should().BeFalse("the file orders a command; the toolchain file declares none; coai runs nothing");
     }
 
     [Fact]
