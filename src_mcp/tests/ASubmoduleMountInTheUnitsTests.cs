@@ -75,7 +75,7 @@ public sealed class ASubmoduleMountInTheUnitsTests
 
         At("/data/jobs/j1", "/w/coai-coder-j1", "/w/main").JobCover.Should().Be("/data/jobs", "a folder of its own: another job's folders are under the cover too");
         At("/j1", "/w/coai-coder-j1", "/w/main").JobCover.Should().Be("/j1", "the root of the file system is never covered");
-        At(BoundaryUnit.UnitTemp + "/j1", "/w/coai-coder-j1", "/w/main").JobCover.Should().Be(BoundaryUnit.UnitTemp + "/j1", "/tmp is where the units bind their own temp folder");
+        At(BoundaryUnit.UnitTemp + "/j1", "/w/coai-coder-j1", "/w/main").JobCover.Should().Be(BoundaryUnit.UnitTemp + "/j1", "that is the folder the units bind their own temp folder at");
         At("/data/jobs/j1", "/data/jobs/coai-coder-j1", "/w/main").JobCover.Should().Be("/data/jobs/j1", "the folder holds the worktree, which the unit is given at that path");
         At("/data/jobs/j1", "/w/coai-coder-j1", "/data/jobs/main").JobCover.Should().Be("/data/jobs/j1", "the folder holds the main checkout, which the unit is given at that path");
     }
