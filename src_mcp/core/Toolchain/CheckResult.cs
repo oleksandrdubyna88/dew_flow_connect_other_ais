@@ -39,6 +39,9 @@ public enum CheckStep
     Test,
     Restore,
     Typecheck,
+
+    /// <summary>The formatter of the turn (E4 s5 t1): run once after the restore step, on the files the turn's commit changed; it is never part of a round's verdict.</summary>
+    Format,
 }
 
 /// <summary>The words of a step on the wire and in a log name.</summary>
@@ -49,6 +52,7 @@ public static class CheckSteps
         CheckStep.Restore => "restore",
         CheckStep.Build => "build",
         CheckStep.Typecheck => "typecheck",
+        CheckStep.Format => "format",
         _ => "test",
     };
 }
@@ -94,8 +98,17 @@ public sealed record StepRecord(
     /// <summary>The folder the step started in, relative to the repository root; <c>.</c> is the root (a step of the file always runs from it).</summary>
     public string WorkingFolder { get; init; } = ".";
 
-    /// <summary>Whether the step passed: it started, was not stopped and exited 0.</summary>
-    public bool Passed => Started && !TimedOut && ExitCode == 0;
+    /// <summary>The scope of a test step (E4 s5 t3): <c>full</c> (the project's own test command), <c>selected</c> (the file's <c>testFor</c> on the files the job changed) or <c>rerun</c> (the one more run of the failed tests, section F).</summary>
+    public string Scope { get; init; } = "full";
+
+    /// <summary>How many files a <c>selected</c> run was given; 0 for any other scope.</summary>
+    public int ScopeFiles { get; init; }
+
+    /// <summary>True when the failures of this step were excused by a clean re-run (E4 s5 t5; the <c>flaky</c> list of the result says which): the step then counts as passed.</summary>
+    public bool Excused { get; init; }
+
+    /// <summary>Whether the step passed: it started, was not stopped and exited 0 — or every failure it had was excused by a clean re-run.</summary>
+    public bool Passed => (Started && !TimedOut && ExitCode == 0) || Excused;
 }
 
 /// <summary>What a repository's own toolchain file did between a job's base commit and its worktree.</summary>
@@ -145,9 +158,45 @@ public sealed record CheckResult(CheckState State, IReadOnlyList<StepRecord> Ste
     /// <summary>How many test files the head modified, added and deleted (S21 of pass 3); null when the head was not read.</summary>
     public TestFileCounts? HeadTests { get; init; }
 
+    /// <summary>The tests a clean re-run excused in this run (E4 s5 t5): each with its proof; they left the digest and the step counted as passed.</summary>
+    public IReadOnlyList<FlakyTest> Flaky { get; init; } = [];
+
     /// <summary>Only a run that ran every step and saw every one pass.</summary>
     public bool Green => State == CheckState.Green;
 
     /// <summary>The first step that did not pass, if the run failed.</summary>
     public StepRecord? FailedStep => Steps.FirstOrDefault(step => !step.Passed);
+}
+
+/// <summary>A test the re-run excused (E4 s5 t5; SPEC F): the envelope's <c>flaky</c> row.</summary>
+/// <param name="Project">The project of the step.</param>
+/// <param name="Test">The test's name.</param>
+/// <param name="File">The file its failure named.</param>
+/// <param name="FirstLog">The log of the first run (relative to the job's folder where the caller can tell).</param>
+/// <param name="Rerun"><c>narrowed</c> or <c>whole</c>.</param>
+/// <param name="Proof"><c>named</c> or <c>totals</c>.</param>
+public sealed record FlakyTest(string Project, string Test, string File, string FirstLog, string Rerun, string Proof);
+
+/// <summary>
+/// What a round knows about the job that the step plan and the runner need (E4 s5 t3 and t5): the paths the job changed (base to head), whether a FULL test run has failed once in this job, how the re-run is set, and what the job has excused. The callbacks write the job's own files, so the facts hold across models.
+/// </summary>
+public sealed record RoundFacts
+{
+    /// <summary>The files the job added or modified, base to head, as repository paths.</summary>
+    public IReadOnlyList<string> ChangedPaths { get; init; } = [];
+
+    /// <summary>A full test run has failed once in this job: the later rounds run the full command only (S7).</summary>
+    public bool FullFailedBefore { get; init; }
+
+    /// <summary>Called once when a full test run fails; the caller writes the fact to a file in the job folder.</summary>
+    public Action? OnFullFailed { get; init; }
+
+    /// <summary><c>COAI_FLAKY_RERUNS</c>: 0 or 1.</summary>
+    public int FlakyReruns { get; init; } = 1;
+
+    /// <summary>How many tests the job has excused already, and which.</summary>
+    public IReadOnlyList<string> ExcusedNames { get; init; } = [];
+
+    /// <summary>Called with the tests a re-run excused; the caller adds them to the job's file.</summary>
+    public Action<IReadOnlyList<ExcusedTest>>? OnExcused { get; init; }
 }

@@ -101,6 +101,34 @@ internal sealed record CoderChecksReport(IReadOnlyList<CoderChecksRound> Rounds,
         json.WriteEndObject();
     }
 
+    private static void WriteFlaky(Utf8JsonWriter json, IReadOnlyList<FlakyTest> flaky)
+    {
+        json.WriteStartArray("flaky");
+        foreach (var test in flaky)
+        {
+            json.WriteStartObject();
+            json.WriteString("project", PathSpelling.Bare(test.Project));
+            json.WriteString("test", test.Test);
+            json.WriteString("file", test.File);
+            json.WriteString("firstLog", test.FirstLog);
+            json.WriteString("rerun", test.Rerun);
+            json.WriteString("proof", test.Proof);
+            json.WriteEndObject();
+        }
+
+        json.WriteEndArray();
+    }
+
+    private static void WriteFormat(Utf8JsonWriter json, FormatResult format)
+    {
+        json.WriteStartObject("format");
+        json.WriteString("state", format.State);
+        json.WriteNumber("files", format.Files);
+        json.WriteString("commit", format.Commit);
+        json.WriteString("note", format.State == "not_configured" ? CoderChecks.FormatNote : format.Note);
+        json.WriteEndObject();
+    }
+
     private static void WriteLines(Utf8JsonWriter json, string name, IReadOnlyList<string> lines)
     {
         json.WriteStartArray(name);
@@ -119,10 +147,8 @@ internal sealed record CoderChecksReport(IReadOnlyList<CoderChecksRound> Rounds,
         json.WriteBoolean("green", last.Green);
         json.WriteString("checksState", last.State);
         json.WriteString("checksNote", last.Note);
-        json.WriteStartObject("format");
-        json.WriteString("state", "not_configured");
-        json.WriteString("note", CoderChecks.FormatNote);
-        json.WriteEndObject();
+        WriteFormat(json, last.Format);
+        WriteFlaky(json, last.Flaky);
         json.WriteStartArray("checks");
         foreach (var step in last.Steps)
         {
@@ -141,6 +167,9 @@ internal sealed record CoderChecksReport(IReadOnlyList<CoderChecksRound> Rounds,
             json.WriteNumber("exitCode", step.ExitCode);
             json.WriteNumber("durationMs", step.DurationMs);
             json.WriteString("logRef", step.LogRef);
+            json.WriteString("scope", step.Scope);
+            json.WriteNumber("files", step.ScopeFiles);
+            json.WriteBoolean("excused", step.Excused);
             json.WriteEndObject();
         }
 

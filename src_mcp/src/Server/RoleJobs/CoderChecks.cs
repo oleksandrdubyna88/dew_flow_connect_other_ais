@@ -18,6 +18,15 @@ internal sealed record CoderCheckStep(string Project, string Step, IReadOnlyList
 
     /// <summary>The folder the step started in, relative to the repository root; <c>.</c> is the root.</summary>
     public string WorkingFolder { get; init; } = ".";
+
+    /// <summary><c>full</c>, <c>selected</c> or <c>rerun</c> (E4 s5 t3, t5): which run of the test this record is.</summary>
+    public string Scope { get; init; } = "full";
+
+    /// <summary>How many files a selected run was given.</summary>
+    public int ScopeFiles { get; init; }
+
+    /// <summary>The step failed and a clean re-run excused its failures: it counts as passed and the result's <c>flaky</c> says which.</summary>
+    public bool Excused { get; init; }
 }
 
 /// <summary>
@@ -35,6 +44,12 @@ internal sealed record CoderChecksRound(int Turn, string HeadSha, string State, 
 
     /// <summary>What level one of the selection decided: the projects that ran and each one left out with its reason (E4 s3 t6); null when nothing was selected.</summary>
     public AffectedSelection? Selection { get; init; }
+
+    /// <summary>The tests the one re-run excused in this round, each with its proof (E4 s5 t5).</summary>
+    public IReadOnlyList<FlakyTest> Flaky { get; init; } = [];
+
+    /// <summary>What the formatter turn before this round did (E4 s5 t1; SPEC D): never a verdict on the round.</summary>
+    public FormatResult Format { get; init; } = FormatResult.NotConfigured;
 
     /// <summary>How many test files the head modified, added and deleted (S21 of pass 3): the gate lets a head edit tests, so the envelope says how many it touched.</summary>
     public TestFileCounts? HeadTests { get; init; }
@@ -87,13 +102,13 @@ internal sealed class CoderChecks(IRoleRun run, GitHistory git, CoderOsLayer lay
     /// <summary>Said in the envelope where the order of a turn has its format slot.</summary>
     public const string FormatNote = "the toolchain file has no formatter step (it names a build and a test per project), so no format was run";
 
-    public async Task<CoderChecksRound> RunAsync(int turn, string head, CancellationToken ct)
+    public async Task<CoderChecksRound> RunAsync(int turn, string head, CancellationToken ct, FormatResult? format = null)
     {
         run.Phase("checks", turn);
         var clean = await ProveEqualToTheCommitAsync(ct);
         if (clean.Length > 0)
         {
-            return Unverified(turn, head, clean);
+            return Unverified(turn, head, clean) with { Format = format ?? FormatResult.NotConfigured };
         }
 
         var before = await StateAsync(ct);
@@ -104,7 +119,8 @@ internal sealed class CoderChecks(IRoleRun run, GitHistory git, CoderOsLayer lay
 
         var logs = Path.Combine(run.Folder, "checks", $"round-{turn}");
         var result = await new ChecksAtBase(git, new CheckRunner(layer.Launcher, layer.ChecksBoundary()))
-            .RunCoderJobAsync(new DiskWorkFolder(tree.Root), baseSha, layer.Job, logs, Jobs, ct, step => RecordStep(logs, step));
+            .RunCoderJobAsync(new DiskWorkFolder(tree.Root), baseSha, layer.Job, logs, Jobs, ct, step => RecordStep(logs, step), Facts());
+        NoteFlaky(result);
         RecordRefusal(result, logs);
         RecordDefinitions(result, logs);
         ct.ThrowIfCancellationRequested();
@@ -114,7 +130,7 @@ internal sealed class CoderChecks(IRoleRun run, GitHistory git, CoderOsLayer lay
             return Unverified(turn, head, moved, Steps(result));
         }
 
-        return new CoderChecksRound(turn, head, result.State.Wire(), Steps(result), result.Note, result.State == CheckState.Failed ? DigestOf(result) : []) { Toolchain = result.Toolchain, Selection = result.Selection, HeadTests = result.HeadTests, Definitions = DefinitionReport.Of(result.Toolchain?.Changes, result.ChangedFiles, result.ToolchainChange, result.HeadTests), ChangedFiles = result.ChangedFiles };
+        return new CoderChecksRound(turn, head, result.State.Wire(), Steps(result), result.Note, result.State == CheckState.Failed ? DigestOf(result) : []) { Flaky = result.Flaky, Format = format ?? FormatResult.NotConfigured, Toolchain = result.Toolchain, Selection = result.Selection, HeadTests = result.HeadTests, Definitions = DefinitionReport.Of(result.Toolchain?.Changes, result.ChangedFiles, result.ToolchainChange, result.HeadTests), ChangedFiles = result.ChangedFiles };
     }
 
     /// <summary>
@@ -161,6 +177,66 @@ internal sealed class CoderChecks(IRoleRun run, GitHistory git, CoderOsLayer lay
         }
     }
 
+    private const string FullFailedFile = "full-failed";
+
+    private const string ExcusedFile = "flaky-excused.txt";
+
+    private const string NoticedFile = "flaky-noticed";
+
+    private string JobChecks => Path.Combine(run.Folder, "checks");
+
+    /// <summary>What the round knows about the job (E4 s5 t3, t5): the setting, and the two facts kept in files of the job folder — a full test run failed once, and which tests were excused — so they hold across models and rounds.</summary>
+    private RoundFacts Facts() => new()
+    {
+        FullFailedBefore = File.Exists(Path.Combine(JobChecks, FullFailedFile)),
+        OnFullFailed = () => Keep(FullFailedFile, "a full test run failed once\n", append: false),
+        FlakyReruns = FlakyReruns.Read(run.Settings).Count,
+        ExcusedNames = ReadExcused(),
+        OnExcused = tests => Keep(ExcusedFile, string.Concat(tests.Select(test => test.Name + "\n")), append: true),
+    };
+
+    private List<string> ReadExcused()
+    {
+        try
+        {
+            return File.Exists(Path.Combine(JobChecks, ExcusedFile)) ? [.. File.ReadAllLines(Path.Combine(JobChecks, ExcusedFile)).Where(line => line.Length > 0)] : [];
+        }
+        catch (IOException)
+        {
+            return [];
+        }
+    }
+
+    /// <summary>A fact of the job, written with a temporary file and a rename.</summary>
+    private void Keep(string name, string text, bool append)
+    {
+        try
+        {
+            Directory.CreateDirectory(JobChecks);
+            var path = Path.Combine(JobChecks, name);
+            var content = append && File.Exists(path) ? File.ReadAllText(path) + text : text;
+            var temp = path + ".tmp";
+            File.WriteAllText(temp, content);
+            File.Move(temp, path, overwrite: true);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            run.Log.Warning("role job {JobId}: the job's fact {Fact} could not be written", run.Request.JobId, name);
+        }
+    }
+
+    /// <summary>ONE coder-test-flaky notice for the job, when a re-run excused a test.</summary>
+    private void NoteFlaky(CheckResult result)
+    {
+        if (result.Flaky.Count == 0 || File.Exists(Path.Combine(JobChecks, NoticedFile)))
+        {
+            return;
+        }
+
+        Keep(NoticedFile, "noticed\n", append: false);
+        run.Notice(RoleJobNotices.TestFlaky(run.Job, result.Flaky.Count, run.Clock.GetUtcNow().UtcDateTime));
+    }
+
     /// <summary><c>unit-preflight.json</c> when the preflight refused the checks and no unit of a step ran.</summary>
     private void RecordRefusal(CheckResult result, string logs)
     {
@@ -185,7 +261,7 @@ internal sealed class CoderChecks(IRoleRun run, GitHistory git, CoderOsLayer lay
     [
         .. result.Steps.Select(step => new CoderCheckStep(
             step.Project, step.Step.Wire(), step.Argv, step.ExitCode, (long)step.Duration.TotalMilliseconds,
-            Path.GetRelativePath(run.Folder, step.LogPath).Replace(Path.DirectorySeparatorChar, '/')) { Network = step.Boundary.Network, WorkingFolder = step.WorkingFolder }),
+            Path.GetRelativePath(run.Folder, step.LogPath).Replace(Path.DirectorySeparatorChar, '/')) { Network = step.Boundary.Network, WorkingFolder = step.WorkingFolder, Scope = step.Scope, ScopeFiles = step.ScopeFiles, Excused = step.Excused }),
     ];
 
     /// <summary>The digest of the first step that did not pass, read from its log — the machine output of the step, redacted and bounded.</summary>

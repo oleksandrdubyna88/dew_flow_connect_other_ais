@@ -16,6 +16,9 @@ public sealed record CheckRequest(string Tree, string LogFolder, int Jobs)
     /// </summary>
     public BoundaryJob? Job { get; init; }
 
+    /// <summary>What the round knows about the job: the changed paths, whether a full run has failed once, the re-run setting and what the job excused (E4 s5 t3, t5).</summary>
+    public RoundFacts Facts { get; init; } = new();
+
     /// <summary>
     /// Called with each step's record the moment the step has ended, before the next step is started — also for the step that failed. A caller that keeps a record of each step (the coder's unit records) writes it here, so a cancel or a hang in a LATER step
     /// does not lose the records of the steps that already ran.
@@ -50,7 +53,7 @@ public sealed class CheckRunner(IProcessLauncher launcher, CheckBoundary? bounda
 
         return toolchain switch
         {
-            ToolchainRead.Configured configured => await RunPlanAsync(StepPlan.OfFile(configured.Toolchain, request.Jobs), request, ct),
+            ToolchainRead.Configured configured => await RunPlanAsync(StepPlan.OfFile(configured.Toolchain, request.Jobs, request.Facts), request, ct),
             ToolchainRead.Refused refused => new CheckResult(CheckState.ToolchainRefused, [], $"the toolchain file is refused, so nothing was run: {refused.Sentence}"),
             _ => new CheckResult(CheckState.NotConfigured, [], $"there is no {ToolchainTables.FilePath}, so nothing was run; checks that did not run are never green"),
         };
@@ -63,16 +66,22 @@ public sealed class CheckRunner(IProcessLauncher launcher, CheckBoundary? bounda
 
         return resolution switch
         {
-            ToolchainResolution.Resolved resolved => (await RunPlanAsync(StepPlan.Of(resolved.Toolchain, ToolchainDefaults.Current, request.Jobs), request, ct)) with { Toolchain = resolved.Toolchain, Selection = selection },
+            ToolchainResolution.Resolved resolved => (await RunPlanAsync(StepPlan.Of(resolved.Toolchain, ToolchainDefaults.Current, request.Jobs, facts: request.Facts), request, ct)) with { Toolchain = resolved.Toolchain, Selection = selection },
             ToolchainResolution.Refused refused => new CheckResult(CheckState.ToolchainRefused, [], $"the toolchain is refused, so nothing was run: {refused.Sentence}"),
             ToolchainResolution.NotConfigured notConfigured => new CheckResult(CheckState.NotConfigured, [], notConfigured.Note),
             _ => throw new InvalidOperationException("a resolution is resolved, refused or not configured"),
         };
     }
 
-    private async Task<CheckResult> RunPlanAsync(IReadOnlyList<PlannedStep> plan, CheckRequest request, CancellationToken ct)
+    /// <summary>
+    /// Runs steps that are NOT a round's checks — the restore and the formatter of the formatter turn (E4 s5 t1) — through the one road (`RunBoundedStepAsync` for a coder job): a plan with no build, typecheck or test step is not refused as `not_configured` here, and the result is
+    /// never a verdict on the code.
+    /// </summary>
+    public Task<CheckResult> RunStepsAsync(IReadOnlyList<PlannedStep> plan, CheckRequest request, CancellationToken ct = default) => RunPlanAsync(plan, request, ct, requireChecks: false);
+
+    private async Task<CheckResult> RunPlanAsync(IReadOnlyList<PlannedStep> plan, CheckRequest request, CancellationToken ct, bool requireChecks = true)
     {
-        if (!StepPlan.Checks(plan))
+        if (requireChecks && !StepPlan.Checks(plan))
         {
             return new CheckResult(CheckState.NotConfigured, [], NothingToCheck);
         }
@@ -85,26 +94,128 @@ public sealed class CheckRunner(IProcessLauncher launcher, CheckBoundary? bounda
         }
 
         var done = new List<StepRecord>();
+        var flaky = new List<FlakyTest>();
+        var extra = plan.Count;
         foreach (var (step, number) in plan.Select((step, index) => (step, index + 1)))
         {
-            var record = gate is Gate.Bounded bounded
-                ? await RunBoundedStepAsync(step, number, request, bounded.Admitted, ct)
-                : await RunStepAsync(step, number, request, ct);
-            done.Add(record);
-            request.StepFinished?.Invoke(record);
-            if (record.ExitCode == StepRecord.UnitSurvivedExitCode)
+            // Selection, level two (E4 s5 t3): the selected tests of the file's testFor first; green is only ever the word of the full run that follows.
+            if (step.SelectedArgv is not null)
             {
-                // A unit that could not be stopped may still hold a process that writes: no fix turn may start beside it (S17 of the verify; as E2 M7 does for the coder's own unit).
-                return new CheckResult(CheckState.BoundaryRefused, done, $"{Describe(record)}; the job ends here");
+                var selected = (await RunOneAsync(gate, step with { Argv = step.SelectedArgv }, ++extra, request, ct)) with { Scope = "selected", ScopeFiles = step.SelectedFiles };
+                done.Add(selected);
+                request.StepFinished?.Invoke(selected);
+                if (Ended(selected, done) is { } ended)
+                {
+                    return ended;
+                }
+
+                if (!selected.Passed && !NothingSelected(selected, step))
+                {
+                    return new CheckResult(CheckState.Failed, done, $"{Describe(selected)}; the full test command was not run");
+                }
+            }
+
+            var record = await RunOneAsync(gate, step, number, request, ct);
+            if (!record.Passed && step.Step == CheckStep.Test)
+            {
+                request.Facts.OnFullFailed?.Invoke();
+                var rerun = await TryRerunAsync(gate, step, record, request, () => ++extra, ct);
+                if (rerun.Record is not null)
+                {
+                    done.Add(rerun.Record);
+                }
+
+                record = rerun.Excused.Count > 0 ? record with { Excused = true } : record;
+                flaky.AddRange(rerun.Excused);
+            }
+
+            done.Insert(done.Count - (done.Count > 0 && done[^1].Scope == "rerun" ? 1 : 0), record);
+            request.StepFinished?.Invoke(record);
+            if (Ended(record, done) is { } over)
+            {
+                return over;
             }
 
             if (!record.Passed)
             {
-                return new CheckResult(CheckState.Failed, done, $"{Describe(record)}; the steps after it were not run");
+                return new CheckResult(CheckState.Failed, done, $"{Describe(record)}; the steps after it were not run") { Flaky = flaky };
             }
         }
 
-        return new CheckResult(CheckState.Green, done, $"{done.Count} step(s) ran and every one exited 0");
+        return new CheckResult(CheckState.Green, done, $"{done.Count} step(s) ran and every one exited 0") { Flaky = flaky };
+    }
+
+    private async Task<StepRecord> RunOneAsync(Gate gate, PlannedStep step, int number, CheckRequest request, CancellationToken ct) =>
+        gate is Gate.Bounded bounded ? await RunBoundedStepAsync(step, number, request, bounded.Admitted, ct) : await RunStepAsync(step, number, request, ct);
+
+    /// <summary>A unit that could not be stopped may still hold a process that writes: no fix turn may start beside it (S17 of the verify; as E2 M7 does for the coder's own unit).</summary>
+    private static CheckResult? Ended(StepRecord record, List<StepRecord> done) =>
+        record.ExitCode == StepRecord.UnitSurvivedExitCode ? new CheckResult(CheckState.BoundaryRefused, done, $"{Describe(record)}; the job ends here") : null;
+
+    /// <summary>S5: an exit code or a marker line that <c>shared/toolchains.json</c> holds as "no test ran" for the adapter is NOTHING SELECTED — not green, not red — and the full command runs.</summary>
+    private static bool NothingSelected(StepRecord selected, PlannedStep step)
+    {
+        if (!selected.Started || selected.TimedOut || !ToolchainDefaults.Current.Stacks.TryGetValue(step.Adapter, out var stack))
+        {
+            return false;
+        }
+
+        var log = ReadLog(selected.LogPath);
+
+        return stack.NoTestRan.Values.Any(row => row.ExitCodes.Contains(selected.ExitCode) || row.Markers.Any(marker => marker.Length > 0 && log.Contains(marker, StringComparison.Ordinal)));
+    }
+
+    private static string ReadLog(string path)
+    {
+        try
+        {
+            return File.ReadAllText(path);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return string.Empty;
+        }
+    }
+
+    private sealed record Rerun(StepRecord? Record, IReadOnlyList<FlakyTest> Excused);
+
+    /// <summary>
+    /// The one re-run of a failed FULL test step (E4 s5 t5; SPEC F): decided by <see cref="FlakyRule"/> from the run summary, never the digest; run once more in a new unit with only a loopback device; and a test is excused only when the re-run ITSELF exits 0 with no new failure and no
+    /// execution error (re-review F0) and SHOWS it ran and passed. Nothing excused: the round stays red with the digest of the FIRST run.
+    /// </summary>
+    private async Task<Rerun> TryRerunAsync(Gate gate, PlannedStep step, StepRecord first, CheckRequest request, Func<int> nextNumber, CancellationToken ct)
+    {
+        var facts = request.Facts;
+        var digest = FailureDigest.Of(step.Step, step.Adapter, ReadLog(first.LogPath), request.Tree, logCut: first.LogCut);
+        var input = new RerunInput(step.Step, first.Scope, first.Started, first.TimedOut, first.ExitCode == StepRecord.UnitSurvivedExitCode, first.Duration, digest.Summary,
+            [.. digest.Items.Select(item => new FailedTest(item.Code, item.File))], step.TestFor is not null, new HashSet<string>(facts.ChangedPaths, StringComparer.Ordinal), facts.ExcusedNames.Count, new HashSet<string>(facts.ExcusedNames, StringComparer.Ordinal), facts.FlakyReruns == 1);
+        var decision = FlakyRule.Decide(input);
+        if (decision.Mode == RerunMode.None || digest.Summary is null)
+        {
+            return new Rerun(null, []);
+        }
+
+        var narrowedFiles = decision.Tests.Select(test => test.File).Where(file => step.TestFiles.Any(prefix => file.StartsWith(prefix.Trim('/') + "/", StringComparison.Ordinal) || prefix.Trim('/').Length == 0)).Distinct(StringComparer.Ordinal).ToList();
+        var narrowed = decision.Mode == RerunMode.Narrowed && narrowedFiles.Count > 0 && step.TestFor is not null;
+        if (decision.Mode == RerunMode.Narrowed && !narrowed && first.Duration > FlakyRule.WholeLimit)
+        {
+            return new Rerun(null, []);
+        }
+
+        var argv = narrowed ? TestSelection.Argv(step.TestFor!, narrowedFiles, ".", request.Jobs) : step.Argv;
+        var record = (await RunOneAsync(gate, step with { Argv = argv }, nextNumber(), request, ct)) with { Scope = "rerun", ScopeFiles = narrowed ? narrowedFiles.Count : 0 };
+        request.StepFinished?.Invoke(record);
+        var summary = FailureDigest.Of(CheckStep.Test, step.Adapter, ReadLog(record.LogPath), request.Tree, logCut: record.LogCut).Summary;
+        var mode = narrowed ? RerunMode.Narrowed : RerunMode.Whole;
+        var excused = FlakyRule.Excused(decision with { Mode = mode }, digest.Summary, new RerunOutcome(record.Started, record.TimedOut, record.ExitCode == StepRecord.UnitSurvivedExitCode, record.ExitCode, summary));
+        if (excused.Count == 0)
+        {
+            return new Rerun(record, []);
+        }
+
+        facts.OnExcused?.Invoke(excused);
+
+        return new Rerun(record, [.. excused.Select(test => new FlakyTest(step.Project, test.Name, test.File, Path.GetFileName(first.LogPath), narrowed ? "narrowed" : "whole", test.Proof))]);
     }
 
     /// <summary>Whether the run may start, and inside what.</summary>

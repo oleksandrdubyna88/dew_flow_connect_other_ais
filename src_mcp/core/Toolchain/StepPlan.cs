@@ -26,7 +26,20 @@ public sealed record PlannedStep(
     TimeSpan Timeout,
     string Origin,
     string Subject,
-    IReadOnlyDictionary<string, string?> Switches);
+    IReadOnlyDictionary<string, string?> Switches)
+{
+    /// <summary>For a TEST step of a project of the file that names <c>testFor</c> (E4 s5 t3): the selected run's argv and the number of files it is given; null when there is no selected run for this round.</summary>
+    public IReadOnlyList<string>? SelectedArgv { get; init; }
+
+    /// <summary>How many files the selected run is given.</summary>
+    public int SelectedFiles { get; init; }
+
+    /// <summary>The argv of the project's <c>testFor</c> and its folder prefixes, kept so the re-run (E4 s5 t5) can name the failed tests' files; null when the file names none.</summary>
+    public IReadOnlyList<string>? TestFor { get; init; }
+
+    /// <summary>The <c>testFiles</c> prefixes of the project, with <see cref="TestFor"/>.</summary>
+    public IReadOnlyList<string> TestFiles { get; init; } = [];
+}
 
 /// <summary>
 /// The step plan of a resolved toolchain (epoch 3 E4 s3 t2): the steps of every project in the project order and, in a project, in the order of a round — restore, build, typecheck, test — with the first step that does not pass ending the run. Pure.
@@ -48,7 +61,7 @@ public static class StepPlan
     };
 
     /// <summary>The steps of <paramref name="toolchain"/>, in the order they run, with <c>{jobs}</c> replaced by <paramref name="jobs"/>.</summary>
-    public static IReadOnlyList<PlannedStep> Of(ResolvedToolchain toolchain, ToolchainDefaults table, int jobs, AffectedSelection? selection = null)
+    public static IReadOnlyList<PlannedStep> Of(ResolvedToolchain toolchain, ToolchainDefaults table, int jobs, AffectedSelection? selection = null, RoundFacts? facts = null)
     {
         var timeouts = toolchain.File?.Timeouts ?? ToolchainTimeouts.Default;
         var skip = toolchain.File?.Skip ?? [];
@@ -62,7 +75,7 @@ public static class StepPlan
 
             if (project.FileProject is { } file)
             {
-                plan.AddRange(FileSteps(file, timeouts, jobs));
+                plan.AddRange(FileSteps(file, timeouts, jobs, facts));
             }
             else if (project.Detected is { } detected)
             {
@@ -74,13 +87,13 @@ public static class StepPlan
     }
 
     /// <summary>The steps of a toolchain FILE read as it always was: each project's build and then its test, plus a restore when the file states one. Used for a file the caller has already resolved to <c>file</c>.</summary>
-    public static IReadOnlyList<PlannedStep> OfFile(RepoToolchain toolchain, int jobs) =>
-        [.. toolchain.Projects.SelectMany(project => FileSteps(project, toolchain.Timeouts, jobs))];
+    public static IReadOnlyList<PlannedStep> OfFile(RepoToolchain toolchain, int jobs, RoundFacts? facts = null) =>
+        [.. toolchain.Projects.SelectMany(project => FileSteps(project, toolchain.Timeouts, jobs, facts))];
 
     /// <summary>Whether the plan has something that checks the work: a build, a typecheck or a test step.</summary>
     public static bool Checks(IReadOnlyList<PlannedStep> plan) => plan.Any(step => step.Step is CheckStep.Build or CheckStep.Typecheck or CheckStep.Test);
 
-    private static IEnumerable<PlannedStep> FileSteps(ToolchainProject project, ToolchainTimeouts timeouts, int jobs)
+    private static IEnumerable<PlannedStep> FileSteps(ToolchainProject project, ToolchainTimeouts timeouts, int jobs, RoundFacts? facts = null)
     {
         var switches = project.Adapter == "dotnet" ? DotnetSwitches : Quiet;
         (CheckStep Step, ToolchainCommand Command, TimeSpan Timeout)[] steps =
@@ -90,7 +103,28 @@ public static class StepPlan
             (CheckStep.Test, project.Test, timeouts.Test),
         ];
 
-        return steps.Where(step => step.Command.Runs).Select(step => new PlannedStep(project.Path, project.Adapter, step.Step, Fill(step.Command.Argv, jobs), null, ".", step.Timeout, "file", project.Path, switches));
+        return steps.Where(step => step.Command.Runs).Select(step => WithSelection(new PlannedStep(project.Path, project.Adapter, step.Step, Fill(step.Command.Argv, jobs), null, ".", step.Timeout, "file", project.Path, switches), project, jobs, facts));
+    }
+
+    /// <summary>
+    /// A selected run (E4 s5 t3): only for a TEST step of a project of the file that names <c>testFor</c> and <c>testFiles</c>, only while no full run has failed in the job, and only when the job changed a file under a test prefix (S6: an unsafe name, a stem that is not letters, digits and underscores, or more than 50 files is no selected run). A detected project never has one.
+    /// </summary>
+    private static PlannedStep WithSelection(PlannedStep step, ToolchainProject project, int jobs, RoundFacts? facts)
+    {
+        if (step.Step != CheckStep.Test || !project.TestFor.Runs || project.TestFiles.Count == 0)
+        {
+            return step;
+        }
+
+        var kept = step with { TestFor = project.TestFor.Argv, TestFiles = project.TestFiles };
+        if (facts is null || facts.FullFailedBefore)
+        {
+            return kept;
+        }
+
+        var selected = TestSelection.Select(facts.ChangedPaths, project.Path == "." ? string.Empty : project.Path, project.TestFiles);
+
+        return selected.State == "files" ? kept with { SelectedArgv = TestSelection.Argv(project.TestFor.Argv, selected.Files, ".", jobs), SelectedFiles = selected.Files.Count } : kept;
     }
 
     private static IEnumerable<PlannedStep> DetectedSteps(ResolvedProject project, DetectedProject detected, ToolchainDefaults table, ToolchainTimeouts timeouts, IReadOnlyList<string> skip, int jobs)

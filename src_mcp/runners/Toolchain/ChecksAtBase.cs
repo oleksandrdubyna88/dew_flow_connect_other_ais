@@ -27,7 +27,7 @@ public sealed class ChecksAtBase(GitHistory history, CheckRunner runner)
     /// The checks of a coder job, the one road for it: the <c>.git</c> pointer of the worktree is compared with what coai wrote down BEFORE anything runs and again AFTER, the base toolchain is read from the MAIN repository
     /// (never through the worktree's pointer), and every step runs inside the OS boundary — this runner must have one, or the job is refused. A pointer that changed after the checks makes the run <see cref="CheckState.Failed"/> whatever the steps said.
     /// </summary>
-    public async Task<CheckResult> RunCoderJobAsync(IWorkFolder tree, string baseSha, BoundaryJob job, string logFolder, int jobs, CancellationToken ct = default, Action<StepRecord>? stepFinished = null)
+    public async Task<CheckResult> RunCoderJobAsync(IWorkFolder tree, string baseSha, BoundaryJob job, string logFolder, int jobs, CancellationToken ct = default, Action<StepRecord>? stepFinished = null, RoundFacts? facts = null)
     {
         var before = job.Tree.Verify();
         if (before.Length > 0)
@@ -35,7 +35,7 @@ public sealed class ChecksAtBase(GitHistory history, CheckRunner runner)
             return new CheckResult(CheckState.BoundaryRefused, [], $"{before} Nothing was run.");
         }
 
-        var result = await RunAsync(tree, baseSha, new CheckRequest(job.Tree.Root, logFolder, jobs) { Job = job, StepFinished = stepFinished }, ct);
+        var result = await RunAsync(tree, baseSha, new CheckRequest(job.Tree.Root, logFolder, jobs) { Job = job, StepFinished = stepFinished, Facts = facts ?? new RoundFacts() }, ct);
         var after = job.Tree.Verify();
 
         return after.Length == 0 ? result : result with { State = CheckState.Failed, Note = $"{after} The result of the checks is not trusted. {result.Note}" };
@@ -63,6 +63,29 @@ public sealed class ChecksAtBase(GitHistory history, CheckRunner runner)
     }
 
     /// <summary>
+    /// The toolchain the HEAD's definitions resolve to, for the formatter turn (E4 s5 t1): the same reading as the checks of the round — the head commit and its toolchain file from the main repository through the hardened reads — and nothing is run. Null when the head or its file cannot be read.
+    /// </summary>
+    public async Task<ToolchainResolution?> ResolveForFormatAsync(BoundaryJob job, string baseSha, CancellationToken ct = default)
+    {
+        var atBase = await ReadFileAtAsync(job.Tree.MainCheckout, baseSha, ct);
+        var head = await git.InCoderTreeAsync(job.Tree, ["--no-replace-objects", "rev-parse", "HEAD"], ct);
+        var headSha = head.Ran && head.Ok ? head.Out.Trim() : string.Empty;
+        if (atBase.Trouble.Length > 0 || !GitHistory.IsCommitish(headSha))
+        {
+            return null;
+        }
+
+        var headFile = await ReadFileAtAsync(job.Tree.MainCheckout, headSha, ct);
+        var file = ToolchainFile.Read(headFile.File);
+        if (headFile.Trouble.Length > 0 || file is ToolchainRead.Refused)
+        {
+            return null;
+        }
+
+        return (await ResolveAsync(file, ToolchainFile.Read(atBase.File), job, baseSha, headSha, ct)).Resolution;
+    }
+
+    /// <summary>
     /// The checks of a coder job run the HEAD's definitions (owner decision 2026-11-26, which replaced the interim gate "frozen build definitions": nothing the head changes is refused). The head commit, its toolchain file and what it changed against the base are read from the MAIN repository through
     /// the hardened reads; the difference is REPORTED (<see cref="CheckResult.ChangedFiles"/>, <see cref="CheckResult.HeadTests"/>, the resolved toolchain's changes) and never judged here. A head that cannot be read, or whose toolchain file does not parse, is a refusal because nothing can be run.
     /// </summary>
@@ -85,6 +108,7 @@ public sealed class ChecksAtBase(GitHistory history, CheckRunner runner)
         var raw = await git.RawChangesAsync(job.Tree.MainCheckout, baseSha, headSha, FrozenDefinitions.MaxChars, ct);
         var changes = raw.Ran && raw.Ok && !raw.Truncated ? FrozenDefinitions.ParseRaw(raw.Out) : null;
         var file = ToolchainFile.Read(headFile.File);
+        request = request with { Facts = request.Facts with { ChangedPaths = changes is null ? [] : [.. changes.Where(change => change.Status is 'A' or 'M' or 'T' && !change.IsLinkOrSubmodule).Select(change => change.Path)] } };
         var result = file is ToolchainRead.Refused
             ? await runner.RunAsync(file, request, ct)
             : await RunDetectedAsync(file, baseFile, job, baseSha, headSha, request, ct);
@@ -99,8 +123,8 @@ public sealed class ChecksAtBase(GitHistory history, CheckRunner runner)
     }
 
     /// <summary>
-    /// What the checks of a CODER job are (epoch 3 E4 s3 t3; SPEC §A): the file at the base wins; with none, or for a project that names no command, the manifests of the BASE commit and of the HEAD commit — the commit coai made, read from the MAIN repository's objects through the
-    /// hardened reads, never from the worktree: an untracked or ignored manifest in the worktree changes nothing — resolve into steps by <see cref="ToolchainResolve"/>. The manifests are read only when the answer needs them: a file that states every command needs neither.
+    /// What the checks of a CODER job are (epoch 3 E4 s3 t3; SPEC §A1, §A4): the toolchain file of the HEAD decides (the base's when the head left it alone); with none, or for a project that names no command, the manifests of the BASE commit and of the HEAD commit — the commit coai made, read from the MAIN repository's objects through the
+    /// hardened reads, never from the worktree: an untracked or ignored manifest in the worktree changes nothing — resolve into steps by <see cref="ToolchainResolve"/>, which runs the HEAD's definitions and REPORTS what the head changed, never refuses it (owner decision 2026-11-26). The manifests are read only when the answer needs them: a file that states every command needs neither.
     /// </summary>
     private async Task<CheckResult> RunDetectedAsync(ToolchainRead file, ToolchainRead baseFile, BoundaryJob job, string baseSha, string headSha, CheckRequest request, CancellationToken ct)
     {

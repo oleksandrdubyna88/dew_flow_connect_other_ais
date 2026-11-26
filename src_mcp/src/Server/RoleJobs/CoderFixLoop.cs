@@ -89,6 +89,14 @@ internal sealed class CoderFixLoop(IRoleRun run, GitHistory git, CoderOsLayer la
         }
 
         var head = first.Head;
+        var formatted = await FormatAsync(head, 0, session, ct);
+        if (formatted.Halted is { } formatHalted)
+        {
+            return formatHalted;
+        }
+
+        head = formatted.Head;
+        var format = formatted.Format;
         var checks = new CoderChecks(run, git, layer, tree, baseSha);
         while (true)
         {
@@ -97,7 +105,7 @@ internal sealed class CoderFixLoop(IRoleRun run, GitHistory git, CoderOsLayer la
                 return Ended(head, report, "timeout", TimeoutReason());
             }
 
-            var round = await checks.RunAsync(_rounds.Count, head, ct);
+            var round = await checks.RunAsync(_rounds.Count, head, ct, format);
             _rounds.Add(round);
             if (!round.Red)
             {
@@ -129,6 +137,14 @@ internal sealed class CoderFixLoop(IRoleRun run, GitHistory git, CoderOsLayer la
             }
 
             head = committed.Head;
+            formatted = await FormatAsync(head, _fixes, session, ct);
+            if (formatted.Halted is { } fixHalted)
+            {
+                return fixHalted;
+            }
+
+            head = formatted.Head;
+            format = formatted.Format;
         }
     }
 
@@ -191,6 +207,28 @@ internal sealed class CoderFixLoop(IRoleRun run, GitHistory git, CoderOsLayer la
     // ---------- the commit of a turn ----------
 
     private sealed record Committed(string Head, CoderLoopEnd? Halted);
+
+    private sealed record Formatted(string Head, FormatResult Format, CoderLoopEnd? Halted);
+
+    /// <summary>
+    /// The formatter turn after a turn's commit (E4 s5): the formatter runs on the files that commit changed, and what it changed is committed as <c>style: format (coai)</c> through the one commit road. A format state is never a verdict: whatever it is, the checks of the round run on the head it leaves.
+    /// </summary>
+    private async Task<Formatted> FormatAsync(string head, int turn, CoderFixSession session, CancellationToken ct)
+    {
+        var prepared = await new CoderFormat(run, git, layer, tree, baseSha).PrepareAsync(head, turn, ct);
+        if (!prepared.Changed)
+        {
+            return new Formatted(head, prepared.Result, null);
+        }
+
+        var committed = await CommitAsync(CoderCommits.FormatMessage(), session, ct);
+        if (committed.Halted is { } halted)
+        {
+            return new Formatted(head, prepared.Result, halted);
+        }
+
+        return new Formatted(committed.Head.Length > 0 ? committed.Head : head, prepared.Result with { Commit = committed.Head }, null);
+    }
 
     /// <summary>The ONE commit of a turn (turn 0 or a fix turn); the generation is compared first. No change means no commit and the head stays where it was.</summary>
     private async Task<Committed> CommitAsync(string message, CoderFixSession session, CancellationToken ct)

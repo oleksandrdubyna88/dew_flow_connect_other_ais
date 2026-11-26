@@ -90,6 +90,9 @@ public static class ServerNoticeCodes
     /// <summary>The exact text of a pool key was found in what its own launch printed or in the coder's changed files: the key is <c>dead (exposed)</c> and must be revoked at the vendor. Subject is the key id; ONE per key.</summary>
     public const string ClaudeKeyExposed = "claude-key-exposed";
 
+    /// <summary>A failed test passed on the one re-run and was excused (E4 s5 t5; SPEC F): the check counted it as passed and listed it under <c>flaky</c> in the result. Subject is the job id; ONE per job.</summary>
+    public const string CoderTestFlaky = "coder-test-flaky";
+
     /// <summary>Every claude key of the pool is disabled, dead or cooling: a pick found none. Subject is <c>pool</c>; at most one in 30 minutes.</summary>
     public const string ClaudeKeysExhausted = "claude-keys-exhausted";
 
@@ -126,6 +129,7 @@ public static class ServerNoticeCodes
         RoleJobLost,
         RoleModelSwitched,
         RoleJobFailed,
+        CoderTestFlaky,
         ClaudeKeyDead,
         ClaudeKeyExposed,
         ClaudeKeysExhausted,

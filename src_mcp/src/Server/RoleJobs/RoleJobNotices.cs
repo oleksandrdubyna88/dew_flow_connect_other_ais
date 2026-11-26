@@ -57,6 +57,21 @@ internal static class RoleJobNotices
         Repo = job.Repo,
     };
 
+    /// <summary>A failed test passed on the one re-run and was excused (E4 s5 t5): the checks counted it as passed. ONE per job. The names are the tests' own and never a value of the output.</summary>
+    public static ServerNotice TestFlaky(RoleJobRecord job, int count, DateTime nowUtc) => new()
+    {
+        Utc = ServerNotice.Iso(nowUtc),
+        Class = "outcome",
+        Source = Source,
+        Code = ServerNoticeCodes.CoderTestFlaky,
+        Subject = job.JobId,
+        Title = $"Role job {job.JobId} ({job.Role}): {count.ToString(System.Globalization.CultureInfo.InvariantCulture)} failed test(s) passed on a re-run and were counted as passed",
+        Detail = "The result lists each under 'flaky' with its proof (the test ran again and passed, in a re-run that itself exited 0). A test that fails once and passes once may be an order dependency of the job's change: it is listed, never hidden.",
+        Cure = "Look at the 'flaky' list of the result; a test that is flaky in the base is a problem of the repository, not of this job.",
+        Role = job.Role,
+        Repo = job.Repo,
+    };
+
     public static ServerNotice Lost(RoleJobRecord job, DateTime nowUtc) => new()
     {
         Utc = ServerNotice.Iso(nowUtc),

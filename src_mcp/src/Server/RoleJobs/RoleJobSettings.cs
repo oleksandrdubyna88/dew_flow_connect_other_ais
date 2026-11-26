@@ -56,6 +56,26 @@ internal sealed record RoleJobSettings(int MaxLiveJobs, int MemoryMegabytes, Lau
 /// <summary>
 /// <c>COAI_FIX_ROUNDS</c>: how many fix turns a coder job may make when its checks are red (<c>server.md</c> § 10). One rule reads it, for every job: a whole number from 0 to 10, else 3 and a NOTE — never a refusal that would stop a job over a typing slip.
 /// </summary>
+/// <summary>
+/// <c>COAI_FLAKY_RERUNS</c> (E4 s5 t5): 0 or 1, default 1 — whether a failed full test step may be run ONE more time (SPEC F). Another value is 1, with a note.
+/// </summary>
+internal static class FlakyReruns
+{
+    public const string Key = "COAI_FLAKY_RERUNS";
+
+    public static (int Count, string Note) Read(Func<string, string?> settings)
+    {
+        var text = settings(Key)?.Trim() ?? string.Empty;
+
+        return text switch
+        {
+            "" or "1" => (1, string.Empty),
+            "0" => (0, string.Empty),
+            _ => (1, $"{Key} is '{(text.Length <= 20 ? text : text[..20] + "…")}'; it must be 0 or 1, so 1 is used"),
+        };
+    }
+}
+
 internal static class FixRounds
 {
     public const string Key = "COAI_FIX_ROUNDS";
