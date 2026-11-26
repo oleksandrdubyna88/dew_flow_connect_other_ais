@@ -35,7 +35,7 @@ internal static class AgyCoderUnit
 
     /// <summary>The folders coai makes before the preflight, in order.</summary>
     public static IReadOnlyList<string> Folders(BoundaryJob job) =>
-        [VendorFolder(job), HomeFolder(job), Path.Combine(HomeFolder(job), ".gemini"), Path.Combine(HomeFolder(job), ".gemini", "antigravity-cli"), job.CoderTempFolder, job.CoderVarTempFolder];
+        [VendorFolder(job), HomeFolder(job), Path.Combine(HomeFolder(job), ".gemini"), Path.Combine(HomeFolder(job), ".gemini", "antigravity-cli"), job.CoderTempOf(AgyCoderVendor.VendorId), job.CoderVarTempOf(AgyCoderVendor.VendorId)];
 
     /// <summary>The <c>-p</c> properties of the agy coder's unit, in the order they are given.</summary>
     public static IReadOnlyList<string> Properties(BoundaryHost host, BoundaryJob job, CoderProgram program, HookHandler handler, TimeSpan runtimeMax)
@@ -55,8 +55,8 @@ internal static class AgyCoderUnit
             $"TemporaryFileSystem={job.JobCover}:ro",
             $"BindPaths={VendorFolder(job)}",
             $"BindReadOnlyPaths={GuardFolder(job)}",
-            $"BindPaths={job.CoderTempFolder}:{BoundaryUnit.UnitTemp}",
-            $"BindPaths={job.CoderVarTempFolder}:{BoundaryUnit.UnitVarTemp}",
+            $"BindPaths={job.CoderTempOf(AgyCoderVendor.VendorId)}:{BoundaryUnit.UnitTemp}",
+            $"BindPaths={job.CoderVarTempOf(AgyCoderVendor.VendorId)}:{BoundaryUnit.UnitVarTemp}",
             .. BoundaryUnit.KeysHidden(job),
             // The real sign-in files of the person — claude's and agy's own, at their real paths — are in no unit but as the job's copy (the coordinator's order of 2026-11-26).
             .. BoundaryUnit.SignInHidden(host),

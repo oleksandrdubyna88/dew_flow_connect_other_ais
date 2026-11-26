@@ -103,8 +103,9 @@ internal sealed class AgyCoderVendor(HookHandler? handler = null) : ICoderVendor
     public CoderPreflightPlan? PreflightPlan(BoundaryHost host, BoundaryJob job, CoderProgram program, string windowsCopy, TimeSpan runtimeMax)
     {
         var other = AgyCoderPreflight.PlantOtherJob(job);
+        var vendors = AgyCoderPreflight.PlantOtherVendors(job);
 
-        return new CoderPreflightPlan(AgyCoderPreflight.Command(host, job, program, windowsCopy, other, Handler, runtimeMax, DateTime.UtcNow), AgyCoderPreflight.Items, () => AgyCoderPreflight.Tidy(job, other));
+        return new CoderPreflightPlan(AgyCoderPreflight.Command(host, job, program, windowsCopy, other, vendors.Folders, Handler, runtimeMax, DateTime.UtcNow), AgyCoderPreflight.Items, () => AgyCoderPreflight.Tidy(job, other, vendors.Made));
     }
 
     /// <summary>Right before the unit starts: the records of the earlier launches, and what the preflight's own probes of the guard wrote, are put away, so the records read after the turn are the turn's own (G15).</summary>

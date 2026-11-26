@@ -154,6 +154,12 @@ if (args is ["--agy-hook"])
     return CoaiMcp.Runners.Reviewers.AntigravityCoderGuard.RunHook(Console.In, Console.Out, Directory.GetCurrentDirectory());
 }
 
+// agy's `models` (the refresh step of the agy coder's sign-in, epoch 3 E3 s6): as measured on 1.5.18, it refreshes the access token of the sign-in file in its home ONLY when that token is expired.
+if (args is ["models"])
+{
+    return CoaiMcp.FakeCli.AgyCoder.Models();
+}
+
 var minimal = MinimalSteering.Load(args);
 Func<string, string?> read = minimal is { } fromFile ? name => fromFile.GetValueOrDefault(name) : Environment.GetEnvironmentVariable;
 if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor" || minimal is not null)

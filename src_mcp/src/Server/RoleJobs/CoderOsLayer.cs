@@ -52,7 +52,7 @@ internal sealed class CoderOsLayer(BoundaryJob job, CoderTurns turns, IProcessLa
     /// What the real sign-in files were when the job began and are now, for the envelope (d4): a sha256 and a modification time each, never text, and whether they differ — which is a notice to the person, because coai opens the real file for reading only and something else changed it.
     /// </summary>
     public IReadOnlyList<CoderSignInRecord> SignInRecords() =>
-        [.. SignIns.All().Where(state => state.Before is not null).Select(state => CoderSignInRecord.Of(state.Vendor, state.Before!, SignInCopy.Snapshot(state.RealFile)))];
+        [.. SignIns.All().Where(state => state.Before is not null).Select(state => CoderSignInRecord.Of(state.Vendor, state.Before!, SignInCopy.Snapshot(state.RealFile)) with { Refreshes = state.Refreshes })];
 
     /// <summary>The copies of the job are deleted when its work ends, whatever came of it; what a killed runner left goes with the job's folder when the retention removes it (30 days or 200 jobs).</summary>
     public void RemoveSignInCopies()

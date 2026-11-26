@@ -144,10 +144,16 @@ public sealed record BoundaryJob(
     public string CoderHomeFolder => CoderHomeOf(ClaudeVendor);
 
     /// <summary>What the coder's unit sees as <c>/tmp</c>.</summary>
-    public string CoderTempFolder => Path.Combine(CoderFolder, "tmp");
+    public string CoderTempFolder => CoderTempOf(ClaudeVendor);
+
+    /// <summary>What <paramref name="vendor"/>'s unit sees as <c>/tmp</c> (pass 5, M13; the same rule as the home of C3): <c>&lt;job&gt;/coder/&lt;vendor&gt;/tmp</c>, bound only into that vendor's unit, so what a CLI leaves there is not in the unit of a later vendor of the job.</summary>
+    public string CoderTempOf(string vendor) => Path.Combine(CoderVendorFolder(vendor), "tmp");
+
+    /// <summary>What <paramref name="vendor"/>'s unit sees as <c>/var/tmp</c>: <c>&lt;job&gt;/coder/&lt;vendor&gt;/vartmp</c>.</summary>
+    public string CoderVarTempOf(string vendor) => Path.Combine(CoderVendorFolder(vendor), "vartmp");
 
     /// <summary>What the coder's unit sees as <c>/var/tmp</c>.</summary>
-    public string CoderVarTempFolder => Path.Combine(CoderFolder, "vartmp");
+    public string CoderVarTempFolder => CoderVarTempOf(ClaudeVendor);
 
     /// <summary>Where the sign-in file is bound inside the coder's home.</summary>
     public string CoderSignInFile => Path.Combine(CoderHomeFolder, ".claude", ".credentials.json");
@@ -196,7 +202,7 @@ public sealed record BoundaryJob(
     public IReadOnlyList<string> CoderFolders => CoderFoldersOf(ClaudeVendor);
 
     /// <summary>The folders coai makes for <paramref name="vendor"/>'s unit: its home, the claude CLI's folder in it, and the two temp folders (shared: a unit sees them as <c>/tmp</c> and <c>/var/tmp</c> only).</summary>
-    public IReadOnlyList<string> CoderFoldersOf(string vendor) => [CoderHomeOf(vendor), Path.Combine(CoderHomeOf(vendor), ".claude"), CoderTempFolder, CoderVarTempFolder];
+    public IReadOnlyList<string> CoderFoldersOf(string vendor) => [CoderHomeOf(vendor), Path.Combine(CoderHomeOf(vendor), ".claude"), CoderTempOf(vendor), CoderVarTempOf(vendor)];
 
     /// <summary>Where the claude sign-in file is bound inside <paramref name="vendor"/>'s home.</summary>
     public string CoderSignInFileOf(string vendor) => Path.Combine(CoderHomeOf(vendor), ".claude", ".credentials.json");

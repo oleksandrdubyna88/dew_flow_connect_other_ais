@@ -256,8 +256,15 @@ internal sealed class CoderRig : IAsyncDisposable
     /// <summary>The folder of one job's own files — the coder's home, temp folders and caches — where the layer makes them.</summary>
     internal string JobFolder(RoleJobRecord job) => Path.Combine(_jobs.Path, job.JobId);
 
-    /// <summary>What the coder's unit sees as <c>/tmp</c>: the job's own temp folder.</summary>
-    internal string JobTemp(RoleJobRecord job) => Path.Combine(JobFolder(job), "coder", "tmp");
+    /// <summary>The vendors a rig stages its fake for: each has its own <c>/tmp</c> (pass 5, M13).</summary>
+    internal static readonly string[] StagedVendors = ["claude", "codex", "agy"];
+
+    /// <summary>What <paramref name="vendor"/>'s coder unit sees as <c>/tmp</c>: that vendor's own temp folder of the job (claude's unless said).</summary>
+    internal string JobTemp(RoleJobRecord job, string vendor = "claude") => Path.Combine(JobFolder(job), "coder", vendor, "tmp");
+
+    /// <summary>The record folders of the launches of the job, one for each vendor that ran (the fake records inside its own unit's <c>/tmp</c>).</summary>
+    internal IReadOnlyList<string> LaunchFolders(RoleJobRecord job) =>
+        [.. StagedVendors.Select(vendor => Path.Combine(JobTemp(job, vendor), "launches")).Where(Directory.Exists)];
 
     /// <summary>
     /// Makes the job's model map and record folder where the coder's unit will find them: the map is copied into the job's temp folder, and the steering file names the paths AS THE UNIT SEES THEM (<c>/tmp/…</c>). Called by <see cref="RunAsync"/>
@@ -265,11 +272,14 @@ internal sealed class CoderRig : IAsyncDisposable
     /// </summary>
     internal void Stage(RoleJobRecord job)
     {
-        var temp = JobTemp(job);
-        Directory.CreateDirectory(Path.Combine(temp, "launches"));
-        if (File.Exists(_inner.MapFile))
+        foreach (var vendor in StagedVendors)
         {
-            File.Copy(_inner.MapFile, Path.Combine(temp, "model-map.json"), overwrite: true);
+            var temp = JobTemp(job, vendor);
+            Directory.CreateDirectory(Path.Combine(temp, "launches"));
+            if (File.Exists(_inner.MapFile))
+            {
+                File.Copy(_inner.MapFile, Path.Combine(temp, "model-map.json"), overwrite: true);
+            }
         }
 
         Steer($"{BoundaryUnit.UnitTemp}/model-map.json", $"{BoundaryUnit.UnitTemp}/launches");
@@ -278,7 +288,10 @@ internal sealed class CoderRig : IAsyncDisposable
 
     /// <summary>The argv of every launch of the coder of <paramref name="job"/> — recorded inside its unit, read from the job's temp folder; empty when the job never launched a coder.</summary>
     internal IReadOnlyList<string[]> Launches(RoleJobRecord job) =>
-        Directory.Exists(Path.Combine(JobTemp(job), "launches")) ? RoleFailoverRig.LaunchesIn(Path.Combine(JobTemp(job), "launches")) : [];
+    [
+        .. LaunchFolders(job).SelectMany(folder => new DirectoryInfo(folder).EnumerateFiles("*.argv")).OrderBy(file => file.CreationTimeUtc).ThenBy(file => file.LastWriteTimeUtc)
+            .Select(file => LaunchRecords.Read(file.FullName).Split('\0')),
+    ];
 
     internal async Task<(int Exit, RoleJobRecord Job)> RunAsync(RoleJobRecord job, Action<string>? boundary = null, TimeProvider? clock = null)
     {

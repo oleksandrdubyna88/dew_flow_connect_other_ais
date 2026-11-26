@@ -393,13 +393,13 @@ public sealed class ACoderFixLoopThroughTheSeamTests
 
         public IReadOnlyList<string> ResumedArgv(string model, string worktree, string sessionId) => CoderVendors.Claude.ResumedArgv(model, worktree, sessionId);
 
-        public IReadOnlyList<string> UnitProperties(CoaiMcp.Runners.Toolchain.BoundaryHost host, CoaiMcp.Runners.Toolchain.BoundaryJob job, CoaiMcp.Runners.Toolchain.CoderProgram program, TimeSpan runtimeMax) => CoderVendors.Claude.UnitProperties(host, job, program, runtimeMax);
+        public IReadOnlyList<string> UnitProperties(CoaiMcp.Runners.Toolchain.BoundaryHost host, CoaiMcp.Runners.Toolchain.BoundaryJob job, CoaiMcp.Runners.Toolchain.CoderProgram program, TimeSpan runtimeMax) => CoaiMcp.Runners.Toolchain.CoderUnit.Properties(host, job, program, runtimeMax, VendorId);
 
         public string WorkingDirectory(CoaiMcp.Runners.Toolchain.BoundaryJob job) => CoderVendors.Claude.WorkingDirectory(job);
 
-        public IReadOnlyList<KeyValuePair<string, string>> Environment(CoaiMcp.Runners.Toolchain.BoundaryHost host, CoaiMcp.Runners.Toolchain.BoundaryJob job) => CoderVendors.Claude.Environment(host, job);
+        public IReadOnlyList<KeyValuePair<string, string>> Environment(CoaiMcp.Runners.Toolchain.BoundaryHost host, CoaiMcp.Runners.Toolchain.BoundaryJob job) => CoaiMcp.Runners.Toolchain.CoderUnit.Environment(host, job, VendorId);
 
-        public CoderHomeLayout Home(CoaiMcp.Runners.Toolchain.BoundaryJob job) => CoderVendors.Claude.Home(job);
+        public CoderHomeLayout Home(CoaiMcp.Runners.Toolchain.BoundaryJob job) => new(job.CoderHomeOf(VendorId), job.CoderSignInFileOf(VendorId), job.CoderFoldersOf(VendorId));
 
         public CoaiMcp.Runners.Toolchain.CoderProgram Program(string executable, string path, CoaiMcp.Runners.Toolchain.BoundaryJob job) => CoderVendors.Claude.Program(executable, path, job);
     }

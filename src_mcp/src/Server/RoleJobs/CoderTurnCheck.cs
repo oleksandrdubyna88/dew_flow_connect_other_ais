@@ -16,10 +16,11 @@ internal static class CoderTurnCheck
     public const string SessionKind = "session";
 
     /// <summary>
-    /// <see cref="Stop"/> asked BEFORE the launch's own stop is read, where no earlier stop (the layer's, a refusal, a key) says more: a denied action leaves an empty answer, and read first as "no answer" it would be a crash that fails over instead of the boundary fault it is.
+    /// <see cref="Stop"/> asked BEFORE the launch's own stop is read, for EVERY launch that has a process, a cut stream too (a deadline, a non-zero exit, a cancel): where no earlier stop (the layer's, a refusal, a key) says more. A denied action leaves an empty answer, and a model that keeps a turn going to
+    /// its deadline would otherwise hide a boundary that broke behind a crash that fails over. A vendor answers a cut stream with a boundary only for what one side alone proves (pass 5, M11); a boundary wins over a crash and a limit.
     /// </summary>
     public static RoleStop? StopFirst(CoderVendorSet vendors, ModelRef model, RoleLaunched launched, string expectedSession, Runners.Toolchain.BoundaryJob? job) =>
-        launched.OsStop is null && launched.Refused is null && launched.KeyStop is null && !launched.KeyExposed && launched.ExposedIds.Count == 0 && launched.Launch?.Process is { ExitCode: 0, TimedOut: false, Cancelled: false }
+        launched.OsStop is null && launched.Refused is null && launched.KeyStop is null && !launched.KeyExposed && launched.ExposedIds.Count == 0
             ? Stop(vendors, model, launched, expectedSession, job)
             : null;
 

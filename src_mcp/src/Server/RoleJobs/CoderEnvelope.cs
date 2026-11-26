@@ -55,6 +55,9 @@ internal sealed record CoderCliRecord(string Vendor, string Installed, string La
 /// <summary>The real sign-in file of a vendor that signs in with a file, before and after the job (s7 t6 d4): a sha256 and a modification time each — a hash, never text — and whether they differ. coai opens that file for reading only, so a difference is something else's doing.</summary>
 internal sealed record CoderSignInRecord(string Vendor, string BeforeSha256, string BeforeModifiedUtc, string AfterSha256, string AfterModifiedUtc, bool Changed)
 {
+    /// <summary>How many refresh units the job ran for this vendor: each puts the owner's refresh token for the seconds of one run into a unit of coai's own (risk A12) and is one more refresh on coai's copy (A5).</summary>
+    public int Refreshes { get; init; }
+
     public static CoderSignInRecord Of(string vendor, RealSignInState before, RealSignInState after) =>
         new(vendor, before.Sha256, Stamp(before.ModifiedUtc), after.Sha256, Stamp(after.ModifiedUtc), before.Sha256 != after.Sha256 || before.ModifiedUtc != after.ModifiedUtc);
 
@@ -73,6 +76,7 @@ internal sealed record CoderSignInRecord(string Vendor, string BeforeSha256, str
         json.WriteString("modifiedUtc", AfterModifiedUtc);
         json.WriteEndObject();
         json.WriteBoolean("changed", Changed);
+        json.WriteNumber("refreshes", Refreshes);
         json.WriteEndObject();
     }
 }

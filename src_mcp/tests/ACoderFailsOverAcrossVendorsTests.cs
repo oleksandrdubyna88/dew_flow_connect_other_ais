@@ -141,11 +141,9 @@ public sealed class ACoderFailsOverAcrossVendorsTests
     /// <summary>What FakeCli tried to read inside each unit, launch by launch: path, what it saw (<c>read</c>, <c>absent</c>, <c>denied</c>) and the first characters.</summary>
     private static IReadOnlyList<IReadOnlyDictionary<string, (string Saw, string Text)>> ReadsOf(CoderRig rig, RoleJobRecord job)
     {
-        var folder = Path.Combine(rig.JobTemp(job), "launches", "sidecars");
-
         return
         [
-            .. new DirectoryInfo(folder).EnumerateFiles("*.reads").OrderBy(file => file.CreationTimeUtc).ThenBy(file => file.LastWriteTimeUtc)
+            .. rig.LaunchFolders(job).Select(folder => Path.Combine(folder, "sidecars")).Where(Directory.Exists).SelectMany(folder => new DirectoryInfo(folder).EnumerateFiles("*.reads")).OrderBy(file => file.CreationTimeUtc).ThenBy(file => file.LastWriteTimeUtc)
                 .Select(file => (IReadOnlyDictionary<string, (string, string)>)File.ReadAllLines(file.FullName).Select(line => line.Split('\t')).ToDictionary(parts => parts[0], parts => (parts[1], parts.Length > 2 ? parts[2] : string.Empty))),
         ];
     }
@@ -269,7 +267,7 @@ public sealed class ACoderFailsOverAcrossVendorsTests
         if (vendorOfLast != "claude")
         {
             (vendorOfLast == "codex" ? codexVendor : agyVendor).Expected.Should().Equal(string.Empty, finalSession);
-            (vendorOfLast == "codex" ? agyVendor : codexVendor).Expected.Should().BeEmpty("a vendor that is not the last one is not asked about the session of the last");
+            (vendorOfLast == "codex" ? agyVendor : codexVendor).Expected.Should().NotContain(session => session.Length > 0, "a vendor that is not the last one is asked only about its own turn 0 — a launch that ended badly is checked too (pass 5, M11) — and never about the session of the last");
         }
 
         // The unit of each vendor, from its record: claude's sign-in bind is in the unit of claude and of no other vendor, and another vendor's unit hides the claude key pool.
@@ -287,7 +285,7 @@ public sealed class ACoderFailsOverAcrossVendorsTests
         }
 
         // The variable names of each unit, from inside: its vendor's own, none of another's.
-        var names = KeyRig.EnvNamesOf(Path.Combine(rig.JobTemp(job), "launches"));
+        var names = KeyRig.EnvNamesOf(rig.LaunchFolders(job));
         names.Should().HaveCount(launches.Count);
         for (var i = 0; i < launches.Count; i++)
         {

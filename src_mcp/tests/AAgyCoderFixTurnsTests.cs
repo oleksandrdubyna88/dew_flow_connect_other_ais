@@ -54,7 +54,7 @@ public sealed class AAgyCoderFixTurnsTests
         launches.Should().OnlyContain(argv => After(argv, "--mode") == "accept-edits" && After(argv, "--agent") == "coai-coder", "the mode and the agent are on EVERY argv");
         rig.Envelope(job).GetProperty("fixTurns").GetInt32().Should().Be(2);
         rig.Envelope(job).GetProperty("green").GetBoolean().Should().BeTrue();
-        var seen = Directory.EnumerateFiles(Path.Combine(rig.JobTemp(job), "launches", "sidecars"), "*.agy").Select(File.ReadAllLines).ToList();
+        var seen = Directory.EnumerateFiles(Path.Combine(rig.JobTemp(job, "agy"), "launches", "sidecars"), "*.agy").Select(File.ReadAllLines).ToList();
         seen.Should().HaveCount(3);
         seen.Select(lines => lines.Single(line => line.StartsWith("cwd=", StringComparison.Ordinal))).Distinct().Should().ContainSingle().Which.Should().Be($"cwd={AgyCoderUnit.GuardFolder(JobOf(rig, job))}", "the same guard folder as the working directory, never the worktree");
         seen.Select(lines => lines.Single(line => line.StartsWith("home=", StringComparison.Ordinal))).Distinct().Should().ContainSingle().Which.Should().Be($"home={AgyCoderUnit.HomeFolder(JobOf(rig, job))}");
@@ -296,6 +296,64 @@ public sealed class AAgyCoderFixTurnsTests
         var (_, ended) = await rig.RunAsync(job);
 
         ended.State.Should().Be(RoleJobStates.Succeeded, ended.Reason);
+    }
+
+    // ---------- M11: a turn that ended badly is checked too, and a boundary wins over a crash ----------
+
+    public static TheoryData<string> CutTurns => new() { "exit-after-a-done-with-no-record", "timeout-after-a-done-with-no-record", "exit-with-a-mode-warning", "exit-after-a-denied-action-result" };
+
+    [Theory]
+    [MemberData(nameof(CutTurns))]
+    public async Task M11_ATurnThatEndedBadly_ButShowsABrokenBoundary_EndsTheJobCoderBoundary_NoFailover(string which)
+    {
+        await using var rig = await RigAsync();
+        rig.AttemptTimeout = TimeSpan.FromSeconds(4);
+        var broken = AgyCoderBed.Tool("write_file", CoderRig.StateFile, CoderRig.Green + "\n", skipHook: true);
+        rig.SaysEntries(Model, which switch
+        {
+            "exit-after-a-done-with-no-record" => AgyCoderBed.Launch([broken], exit: 1),
+            "timeout-after-a-done-with-no-record" => AgyCoderBed.Launch([broken], holdMs: 60_000),
+            "exit-with-a-mode-warning" => AgyCoderBed.Launch([AgyCoderBed.Writes(CoderRig.Green)], exit: 1, stderr: "warning: --mode auto is not available for this account; continuing in the default mode."),
+            _ => AgyCoderBed.Launch([AgyCoderBed.Writes(CoderRig.Green)], exit: 1, answer: string.Empty, denied: "[{\"action\":\"command\",\"display_name\":\"Bash\"}]"),
+        }).SaysEntries("gemini-4-argon-medium", Turn(CoderRig.Green, AgyCoderBed.Other));
+        var job = rig.NewJob(route: Two);
+
+        var (_, ended) = await rig.RunAsync(job);
+
+        (ended.State, ended.Stop).Should().Be((RoleJobStates.Failed, RoleStopWords.CoderBoundary), $"{which}: {ended.Reason}");
+        rig.Launches(job).Should().ContainSingle("a boundary wins over a crash: the next model is never launched");
+        (await CommitsAsync(rig, job)).Should().Be("0");
+    }
+
+    [Fact]
+    public async Task M11_ATurnThatEndedBadly_WithNothingBroken_StillFailsOver_AsACrash()
+    {
+        await using var rig = await RigAsync();
+        rig.SaysEntries(Model, AgyCoderBed.Launch([AgyCoderBed.Tool("write_file", "stray.txt", "half\n")], exit: 1, stderr: "the CLI fell over: boom"))
+            .SaysEntries("gemini-4-argon-medium", Turn(CoderRig.Green, AgyCoderBed.Other));
+        var job = rig.NewJob(route: Two);
+
+        var (_, ended) = await rig.RunAsync(job);
+
+        ended.State.Should().Be(RoleJobStates.Succeeded, ended.Reason);
+        ended.Attempts.Select(attempt => attempt.Stop).Should().Contain(RoleStopWords.Crash);
+        File.Exists(Path.Combine(rig.WorktreeOf(job), "stray.txt")).Should().BeFalse("the worktree went back to the last coai commit");
+    }
+
+    [Fact]
+    public void M11_OnACutStream_TheCheckAnswersBoundaryForWhatOneSideAloneProves_AndNothingForWhatACutExplains()
+    {
+        var done = Stream(Init("c"), Step("c", 2, "ACTIVE", "write_file"), Step("c", 2, "DONE", "write_file"));
+        var cut = (string stream, string? records, string stderr) => Check(stream, records, stderr, exit: 1);
+
+        cut(done, string.Empty, string.Empty).Should().BeOfType<CoderTurnVerdict.Boundary>("a DONE event with no record");
+        cut(done, Record("c", 2, "write_file", "deny") + "\n", string.Empty).Should().BeOfType<CoderTurnVerdict.Boundary>("a DONE event whose record says deny");
+        cut(done, null, string.Empty).Should().BeOfType<CoderTurnVerdict.Boundary>("a DONE event and records that cannot be read: nothing shows the hook decided");
+        cut(Stream(Init("c"), Step("c", 2, "DONE", "run_command")), Record("c", 2, "run_command", "allow") + "\n", string.Empty).Should().BeOfType<CoderTurnVerdict.Boundary>("a DONE event of another tool");
+        cut(done, Record("c", 2, "write_file", "allow") + "\n", string.Empty).Should().BeOfType<CoderTurnVerdict.Fine>("a matched event: the cut explains the rest");
+        cut(Stream(Init("c"), Step("c", 2, "ACTIVE", "write_file")), string.Empty, string.Empty).Should().BeOfType<CoderTurnVerdict.Fine>("an event that did not end is what a cut explains");
+        cut(Stream(Init("c")), Record("c", 2, "write_file", "allow") + "\n", string.Empty).Should().BeOfType<CoderTurnVerdict.Fine>("a record with no event: the stream was cut before it");
+        cut(Stream(Init("c")), string.Empty, "warning: --mode auto is not available").Should().BeOfType<CoderTurnVerdict.Boundary>("a mode sign");
     }
 
     // ---------- the check itself, over crafted streams ----------

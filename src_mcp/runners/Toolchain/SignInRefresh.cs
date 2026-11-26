@@ -53,7 +53,7 @@ internal sealed class SignInRefresh(IProcessLauncher launcher, BoundaryHost host
     /// <summary>
     /// Copies <paramref name="realFile"/> to <paramref name="scratch"/>/<paramref name="relative"/> (mode 0600, folders 0700), runs <paramref name="program"/> with <paramref name="argv"/> in the refresh unit <paramref name="unit"/>, asks that it is gone, deletes the scratch home when the refresh failed, and answers where the refreshed file is when it did not (the caller reads it, makes the coder's copy, and deletes the scratch with <see cref="Delete"/> before any coder starts).
     /// </summary>
-    public async Task<SignInRefreshResult> RunAsync(BoundaryJob job, string realFile, string scratch, string relative, CoderProgram program, IReadOnlyList<string> argv, IReadOnlyList<KeyValuePair<string, string>> environment, string unit, Func<IReadOnlyList<string>, IReadOnlyList<string>>? degrade, CancellationToken ct)
+    public async Task<SignInRefreshResult> RunAsync(BoundaryJob job, string realFile, string scratch, string relative, CoderProgram program, IReadOnlyList<string> argv, IReadOnlyList<KeyValuePair<string, string>> environment, string unit, Func<IReadOnlyList<string>, IReadOnlyList<string>>? degrade, CancellationToken ct, string staleField = "")
     {
         var target = Path.Combine(scratch, relative);
         try
@@ -78,6 +78,14 @@ internal sealed class SignInRefresh(IProcessLauncher launcher, BoundaryHost host
             {
                 from.CopyTo(to);
             }
+
+            // agy refreshes only a token that is EXPIRED (measured, 10.5): the access token of THIS scratch copy is set to the past so the refresh unit refreshes. The real file is never touched.
+            if (staleField.Length > 0 && MakeStale(target, staleField) is { Length: > 0 } cannot)
+            {
+                Delete(scratch);
+
+                return new SignInRefreshResult.Failed(cannot);
+            }
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -95,6 +103,45 @@ internal sealed class SignInRefresh(IProcessLauncher launcher, BoundaryHost host
         }
 
         return new SignInRefreshResult.Refreshed(target);
+    }
+
+    /// <summary>Sets the time at <paramref name="field"/> (a <c>/</c>-separated path) of the JSON file at <paramref name="file"/> two hours into the past; empty when it was, else the sentence (no value of the file in it).</summary>
+    private static string MakeStale(string file, string field)
+    {
+        try
+        {
+            if (System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(file)) is not System.Text.Json.Nodes.JsonObject root)
+            {
+                return "the sign-in file is not a JSON object, so its copy for the refresh could not be made stale";
+            }
+
+            var parts = field.Split('/', StringSplitOptions.RemoveEmptyEntries);
+            var at = root;
+            foreach (var part in parts[..^1])
+            {
+                if (at[part] is not System.Text.Json.Nodes.JsonObject next)
+                {
+                    return "the sign-in file has no expiry field, so its copy for the refresh could not be made stale";
+                }
+
+                at = next;
+            }
+
+            if (at[parts[^1]] is null)
+            {
+                return "the sign-in file has no expiry field, so its copy for the refresh could not be made stale";
+            }
+
+            at[parts[^1]] = DateTime.UtcNow.AddHours(-2).ToString("O", System.Globalization.CultureInfo.InvariantCulture);
+            using var stream = new FileStream(file, FileMode.Truncate, FileAccess.Write, FileShare.None);
+            stream.Write(System.Text.Encoding.UTF8.GetBytes(root.ToJsonString()));
+
+            return string.Empty;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+        {
+            return $"the copy of the sign-in for the refresh could not be made stale ({e.GetType().Name})";
+        }
     }
 
     /// <summary>The unit's own run: empty when it ended 0 and was gone, else the sentence.</summary>

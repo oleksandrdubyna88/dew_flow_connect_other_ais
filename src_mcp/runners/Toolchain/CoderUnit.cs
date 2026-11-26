@@ -60,8 +60,8 @@ internal static partial class CoderUnit
             $"TemporaryFileSystem={job.JobCover}:ro",
             // ONLY this vendor's folder of the job's coder (C3): another vendor's home is under the cover above and is not there.
             $"BindPaths={job.CoderVendorFolder(vendor)}",
-            $"BindPaths={job.CoderTempFolder}:{BoundaryUnit.UnitTemp}",
-            $"BindPaths={job.CoderVarTempFolder}:{BoundaryUnit.UnitVarTemp}",
+            $"BindPaths={job.CoderTempOf(vendor)}:{BoundaryUnit.UnitTemp}",
+            $"BindPaths={job.CoderVarTempOf(vendor)}:{BoundaryUnit.UnitVarTemp}",
             .. host.SignInFile.Length > 0 ? [$"BindReadOnlyPaths={host.SignInFile}:{job.CoderSignInFileOf(vendor)}"] : Array.Empty<string>(),
             .. KeysHidden(host, job),
             // The real sign-in files of the vendors whose coder gets a COPY are not in a claude coder's unit either (C3 item 2).
