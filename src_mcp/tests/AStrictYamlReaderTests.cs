@@ -177,6 +177,17 @@ public sealed class AStrictYamlReaderTests
         refused.Message.Should().Contain(wording).And.StartWith("line ");
     }
 
+    [Theory]
+    [InlineData("a: 1\nghp_0123456789abcdefghijklmnopqrstuvwxyzAB\n")]
+    [InlineData("a: ghp_0123456789abcdefghijklmnopqrstuvwxyzAB: x\n")]
+    [InlineData("a: \"x\" ghp_0123456789abcdefghijklmnopqrstuvwxyzAB\n")]
+    [InlineData("ghp_0123456789abcdefghijklmnopqrstuvwxyzAB: 1\nghp_0123456789abcdefghijklmnopqrstuvwxyzAB: 2\n")]
+    [InlineData("a: \"\\ghp_0123456789abcdefghijklmnopqrstuvwxyzAB\"\n")]
+    public void ARefusal_NeverRepeatsTextOfTheFile(string text)
+    {
+        Refused(text).Message.Should().NotContain("ghp_").And.StartWith("line ", "the line and a fixed sentence are all a refusal says (the security verify, M6)");
+    }
+
     [Fact]
     public void TheRefusalNamesTheLineOfTheFault()
     {

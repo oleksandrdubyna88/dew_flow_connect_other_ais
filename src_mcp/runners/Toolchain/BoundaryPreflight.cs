@@ -269,7 +269,7 @@ internal static class BoundaryPreflight
     private static string Unanswered(Processes.ProcessResult result, bool gone) =>
         !gone ? "the preflight unit could not be stopped"
         : result.TimedOut ? "the preflight unit did not finish in time"
-        : $"the preflight unit did not start or did not finish (exit {result.ExitCode}): {Short(result.StdErr)}";
+        : $"the preflight unit did not start or did not finish (exit {result.ExitCode}): {Short(result.StdErr)} {CoaiMcp.Runners.Detach.DetachedLauncher.ExpandEnvironmentHint(result.StdErr)}".TrimEnd();
 
     private static string Short(string text)
     {
