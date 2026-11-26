@@ -2,8 +2,8 @@ import type { CopyDecision } from './copyText';
 import { agoWords } from './gaugeWords';
 import { ACCOUNTS_SECONDS, ACCOUNTS_UNREADABLE_SAID, plainValue } from './remoteAccountsReply';
 import type { ManagerWord } from './remoteAccountsReply';
-import { ACCOUNTS_READING, READING_OFF_SAID, claudeAccountKey } from './remoteAccountsRound';
-import type { AccountsReading, AccountsState, HostMemory, Memory, StateChange } from './remoteAccountsRound';
+import { claudeAccountKey } from './remoteAccountsRound';
+import type { HostMemory, Memory } from './remoteAccountsRound';
 import { dayOf } from './remoteHosts';
 import type { Committed, HostStanding } from './remoteHosts';
 import { HOSTS_SAID } from './remoteHostsSaid';
@@ -417,86 +417,8 @@ function readingRows(view: AccountsView, nowMs: number): readonly Row[] {
   return [...head, ...floorRows(view), ...groupRows(view, nowMs), separator(HOSTS_LABEL), ...view.hosts.map((host) => hostRow(view, host, nowMs))];
 }
 
-/** The cut: while the reading is off the list is this one row, whatever the window holds. */
-const offRows = (): readonly Row[] => [{ kind: 'info', label: READING_OFF_SAID }];
-
-const ROWS_OF: Readonly<Record<AccountsReading, (view: AccountsView, nowMs: number) => readonly Row[]>> = { off: offRows, on: readingRows };
-
-/** The list's rows: one row that says the reading is off, or the groups and the hosts. `reading` is the build's constant unless a test hands one in. */
-export const accountsRows = (view: AccountsView, nowMs: number, reading: AccountsReading = ACCOUNTS_READING): readonly Row[] => ROWS_OF[reading](view, nowMs);
-
-// ───────────────── the notices ─────────────────
-
-const DAY_MS = 86_400_000;
-
-const isAuto = (standing: HostStanding): boolean => standing.answer === 'yes' && standing.how === 'auto';
-
-/** Due again when the last notice is absent or a day old; a time that cannot be read is no notice. */
-const dueAgain = (last: string | undefined, nowMs: number): boolean => last === undefined || !(nowMs - Date.parse(last) < DAY_MS);
-
-const autoDue = (state: AccountsState, standings: readonly HostStanding[], nowMs: number): readonly string[] => {
-  const last = state.lastAutoNoticeUtc;
-
-  return dueAgain(last, nowMs) ? standings.filter((one) => isAuto(one) && (last === undefined || one.askedUtc > last)).map((one) => one.host) : [];
-};
-
-const olderThan = (one: HostStanding, roundStartMs: number): boolean => one.answer === 'yes' && one.how === 'person' && one.askedUtc < new Date(roundStartMs).toISOString();
-
-const firstDue = (state: AccountsState, standings: readonly HostStanding[], firstRoundEnded: boolean, roundStartMs: number): readonly string[] =>
-  (firstRoundEnded && state.toldUtc === undefined ? standings.filter((one) => olderThan(one, roundStartMs)).map((one) => one.host) : []);
-
-/**
- * The hosts a notice is due for. `autoHosts`: the automatic "yes" rows allowed after the last such notice, once a day. `first`: the
- * person's own "yes" rows, once, at the end of the first round, while the person was never told. The host commits `{ told }` whether or
- * not `first` is empty (it checks `toldUtc` and the round itself).
- */
-export const noticesDue = (state: AccountsState, standings: readonly HostStanding[], firstRoundEnded: boolean, nowMs: number, roundStartMs: number = nowMs): { readonly autoHosts: readonly string[]; readonly first: readonly string[] } =>
-  ({ autoHosts: autoDue(state, standings, nowMs), first: firstDue(state, standings, firstRoundEnded, roundStartMs) });
-
-/** What the notices need of the window. `state` is `undefined` over a state row that cannot be read: then nobody is told and nothing is written. */
-export interface NoticeSeams {
-  readonly state: () => AccountsState | undefined;
-  readonly standings: () => Promise<readonly HostStanding[]>;
-  readonly nowMs: () => number;
-  /** When the round that just ended started. */
-  readonly roundStartMs: () => number;
-  /** The daily notice: these hosts were allowed by the round itself. */
-  readonly allowed: (hosts: readonly string[]) => void;
-  /** The first-round notice: these hosts, which the person allowed before, are now read every 10 minutes. */
-  readonly everyTen: (hosts: readonly string[]) => void;
-  /** A field change of the state row. */
-  readonly commit: (change: StateChange) => Promise<unknown>;
-}
-
-/** The daily notice, then its time in the state row. */
-async function dailyNotice(seams: NoticeSeams, hosts: readonly string[]): Promise<void> {
-  if (hosts.length > 0) {
-    seams.allowed(hosts);
-    await seams.commit({ autoNoticed: new Date(seams.nowMs()).toISOString() });
-  }
-}
-
-/** The first-round notice, when it names hosts; its time is written whether or not it did, so an empty list is not asked again. */
-async function firstNotice(seams: NoticeSeams, hosts: readonly string[], due: boolean): Promise<void> {
-  if (!due) {
-    return;
-  }
-  if (hosts.length > 0) {
-    seams.everyTen(hosts);
-  }
-  await seams.commit({ told: new Date(seams.nowMs()).toISOString() });
-}
-
-/** After a round: what is due (`noticesDue`) is told and its time committed. `firstRoundEnded` is true for a round that was not abandoned. */
-export async function tellAfterRound(seams: NoticeSeams, firstRoundEnded: boolean): Promise<void> {
-  const state = seams.state();
-  if (state === undefined) {
-    return;
-  }
-  const due = noticesDue(state, await seams.standings(), firstRoundEnded, seams.nowMs(), seams.roundStartMs());
-  await dailyNotice(seams, due.autoHosts);
-  await firstNotice(seams, due.first, firstRoundEnded && state.toldUtc === undefined);
-}
+/** The list's rows: the groups and the hosts. */
+export const accountsRows = (view: AccountsView, nowMs: number): readonly Row[] => readingRows(view, nowMs);
 
 // ───────────────── choosing a row, and the copy button ─────────────────
 

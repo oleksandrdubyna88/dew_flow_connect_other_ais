@@ -1,5 +1,4 @@
 import { byCodeUnit } from './codeUnitOrder';
-import type { DoorAnswer } from './remotePermission';
 import type { KeyValueStore } from './sideSettings';
 
 /**
@@ -52,33 +51,6 @@ export type Committed =
   | { readonly kind: 'damaged' }
   /** The refusals file did not take the change. `why` is one of three fixed words. */
   | { readonly kind: 'unwritten'; readonly why: 'busy' | 'disk' | 'lost' };
-
-/**
- * The round's OLD view of the door, called just before every accounts call; deleted by E2.S4 with the round's own door call. The door is
- * the keeper's `may` (`remotePermission.ts`) and `admissionOf` maps its answer to this type while the round still reads it.
- */
-export type Admission =
-  | { readonly kind: 'read'; readonly how: 'person' | 'auto'; readonly allowedNow: boolean }
-  | { readonly kind: 'refused' }
-  | { readonly kind: 'not-asked' }
-  | { readonly kind: 'full' }
-  | { readonly kind: 'damaged' }
-  /** A "no" or a Stop is not in the file yet: no host is contacted. */
-  | { readonly kind: 'unwritten' };
-
-/** The door's answer as the round's old view (the bridge of E2.S1, deleted by E2.S4 with `Admission`). */
-export function admissionOf(answer: DoorAnswer): Admission {
-  return ADMISSION_OF[answer];
-}
-
-const ADMISSION_OF: Readonly<Record<DoorAnswer, Admission>> = {
-  'yes': { kind: 'read', how: 'person', allowedNow: false },
-  'no': { kind: 'refused' },
-  'damaged': { kind: 'damaged' },
-  'waiting': { kind: 'unwritten' },
-  'no-permission': { kind: 'not-asked' },
-  'stopped': { kind: 'unwritten' },
-};
 
 export interface HostStanding {
   readonly host: string;
