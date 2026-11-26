@@ -65,7 +65,7 @@ internal sealed partial class RoleModelLauncher(Func<string, string?> settings, 
     public async Task<RoleLaunched> LaunchAsync(ModelRef model, string prompt, string repoPath, string outputDir, TimeSpan timeout, CancellationToken ct, string handle = "", RoleKey? key = null)
     {
         var (runtime, name) = RuntimeOf(model.Vendor);
-        // A vendor whose sign-in lives for a limited time caps the deadline of every turn of it (agy: under the life of a token).
+        // A vendor whose sign-in lives for a limited time caps the deadline of every turn of it, so that a turn ends before its token does.
         if (Coder is not null && Vendors.Resolve(model.Vendor) is CoderVendorResolution.Launchable capped && capped.Vendor.TurnDeadline is { } cap && cap < timeout)
         {
             timeout = cap;

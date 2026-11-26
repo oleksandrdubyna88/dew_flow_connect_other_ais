@@ -78,6 +78,15 @@ public sealed class AAgyCoderLaunchTests
     }
 
     [Fact]
+    public void TheMarkLaunchable_IsOffInTheProductsTable_SoNoProductJobLaunchesAgyYet_AndOneCommitOfS8T6TurnsItOn()
+    {
+        // s8 t6 d4 turns the mark on, after the must-changes are built and green; nothing here does.
+        CoderBoundaryTable.Shipped.Row("agy")!.Launchable.Should().BeFalse();
+        CoderVendors.Shipped.Resolve("agy").Should().BeOfType<CoderVendorResolution.Refused>().Which.Sentence.Should().Contain("launchable");
+        CoderVendors.Shipped.Implemented.Select(vendor => vendor.Id).Should().Contain("agy", "the type exists; only the mark is off");
+    }
+
+    [Fact]
     public void D2_ACoderLaunch_WithNoGuardFolder_OrWithTheWorktreeAsItsFolder_IsNeverBuilt()
     {
         var worktree = Path.Combine(Path.GetFullPath("roots"), "coai-coder-r20261126101010-0000000a");
