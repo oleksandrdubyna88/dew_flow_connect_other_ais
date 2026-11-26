@@ -281,6 +281,8 @@ const SCRIPT = `
     if (row.note !== null) { cell.appendChild(el('div', 'muted', row.note)); }
     return cell;
   }
+  /** A place name as shown: cut like the model's shown field, while the raw name is what a button posts. */
+  function cut(name) { return name.length > 200 ? name.slice(0, 199) + '…' : name; }
   function windowCells(row) {
     var codex = row.tool === 'codex';
     if (row.span !== null) {
@@ -314,7 +316,7 @@ const SCRIPT = `
   function serverUnit(block) {
     var node = el('section', 'block');
     var heading = el('div', 'heading');
-    put(heading, el('strong', 'host', block.host), status(block.head), refuseButtons(block.host, block.canRefuse, block.canReadAgain));
+    put(heading, el('strong', 'host', block.shown), status(block.head), refuseButtons(block.host, block.canRefuse, block.canReadAgain));
     node.appendChild(heading);
     if (block.head.kind === 'jq-missing') { node.appendChild(installLine(block.host, block.head.manager)); }
     if (block.olderAt !== null) { node.appendChild(when(el('div', 'older'), 'The table below is of the read of ', block.olderAt)); }
@@ -360,7 +362,7 @@ const SCRIPT = `
     var body = el('tbody');
     account.places.forEach(function (one) {
       var tr = el('tr');
-      put(tr, put(td('Place'), el('strong', null, one.place)), readCell(one.place, one.failure, one.readAt));
+      put(tr, put(td('Place'), el('strong', null, cut(one.place))), readCell(one.place, one.failure, one.readAt));
       body.appendChild(tr);
     });
     node.appendChild(put(el('table', 'acct'), headRow([{ label: 'Place', key: 'name' }, { label: 'Read', key: 'age' }]), body));
@@ -368,7 +370,7 @@ const SCRIPT = `
   }
   function lineRow(line, withWindows) {
     var tr = el('tr');
-    put(tr, put(td('Place'), el('strong', null, line.place)), accountCell(line.row));
+    put(tr, put(td('Place'), el('strong', null, cut(line.place))), accountCell(line.row));
     if (withWindows) {
       windowCells(line.row).forEach(function (cell) { tr.appendChild(cell); });
     } else {
@@ -397,7 +399,7 @@ const SCRIPT = `
     node.appendChild(el('h2', null, 'No Claude account'));
     items.forEach(function (one) {
       var row = el('div', 'none-row');
-      put(row, el('strong', null, one.place), el('span', 'muted', one.said));
+      put(row, el('strong', null, cut(one.place)), el('span', 'muted', one.said));
       if (one.action === 'read-again') { row.appendChild(refuseButtons(one.place, false, true)); }
       if (one.action === 'copy-install') { row.appendChild(button('Copy install command', function () { post('copy-install', { place: one.place }); })); }
       node.appendChild(row);
@@ -421,12 +423,13 @@ const SCRIPT = `
     put(line, cellNode(row.five, row.tool === 'codex'), cellNode(row.week, row.tool === 'codex'));
     cell.appendChild(line);
     row.models.forEach(function (one) { cell.appendChild(namedLine(one)); });
+    row.others.forEach(function (one) { cell.appendChild(namedLine(one)); });
     return cell;
   }
   function userRow(row) {
     var tr = el('tr');
     var place = td('Place');
-    put(place, el('strong', null, row.place), refuseButtons(row.place, row.canRefuse, row.canReadAgain));
+    put(place, el('strong', null, cut(row.place)), refuseButtons(row.place, row.canRefuse, row.canReadAgain));
     var read = td('Read');
     read.appendChild(status(row.head));
     if (row.failure !== null || row.olderAt !== null) {
@@ -453,7 +456,7 @@ const SCRIPT = `
     } else if (view.groupBy === 'account') {
       view.accounts.forEach(function (account) {
         var key = 'account:' + (account.key === null ? 'place:' + account.places[0].place : account.key);
-        units.push({ key: key, data: account, build: function () { return accountUnit(account); } });
+        units.push({ key: key, label: 'account:#' + units.length, data: account, build: function () { return accountUnit(account); } });
       });
       if (view.codex.length > 0) { units.push({ key: 'section:codex', data: view.codex, build: function () { return sectionUnit('Codex', view.codex, true); } }); }
       if (view.agy.length > 0) { units.push({ key: 'section:agy', data: view.agy, build: function () { return sectionUnit('Antigravity', view.agy, false); } }); }
@@ -489,7 +492,7 @@ const SCRIPT = `
       current = unit.key;
       timed[unit.key] = [];
       var node = unit.build();
-      node.setAttribute('data-unit', unit.key);
+      node.setAttribute('data-unit', unit.label || unit.key);
       next[unit.key] = { sig: sig, node: node };
       return node;
     });

@@ -87,8 +87,10 @@ export interface Head {
 }
 
 export interface Block {
-  /** The scope host: E2 has no other kind of place. */
+  /** The scope host as the terminal named it, WHOLE (its alphabet is closed): what a message names and what groups. E2 has no other kind of place. */
   readonly host: string;
+  /** The host as it is drawn: cut at the sentence length through `forList`. Never a key and never posted. */
+  readonly shown: string;
   readonly head: Head;
   readonly rows: readonly ToolRow[];
   /** The instant of the older read whose rows these are, after a failure; else `null`. */
@@ -445,28 +447,28 @@ function memoryHead(host: string, memory: HostMemory): Head {
 function wslBlock(input: TableInput): Block {
   const said = input.windows ? WSL_WINDOWS_SAID : WSL_ELSEWHERE_SAID;
 
-  return { host: 'wsl', head: headOf('wsl', null, said), rows: [], olderAt: null, line: null, noClaude: said, canRefuse: false, canReadAgain: false };
+  return { host: 'wsl', shown: 'wsl', head: headOf('wsl', null, said), rows: [], olderAt: null, line: null, noClaude: said, canRefuse: false, canReadAgain: false };
 }
 
-function closedBlock(shown: string, refused: boolean, said: string): Block {
-  return { host: shown, head: headOf('not-allowed', null, said), rows: [], olderAt: null, line: null, noClaude: said, canRefuse: !refused, canReadAgain: refused };
+function closedBlock(host: string, shown: string, refused: boolean, said: string): Block {
+  return { host, shown, head: headOf('not-allowed', null, said), rows: [], olderAt: null, line: null, noClaude: said, canRefuse: !refused, canReadAgain: refused };
 }
 
 /** The instant of the older read whose rows a failed place keeps. */
 const olderAtOf = (head: Head, reading: HostMemory['reading']): number | null => (head.kind === 'failed' && reading !== undefined ? reading.atMs : null);
 
-function readBlock(shown: string, memory: HostMemory, head: Head, shared: ReadonlyMap<string, Shared>): Block {
+function readBlock(host: string, shown: string, memory: HostMemory, head: Head, shared: ReadonlyMap<string, Shared>): Block {
   const { reading } = memory;
-  const rows = reading === undefined ? [] : rowsOf(shown, { host: shown, read: reading.read, at: reading.atMs }, shared);
+  const rows = reading === undefined ? [] : rowsOf(host, { host, read: reading.read, at: reading.atMs }, shared);
   const olderAt = olderAtOf(head, reading);
 
-  return { host: shown, head, rows, olderAt, line: head.kind === 'read' && rows.length === 0 ? NO_TOOL_SAID : null, noClaude: noClaudeOf(head, rows, olderAt), canRefuse: true, canReadAgain: false };
+  return { host, shown, head, rows, olderAt, line: head.kind === 'read' && rows.length === 0 ? NO_TOOL_SAID : null, noClaude: noClaudeOf(head, rows, olderAt), canRefuse: true, canReadAgain: false };
 }
 
 function readBlockFor(input: TableInput, host: string, shown: string, shared: ReadonlyMap<string, Shared>): Block {
   const memory = input.memory.get(host) ?? {};
 
-  return readBlock(shown, memory, memoryHead(host, memory), shared);
+  return readBlock(host, shown, memory, memoryHead(host, memory), shared);
 }
 
 function blockFor(input: TableInput, host: string, shared: ReadonlyMap<string, Shared>): Block {
@@ -477,7 +479,7 @@ function blockFor(input: TableInput, host: string, shared: ReadonlyMap<string, S
   const standing = input.standings.find((one) => one.host === host);
   const closed = notReadSaid(input, standing);
 
-  return closed === undefined ? readBlockFor(input, host, shown, shared) : closedBlock(shown, standing?.answer === 'no', closed);
+  return closed === undefined ? readBlockFor(input, host, shown, shared) : closedBlock(host, shown, standing?.answer === 'no', closed);
 }
 
 const roundPart = (round: RoundNow): RoundPart =>

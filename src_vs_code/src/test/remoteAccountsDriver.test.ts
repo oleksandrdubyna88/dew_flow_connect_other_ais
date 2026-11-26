@@ -318,3 +318,16 @@ test('E2S4-T7 (the round): each place lands with its own host, and the result co
 test('E2S4-T10: the shipped usage policy is still off', () => {
   assert.deepEqual(USAGE_POLICY, { kind: 'off' });
 });
+
+test('E2S4-F2: while a round runs the driver knows where it is — host, place in the order, how many — and nothing before or after', async () => {
+  const r = rig({ hosts: ['a', 'b', 'wsl'], permitted: true });
+  await r.driver.changed();
+  const seen: (string | undefined)[] = [];
+  r.control.hold = async () => { const now = r.driver.progress(); seen.push(now === undefined ? undefined : `${now.host} ${now.index} of ${now.total}`); };
+  assert.equal(r.driver.progress(), undefined, 'progress before a round');
+  await r.driver.runNow('refresh');
+
+  assert.deepEqual(seen, ['a 1 of 2', 'b 2 of 2'], 'the progress did not follow the places of the round (wsl is never one)');
+  assert.equal(r.driver.progress(), undefined, 'progress after the round ended');
+  assert.ok(r.landed.filter((one) => one === undefined).length >= 3, 'the tab is not told when the round moves to the next place');
+});

@@ -7,7 +7,7 @@ import { AccountsPanel } from './remoteAccountsPanel';
 import { readAccounts } from './remoteAccountsReply';
 import { AccountsCall, Memory, RoundResult, STATE_KEY, Trigger, accountsHosts, callFor, logGate } from './remoteAccountsRound';
 import { runAccountsCommand } from './remoteAccountsRun';
-import { TableModel, tableModel } from './remoteAccountsTable';
+import { RoundNow, TableModel, tableModel } from './remoteAccountsTable';
 import { readableOf } from './remoteHosts';
 import type { RemoteSessions } from './remoteSessionHost';
 import { ACCOUNTS_LIMITS, defaultRemoteSeams, runAccounts } from './remoteSsh';
@@ -185,9 +185,19 @@ class AccountsWindow implements TerminalAccounts {
       stopped: await this.driver.stoppedNow(),
       permission: await this.sessions.permission(),
       damaged: file ? 'file' : list ? 'list' : undefined,
-      round: summary === undefined ? { kind: 'idle' } : { kind: 'ended', endedMs: summary.endedMs, read: summary.read, asked: summary.asked },
+      round: this.roundNow(summary),
       windows: process.platform === 'win32',
     });
+  }
+
+  /** What the toolbar says of the round: where it is while it runs, else how the last one ended, else nothing. */
+  private roundNow(summary: RoundSummary | undefined): RoundNow {
+    const progress = this.driver.progress();
+    if (progress !== undefined) {
+      return { kind: 'running', ...progress };
+    }
+
+    return summary === undefined ? { kind: 'idle' } : { kind: 'ended', endedMs: summary.endedMs, read: summary.read, asked: summary.asked };
   }
 
   /** The tab is opened (or revealed) with the model of now. */

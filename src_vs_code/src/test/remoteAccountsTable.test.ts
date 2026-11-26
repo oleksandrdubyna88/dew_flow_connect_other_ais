@@ -377,3 +377,16 @@ test('E2S2-T13: changedBlocks names the landed place and the place whose shared 
   assert.equal(changedBlocks(undefined, next).length, 2);
   assert.equal(ANN.length > 0, true);
 });
+
+test('E2S2-F1: a host of 250 characters is a block under its WHOLE name; its drawn name is cut, and two hosts that share 200 characters are two blocks', () => {
+  const long = (tail: string): string => `${'a'.repeat(240)}${tail}`;
+  const one = long('0123456789');
+  const two = long('9876543210');
+  const model = tableModel(inputOf({ hosts: [one, two], memory: memoryOf([one, seen(reading({ claude: claude() }), 1)], [two, seen(reading({ claude: claude() }), 1)]) }));
+
+  assert.equal(model.blocks.length, 2, 'two long hosts became one block');
+  assert.deepEqual(model.blocks.map((block) => block.host), [one, two].sort(), 'a block is not named by the whole host');
+  assert.ok(model.blocks.every((block) => [...block.shown].length <= 200 && block.shown !== block.host && block.host.startsWith(block.shown.replace(/…$/u, ''))), 'the drawn name is not cut');
+  assert.ok(model.blocks.every((block) => block.rows.every((row) => row.place === block.host)), 'a row names the cut host');
+  assert.equal(blockOf(model, one)?.host, one);
+});

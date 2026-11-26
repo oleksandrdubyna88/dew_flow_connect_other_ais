@@ -14145,9 +14145,9 @@ The QuickPick (`AccountsList`, `openList`, `ShownItem`, the test door's `lastIte
 
 ### Known limits (E2)
 
-- **The tab does not show a round in flight.** The driver reports the end of a round (`summary`) but not its progress, so the toolbar says *last round … k of n read* or *no round has run yet*; the model's `running` part is not fed by the host in this build.
 - **A modal that nobody answers is not driven by the host scenarios.** E2S3-H1 gives the permission through the keeper before it presses the icon; the first-press question is `askPermissionFirst`'s own test (E2S1).
-- **The chat bundle grew** by the page, the groupings and the model (593,271 → about 626 KB); its budget in `scripts/bundle-entries.json` was raised for it.
+- **The chat bundle grew** by the page, the groupings and the model (593,271 → 626,030 bytes); its budget in `scripts/bundle-entries.json` was raised from 598,016 to 630,784 for it (the build plus the same ~4.7 KB of headroom the old budget had, in the 8 KiB steps the budget has always moved by).
+- **The tab shows a round in flight** (`AccountsDriver.progress()`: the place being called, its place in the round's order and the count; the host passes it to the model as `running`), and the model keeps a host's WHOLE name in `Block.host` (the name a message carries) and its cut drawn name in `Block.shown`.
 - The residuals of the permission are numbered 1–19 in `SECURITY.md`, section *The extension's outward ssh calls*.
 
 ### Tests (E2)

@@ -67,3 +67,11 @@ test('E2S3-T9: an unknown name, a non-object and a missing model are nothing', (
   assert.equal(accountsCommandOf({ type: 'refuse', host: 'ok' }, undefined), undefined, 'with no model there is no host to name');
   assert.deepEqual(accountsCommandOf({ type: 'ready' }, undefined), { kind: 'ready' });
 });
+
+test('E2S2-F1 (message): refuse and read-again for a host of 250 characters carry the whole host, and the copy of its install command is found by it', () => {
+  const host = `${'h'.repeat(249)}x`;
+  const model = tableModel(inputOf({ hosts: [host], memory: memoryOf([host, seen(reading({ claude: claude() }), 1)]) }));
+
+  assert.deepEqual(accountsCommandOf({ type: 'refuse', host }, model), { kind: 'refuse', host });
+  assert.equal(accountsCommandOf({ type: 'refuse', host: model.blocks[0]?.shown }, model), undefined, 'the cut name names a block');
+});

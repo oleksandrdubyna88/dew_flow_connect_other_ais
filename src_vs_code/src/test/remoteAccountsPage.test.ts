@@ -6,12 +6,12 @@ import { INSTALL_JQ } from '../remoteAccountsRows';
 import { accountsHtml } from '../remoteAccountsPage';
 import { tableModel } from '../remoteAccountsTable';
 import type { TableInput, TableModel } from '../remoteAccountsTable';
-import { minutesLeft, resetText } from '../usageWords';
+import { minutesLeft, resetText, windowLabel } from '../usageWords';
 import { stylesheet } from './cssRules';
 import { bundledAccountsModule, pageScriptOf, runAccountsPage, tagCounts } from './accountsPageHarness';
 import type { AccountsPage } from './accountsPageHarness';
 import {
-  NOW, agyOf, bigInput, claude, codexOf, inputOf, memoryOf, min, reading, seen, usageOf,
+  NOW, ORG, agyOf, bigInput, claude, codexOf, codexUsage, inputOf, memoryOf, min, reading, seen, usageOf,
 } from './accountsTableFixtures';
 
 /**
@@ -376,4 +376,23 @@ test('E2S3-T2: the install command of a place is shown from the closed table, ne
   const run = page(BIG);
 
   assert.ok(run.text().includes(`Run there: ${INSTALL_JQ['apt-get']}`));
+});
+
+test('E2S3-F3: the User grouping draws a Codex window that is neither 5-hour nor weekly, as the Server grouping does', () => {
+  const odd = codexUsage({ windows: [{ minutes: 300, usedPercent: 10, resetsAtMs: NOW + min(65) }, { minutes: 10_080, usedPercent: 14, resetsAtMs: NOW + min(6_000) }, { minutes: 1_440, usedPercent: 40, resetsAtMs: NOW + min(90) }] });
+  const model = tableModel(inputOf({ hosts: ['a'], memory: memoryOf(['a', seen(reading({ codex: codexOf(odd) }), 2)]) }));
+  const label = windowLabel({ minutes: 1_440 });
+  const run = page(model);
+  assert.ok(viewHtml(run).includes(label), 'the Server grouping does not draw the odd window');
+  choose(run, 'group', 'user');
+  assert.ok(viewHtml(run).includes(label), 'the User grouping drops the odd window');
+  assert.ok(viewHtml(run).includes('60% left'), 'its figure is not drawn');
+});
+
+test('E2S3-N1: no attribute of the page holds an account of a VM — the units of the Claude account grouping are numbered', () => {
+  const run = page(BIG);
+  choose(run, 'group', 'account');
+  const units = run.document.querySelectorAll('[data-unit]').map((one) => one.getAttribute('data-unit') ?? '');
+  assert.ok(units.length > 0, 'the grouping drew no unit');
+  assert.ok(units.every((unit) => !unit.includes('@') && !unit.includes(ORG)), `a unit is named by an account: ${units.join(' | ')}`);
 });
