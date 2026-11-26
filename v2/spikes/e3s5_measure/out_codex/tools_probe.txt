@@ -1,0 +1,31 @@
+[base] flags: none
+top-level tools: functions.exec, functions.wait, functions.request_user_input, functions.request_user_input_async, collaboration.followup_task, collaboration.interrupt_agent, collaboration.list_agents, collaboration.send_message, collaboration.spawn_agent, collaboration.wait_agent
+nested (code-mode) tools: apply_patch, exec_command, list_mcp_resource_templates, list_mcp_resources, read_mcp_resource, write_stdin, clock__curr_time
+[v2off] flags: -c features.multi_agent_v2=false -c features.multi_agent=false
+top-level tools: functions.exec, functions.wait, functions.request_user_input, functions.request_user_input_async, collaboration.followup_task, collaboration.interrupt_agent, collaboration.list_agents, collaboration.send_message, collaboration.spawn_agent, collaboration.wait_agent
+nested (code-mode) tools: apply_patch, exec_command, list_mcp_resource_templates, list_mcp_resources, read_mcp_resource, write_stdin, clock__curr_time
+[a2] flags: -c agents.max_concurrent_threads_per_session=1 -c agents.max_depth=0
+top-level tools: functions.exec, functions.wait, functions.request_user_input, functions.request_user_input_async, collaboration.followup_task, collaboration.interrupt_agent, collaboration.list_agents, collaboration.send_message, collaboration.spawn_agent, collaboration.wait_agent
+nested (code-mode) tools: apply_patch, exec_command, list_mcp_resource_templates, list_mcp_resources, read_mcp_resource, write_stdin, clock__curr_time
+[a4] flags: -c features.multi_agent_v2.max_concurrent_threads_per_session=0
+<anonymous_script>:1
+
+[a5] flags: --disable code_mode_host
+top-level tools: functions.exec, functions.wait, functions.request_user_input, functions.request_user_input_async, collaboration.followup_task, collaboration.interrupt_agent, collaboration.list_agents, collaboration.send_message, collaboration.spawn_agent, collaboration.wait_agent
+nested (code-mode) tools: apply_patch, exec_command, list_mcp_resource_templates, list_mcp_resources, read_mcp_resource, write_stdin, clock__curr_time
+[a6] flags: --disable unified_exec
+top-level tools: functions.exec, functions.wait, functions.request_user_input, functions.request_user_input_async, collaboration.followup_task, collaboration.interrupt_agent, collaboration.list_agents, collaboration.send_message, collaboration.spawn_agent, collaboration.wait_agent
+nested (code-mode) tools: apply_patch, exec_command, list_mcp_resource_templates, list_mcp_resources, read_mcp_resource, write_stdin, clock__curr_time
+[a7] flags: -c features.multi_agent_v2.root_agent_usage_hint_text=\"\"
+top-level tools: functions.exec, functions.wait, functions.request_user_input, functions.request_user_input_async, collaboration.followup_task, collaboration.interrupt_agent, collaboration.list_agents, collaboration.send_message, collaboration.spawn_agent, collaboration.wait_agent
+nested (code-mode) tools: apply_patch, exec_command, list_mcp_resource_templates, list_mcp_resources, read_mcp_resource, write_stdin, clock__curr_time
+[a8] flags: --disable collaboration_modes --disable multi_agent_v2 --disable code_mode_host_grpc
+top-level tools: functions.exec, functions.wait, functions.request_user_input, functions.request_user_input_async, collaboration.followup_task, collaboration.interrupt_agent, collaboration.list_agents, collaboration.send_message, collaboration.spawn_agent, collaboration.wait_agent
+nested (code-mode) tools: apply_patch, exec_command, list_mcp_resource_templates, list_mcp_resources, read_mcp_resource, write_stdin, clock__curr_time
+[noagents] flags: -c agents.enabled=false
+top-level tools: functions.exec, functions.wait, functions.request_user_input, functions.request_user_input_async
+nested (code-mode) tools: apply_patch, exec_command, list_mcp_resource_templates, list_mcp_resources, read_mcp_resource, write_stdin, clock__curr_time
+[not accepted] -c agents.max_threads=0 : Error: agents.max_concurrent_threads_per_session must be at least 1 (rc 1)
+[not accepted] -c features.multi_agent_v2.enabled=false, -c features.multi_agent_v2.hide_spawn_agent=true : Error: data did not match any variant of untagged enum FeatureToml in `features.multi_agent_v2` (rc 1)
+[a1 -c agents.max_threads=0 and a3 -c features.multi_agent_v2.enabled=false printed no list: rc 1, see above]
+[a2 -c agents.max_concurrent_threads_per_session=1 -c agents.max_depth=0] the six collaboration tools stay

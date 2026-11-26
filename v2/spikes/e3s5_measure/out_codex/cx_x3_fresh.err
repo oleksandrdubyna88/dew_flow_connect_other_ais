@@ -1,0 +1,3 @@
+2026-11-26T11:40:43.628150Z ERROR codex_core::tools::router: error=patch rejected: writing outside of the project; rejected by user approval settings
+2026-11-26T11:40:55.976902Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /home/<user>/coai-e3s5/fx/x3/cr/wt/a.txt:
+*

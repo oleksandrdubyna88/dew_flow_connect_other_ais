@@ -1,0 +1,4 @@
+{"type":"thread.started","thread_id":"01a217af-bf24-7111-9232-7c5363d25131"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"I can’t start the child agent because `spawn_agent` isn’t available in this session."}}
+{"type":"turn.completed","usage":{"input_tokens":23735,"cached_input_tokens":7552,"cache_write_input_tokens":0,"output_tokens":58,"reasoning_output_tokens":0}}

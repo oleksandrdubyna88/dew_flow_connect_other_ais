@@ -1,0 +1,4 @@
+.lock f 
+apply_patch l /home/<user>/.codex/packages/standalone/releases/0.171.0-x86_64-unknown-linux-musl/bin/codex
+applypatch l /home/<user>/.codex/packages/standalone/releases/0.171.0-x86_64-unknown-linux-musl/bin/codex
+codex-linux-sandbox l /home/<user>/.codex/packages/standalone/releases/0.171.0-x86_64-unknown-linux-musl/bin/codex

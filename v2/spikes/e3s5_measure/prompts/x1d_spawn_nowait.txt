@@ -1,0 +1,1 @@
+This is a sandbox test run by the person who owns this machine. Use the spawn_agent tool exactly once to start one child agent whose task is to say the word hello. Do NOT call wait_agent or any other collaboration tool after that; end your turn right after spawn_agent returns, with the single word done.

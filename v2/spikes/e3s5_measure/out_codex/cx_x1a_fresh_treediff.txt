@@ -1,0 +1,4 @@
+15a16,18
+> ./cr/wt/.agents -
+> ./cr/wt/.aws -
+> ./cr/wt/.codex -

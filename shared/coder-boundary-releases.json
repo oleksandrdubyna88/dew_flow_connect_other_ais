@@ -22,6 +22,22 @@
    "verdict": "ship",
    "results": "v2/spikes/RESULTS_codex_coder.md",
    "releases": [],
+   "measured": [
+    {
+     "release": "codex-cli 0.171.0",
+     "measuredOn": "2026-11-25 (the rows B1 to B15, results sections 0 to 8) and 2026-11-26 (the open rows, results section 9)",
+     "what": "History only: the version that was measured, and when. Nothing compares an installed codex with this entry and no version gates a launch (the owner's decision of 2026-11-26; judgement section 13.5).",
+     "resultsHeading": "9. codex-cli 0.171.0 - the open rows of the judgement X1 (a) to (e), measured 2026-11-26 (epoch 3 E3 s5 t6)",
+     "judgementHeading": "13. Addendum 2 (2026-11-26): codex-cli 0.171.0 after the open-row measure of s5 t6",
+     "laterResultsHeadings": [
+      "10. codex-cli 0.171.0 - the rows X9 (a) to (c), the third program, the host-network refresh fixture, measured 2026-11-26 (epoch 3 E3 s5 t6, after the judgement addendum e748007f)"
+     ],
+     "programs": [
+      { "file": "codex", "sha256": "b76a027d6b210f9a8da7aaf321dd235c700f0ef7a794d4a5314b9af6c134f0f0" },
+      { "file": "codex-code-mode-host", "sha256": "f49bd4f0c0cc73cf1ec3a719009e07ce5b6e100520d023c760cc203fb37e5c6f" }
+     ]
+    }
+   ],
    "properties": [
     { "id": "CX-P1", "class": "launch" },
     { "id": "CX-V1", "class": "pre" },
@@ -34,6 +50,8 @@
     { "id": "CX-T2", "class": "release" },
     { "id": "CX-T3", "class": "release" },
     { "id": "CX-T4", "class": "turn" },
+    { "id": "CX-T5", "class": "turn" },
+    { "id": "CX-T6", "class": "release" },
     {
      "id": "CX-C1",
      "class": "pre",
@@ -43,23 +61,40 @@
     },
     { "id": "CX-C2", "class": "launch" },
     { "id": "CX-C3", "class": "pre" },
-    { "id": "CX-C4", "class": "release" },
+    {
+     "id": "CX-C4",
+     "class": "pre",
+     "also": [
+      "release"
+     ]
+    },
     { "id": "CX-R1", "class": "launch" },
     { "id": "CX-R2", "class": "pre" },
     { "id": "CX-R3", "class": "pre" },
+    { "id": "CX-R4", "class": "pre" },
     { "id": "CX-S1", "class": "turn" },
     { "id": "CX-S2", "class": "launch" },
     { "id": "CX-S3", "class": "turn" }
    ],
-   "pending": [
-    "CX-R4"
-   ]
+   "pending": []
   },
   {
    "id": "agy",
    "verdict": "ship",
    "results": "v2/spikes/RESULTS_agy_coder.md",
    "releases": [],
+   "measured": [
+    {
+     "release": "1.5.18",
+     "measuredOn": "2026-11-26",
+     "what": "History only: the version that was measured, and when. Nothing compares an installed agy with this entry and no version gates a launch (the owner's decision of 2026-11-26; judgement section 14.5). The rows of 1.5.17 (results sections 0 to 8, 2026-11-25) are of a program that is no longer installed.",
+     "resultsHeading": "10. agy 1.5.18 - the open rows of the judgement G1, measured 2026-11-26 after the owner's word (epoch 3 E3 s6 t7)",
+     "judgementHeading": "14. Addendum 3 (2026-11-26): agy 1.5.18 after the open-row measure of s6 t7",
+     "programs": [
+      { "file": "agy", "sha256": "7c96ad8c944c1a8d195ca34d2041a3d74d5166c96662b52183b748a3c455d52f" }
+     ]
+    }
+   ],
    "properties": [
     { "id": "AG-P1", "class": "launch" },
     { "id": "AG-G1", "class": "pre" },
@@ -76,6 +111,7 @@
     { "id": "AG-A2", "class": "turn" },
     { "id": "AG-M1", "class": "launch" },
     { "id": "AG-M2", "class": "turn" },
+    { "id": "AG-M4", "class": "release" },
     {
      "id": "AG-B1",
      "class": "pre",
@@ -84,15 +120,21 @@
      ]
     },
     { "id": "AG-B2", "class": "release" },
+    { "id": "AG-B3", "class": "pre" },
+    { "id": "AG-G5", "class": "turn" },
     { "id": "AG-R1", "class": "pre" },
+    {
+     "id": "AG-R2",
+     "class": "pre",
+     "also": [
+      "launch"
+     ]
+    },
     { "id": "AG-S1", "class": "turn" },
     { "id": "AG-S2", "class": "launch" }
    ],
    "pending": [
-    "AG-P2",
-    "AG-G5",
-    "AG-B3",
-    "AG-R2"
+    "AG-P2"
    ]
   }
  ]

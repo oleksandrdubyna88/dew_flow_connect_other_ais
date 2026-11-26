@@ -1,0 +1,2 @@
+2026-11-26T12:16:07.147138Z ERROR codex_core::tools::router: error=unknown MCP server 'x' for the selected environment
+2026-11-26T12:16:07.148796Z ERROR codex_core::tools::router: error=failed to parse function arguments: missing field `server`

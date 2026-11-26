@@ -1,0 +1,4 @@
+warning: Untrusted project-local configuration is disabled. Run `codex exec --trust` to allow project configuration and MCP servers for this and future chats in the project, including MCP commands outside the sandbox. Explicitly untrusted projects must have their trust setting updated first.
+2026-11-26T11:47:20.312839Z ERROR codex_core::tools::router: error=patch rejected: writing outside of the project; rejected by user approval settings
+2026-11-26T11:47:34.697385Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /home/<user>/coai-e3s5/fx/x3/cr/wt/a_r.txt:
+*

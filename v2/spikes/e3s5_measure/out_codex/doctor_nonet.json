@@ -1,0 +1,417 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "1795693906s since unix epoch",
+  "overallStatus": "fail",
+  "codexVersion": "0.171.0",
+  "checks": {
+    "app_server.status": {
+      "id": "app_server.status",
+      "category": "app-server",
+      "status": "ok",
+      "summary": "background server is not running",
+      "details": {
+        "control socket": "/home/<user>/coai-e3s5/fx/x1/c/home/.codex/app-server-control/app-server-control.sock",
+        "daemon state dir": "/home/<user>/coai-e3s5/fx/x1/c/home/.codex/app-server-daemon",
+        "dedicated pid file": "/home/<user>/coai-e3s5/fx/x1/c/home/.codex/app-server-daemon/daemon.pid (missing)",
+        "dedicated update-loop pid file": "/home/<user>/coai-e3s5/fx/x1/c/home/.codex/app-server-daemon/daemon-updater.pid (missing)",
+        "mode": "ephemeral",
+        "pid file": "/home/<user>/coai-e3s5/fx/x1/c/home/.codex/app-server-daemon/app-server.pid (missing)",
+        "settings": "/home/<user>/coai-e3s5/fx/x1/c/home/.codex/app-server-daemon/settings.json (missing)",
+        "status": "not running",
+        "update-loop pid file": "/home/<user>/coai-e3s5/fx/x1/c/home/.codex/app-server-daemon/app-server-updater.pid (missing)"
+      },
+      "remediation": null,
+      "durationMs": 0
+    },
+    "auth.credentials": {
+      "id": "auth.credentials",
+      "category": "auth",
+      "status": "ok",
+      "summary": "auth is configured",
+      "details": {
+        "auth file": "/home/<user>/coai-e3s5/fx/x1/c/home/.codex/auth.json",
+        "auth storage mode": "File",
+        "stored API key": "false",
+        "stored ChatGPT tokens": "true",
+        "stored agent identity": "false",
+        "stored auth mode": "chatgpt"
+      },
+      "remediation": null,
+      "durationMs": 0
+    },
+    "config.load": {
+      "id": "config.load",
+      "category": "config",
+      "status": "ok",
+      "summary": "config loaded",
+      "details": {
+        "CODEX_HOME": "/home/<user>/coai-e3s5/fx/x1/c/home/.codex",
+        "active thread overrides": "not inspected",
+        "config.toml": "/home/<user>/coai-e3s5/fx/x1/c/home/.codex/config.toml",
+        "config.toml parse": "ok",
+        "configuration load ms": "41",
+        "configuration scope": "invocation config, including cloud-managed policy",
+        "configured TUI mode": "fullscreen",
+        "cwd": "/home/<user>/coai-e3s5/fx/x1/cr/wt",
+        "enabled feature flags": "daemon_auto_start, tui_workspace, shell_tool, unified_exec, unified_exec_tty, shell_snapshot, content_item_kinds, untrusted_as_tool_output, code_mode_host, code_mode_host_grpc, code_mode_host_output_truncation, code_mode_interrupt, instant_interrupt, terminal_resize_reflow, sqlite, write_stdin_approval, api_key_model_discovery, cli_daybreak, api_key_cyber_access_programs, enable_request_compression, unbounded_connection_retries, worktrees, system_proxy_fallback, mcp_oauth_refresh_coordination, tool_search_always_defer_mcp_tools, deferred_tool_world_state, incremental_tools, incremental_tools_legacy, incremental_tools_legacy_gcp, prediction_preserve_parent_tools, browser_annotation_api, in_app_dictation, in_app_voice, in_app_updates, plugin_sharing, unified_image_budget, resize_all_images, item_ids, mentions_v2, steer, guardian_approval, guardian_include_additional_context, guardian_reuse_parent_compaction, reasoning_effort_override, collaboration_modes, tool_call_mcp_elicitation, auth_elicitation, bedrock_setup_wizard, fast_mode, ultrafast_mode, realtime_conversation, tui_app_server, compaction_image_budget, retain_client_tool_outputs, workspace_dependencies",
+        "feature flag overrides": "view_image=false, sleep_tool=false, hooks=false, multi_agent=false, apps=false, tool_suggest=false, plugins=false, in_app_browser=false, in_app_chat=false, in_app_local_automation=false, browser_use=false, browser_use_full_cdp_access=false, browser_use_external=false, computer_use=false, remote_plugin=false, image_generation=false, skill_mcp_dependency_install=false, skill_search=false, goals=false",
+        "feature flags enabled": "55",
+        "log dir": "/home/<user>/coai-e3s5/fx/x1/c/home/.codex/log",
+        "mcp servers": "0",
+        "model": "gpt-6-luna",
+        "model provider": "openai",
+        "sqlite home": "/home/<user>/coai-e3s5/fx/x1/c/home/.codex"
+      },
+      "remediation": null,
+      "durationMs": 0
+    },
+    "git.environment": {
+      "id": "git.environment",
+      "category": "git",
+      "status": "ok",
+      "summary": "git executable found; execution not verified",
+      "details": {
+        ".git entry": "file -> /home/<user>/coai-e3s5/fx/x1/main/.git/worktrees/wt",
+        "PATH git #1": "/usr/bin/git",
+        "PATH git #2": "/bin/git",
+        "PATH git entries": "2",
+        "git execution": "not inspected (PATH helpers are not executed)",
+        "repo detected": "true",
+        "repo root": "/home/<user>/coai-e3s5/fx/x1/cr/wt",
+        "selected git": "/usr/bin/git"
+      },
+      "remediation": null,
+      "durationMs": 0
+    },
+    "installation": {
+      "id": "installation",
+      "category": "install",
+      "status": "ok",
+      "summary": "installation looks consistent",
+      "details": {
+        "PATH codex #1": "/home/<user>/.codex/packages/standalone/releases/0.171.0-x86_64-unknown-linux-musl/bin/codex",
+        "current executable": "/home/<user>/.codex/packages/standalone/releases/0.171.0-x86_64-unknown-linux-musl/bin/codex",
+        "install context": "other",
+        "managed by Vite+": "false",
+        "managed by bun": "false",
+        "managed by npm": "false",
+        "managed by pnpm": "false",
+        "managed package root": "not set"
+      },
+      "remediation": null,
+      "durationMs": 0
+    },
+    "mcp.config": {
+      "id": "mcp.config",
+      "category": "mcp",
+      "status": "ok",
+      "summary": "no MCP servers configured",
+      "details": {},
+      "remediation": null,
+      "durationMs": 0
+    },
+    "network.env": {
+      "id": "network.env",
+      "category": "network",
+      "status": "ok",
+      "summary": "network-related environment looks readable",
+      "details": {
+        "managed proxy": "not configured",
+        "proxy env vars": "none",
+        "respect system proxy": "disabled"
+      },
+      "remediation": null,
+      "durationMs": 0
+    },
+    "network.provider_reachability": {
+      "id": "network.provider_reachability",
+      "category": "reachability",
+      "status": "fail",
+      "summary": "one or more required provider endpoints are unreachable over HTTP",
+      "details": {
+        "ChatGPT inference URL": "https://chatgpt.com/backend-api/<redacted> connect failed (required)",
+        "reachability mode": "ChatGPT auth"
+      },
+      "remediation": "Check proxy, VPN, firewall, DNS, and custom CA configuration.",
+      "durationMs": 5078
+    },
+    "network.websocket_reachability": {
+      "id": "network.websocket_reachability",
+      "category": "websocket",
+      "status": "warning",
+      "summary": "Responses WebSocket failed; HTTPS fallback may still work",
+      "details": {
+        "DNS": "lookup failed (failed to lookup address information: Try again)",
+        "auth mode": "chatgpt",
+        "connect timeout": "15000 ms",
+        "endpoint": "wss://chatgpt.com/backend-api/<redacted>",
+        "handshake transport error": "network error: [redacted]",
+        "model provider": "openai",
+        "provider name": "OpenAI",
+        "proxy env vars": "none",
+        "supports websockets": "true",
+        "wire API": "responses"
+      },
+      "remediation": "Check proxy, VPN, firewall, DNS, custom CA, and WebSocket policy support.",
+      "durationMs": 10061
+    },
+    "runtime.provenance": {
+      "id": "runtime.provenance",
+      "category": "runtime",
+      "status": "ok",
+      "summary": "running local build on linux-x86_64",
+      "details": {
+        "commit": "unknown",
+        "current executable": "/home/<user>/.codex/packages/standalone/releases/0.171.0-x86_64-unknown-linux-musl/bin/codex",
+        "install method": "other",
+        "platform": "linux-x86_64",
+        "version": "0.171.0"
+      },
+      "remediation": null,
+      "durationMs": 0
+    },
+    "runtime.search": {
+      "id": "runtime.search",
+      "category": "search",
+      "status": "ok",
+      "summary": "search command found (system); execution not verified",
+      "details": {
+        "search command": "rg",
+        "search command path": "/usr/bin/rg",
+        "search command readiness": "found; execution not verified",
+        "search provider": "system"
+      },
+      "remediation": null,
+      "durationMs": 0
+    },
+    "sandbox.filesystem_paths": {
+      "id": "sandbox.filesystem_paths",
+      "category": "sandbox",
+      "status": "ok",
+      "summary": "configured filesystem paths listed; read restrictions prevent probes",
+      "details": {
+        "operation": "resolve paths only; read/write access is not tested",
+        "path 1": "/home/<user>/.codex/packages/standalone/releases/0.171.0-x86_64-unknown-linux-musl/bin (read); not probed (filesystem read restrictions apply)",
+        "path 1 source": "permissions.coai.filesystem./home/<user>/.codex/packages/standalone/releases/0.171.0-x86_64-unknown-linux-musl/bin in user (/home/<user>/coai-e3s5/fx/x1/c/home/.codex/config.toml)",
+        "path 2": "/home/<user>/coai-e3s5/fx/x1/c/home/.codex/tmp/arg0-linux/codex-arg0vpelEx (read); not probed (filesystem read restrictions apply)",
+        "path 2 source": "effective filesystem policy (entry provenance unavailable)",
+        "paths checked": "2 of 2",
+        "permission profile": "coai",
+        "probe budgets": "2 seconds per path, 8 seconds total, at most 32 paths"
+      },
+      "remediation": null,
+      "durationMs": 0
+    },
+    "sandbox.helpers": {
+      "id": "sandbox.helpers",
+      "category": "sandbox",
+      "status": "ok",
+      "summary": "sandbox configuration is readable",
+      "details": {
+        "approval policy": "Never",
+        "codex-linux-sandbox helper": "/home/<user>/coai-e3s5/fx/x1/c/home/.codex/tmp/arg0-linux/codex-arg0vpelEx/codex-linux-sandbox",
+        "denied-read glob rules": "0",
+        "denied-read rules": "0",
+        "filesystem sandbox": "restricted",
+        "glob scan max depth": "unbounded",
+        "managed filesystem source": "none",
+        "network sandbox": "restricted"
+      },
+      "remediation": null,
+      "durationMs": 0
+    },
+    "security.endpoint": {
+      "id": "security.endpoint",
+      "category": "security",
+      "status": "ok",
+      "summary": "endpoint protection is not inspected on this platform",
+      "details": {
+        "endpoint products": "not inspected on this platform"
+      },
+      "remediation": null,
+      "durationMs": 0
+    },
+    "state.paths": {
+      "id": "state.paths",
+      "category": "state",
+      "status": "ok",
+      "summary": "state paths and databases are inspectable",
+      "details": {
+        "CODEX_HOME": "/home/<user>/coai-e3s5/fx/x1/c/home/.codex (dir)",
+        "active rollout files": "10 files, 1238149 total bytes, 123814 average bytes",
+        "archived rollout files": "0 files, 0 total bytes, 0 average bytes",
+        "goals DB": "/home/<user>/coai-e3s5/fx/x1/c/home/.codex/goals_1.sqlite (file)",
+        "goals DB integrity": "ok",
+        "log DB": "/home/<user>/coai-e3s5/fx/x1/c/home/.codex/logs_2.sqlite (file)",
+        "log DB integrity": "ok",
+        "log dir": "/home/<user>/coai-e3s5/fx/x1/c/home/.codex/log (missing)",
+        "memories DB": "/home/<user>/coai-e3s5/fx/x1/c/home/.codex/memories_1.sqlite (file)",
+        "memories DB integrity": "ok",
+        "memories v2 DB": "/home/<user>/coai-e3s5/fx/x1/c/home/.codex/memories_v2_1.sqlite (missing)",
+        "memories v2 DB integrity": "skipped (missing)",
+        "queue DB": "/home/<user>/coai-e3s5/fx/x1/c/home/.codex/queue_1.sqlite (file)",
+        "queue DB integrity": "ok",
+        "sqlite home": "/home/<user>/coai-e3s5/fx/x1/c/home/.codex (dir)",
+        "state DB": "/home/<user>/coai-e3s5/fx/x1/c/home/.codex/state_5.sqlite (file)",
+        "state DB integrity": "ok",
+        "thread history DB": "/home/<user>/coai-e3s5/fx/x1/c/home/.codex/thread_history_1.sqlite (file)",
+        "thread history DB integrity": "ok"
+      },
+      "remediation": null,
+      "durationMs": 48
+    },
+    "state.rollout_db_parity": {
+      "id": "state.rollout_db_parity",
+      "category": "threads",
+      "status": "warning",
+      "summary": "rollout files and state DB thread inventory differ",
+      "details": {
+        "default model provider": "openai",
+        "rollout DB active files": "10",
+        "rollout DB active rows": "10",
+        "rollout DB archive mismatches": "0",
+        "rollout DB archived files": "0",
+        "rollout DB archived rows": "0",
+        "rollout DB duplicate DB paths": "0",
+        "rollout DB duplicate rollout thread ids": "0",
+        "rollout DB malformed file names": "0",
+        "rollout DB missing active rows": "7",
+        "rollout DB missing active sample": [
+          "/home/<user>/coai-e3s5/fx/x1/c/home/.codex/sessions/2026/11/26/rollout-2026-11-26T12-48-43-01a217af-bf24-7111-9232-7c5363d25131.jsonl",
+          "/home/<user>/coai-e3s5/fx/x1/c/home/.codex/sessions/2026/11/26/rollout-2026-11-26T12-49-12-01a217b0-3271-72f2-af42-5627aa4832f6.jsonl",
+          "/home/<user>/coai-e3s5/fx/x1/c/home/.codex/sessions/2026/11/26/rollout-2026-11-26T12-47-58-01a217af-0f53-7310-a2e4-641468fecbb1.jsonl",
+          "/home/<user>/coai-e3s5/fx/x1/c/home/.codex/sessions/2026/11/26/rollout-2026-11-26T12-40-37-01a217a8-5400-7291-9ee4-5acd18035f31.jsonl",
+          "/home/<user>/coai-e3s5/fx/x1/c/home/.codex/sessions/2026/11/26/rollout-2026-11-26T12-40-25-01a217a8-2794-7661-b566-7b12af2cc733.jsonl"
+        ],
+        "rollout DB missing archived rows": "0",
+        "rollout DB model providers": "openai=10",
+        "rollout DB rows": "10",
+        "rollout DB scan cap reached": "false",
+        "rollout DB scan errors": "0",
+        "rollout DB sources": "exec=7, subagent:thread_spawn=3",
+        "rollout DB stale row sample": [
+          "/home/<user>/coai-e3s5/fx/x2/c/home/.codex/sessions/2026/11/26/rollout-2026-11-26T12-40-25-01a217a8-2794-7661-b566-7b12af2cc733.jsonl",
+          "/home/<user>/coai-e3s5/fx/x3/c/home/.codex/sessions/2026/11/26/rollout-2026-11-26T12-40-37-01a217a8-5400-7291-9ee4-5acd18035f31.jsonl",
+          "/home/<user>/coai-e3s5/fx/x4/c/home/.codex/sessions/2026/11/26/rollout-2026-11-26T12-41-32-01a217a9-2c25-7642-8f8c-359d0318d68c.jsonl",
+          "/home/<user>/coai-e3s5/fx/x9/c/home/.codex/sessions/2026/11/26/rollout-2026-11-26T12-47-54-01a217af-01a0-77b3-bef4-3590359be574.jsonl",
+          "/home/<user>/coai-e3s5/fx/x9/c/home/.codex/sessions/2026/11/26/rollout-2026-11-26T12-47-58-01a217af-0f53-7310-a2e4-641468fecbb1.jsonl"
+        ],
+        "rollout DB stale rows": "7"
+      },
+      "issues": [
+        {
+          "severity": "warning",
+          "cause": "rollout files are missing from the state DB",
+          "measured": "7 active, 0 archived",
+          "expected": "every rollout file has a matching threads row",
+          "remedy": null,
+          "fields": []
+        },
+        {
+          "severity": "warning",
+          "cause": "state DB rows point at missing or unusable rollout files",
+          "measured": "7 stale rows",
+          "expected": "every state DB rollout path is a file on disk",
+          "remedy": null,
+          "fields": []
+        }
+      ],
+      "remediation": null,
+      "durationMs": 28
+    },
+    "system.disk": {
+      "id": "system.disk",
+      "category": "disk",
+      "status": "ok",
+      "summary": "sufficient free disk space (428.9 GiB)",
+      "details": {
+        "CODEX_HOME available": "428.9 GiB",
+        "failure threshold": "1.0 GiB",
+        "warning threshold": "5.0 GiB",
+        "worktree available": "428.9 GiB"
+      },
+      "remediation": null,
+      "durationMs": 0
+    },
+    "system.environment": {
+      "id": "system.environment",
+      "category": "system",
+      "status": "ok",
+      "summary": "OS language C",
+      "details": {
+        "EDITOR": "not set",
+        "LANG": "C.UTF-8",
+        "VISUAL": "not set",
+        "os": "Ubuntu 26.4.0 (resolute) [64-bit]",
+        "os language": "C",
+        "os type": "Ubuntu",
+        "os version": "26.4.0"
+      },
+      "remediation": null,
+      "durationMs": 24
+    },
+    "terminal.env": {
+      "id": "terminal.env",
+      "category": "terminal",
+      "status": "warning",
+      "summary": "TERM=dumb - colors and cursor control are disabled in this non-interactive run",
+      "details": {
+        "NO_COLOR": "1",
+        "TERM": "dumb",
+        "color output": "disabled (NO_COLOR)",
+        "effective locale": "C.UTF-8",
+        "stderr is terminal": "false",
+        "stdin is terminal": "false",
+        "stdout is terminal": "false",
+        "terminal": "dumb",
+        "terminal size": "80x24"
+      },
+      "issues": [
+        {
+          "severity": "warning",
+          "cause": "TERM=dumb - colors and cursor control are disabled in this non-interactive run",
+          "measured": "TERM=dumb",
+          "expected": null,
+          "remedy": null,
+          "fields": [
+            "TERM"
+          ]
+        }
+      ],
+      "remediation": null,
+      "durationMs": 4
+    },
+    "terminal.title": {
+      "id": "terminal.title",
+      "category": "title",
+      "status": "ok",
+      "summary": "terminal title default",
+      "details": {
+        "terminal title activity": "true",
+        "terminal title items": "activity, project-name",
+        "terminal title project source": "git repo root",
+        "terminal title project value": "wt",
+        "terminal title source": "default"
+      },
+      "remediation": null,
+      "durationMs": 0
+    },
+    "updates.status": {
+      "id": "updates.status",
+      "category": "updates",
+      "status": "warning",
+      "summary": "update configuration is locally consistent",
+      "details": {
+        "check for update on startup": "true",
+        "latest version probe": "version request timed out",
+        "update action": "manual or unknown",
+        "version cache": [
+          "/home/<user>/coai-e3s5/fx/x1/c/home/.codex/version.json",
+          "missing"
+        ]
+      },
+      "remediation": null,
+      "durationMs": 5002
+    }
+  }
+}
