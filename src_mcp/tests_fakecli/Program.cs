@@ -7,6 +7,7 @@
 //   stderr-exit <text> <code>            — text to stderr, exit <code>
 //   sleep <ms>                           — exit 0 after the delay
 //   emit-bytes <n>                       — n bytes of 'x' on stdout in lines of 99, no pause, exit 0 (a check step that is too chatty; epoch 3 E2 s1 t2)
+//   exec --help / exec resume --help — the text of the file FAKECLI_EXEC_HELP_FILE / FAKECLI_EXEC_RESUME_HELP_FILE names (exit FAKECLI_EXEC_HELP_EXIT / FAKECLI_EXEC_RESUME_HELP_EXIT when not 0): a codex's write capability (epoch 3 E3 s5 t1)
 //   set-json-field <file> <field> <value> — set one string field (a '/'-separated path) of the JSON file; exit 0, or 1 with a line on stderr when the file is not JSON (the fake as a vendor's own refresh step, epoch 3 E3 s7 t6)
 //   write-files <path>...                — try to write each path; "wrote <path>" on stdout, "fake-cli: could not write <path>: <why>" on stderr; exit 0 (the fake as a coder, epoch 3 E2 s2 t5)
 //   hold-in <folder> <ms>                — write <folder>/ready, then wait <ms>, exit 0 (a coder that is working; a test waits for the file)
@@ -162,6 +163,23 @@ if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor" || minimal is
 
         Console.Out.Write(read("FAKECLI_HELP_STDOUT") ?? "Usage: fake [options]\n");
         return int.TryParse(read("FAKECLI_HELP_EXIT"), out var helpExit) ? helpExit : 0;
+    }
+
+    // The codex coder's write capability (epoch 3 E3 s5 t1) asks `exec --help` and `exec resume --help`: each answers the text of its own variable (the file a test points it at), exit 0, no stdin.
+    if (args is ["exec", "--help"] or ["exec", "resume", "--help"])
+    {
+        var resumed = args.Length == 3;
+        if (int.TryParse(read(resumed ? "FAKECLI_EXEC_RESUME_HELP_EXIT" : "FAKECLI_EXEC_HELP_EXIT"), out var execHelpExit) && execHelpExit != 0)
+        {
+            return execHelpExit;
+        }
+
+        if (read(resumed ? "FAKECLI_EXEC_RESUME_HELP_FILE" : "FAKECLI_EXEC_HELP_FILE") is { Length: > 0 } helpFile && File.Exists(helpFile))
+        {
+            Console.Out.Write(File.ReadAllText(helpFile));
+        }
+
+        return 0;
     }
 
     // A codex asks its CLI's --version before every launch (the tier probe), and `providers` asks it too.
