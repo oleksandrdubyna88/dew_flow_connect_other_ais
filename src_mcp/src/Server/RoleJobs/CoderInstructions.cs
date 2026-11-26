@@ -23,6 +23,9 @@ internal sealed record CoderInstructionsRecord(bool Declared, IReadOnlyList<stri
     /// </summary>
     public IReadOnlyList<InstructionSecret> Secrets { get; init; } = [];
 
+    /// <summary>The most characters of one argv item that a record keeps.</summary>
+    internal const int ArgvItemCharacters = 300;
+
     /// <summary>The record of a job whose base commit declares no step.</summary>
     public static CoderInstructionsRecord NotDeclared { get; } = new(false, [], 0, 0, string.Empty, 0, []);
 
@@ -34,7 +37,8 @@ internal sealed record CoderInstructionsRecord(bool Declared, IReadOnlyList<stri
         json.WriteStartArray("argv");
         foreach (var item in Argv)
         {
-            json.WriteStringValue(item);
+            // The argv goes through the redactor wherever it is written (the re-review of 2026-11-26, F0): the one road for the failure record and for the record of a step that passed. The argv that is RUN is the real one.
+            json.WriteStringValue(Redaction.SafeText(item, ArgvItemCharacters));
         }
 
         json.WriteEndArray();
@@ -47,7 +51,7 @@ internal sealed record CoderInstructionsRecord(bool Declared, IReadOnlyList<stri
             json.WriteStartArray("stderrTail");
             foreach (var line in StderrTail)
             {
-                json.WriteStringValue(line);
+                json.WriteStringValue(Redaction.SafeText(line, ArgvItemCharacters));
             }
 
             json.WriteEndArray();

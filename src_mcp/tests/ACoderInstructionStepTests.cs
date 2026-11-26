@@ -98,6 +98,28 @@ public sealed class ACoderInstructionStepTests
     }
 
     [Fact]
+    public void D7_TheRecordOfAStep_WritesItsArgvThroughTheRedactor_AndTheStderrTailToo_ButNeverTheExitCodeOrTheSize()
+    {
+        // V24, the re-review of 2026-11-26 (F0): the failure record keeps the argv and the last lines of standard error, and both go through the redactor before they are written. The argv that is RUN is the real one; the record is not.
+        const string InArgv = "ghp_ARGVSENTINEL0123456789abcdefghijklmnop";
+        const string InStderr = "ghp_STDERRSENTINEL0123456789abcdefghijklmn";
+        var record = new CoderInstructionsRecord(true, ["tool", $"--token={InArgv}", "--keep=plain"], 3, 42, "abc", 7, [$"the step said {InStderr}", "a last line"]);
+        using var stream = new MemoryStream();
+        using (var json = new Utf8JsonWriter(stream))
+        {
+            json.WriteStartObject();
+            record.Write(json);
+            json.WriteEndObject();
+        }
+
+        var written = Encoding.UTF8.GetString(stream.ToArray());
+
+        written.Should().NotContain("ARGVSENTINEL").And.NotContain(InArgv, "the sentinel in an argv item is not in the record");
+        written.Should().Contain("--keep=plain").And.Contain("\"exitCode\":3").And.Contain("\"bytes\":42", "the exit code, the size and the plain items are");
+        written.Should().NotContain("STDERRSENTINEL", "the stderr tail went through the redactor already");
+    }
+
+    [Fact]
     public void D1_AnEmptyArgv_IsRefused_AndTheSchemaSaysTheSame()
     {
         Refused(Head + "instructions:\n  argv: []\n").Sentence.Should().Contain("'argv' of instructions is empty");
