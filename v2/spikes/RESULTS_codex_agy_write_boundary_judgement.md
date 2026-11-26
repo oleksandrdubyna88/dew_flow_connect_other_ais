@@ -264,10 +264,11 @@ with the next plan round (section 10).
 | CX-T2 | a command of a `spawn_agent` child has the same sandbox and no other tool | release — **not measured yet (X1 a)** | B9 to B12 |
 | CX-T3 | the JavaScript of `functions.exec` reaches no file, environment, process or network by itself | release — **not measured yet (X1 b)** | B6, B10, B11 |
 | CX-T4 | no item of a turn's stream is a tool outside the measured list (an MCP call, a web search; an agent call when CX-T2 says the stream shows it) | turn | B12 |
+| CX-T5 | after every turn the rollout files in `sessions` of the job's `CODEX_HOME` are those of the handle's thread and of no other thread, at least one is there, and none of their function calls has a name that starts with `collaboration.` (added by addendum 2, section 13.3: the stream does not show an agent call) | turn | B9 to B12 |
 | CX-C1 | the job's `config.toml` is byte for byte what coai wrote, read back inside the unit | pre, and launch (written before every turn) | B14 |
 | CX-C2 | the argv is CX1, fresh and resumed, and holds no never-flag of SPEC C3 | launch | B12, B14 |
 | CX-C3 | a `.codex/config.toml` with an MCP server in a stand-in project does not change the tool list of `codex debug prompt-input` (the project is not trusted) | pre | B13 |
-| CX-C4 | `exec` and `exec resume` apply the profile of `config.toml` to every command of the model | release (X1 looks for a model-free way to ask it) | B2 to B11 |
+| CX-C4 | `exec` and `exec resume` apply the profile of `config.toml` to every command of the model | pre, and release — since addendum 2 (section 13.3); before it this cell said "release (X1 looks for a model-free way to ask it)" | B2 to B11 |
 | CX-R1 | the copy's access token has a readable `exp`, and `exp` ≥ now + the unit's `RuntimeMaxSec` + 60 min (section 9) | launch | — |
 | CX-R2 | `CODEX_REFRESH_TOKEN_URL_OVERRIDE` is in the unit's environment with the dead local address, and a connection to that address from inside the unit is REFUSED | pre | — |
 | CX-R3 | the sign-in in the unit is the job's copy, mode 0600; the real `~/.codex` cannot be seen | pre | B11 |
@@ -300,6 +301,11 @@ with the next plan round (section 10).
 | AG-S2 | the handle is bound by coai to the vendor, the job, the worktree and the home | launch | B14 |
 
 Counts: 12 shared, 22 codex, 18 agy. An id marked "when … shows" enters the table only with the addendum that follows the measure.
+
+After addendum 2 (section 13, 2026-11-26): 23 codex ids. Section 13.3 is read WITH the codex table above: it says what was measured for
+CX-T2, CX-T3, CX-C4 and CX-R4, what CX-T1, CX-T4 and CX-C2 mean now, adds CX-T5, and section 13.5 says what the owner's decision of
+2026-11-26 leaves of CX-P1, U9 and X2. Two rows of the table were touched by that addendum (CX-C4: its class cell, the old words kept in
+it; CX-T5: new); no other row was changed.
 
 ## 9. The refresh margin (codex)
 
@@ -454,3 +460,255 @@ t3). For the boundary, read by the same judge, with nothing run:
   as `AGENTS.md` does (accepted risks C4 and A7 stand).
 - A declared step that cannot run refuses the job. A job never starts with a cut or missing instruction text.
 - No id of section 8 is added: the step is not a property a verdict relies on.
+
+## 13. Addendum 2 (2026-11-26): codex-cli 0.171.0 after the open-row measure of s5 t6
+
+Judge: Fable, the same role (epoch 3 E3 s5 t6 d6). Head `32886a6e` on `feat/v2-ep3-e3-measure`. Read: `RESULTS_codex_coder.md` section 9
+(and sections 2 to 5 again), `v2/spikes/e3s5_measure/` with every file of `out_codex/`, `PREDICTIONS.md`, the SPEC (C, D, H), the task
+files of s5, `shared/coder-boundary-releases.json` and its reader `CoderBoundaryTable.cs`, `ACoderVendorSeamTests.cs`.
+Run by the judge: **no vendor CLI, no model call, no build, no test.** Read-only commands on saved material and on the program folder:
+section 13.2. Sections 1 to 12 stand as they were written, but for the two rows of section 8 that its last paragraph names.
+
+Two decisions of the owner reached this judge through the coordinator's messages, both dated 2026-11-26; the judge did not see the
+owner's own words: (1) the owner accepts the risks C1 to C4 of section 7 and wants codex as a full coder; (2) a CLI version never gates
+anything — the measured release is history. Neither changes what was measured. This addendum judges on the evidence, follows (2) in what
+it writes into the table (13.5), and names what (2) costs as a risk for the owner (C6 in 13.8).
+
+### 13.1 Verdict
+
+**codex: ship.** Measured on `codex-cli 0.171.0`, 2026-11-25 (rows B1 to B15, results sections 0 to 8) and 2026-11-26 (the open rows of
+X1, results section 9). The verdict of section 1 stands; the row "ship / ship" of SPEC C5 stays. It holds only with all of this:
+
+1. the argv of 13.4 (the set CX1 **and `-c agents.enabled=false`**), on every turn;
+2. the ids of 13.3 in their classes, each one asked where its class says;
+3. the three open rows X9 of 13.7 measured **before the argv is frozen** (s5 t2). They are small (4 paid calls at most). When one of
+   them does not hold and no switch closes it, the verdict for codex is `refuse`, the row "refuse / ship" of SPEC C5 applies and the
+   owner is asked before any code of s5;
+4. the risks of 13.8 seen by the owner. C5, C6 and C7 are new; C8 is new only when X9 (b) stays open.
+
+Why not refuse. The rule of X1 was: refuse when (a) or (b) does not hold and no switch closes it. (a) holds, fresh and resumed, and a
+switch closes the whole path. (b) holds for everything the measure tried. (c), (d) and (e) hold. No row of B1 to B15 went red on
+either day (28 calls reached inference: 11 and 17). Why the verdict has conditions: three things a verdict would lean on were not tried (13.7), one prediction
+about a check was wrong (the stream does not show an agent call), and the JavaScript runs outside the vendor sandbox (C5).
+
+### 13.2 What the judge checked itself
+
+| # | Claim of the results | How | Answer |
+|---|---|---|---|
+| J11 | the two sha256 of section 9 | `sha256sum` on the two files of the program folder (read-only; the program was not started) | **equal**: `codex` `b76a027d6b210f9a8da7aaf321dd235c700f0ef7a794d4a5314b9af6c134f0f0`, `codex-code-mode-host` `f49bd4f0c0cc73cf1ec3a719009e07ce5b6e100520d023c760cc203fb37e5c6f` |
+| J12 | "a SECOND executable beside `codex`" | `ls` of the program folder | the folder holds **three**: also `codex-exec-server` (sha256 `da2b3636f0b050e4b97da5cf8ed6b3f85621d7611105f58ee9748d8c7e2266fe`, the judge's own reading; it is in no process sample and in no line of the results). All three are in the folder that the unit binds and that the profile lets a command read |
+| J13 | the stream does not name `spawn_agent` | the item types of all 19 saved streams | **true.** Calls 1 and 2 hold one `collab_tool_call` item each (`tool: "wait"`, empty `receiver_thread_ids`); call 12 holds one `agent_message` and nothing else. **More than the results say: a child's commands are not in the stream either.** The children of calls 1 and 2 made 7 and 8 `exec` calls (`rollout_call_names.txt`); the parent's stream holds no `command_execution` item |
+| J14 | "a grandchild was not measured" | `rollout_call_names.txt`, thread by thread against the ledger | the child of call 1 called `collaboration.spawn_agent` once and `send_message` once; the child of call 2 called `spawn_agent` twice and `wait_agent` once. The file lists ten threads, each a parent or a child of a ledger call, and no thread of a grandchild. What those three calls answered is in no saved file. So: **a child TRIED to start a grandchild in both calls, and the outcome is not known** |
+| J15 | `-c agents.enabled=false` removes the six tools | `tools_probe.txt`; the streams of calls 3, 13, 15, 16, 17 | true for the model-free list (4 top-level names and 7 nested names are left) and for the model's own answer in the 3 calls that had the switch and asked (3, 13, 15); call 17, without the switch on a thread whose turn 0 had it, also had no such tool (one observation). The probe passed no `-m`: it ran with the model of the scratch `config.toml`, outside the unit |
+| J16 | the JavaScript has no host interface | `x1b_js_rollout.txt` (the script and its output), `cx_x1b_js_procs.txt` | true for what the script tried. The script also printed every global name: besides the language's own there are `tools`, `ALL_TOOLS` and **12 functions of the host** (`text`, `content`, `image`, `audio`, `generatedImage`, `store`, `load`, `notify`, `yield_control`, `exit`, `as_settled`, `stream_settled`). It called `text` and none of the other eleven. The process sample shows `codex-code-mode` with the mount, pid and user namespace ids of the `codex` process |
+| J17 | the refresh texts | `cx_x4b_exp60_nonet.err/.jsonl`, `cx_x4b_exp60_host.err/.jsonl`, the fixture | true as written. In both runs EVERY `Failed to refresh token` line names `http://127.0.0.1:9/oauth/token`; the vendor's address appears only in the models request of the host-network run. The saved fixture is the run with NO network — a shape a coder job cannot meet (13.6) |
+| J18 | `codex doctor --json` prints the profile | `doc_summary.mjs` on the three saved reports | true: `permission profile = coai`, `filesystem sandbox = restricted`, `network sandbox = restricted`; `approval policy = Never` with the flag and `OnRequest` without. The same reports also say `mcp servers = 0`, `configuration scope = invocation config, including cloud-managed policy`, 55 enabled feature flags (`multi_agent_v2` is not one of them), and `latest version = 0.172.0` |
+| J19 | nothing saved is a token | `grep` for a JWT prefix with ten more characters over `out_codex/` and the fixture | 0 files |
+| J20 | "CX1 has `web_search="disabled"`; the s4 runner did not pass it" | results sections 4 and 9, the ledger | true, and it matters: the paid calls of 2026-11-25 ran WITHOUT the flag, the calls of 2026-11-26 WITH it, and **no call of either day asked the model to search the web.** The tool list of `codex debug prompt-input` names no web search with the flag and none without it (results U3), so the list is not shown to be able to see one (13.7, X9 b) |
+
+### 13.3 The ids: which enter the table, and in which class
+
+| Id | In the table | Class | What was seen on 0.171.0 | What it does not cover |
+|---|---|---|---|---|
+| CX-T2 | **yes** (it stays) | `release` | calls 1 and 2: a command and an `apply_patch` of a `spawn_agent` child got the answers of the parent for B2, B6, B10 and B11, fresh and resumed; its environment has only core names and `CODEX_*` names; its own pid namespace; its tools are the parent's | a grandchild (J14). Nothing asks it at the time of a job. With the switch of 13.4 no child exists in a coai turn: CX-T2 is the layer UNDER the switch, not the one a job relies on first |
+| CX-T3 | **yes, in a narrower sense** | `release` | call 5: `require`, `process`, `Deno`, `Bun`, `fetch`, `XMLHttpRequest`, `WebSocket`, `fs`, `Buffer` are undefined and `import` is refused; the script reaches the 7 nested tools | ONE script of the model, fresh only. Eleven host functions were not called (J16), so "reaches no file, environment, process or network by itself" is not yet observed for them: X9 (a). Until then the id means what the left cell says and no more |
+| CX-T4 | **yes** (it stays) | `turn` | the stream shows a wait as a `collab_tool_call` item and does NOT show a `spawn_agent` or anything a child does (J13) | so the words "an agent call when CX-T2 says the stream shows it" are answered: it does not. CX-T4 now means: an item of type `collab_tool_call` of ANY kind, an MCP call and a web search each end the job `coder-boundary`, and nothing of the turn is committed. With the switch no such item can be honest. That the stream names a web search item was not seen either (X9 b) |
+| CX-T5 | **new** | `turn` | each thread has a rollout file of its own in `sessions` of the job's `CODEX_HOME`, its name ends with the thread id, and its function calls can be read by name (`rollout_call_names.txt`): this is where a `spawn_agent` IS visible | the file is the vendor's own format, seen on one release. So the check is closed by construction: no rollout file with the handle's thread id, a file that cannot be read, a file of another thread, or a call named `collaboration.*` ends the job `coder-boundary`. A format change then refuses jobs; it does not pass them |
+| CX-C4 | **yes** | `pre`, and `release` | **pre:** inside the unit, with the launch's flags and the job's `CODEX_HOME`, `codex doctor --json` names `permission profile = coai`, `filesystem sandbox = restricted`, `network sandbox = restricted`, `approval policy = Never` (J18). **release:** every row of the two days, and calls 18 and 19: a command has `CODEX_PERMISSION_PROFILE=coai`, also in a resumed turn with no `-c` flag at all | the report says of itself "read/write access is not tested": the pre half is the CLI's own statement of what it resolved, not a write that was refused — CX-V1 to CX-V6 are the rows that try. The row ignores the exit code (the report's network checks can fail), has a deadline, and is red when a field is missing or the report says the config could not be loaded. `doctor` contacts the vendor (reachability, no model request): the row is the first vendor contact of a job |
+| CX-R4 | **yes** (it leaves `pending`) | `pre` | calls 9 and 10: a copy with the real access token and a placeholder for the refresh token answered `exec` and `exec resume`; 0 refresh POSTs; the file was not rewritten | a placeholder never reached the vendor (every POST of the measure went to the override), so what the vendor does with one is not known. The row reads the job's copy and needs the exact placeholder coai wrote |
+
+What two older ids mean now (their classes do not change):
+
+- **CX-T1** (`pre`): the measured list for the argv of 13.4 is, top-level, `functions.exec`, `functions.wait`,
+  `functions.request_user_input`, `functions.request_user_input_async`, and nested `apply_patch`, `exec_command`, `write_stdin`,
+  `list_mcp_resources`, `list_mcp_resource_templates`, `read_mcp_resource`, `clock__curr_time` — **no name that starts with
+  `collaboration.`**. This row is how the EFFECT of the switch is asked before every job; CX-C2 only shows that coai sent it. The row runs
+  with the job's own `-m` and effort: the binary's own text says a model can select the agent tools ("even when the model selects a
+  subagent version, unless `[features].multi_agent_v2` is enabled"), and J15 saw the list for one model only. A list that differs for
+  another model refuses the job; that is the row working, and the lead then has a measure to order, not a list to widen.
+- **CX-C2** (`launch`): "the argv is CX1" becomes "the argv is the set of 13.4".
+- **CX-C3** (`pre`): the same `doctor` report of CX-C4 says `mcp servers = 0`; the row of CX-C3 reads that too.
+
+The late `.codex` files (X1 d) add no id. They did nothing in two resumed turns (calls 2 and 11; in call 2 also for the child) — with TWO things on at once: the
+project is not trusted, and `--disable hooks` is on the argv. The measure cannot say which of the two stopped the hooks. So both stay,
+and neither is ever dropped because "the other one holds it": `--disable hooks` is in the argv of 13.4, and `--trust` stays a
+never-flag (CX-C2 asserts both). Not measured: a late `AGENTS.md`, and files written while a turn runs.
+
+### 13.4 The argv a codex coder must carry
+
+```
+codex exec --json -m <model> -c model_reasoning_effort=<effort>
+  <the 19 --disable flags of CX1, results section 2; --disable hooks is one of them>
+  -c approval_policy="never" -c shell_environment_policy.inherit="core" -c web_search="disabled" -c agents.enabled=false
+  [--output-schema <the flat schema>] -
+resumed: codex exec resume <every flag above> <thread id> -
+```
+
+- **`-c agents.enabled=false` is new and is not optional**, on turn 0 and on every fix turn (calls 13 and 15 show `exec resume`
+  accepts it). Reason: an agent call cannot be seen in the stream, a child's commands cannot be seen in the stream, and a grandchild
+  was tried and not measured (J13, J14). The six tools are closed at the source instead.
+- **`-c web_search="disabled"` stays**, with this said plainly: it is on the argv as a request. Its effect was not observed (J20).
+- **`-c approval_policy="never"` stays**: without it the resolved policy is `OnRequest` (J18).
+- The never-flags of SPEC C3 stay never. No flag of the set may be dropped on a resumed turn. Call 19 shows that the profile survives a
+  resume with fewer flags; nobody asked what the tool list is then.
+- The job's `config.toml` (results section 2) is written and read back before every launch, as X4 says. The switch may ALSO be written
+  there as `[agents] enabled = false` only after the model-free list shows the same 11 names with it; today only the `-c` form was seen.
+- `--disable multi_agent_v2` may be added only the same way. The binary's sentence makes that feature the one thing that undoes the
+  switch; it is not among the enabled flags of the saved reports (J18). The combination with the switch was not probed, so it is not
+  in the set.
+
+### 13.5 The release and the program files — history, by the owner's decision
+
+The owner's decision (2) makes the release a record of what was measured, not a gate. So this addendum adds NO pin and NO check of the
+installed bytes, and the entry it writes into `shared/coder-boundary-releases.json` is a line of history:
+
+- `codex-cli 0.171.0`, measured 2026-11-25 and 2026-11-26, results heading "9. codex-cli 0.171.0 - the open rows of the judgement X1
+  (a) to (e), measured 2026-11-26 (epoch 3 E3 s5 t6)" (the rows B1 to B15 are sections 0 to 8 of the same file, on the same program),
+  judgement heading: the heading of this section; program files as the results record them: `codex`
+  `b76a027d6b210f9a8da7aaf321dd235c700f0ef7a794d4a5314b9af6c134f0f0` and `codex-code-mode-host`
+  `f49bd4f0c0cc73cf1ec3a719009e07ce5b6e100520d023c760cc203fb37e5c6f`.
+- It is under a key of its own, `measured`, in the codex row. The list `releases` stays empty: today's reader takes a release in that
+  list as "this vendor may be launched" (`CoderVendorRow.Ships`), and tests hold the list empty for the product's table (13.9, item 6). Whether a
+  verdict alone ships a vendor is a change of the reader; the coordinator said a coder makes it. This commit changes no code.
+
+What the decision leaves of the older text (the judge did not rewrite it; the lead folds it):
+
+- **X2** ("the release is pinned by its bytes") and SPEC C2 item 2 ("only a measured release") no longer apply.
+- **CX-P1**: the halves "exactly a release of the table" and "the sha256 is the measured one" no longer apply. The third half stays and
+  is not a version gate: the help of `exec` and of `exec resume` declares every FLAG of the argv. It cannot see a `-c` key: a key the
+  CLI no longer knows is seen only by its effect (CX-T1, CX-C4).
+- **U9**: "its sha256 is the measured one" no longer applies. "The program is there and cannot be written from inside the unit" stays.
+- Had a pin stayed, it would have had to cover every executable of the program folder, not `codex` alone: the JavaScript of the model
+  runs in `codex-code-mode-host`, and the folder holds a third program (J12). The judge writes this down so that a later reader does
+  not take "the sha256 of the program file" as a statement about one file.
+- Recording is not gating: the release and the sha256 of the files a job ran stay worth writing into the envelope (s5 t1 d2), so
+  that a job that went wrong can be tied to what ran. Nothing compares them.
+
+What the decision costs is risk C6 (13.8).
+
+### 13.6 The refresh, and what the failover reads
+
+Measured (results 9.6): `exp` decides, not `last_refresh` (0 POSTs with `exp` 8 days away); a copy with a placeholder works, fresh and
+resumed; a refresh that is due and meets the refusing override does NOT end with the sentence of s4.
+
+- **CX-R4 is on.** The job's copy holds coai's placeholder in place of the refresh token (s7 t6). The owner's refresh token is then
+  never in a job folder, and a refresh on the copy has nothing of the owner's to rotate. The copy still holds the real access token
+  (it lives 10 days; 8 were left in the measure) and the id token: K3 searches for both.
+- **The margin CX-R1 and the override CX-R2 stay, both.** With a placeholder a due refresh can only fail, and a job that meets it burns
+  its whole deadline for nothing: the margin is what keeps a job from ever being there. The override keeps the placeholder — and, should
+  the copy recipe ever fail, a real token — from leaving the machine.
+- **The failover reads a codex turn as a lost sign-in** (the vendor's other models are skipped; the cure tells the person to run
+  `codex` once themselves) when ANY of these is true:
+  1. the stderr of the turn holds a line with `Failed to refresh token` — the CLI's own line, written before any answer of the vendor,
+     27 and 28 times in the two runs (J17). This is the sign of a refresh that was due and failed, in every network state;
+  2. the `turn.failed` message holds `unauthorized (401)` (seen: `workspace routing discovery unauthorized (401)`, exit code 1, 20 s):
+     the vendor refused the token. ONE observation, with a crafted token that the vendor called "not from a valid issuer"; the text for
+     a real token that expired or was revoked was not seen;
+  3. the sentence of s4, `Your access token could not be refreshed` (an override that ANSWERED 400). A refusing port cannot produce it;
+     it stays in the list because a later CLI or a listener could.
+- **Not a lost sign-in by itself:** `workspace routing discovery failed` with no line of case 1. In the measure that text came from a
+  unit with NO network (exit code 1 after 164 s). A coder's unit has the host network, so in a job this text says that the network or
+  the vendor could not be reached. It goes the road of a crash. Telling the person to sign in again would be wrong.
+- The exit code is 1 in every case: it tells nothing apart.
+- **The fixture.** `codex-refresh-failed.json` is the run with no network: it holds case 1, and its stdout is the text that is NOT a
+  lost sign-in by itself. The shape a job would meet is the host-network run (`out_codex/cx_x4b_exp60_host.*`: case 1 and case 2
+  together). s5 t4 d2 needs that second fixture; a test that knows only the first would teach the failover the wrong stdout.
+- d4 asked that nothing in the fixture names the vendor's address. That holds for the saved fixture. In the host-network run the
+  vendor's address IS in stderr — as the address of the models request, with request ids. It is no token and no refresh went there.
+
+### 13.7 Open rows X9 — measured before the argv is frozen (s5 t2)
+
+Same shape as X1: the smallest model, the unit and the argv of 13.4, canaries, 4 paid calls at most (the cap is the owner's).
+
+- **(a) the eleven host functions of the JavaScript** (J16). One script, without `exec_command`: for each of `content`, `image`,
+  `audio`, `generatedImage`, `store`, `load`, `notify`, `yield_control`, `exit`, `as_settled`, `stream_settled` — what it takes, and
+  whether a path, a `file:` address or an `http:` address given to it reads the main canary, reads the job's `auth.json`, or reaches a
+  listener on the host loopback. Fresh, and once on a resumed turn (the d2 probe was fresh only).
+- **(b) the web search.** First with no model: does the request that `codex debug prompt-input` prints name a hosted web search tool
+  without the flag, and none with it? When the list cannot tell: one paid pair, a model asked to search the web with the flag and
+  without it; recorded: whether it could, and what item the stream then holds (CX-T4 needs that name).
+- **(c) the MCP resource tools.** They are in the measured list and nobody called them. In the script of (a):
+  `tools.list_mcp_resources` and `tools.list_mcp_resource_templates`; the expected answer is empty (`mcp servers = 0`). A resource of
+  the owner's account in the answer is a hole of B12.
+
+The rule: (a) a host function that reads outside the worktree, gives the environment or opens a connection; (b) a model that searches
+the web with the flag on; (c) a resource of the account — each is `refuse` for codex unless a switch closes it and the model-free list
+or a second call shows the switch work.
+
+### 13.8 Risks for the owner
+
+**C1 to C4 as they stand after the measure** (accepted by the owner on 2026-11-26, by the coordinator's word):
+
+- **C1** — unchanged in kind: for a command of the model, B6 inside the job folder, B10 and B11 are one layer, the vendor sandbox. It
+  held in every call of two days, for a child as for the parent. What a hole would give is smaller with CX-R4: the access token (10 days
+  at most) and the id token, not the refresh token.
+- **C2** — unchanged: the codex process has the whole network and the host's loopback. `doctor` adds one vendor contact before a job.
+- **C3** — smaller: a real refresh was still never run, and with CX-R4 a refresh on the copy cannot rotate the owner's token. Left over:
+  what the vendor does to a session when it is shown a wrong refresh token was never seen, because none ever left the machine.
+- **C4** — unchanged, with one line more: an `AGENTS.md` that appears in the worktree after turn 0 was not measured. It is text for
+  the model, and the sandbox is what holds.
+
+**New.**
+
+- **C5. The JavaScript the model writes runs OUTSIDE the vendor sandbox.** `functions.exec` is the model's first tool: every command
+  and every patch goes through a script. The script runs in `codex-code-mode`, a child of the CLI, inside the unit and outside bwrap: in
+  a process that can read the job's sign-in copy and has the CLI's network (C2). Between the model's code and those two things there is
+  ONE layer, and it is not the one of C1: the vendor's V8 isolate and the short list of functions the host puts into it. The evidence
+  for that layer is one script on one day; eleven of its twelve host functions were not called (X9 a); nobody attacked the isolate. No
+  switch that removes `functions.exec` was found (`--disable code_mode_host` did not). The unit still hides the main checkout, the
+  real home and other jobs from that process, and CX-R4 keeps the refresh token out of its reach. X9 (a) can make this risk smaller;
+  it cannot remove it.
+- **C6. No version gate (the owner's decision of 2026-11-26).** Three ids are class `release`: CX-T2, CX-T3 and the effect half of
+  CX-C4. They are facts about `codex-cli 0.171.0` and its three program files. A newer codex runs coder jobs on behaviour nobody
+  measured for them — and the reports of the measure already name `0.172.0` as available (J18). What still asks on every job, on
+  whatever is installed: the `pre` rows (the unit, the vendor sandbox tried with `codex sandbox`, the tool list, the profile by
+  `doctor`, the override, the copy) and the `turn` checks. What nothing asks on a new release: whether a child keeps the sandbox,
+  what the JavaScript can reach (C5), whether `exec` applies what `doctor` reports, and every text the failover and CX-T5 read. The
+  same holds WITHOUT a new release: the CLI says its configuration includes "cloud-managed policy", and the binary says a model can
+  select its agent tools, so the vendor can change a session from its side. This is why 13.3 moves what can be moved into `pre` and
+  `turn`, and why each such check is red when it cannot read what it expects. The judge's own view, for the record: with a gate, an
+  update refuses the vendor until it is measured (risk 7 of SPEC H); without one, an update is trusted until a `pre` row or a `turn`
+  check happens to see a difference. The owner chose the second; this line is so that the choice is seen whole.
+- **C7. What an agent does is invisible in the stream.** Not the call, not the child's commands (J13). The turn check of coai reads
+  the stream, so it is blind there. Three things stand in: the switch (asked by its effect, CX-T1), the child's sandbox on 0.171.0
+  (CX-T2) and the rollout check (CX-T5). A grandchild was tried by a child twice and its outcome is not known (J14). If CX-T5 is not
+  built, or the switch is ever dropped, this risk is as large as "a turn can run commands coai never sees".
+- **C8 — only while X9 (b) is open: the model may have the vendor's web search.** It runs on the vendor's side: it reaches nothing of
+  the unit, the sign-in or the loopback. It could carry text of the repository into a request to a third party and bring text of the
+  web to the model. The flag against it was never seen working.
+
+### 13.9 For the lead
+
+Task and plan text that needs a line from this addendum (the judge edited none of it; the files of this commit are this file and the
+table):
+
+1. **s5 t2**: d1 — the argv is the set of 13.4, fresh and resumed; it depends on X9. **A task for X9** (13.7) before t2, with its cap.
+2. **s5 t3**: d3 — CX-T1 with the job's model and the 11 names; the `doctor` row of CX-C4 (and `mcp servers = 0` for CX-C3); CX-R4 is
+   in the table now.
+3. **s5 t4**: d2 — the three signs of 13.6, the text that is not one, and the second fixture; d3 — CX-T4 for any `collab_tool_call`
+   item; CX-T5.
+4. **s5 t1**: d1 and d2 name a release and a hash that gate; by the owner's decision they no longer do (13.5).
+5. **s7 t6**: the copy with the placeholder; K3 over the access token and the id token.
+6. **The reader and its tests** (the coder the coordinator named): the key `measured`; `CoderVendorRow.Ships`; the tests that hold
+   `releases` empty (`ACoderVendorSeamTests` D3, `ACoderFailsOverAcrossVendorsTests` D2, and those that read the words "no release").
+7. **SPEC**: C2 items 1 and 2 and "How the list of releases is updated"; risk 7 and risk 9 of section H (C5 to C8); section 9 of this
+   file names only the sentence of s4 for the failover — 13.6 replaces that one line.
+8. **The plan-change count** is the lead's: one id and one measure were added for one cause (this addendum).
+9. **d5 of s5 t6 as it is written is not met in one point:** it says "8 paid calls at most"; the ledger holds 19, of them 17 with
+   inference, under "cap 30", which the results call the owner's. The judge saw no record of that word (SPEC H says the cap of 8 had no
+   answer). Not a boundary matter. Two of five predictions were wrong and are reported as wrong (results 9.2): that is the measure
+   working. Two cross-references in results 9.1 point one section too low (9.5 for the refresh, 9.6 for `doctor`).
+
+### 13.10 Not measured, and not checked by this judge
+
+- Everything of 13.7. A grandchild. A resume that drops the switch on a thread that had started agents. The isolate beyond one script.
+- The switch, the list and `doctor` for any model but `gpt-6-luna`; the switch written in `config.toml`; `--disable multi_agent_v2`
+  together with the switch.
+- Whether the name of a rollout file and its call names are the same after a resume of many turns (CX-T5 was read from three calls).
+- What `request_user_input` does in a job (it is in the model-free list and absent from the model's own answer).
+- A real refresh; a placeholder at the vendor; a real token that expired, at the vendor.
+- `codex-exec-server`: when it runs and what it can reach.
+- Another machine, and any release but 0.171.0.
+- The judge ran no row again, started no vendor program and ran no test: the suite was not run on this commit (other agents held the
+  build), so "the table agrees with section 8" was checked by the judge with a script that copies the test's own pattern, not by the
+  test.
