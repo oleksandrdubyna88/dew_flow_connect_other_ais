@@ -141,6 +141,32 @@ public sealed class APlanFolderBindingTests
 
     // ---------- d3: a change of what the reviewers read refuses a coder start, and names the first difference ----------
 
+    // ---------- d6: the pack format is in the approval id ----------
+
+    private static string IdOf(IEnumerable<string> lines) => Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(string.Concat(lines.Select(line => line + "\n")))));
+
+    [Fact]
+    public async Task D6_AnApprovalMadeWithoutTheVLine_OrUnderALowerFormat_BindsNoJob_WithASentenceThatNamesNoPath_AndTheCurrentOneBinds()
+    {
+        await using var rig = await RigAsync();
+        await ApproveAsync(rig, Scope);
+        var approved = new SessionStore(rig.Data).Load(rig.Repo, "feature")!.Rounds.Last(round => round.PlanSource is not null).PlanSource!;
+        var job = rig.Jobs.Read(await JobAsync(rig, ScopeTask))!;
+        var pack = ((PackOutcome.Packed)WorkPack.Build(ListedFolder.OfDisk(Path.Combine(rig.Repo, "plan")), new StrictYamlReader(), Feature, Scope)).Pack;
+        var withoutV = IdOf(pack.Approval.Skip(1).Select(line => line.Text));
+        var lower = IdOf(pack.Approval.Skip(1).Select(line => line.Text).Prepend("V 1"));
+        pack.ApprovalId.Should().Be(approved.Blob, "CONTROL: the pack of this build, at the round's commit, is the approved one");
+        var git = new CoaiMcp.Runners.Collecting.GitHistory(new CoaiMcp.Runners.Processes.ProcessLauncher());
+
+        (await CoaiMcp.Server.RoleJobs.FolderPlanBinding.AtBaseAsync(git, rig.Repo, job, approved, TestContext.Current.CancellationToken)).Should().BeEmpty("the same scope approved under the current format binds");
+        foreach (var old in new[] { withoutV, lower })
+        {
+            var refused = await CoaiMcp.Server.RoleJobs.FolderPlanBinding.AtBaseAsync(git, rig.Repo, job, approved with { Blob = old }, TestContext.Current.CancellationToken);
+
+            refused.Should().Contain("pack format").And.Contain("new plan round").And.NotContain(Scope).And.NotContain("plan/", "the sentence names no path");
+        }
+    }
+
     [Fact]
     public async Task D3_AChangedScopeFile_RefusesTheStart_AndNamesTheFile()
     {

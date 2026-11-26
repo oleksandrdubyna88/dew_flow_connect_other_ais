@@ -186,7 +186,7 @@ public sealed class AWorkPackIsTopologicalTests
         f.Select(line => line.Key).Should().Equal(pack.Sections.Select(section => section.Path), "one F line for every file whose text is in the pack: the scope files, feature.yaml, the plan file, the ancestors and the spec");
         f.All(line => line.Value == ListedFolder.BlobOf(files[line.Key.Substring(Feature.Length + 1)])).Should().BeTrue("the blob id of every line is the blob of its file");
         f.Select(line => line.Key).Should().Contain([$"{Feature}/feature.yaml", $"{Feature}/PLAN.md", $"{Feature}/epoch-1/epoch.yaml", $"{Feature}/epoch-1/e2-more/epic.yaml", $"{Feature}/epoch-1/e2-more/SPEC.md"]);
-        pack.Approval.Select(line => line.Kind).SkipWhile(kind => kind == "F").Should().OnlyContain(kind => kind == "D", "the F lines come first, then the D lines");
+        pack.Approval.Select(line => line.Kind).Skip(1).SkipWhile(kind => kind == "F").Should().OnlyContain(kind => kind == "D", "the V line first, then the F lines, then the D lines");
         pack.Approval.Where(line => line.Kind == "D").Select(line => line.Text).Should().Equal("D epoch-1/e1-core/s1-first Story s1-first", "D epoch-1/e1-core/s1-first/t1-a Task t1-a");
         pack.ApprovalId.Should().Be(Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(string.Concat(pack.Approval.Select(line => line.Text + "\n"))))));
     }
@@ -303,5 +303,52 @@ public sealed class AWorkPackIsTopologicalTests
         {
             line.Should().Contain($"{dependency.Key} (\"{dependency.Value}\")", "the reviewers read what the approval covers: every D line, node and title");
         }
+    }
+
+    /// <summary>
+    /// The golden vectors of the pack FORMAT (the re-review of 2026-11-26, F1): for each vector the sha256 of the pack text and the approval id, pinned to <see cref="WorkPack.FormatVersion"/>. A change of what the text or the approval lines hold, without raising the constant and pinning the new
+    /// numbers under it, fails here; raising the constant without pinning fails too.
+    /// </summary>
+    private static readonly Dictionary<int, Dictionary<string, (string Text, string Approval)>> Golden = new()
+    {
+        [2] = new()
+        {
+            ["ties go by the number in the id, not by the letters"] = ("a19d0baba78094abd23dea73e711dc503051934dfe1897c6014a004c3d448953", "0da97cf0010c96e2edb895ae8473c75477a9ea98855c85b8c4d6b5de45041c39"),
+            ["a story comes after the story it depends on, whatever its number"] = ("99a8909948f8089e4a818fea585c119a3caf9810d5f72e01a481007a9ebf4dff", "d86d3380a6e13b1db753a0e1abf8e107586253886fa88ded11a213a04b2661f6"),
+            ["in a story a task comes after the task it depends on"] = ("4ee06ccac2b8ee426615b6d4d4f55bf2d2269f00d0b0ae2be1a074d7908edd44", "37155927937e93237301eb9597293e0513a52833aca53292c77729e71b99d413"),
+            ["a story that depends on a story of another epic comes after it, though its epic comes first"] = ("c955b5be77b9b80598f7e42a03f2a7890cda73d5b2b6632e812d5765829726d8", "8c442ea7d26329debc0c4f960ac4cdf1b32747a9d29e70c16f03745af3db9cce"),
+            ["a story scope holds feature.yaml, the plan file, the ancestors and the spec of its epic, then its own tasks, and one line for each outside dependency"] = ("91eed240c07816691f3ccd8d1be68718d48b1dbfe24936a76d7fed737b70886d", "0e720400027b04d91c32b33389b6d530132cd9ab7e3fdd365b2069d47db58fa6"),
+            ["an epic scope holds the epoch above it and its own stories; a node of a sibling story is not in the pack"] = ("6d09b59e514e0ee54191f85552cb496c520d831af729949663b791d9a5f32d97", "cda97d627b2aa9042bf3fd1138ee3f1e6e8be4d5d3858d13831b95bcba63fef9"),
+        },
+    };
+
+    [Fact]
+    public void D6_APackWhoseTextOrApprovalLinesChanged_ComesWithANewFormatVersion_TheGoldenVectorsArePinnedToIt()
+    {
+        Golden.Should().ContainKey(WorkPack.FormatVersion, "the format version was raised: pin the golden vectors of the new format");
+        var pinned = Golden[WorkPack.FormatVersion];
+        var actual = PackVectors.All().Where(vector => vector.Refused.Length == 0).Take(6).ToDictionary(vector => vector.Name, vector =>
+        {
+            var pack = Packed(vector.Files, vector.Scope);
+
+            return (Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(pack.Text))), pack.ApprovalId);
+        });
+
+        actual.Keys.Should().Equal(pinned.Keys, "the same vectors; to pin them: " + string.Join(" ", actual.Select(pair => $"[\"{pair.Key}\"] = (\"{pair.Value.Item1}\", \"{pair.Value.Item2}\"),")));
+        foreach (var (name, now) in actual)
+        {
+            now.Should().Be(pinned[name], $"the pack of '{name}' changed while WorkPack.FormatVersion is {WorkPack.FormatVersion}: raise the constant in the same change and pin the new numbers (actual: text {now.Item1}, approval {now.Item2})");
+        }
+    }
+
+    [Fact]
+    public void D6_TheFirstApprovalLine_IsTheFormatVersion_AndTheIdCoversIt()
+    {
+        var pack = Packed(Plan(), "epoch-1/e2-more/stories/s1-more");
+
+        pack.Approval[0].Should().Be(new ApprovalLine("V", WorkPack.FormatVersion.ToString(System.Globalization.CultureInfo.InvariantCulture), string.Empty));
+        pack.Approval[0].Text.Should().Be($"V {WorkPack.FormatVersion}");
+        var withoutIt = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(string.Concat(pack.Approval.Skip(1).Select(line => line.Text + "\n")))));
+        pack.ApprovalId.Should().NotBe(withoutIt, "an approval made before the line (format 1) is a different id: it binds no coder job");
     }
 }

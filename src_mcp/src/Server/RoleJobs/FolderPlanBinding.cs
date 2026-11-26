@@ -34,6 +34,18 @@ internal static class FolderPlanBinding
             return found;
         }
 
+        // The id at the commit of the ROUND first (the re-review of 2026-11-26, F1): when this build does not reproduce the approved id there, the pack format changed since the approval — or the record is not one a round wrote — and no job is bound to it. The sentence names no path.
+        var approved = await PackAsync(git, repoPath, plan.Commit, feature, plan.Path, ct);
+        if (approved.Pack is null)
+        {
+            return $"the approved plan folder {feature} cannot be packed at commit {GitIds.Short(plan.Commit)}: {approved.Refusal}";
+        }
+
+        if (approved.Pack.ApprovalId != plan.Blob)
+        {
+            return FormatChanged(plan);
+        }
+
         var atBase = await PackAsync(git, repoPath, job.BaseSha, feature, plan.Path, ct);
         if (atBase.Pack is null)
         {
@@ -86,10 +98,14 @@ internal static class FolderPlanBinding
         return $"what the reviewers read of {plan.Path} changed after the plan round approved it at commit {GitIds.Short(plan.Commit)}: {(first.Length > 0 ? first : "the approval ids differ")} (job base {GitIds.Short(baseSha)}); the approval covers every file in the pack and every outside dependency — {NewRound}";
     }
 
+    /// <summary>The sentence for an approval this build does not reproduce at the commit of its round: the pack format changed since it was made. No path is named.</summary>
+    private static string FormatChanged(PlanSource plan) =>
+        $"the plan round that approved this scope was made under another pack format (this build packs under format {WorkPack.FormatVersion}), so what it approved cannot be told from what is packed now and no coder job is bound to it — {NewRound}";
+
     /// <summary>The refusal when the pack rebuilt at the round's commit is not the approved one (the id, the text), or empty.</summary>
     private static string Reproduced(Pack approved, PlanSource plan, string feature) =>
         approved.ApprovalId != plan.Blob
-            ? $"the approval of {plan.Path} cannot be reproduced at commit {GitIds.Short(plan.Commit)} from the feature folder {feature}: the pack there has approval id {approved.ApprovalId[..12]}, the round recorded {plan.Blob[..Math.Min(12, plan.Blob.Length)]}"
+            ? FormatChanged(plan)
             : DocumentRules.ArtifactIdOf(approved.Text) != plan.TextId
                 ? $"the pack of {plan.Path} at commit {GitIds.Short(plan.Commit)} is not the text the reviewers read (text id {DocumentRules.ArtifactIdOf(approved.Text)}, the round recorded {plan.TextId})"
                 : string.Empty;

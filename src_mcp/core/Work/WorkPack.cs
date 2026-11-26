@@ -6,14 +6,14 @@ using CoaiMcp.Core.Feature;
 
 namespace CoaiMcp.Core.Work;
 
-/// <summary>One line of the approval: <c>F &lt;blob&gt; &lt;path&gt;</c> for a packed file, <c>D &lt;node&gt; &lt;title&gt;</c> for a dependency outside the scope.</summary>
-/// <param name="Kind"><c>F</c> or <c>D</c>.</param>
-/// <param name="Key">The repository-relative path of an <c>F</c> line, the node of a <c>D</c> line.</param>
-/// <param name="Value">The blob id of an <c>F</c> line, the title of a <c>D</c> line.</param>
+/// <summary>One line of the approval: <c>V &lt;version&gt;</c> first (the pack format), then <c>F &lt;blob&gt; &lt;path&gt;</c> for a packed file, then <c>D &lt;node&gt; &lt;title&gt;</c> for a dependency outside the scope.</summary>
+/// <param name="Kind"><c>V</c>, <c>F</c> or <c>D</c>.</param>
+/// <param name="Key">The pack format version of the <c>V</c> line, the repository-relative path of an <c>F</c> line, the node of a <c>D</c> line.</param>
+/// <param name="Value">Empty for the <c>V</c> line, the blob id of an <c>F</c> line, the title of a <c>D</c> line.</param>
 public sealed record ApprovalLine(string Kind, string Key, string Value)
 {
     /// <summary>The line as it is hashed, without its line end.</summary>
-    public string Text => Kind == "F" ? $"F {Value} {Key}" : $"D {Key} {Value}";
+    public string Text => Kind switch { "V" => $"V {Key}", "F" => $"F {Value} {Key}", _ => $"D {Key} {Value}" };
 }
 
 /// <summary>One file section of the pack: the repository-relative path and the size of the file in it.</summary>
@@ -23,7 +23,7 @@ public sealed record PackSection(string Path, long Bytes);
 /// <param name="Text">What the reviewers read under the plan heading: the line Not sent, then one fenced section per file. The line that says who packed it is <see cref="WorkPack.SourceLine"/>.</param>
 /// <param name="Scope">The repository-relative folder of the scope (the feature folder when the whole feature is the scope).</param>
 /// <param name="ApprovalId">SHA-256, in hex, over <paramref name="Approval"/> — one line each, ended by a line feed.</param>
-/// <param name="Approval">The <c>F</c> lines in pack order, then the <c>D</c> lines in pack order.</param>
+/// <param name="Approval">The <c>V</c> line, the <c>F</c> lines in pack order, then the <c>D</c> lines in pack order.</param>
 /// <param name="Sections">The files in pack order.</param>
 /// <param name="Bytes">The UTF-8 size of <paramref name="Text"/>.</param>
 public sealed record Pack(string Text, string Scope, string ApprovalId, IReadOnlyList<ApprovalLine> Approval, IReadOnlyList<PackSection> Sections, int Bytes);
@@ -53,6 +53,12 @@ public abstract record PackOutcome
 /// </remarks>
 public static class WorkPack
 {
+    /// <summary>
+    /// The FORMAT of a pack: its text and its approval lines. The approval id covers it (the first approval line is <c>V</c> and this number), so an approval made under another format never reproduces, and no coder job is bound to it (the re-review of 2026-11-26, F1). It is raised in the SAME change as any
+    /// change of what the text or the lines hold; <c>AWorkPackIsTopologicalTests</c> pins golden vectors to it and fails when the pack changes while this number does not. 1 was the format before the line; 2 added the line <c>V</c> and the line of the outside dependencies in the text of every scope.
+    /// </summary>
+    public const int FormatVersion = 2;
+
     /// <summary>The largest pack, in UTF-8 bytes — the ceiling a committed plan has.</summary>
     public const int PackBytes = 256 * 1024;
 
@@ -113,7 +119,7 @@ public static class WorkPack
     }
 
     private static List<ApprovalLine> Approval(IReadOnlyList<WorkPackFiles.Section> sections, IReadOnlyList<WorkPackOrder.Dependency> dependencies) =>
-        [.. sections.Select(section => new ApprovalLine("F", section.Path, section.Blob)), .. dependencies.Select(dependency => new ApprovalLine("D", dependency.Node, dependency.Title))];
+        [new ApprovalLine("V", FormatVersion.ToString(CultureInfo.InvariantCulture), string.Empty), .. sections.Select(section => new ApprovalLine("F", section.Path, section.Blob)), .. dependencies.Select(dependency => new ApprovalLine("D", dependency.Node, dependency.Title))];
 
     private static string IdOf(IEnumerable<ApprovalLine> approval) =>
         Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(string.Concat(approval.Select(line => line.Text + "\n")))));
