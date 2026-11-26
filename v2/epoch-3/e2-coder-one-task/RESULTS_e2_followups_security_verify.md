@@ -164,3 +164,79 @@ By reading, not measured: the coder's unit ends before the checks start (`CoderF
 - The window of H1 was not reproduced.
 - Systemd older than 259 was not tried for P2 or P6.
 - What the claude CLI itself writes into the coder's home was not looked at again (the proof run's key scan is the evidence in hand).
+
+## Second pass (2026-11-26, `43de4629..7d644867`)
+
+Read-only again: no edit, no build, no test run. Read: the diff of `e36136c1`, `afe3d20f`, `dc084971`, `35e6f584`, `6786502c`, `7d644867` over `src_mcp/runners/Toolchain`,
+`src_mcp/runners/Files`, `src_mcp/src/Server/RoleJobs`, the new tests' names and the two units' tests, the changed docs. Run: 6 more probe units (3 of them only sleep); scratch folder removed, no unit left.
+
+### Verdict
+
+**must-change: 1 (M3), then READY.** M1 is closed. S2 is closed where the cover can be made, and the fall-back is as it was before. M2 is closed for a key path that is its own real path, and open for one spelled through a link (M3).
+The retention, the HeldFile and the doc items are done as asked. Taking `PrivatePIDs` out again is right, and its reason is confirmed by measure.
+
+### What was measured
+
+| # | Question | Answer |
+|---|---|---|
+| Q1 | Keys folder, keys file and sign-in file SPELLED through links that lie under a hidden folder (a `TemporaryFileSystem` stand-in for `/home`), real paths outside it; `InaccessiblePaths=-<spelling>` for each | By the spelling: not readable — what both rows ask. **At the real path: the keys folder, a key file in it, the keys file and the sign-in file are all READ** |
+| Q2 | The same three by their real paths | Not readable. The hidden FILE answers `-e` true and `-r` false, as the coder noted; the rows' `-r` and read are the right question |
+| Q3 | The coder's unit shape: cover over the jobs folder, `coder` bound, the sign-in bound read-only into it, a submodule source taken from the covered folder | Another job's file: not there. The submodule files are at their target, read-only; the source path is not there. The coder's home is writable; the bound sign-in is readable and not writable; the checks' `home` is not there |
+| Q4 | A stop of a unit with `PrivatePIDs=yes` (the step is PID 1) | Without it: 0.02 s. With it and `TimeoutStopSec=8`: **8.2 s** — the SIGTERM does nothing. With it and `KillSignal=SIGKILL`: 0.04 s |
+
+### M1 — closed
+
+`BoundaryJob.JobRootOnDiskProblem()` (`BoundaryJob.cs:110`) compares the real path with the spelling after the folders are made, in both admissions (`CheckBoundary.cs:68`, `CoderBoundary.cs:92`); no unit starts without an admission.
+A test covers both. One consequence to know: a machine whose `/home` is itself a link, with `HOME` spelled through it, refuses every coder job with the sentence. That is the safe side.
+
+### M2 — closed for real paths; **M3 (must-change): a key path or a home behind a link is hidden at the wrong place, and both rows say "ok"**
+
+- Where: `src_mcp/src/Server/RoleJobs/CoderWork.cs:122` (`KeysFolder = <data folder>/keys`, the data folder as spelled) and `:138` (`Path.GetFullPath`, no link resolved);
+  `src_mcp/runners/Toolchain/BoundaryUnit.cs:68-75` (`KeysHidden`, `SignInHidden` spell those paths and `host.RealHome` into `InaccessiblePaths=-`);
+  `BoundaryPreflight.cs:140-153` and `:235` (the rows read the same spellings). `CoderUnit.cs:45` shares the list, so the keyed coder's unit and its row have it too.
+- Scenario: the data folder is `/home/u/coai-data`, a link to `/srv/coai` (or the keys file is named through such a link; or the home is a link and `COAI_CODER_JOBS` is a real path elsewhere, so M1's refusal does not meet it).
+  In the unit `/home` is an empty tmpfs: the spelled path is not there, so `InaccessiblePaths=-` hides nothing and is no error. The real `/srv/coai/keys` is read-only, not hidden.
+  The build step (host network) reads every pool key at the real path. `keys-folder-hidden` and `sign-in-not-in-unit` answer "ok". Measured: Q1. It is M1's own shape, for the objects of M2.
+- Smallest fix: resolve once where the paths are made — `CoderWork.cs:122` and `:138` take `RealPath.Resolve(...)` when it answers, and the sign-in of `SignInHidden` and the row's `$rh` use the resolved home.
+  Then the property, the row and `KeysFolderProblem()` all get the real path. A link that is visible in the unit is followed by the manager, so the real path is right in every layout. One test: the bed's keys folder behind a link — the row holds and a read at the real path fails.
+  (A refusal like M1's also closes it, but refuses every job of a person whose data folder is behind a link.)
+
+Small, not must: the keys row splits `$9` with the shell (`for k in $keylist`), so a `*`, `?` or `[` in a key path is expanded; `IsPlain` lets them through. A keys folder that is made while a step runs is not hidden in that one step (`-` skips a path that is not there).
+
+### S2 — closed where the cover can be made; the fall-back
+
+`BoundaryJob.JobCover` (`BoundaryJob.cs:94-104`) is the folder that holds the job folder. Both units use it (`BoundaryUnit.cs:84`, `CoderUnit.cs:60`); real-unit tests for both; Q3 for the coder's shape.
+
+It falls back to the job folder alone in these cases, and only these:
+
+1. the holding folder is the root of the file system (`COAI_CODER_JOBS=/`);
+2. it is, or holds, the worktree or the coder root (`COAI_CODER_JOBS` is the coder root or a folder above it);
+3. it is, or holds, the main checkout (`COAI_CODER_JOBS=/work`, the repository at `/work/repo`);
+4. it is, or holds, `/tmp` or `/var/tmp` (`/`, `/var`, or one of the two themselves).
+
+What is visible then: every other entry of that holding folder — other jobs' folders with their coder homes, and their `.mounts` folders — read-only, exactly as before the fix, unless the folder is under `/home`, `/root`, `/mnt` or `/run/user`,
+or is `/tmp` or `/var/tmp` itself (the unit's own temp bind lies over it). This job's coder folder stays hidden in every case. Nothing new is opened by the fall-back.
+It is silent but for the recorded property (`TemporaryFileSystem=<path>:ro` in the unit's record) and the "Still open" line of `RESULTS_coder_proof.md`. Acceptable for E2.
+For E3 (S2 is a must there) it wants either a refusal when the fall-back meets a holding folder outside the hidden paths, or the row K2 of the E3 judgement (a canary in another job's folder cannot be read).
+
+The other direction — the cover made where it hides something a unit needs — is fail-closed: the caches, the program folder, the resolver file and the sign-in are bound after it, by path (Q3);
+a `COAI_CODER_JOBS` that is a system folder (`/opt`, `/usr`) hides that folder from the unit, and the step or the preflight then fails. No refusal names it; a person who does that reads "not found".
+
+### `PrivatePIDs` taken out again (`6786502c`) — the reasoning holds
+
+The kernel gives the first process of a PID namespace only the signals it has a handler for; from outside, only SIGKILL and SIGSTOP are forced. So the manager's SIGTERM is dropped and the stop waits for the stop timeout: Q4, 8.2 s against 0.02 s.
+Taking it out was right for E2: S1 was a should, and a stop that takes the full timeout breaks the rule that a deadline ends the tree. `KillSignal=SIGKILL` on the unit makes the stop immediate again (Q4, 0.04 s) and costs nothing here, because a step is never asked to end gently;
+the pids "read from outside" of the todo are a second, separate piece. Until then S1 stands as recorded: a check can signal every process of the person and read every command line.
+
+### The rest
+
+- Retention (`afe3d20f`): the coder folders go before the record, under the lease, and the record stays while a folder does (`RoleJobRetention.cs:53-60`); links are unlinked with no read of the target (`GitScratch.DeleteLeavingLinkTargetsUnread`). R1, R2, R3 and the doc note of R4 are done.
+  One thing follows from R1's fix: a folder of mode 000 made by check code keeps its job's record and folders for ever, with one warning in the log at every job start. `Writable` (`GitScratch.cs:94-101`) only gives the write bit back; giving the owner read, write and search before the folder is listed ends it. Should.
+- HeldFile (`dc084971`): any failure of the seam closes the descriptor and rethrows; the old words are gone. H1 is in the doc.
+- Docs (`35e6f584`, `6786502c`): the order sentence, "wherever it lies", the link words and the open list now match the code — except "the keys file, wherever it lies" (`module_server.md`, and the test name `TheKeysFile_IsHiddenFromACheckUnit_WhereverItLies`), which is true only for a real path until M3.
+- Red-first: the coder says M1 and M2 were not seen red against the old code. The degrade rows go red when the property is dropped, which is evidence of the same kind. Not checked here.
+
+### Not measured in this pass
+
+- No product test was run. The probe units are hand-made replicas, without the `/tmp` binds; Q1 used a stand-in for `/home`.
+- The layout "jobs folder is `/tmp` itself" (the cover and the binds are then made inside the job's temp folder) was read, not tried.
