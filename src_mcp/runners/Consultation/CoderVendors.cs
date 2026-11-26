@@ -1,4 +1,5 @@
 using CoaiMcp.Core.QuestionConsult;
+using CoaiMcp.Core.Toolchain;
 using CoaiMcp.Runners.Processes;
 using CoaiMcp.Runners.Reviewers;
 using CoaiMcp.Runners.Toolchain;
@@ -37,7 +38,14 @@ internal abstract record CoderTurnVerdict
 }
 
 /// <summary>A vendor's own preflight (epoch 3 E3 s6 t4): the command its unit runs, the rows the command answers, and what is tidied after it ran.</summary>
-internal sealed record CoderPreflightPlan(IReadOnlyList<string> Command, IReadOnlyList<string> Items, Action Tidy);
+internal sealed record CoderPreflightPlan(IReadOnlyList<string> Command, IReadOnlyList<string> Items, Action Tidy)
+{
+    /// <summary>How long the preflight unit may run, when the vendor's own probes need more than the claude coder's minute (codex runs the vendor's sandbox, two tool lists and a doctor report in it); null means the shared deadline.</summary>
+    public TimeSpan? Budget { get; init; }
+
+    /// <summary>The rows of the finished unit, when the vendor decides some of them in code from what the unit handed over (codex: the tool list and the doctor report are JSON); null means the rows of <see cref="Items"/> as the unit printed them.</summary>
+    public Func<UnitStart, bool, IReadOnlyList<PreflightRow>>? Rows { get; init; }
+}
 
 /// <summary>Where a vendor's CLI keeps its files inside the coder's unit: its home, the file its sign-in is read from, and the folders coai makes before the preflight.</summary>
 /// <param name="Home">The <c>HOME</c> of the coder's process.</param>

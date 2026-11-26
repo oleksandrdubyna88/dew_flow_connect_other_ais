@@ -137,7 +137,7 @@ public sealed class CheckBoundary(IProcessLauncher launcher, BoundaryHost host)
     /// (E3 s7 t5, K2; security verify pass 2, M5). When the holding folder cannot be covered the job folder is its own cover, and then another job's folder IS in the unit unless the folder is out of sight some other way: that layout is asked about too, never assumed. Empty when no stand-in could
     /// be made (no holding folder, a name taken by something that is not a folder, a full disk): the row then says it observed nothing, and that is a refusal, never an "ok". A leftover FOLDER of that name (a killed runner's) is replaced; a file or a link is never touched.
     /// </summary>
-    private static string PlantAnotherJob(BoundaryJob job)
+    internal static string PlantAnotherJob(BoundaryJob job)
     {
         try
         {
@@ -170,7 +170,7 @@ public sealed class CheckBoundary(IProcessLauncher launcher, BoundaryHost host)
         }
     }
 
-    private static void RemoveAnotherJob(string folder)
+    internal static void RemoveAnotherJob(string folder)
     {
         try
         {

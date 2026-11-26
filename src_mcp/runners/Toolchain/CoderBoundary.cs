@@ -245,15 +245,18 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
         {
             IReadOnlyList<string> inner =
                 ["/usr/bin/env", "-i", .. Vendor.Environment(host, job).Select(pair => $"{pair.Key}={pair.Value}"), .. plan?.Command ?? BoundaryPreflight.CoderCommand(job, launchHost, program, windowsCopy, signIn)];
-            var arguments = BoundaryUnit.Wrap(unit, Vendor.WorkingDirectory(job), [], Vendor.UnitProperties(launchHost, job, program, PreflightBudget + UnitControl.Backstop), inner, Degrade);
+            var budget = plan?.Budget ?? PreflightBudget;
+            var arguments = BoundaryUnit.Wrap(unit, Vendor.WorkingDirectory(job), [], Vendor.UnitProperties(launchHost, job, program, budget + UnitControl.Backstop), inner, Degrade);
             var started = await _units.StartAsync(new ProcessRequest(host.SystemdRun, arguments, job.Tree.Root)
             {
-                Timeout = PreflightBudget,
+                Timeout = budget,
                 InheritsEnvironment = false,
                 Passthrough = UnitControl.Client,
             }, ct);
 
-            return BoundaryPreflight.Rows(started, started.Problem.Length == 0 && await _units.EnsureGoneAsync(unit), plan?.Items ?? BoundaryPreflight.CoderItemsFor(job));
+            var gone = started.Problem.Length == 0 && await _units.EnsureGoneAsync(unit);
+
+            return plan?.Rows is { } decide ? decide(started, gone) : BoundaryPreflight.Rows(started, gone, plan?.Items ?? BoundaryPreflight.CoderItemsFor(job));
         }
         finally
         {

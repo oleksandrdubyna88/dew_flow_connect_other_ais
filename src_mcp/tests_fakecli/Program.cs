@@ -9,6 +9,7 @@
 //   emit-bytes <n>                       — n bytes of 'x' on stdout in lines of 99, no pause, exit 0 (a check step that is too chatty; epoch 3 E2 s1 t2)
 //   exec --help / exec resume --help — the text of the file FAKECLI_EXEC_HELP_FILE / FAKECLI_EXEC_RESUME_HELP_FILE names (exit FAKECLI_EXEC_HELP_EXIT / FAKECLI_EXEC_RESUME_HELP_EXIT when not 0): a codex's write capability (epoch 3 E3 s5 t1)
 //   set-json-field <file> <field> <value> — set one string field (a '/'-separated path) of the JSON file; exit 0, or 1 with a line on stderr when the file is not JSON (the fake as a vendor's own refresh step, epoch 3 E3 s7 t6)
+//   sandbox -P coai -- <command...> / debug prompt-input <flags> x / doctor --json — the codex coder's model-free verbs (epoch 3 E3 s5 t3): a real bwrap sandbox, the measured tool list and the measured doctor report, steered by FAKECLI_CODEX_SANDBOX / _TOOLS / _DOCTOR / _EXPECT_MODEL (CodexVerbs.cs)
 //   write-files <path>...                — try to write each path; "wrote <path>" on stdout, "fake-cli: could not write <path>: <why>" on stderr; exit 0 (the fake as a coder, epoch 3 E2 s2 t5)
 //   hold-in <folder> <ms>                — write <folder>/ready, then wait <ms>, exit 0 (a coder that is working; a test waits for the file)
 //   emit-repeat <text> <times>           — <text> <times> times on stdout, exit 0 (output whose bytes outnumber its characters)
@@ -152,6 +153,12 @@ if (args.Length >= 2 && args[0] == "vendor-mcp")
 if (args is ["--agy-hook"])
 {
     return CoaiMcp.Runners.Reviewers.AntigravityCoderGuard.RunHook(Console.In, Console.Out, Directory.GetCurrentDirectory());
+}
+
+// The codex coder's model-free verbs (`sandbox`, `debug prompt-input`, `doctor`; epoch 3 E3 s5 t3): answered before the vendor mode, steered by the environment or the minimal-environment file, because a unit's `env -i` carries no FAKECLI_* name.
+if (CoaiMcp.FakeCli.CodexVerbs.Handles(args))
+{
+    return CoaiMcp.FakeCli.CodexVerbs.Run(args);
 }
 
 var minimal = MinimalSteering.Load(args);

@@ -78,6 +78,9 @@ internal sealed class CodexCoderVendor : ICoderVendor
     /// <summary>The turn check of codex (s5 t4): the stream is read there. Until it is built the stream says nothing wrong.</summary>
     public CoderTurnVerdict CheckTurn(ProcessResult process, string expectedSession) => CodexTurnCheck.Check(process, expectedSession);
 
+    /// <summary>The preflight of codex (s5 t3): its own rows, one for every id of class pre of its row of the table — <see cref="CodexPreflight"/>.</summary>
+    public CoderPreflightPlan? PreflightPlan(BoundaryHost host, BoundaryJob job, CoderProgram program, string windowsCopy, TimeSpan runtimeMax) => CodexPreflight.Plan(host, job, program, windowsCopy);
+
     public async Task<CoderCapability> ProbeAsync(IProcessLauncher launcher, string executable, string workingDirectory, CancellationToken ct) =>
         await CodexWriteCapability.ProbeAsync(launcher, executable, workingDirectory, ct) switch
         {
@@ -163,6 +166,19 @@ internal sealed class CodexCoderVendor : ICoderVendor
 
     public CoderProgram Program(string executable, string path, BoundaryJob job) => CoderProgram.Resolve(executable, path, job);
 
+    /// <summary>The folder of the program the profile lets a command read: the one bound into the unit, else the one the program lies in.</summary>
+    public static string ProgramFolder(CoderProgram program) => program.BindFolder.Length > 0 ? program.BindFolder : Path.GetDirectoryName(program.Real) ?? string.Empty;
+
+    /// <summary>
+    /// The flags of the model-free probes (<c>codex debug prompt-input</c>, <c>codex doctor</c>), epoch 3 E3 s5 t3: the flags of the launch (<see cref="Flags"/>) that a command which is not <c>exec</c> takes — the job's own model as <c>-c model="…"</c> (the form of <c>-c</c>, which the measure showed those commands take, in the place of the exec-only <c>-m</c> and <c>--json</c>) and its
+    /// effort, the 19 disabled features, the approval policy, the environment policy, the web search and the agent switch.
+    /// </summary>
+    public static IReadOnlyList<string> ProbeFlags(string model) =>
+    [
+        "-c", $"model={Quote(model)}",
+        .. Flags(model, CoderLaunchFiles.None).Skip(3),
+    ];
+
     /// <summary>The job's <c>CODEX_HOME</c>: <c>&lt;job&gt;/coder/codex/home/.codex</c>.</summary>
     public static string CodexHome(BoundaryJob job) => Path.Combine(job.CoderHomeOf(VendorId), ".codex");
 
@@ -207,7 +223,7 @@ internal sealed class CodexCoderVendor : ICoderVendor
             return Refused(request, $"the codex coder was not launched: {program.Problem}");
         }
 
-        var folder = program.BindFolder.Length > 0 ? program.BindFolder : Path.GetDirectoryName(program.Real) ?? string.Empty;
+        var folder = ProgramFolder(program);
         var wrote = WriteOwnFile(Path.Combine(codexHome, "config.toml"), ConfigText(ModelOf(request.Arguments), folder));
         if (wrote.Length > 0)
         {
@@ -254,6 +270,25 @@ internal sealed class CodexCoderVendor : ICoderVendor
     }
 
     private static CoderLaunchPrepared Refused(ProcessRequest request, string problem) => new(request, problem);
+
+    /// <summary>
+    /// The model the job's <c>config.toml</c> names on its first line (<c>model = "…"</c>, as <see cref="ConfigText"/> writes it), or empty when the file has none: what the preflight, which is not handed the launch's argv, asks its probes for. The preflight's own row reads the file back byte for byte against <see cref="ConfigText"/> of this model,
+    /// so a file that was changed in any other line is a red row.
+    /// </summary>
+    public static string ModelOfConfig(BoundaryJob job)
+    {
+        try
+        {
+            var first = File.ReadLines(Path.Combine(CodexHome(job), "config.toml")).FirstOrDefault() ?? string.Empty;
+            const string Start = "model = \"";
+
+            return first.StartsWith(Start, StringComparison.Ordinal) && first.EndsWith('"') && first.Length > Start.Length ? first[Start.Length..^1].Replace("\\\"", "\"", StringComparison.Ordinal).Replace("\\\\", "\\", StringComparison.Ordinal) : string.Empty;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return string.Empty;
+        }
+    }
 
     /// <summary>The model of an argv: the value after <c>-m</c>.</summary>
     public static string ModelOf(IReadOnlyList<string> arguments)

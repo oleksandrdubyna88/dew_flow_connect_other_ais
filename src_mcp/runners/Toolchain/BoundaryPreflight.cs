@@ -244,7 +244,7 @@ internal static class BoundaryPreflight
 
     private static string CoderScriptFor(BoundaryJob job) => job.Mounts.Count == 0 ? CoderScript : Join(CoderScript, SubmodulesRow(4));
 
-    private static IReadOnlyList<string> MountArguments(BoundaryJob job) => [.. job.Mounts.SelectMany(mount => new[] { mount.Target, mount.Source })];
+    internal static IReadOnlyList<string> MountArguments(BoundaryJob job) => [.. job.Mounts.SelectMany(mount => new[] { mount.Target, mount.Source })];
 
     /// <summary>The command of the preflight unit.</summary>
     internal static IReadOnlyList<string> Command(BoundaryJob job, BoundaryHost host, CheckNetwork network, string program, string otherJob = "") =>
