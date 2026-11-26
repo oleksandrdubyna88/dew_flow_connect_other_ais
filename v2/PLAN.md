@@ -3,11 +3,10 @@
 > Status: **plan, nothing built, 2026-11-22.** Branch `feat/v2-plan`. Built with the v2 work method itself: a feature
 > folder → epochs (≤ 5 epics each, MVP first) → epics → stories → tasks, each node with a YAML file. Stories and tasks
 > are written for an epic when it starts (now: epoch 1). The split was re-decided by Fable on 2026-11-22: 5 epochs, MVP epics with measurable pass criteria, 10 cornerstone stories (feature.yaml `cornerstones`; 12 since 2026-11-25, when the E3 plan gate added E3 s3 and s4).
-> **Stopped for re-review, 2026-11-26** (the ledger below): the owner ordered epoch 3 revised and reviewed whole.
 
 ## Plan changes
 
-> Epoch 1 · approved 2026-11-22 · by reviewers · state: stopped
+> Epoch 1 · approved 2026-11-22 · by reviewers · state: closed
 
 - 1.1 · 2026-11-25 · owner · contract, approach — decision 40: the coder prompt has a version for each vendor, the claude text unchanged (epoch 3 E3 SPEC C7)
 - 1.2 · 2026-11-26 · owner · dod — the paid caps of epoch 3 E3: s8 t3 and s8 t4 together at most 30 USD, s5 t6 at most 30 codex calls, s6 t7 at most 30 agy turns; they replace 8 calls, 12 turns, 0.10 USD and 0.50 USD
@@ -51,6 +50,23 @@
   not merged into this branch yet. The planner has the answer from the lead, not in the owner's own words. What they changed
   in E3, and how the lists 13.11 and 14.8 map on the task files: section O of
   [SPEC_CHANGES.md](epoch-3/e3-roles-complete/SPEC_CHANGES.md). The plan stays stopped.)
+
+### Re-review for epoch 2
+
+Narrowed: yes — the release pin, the agy program store and the refusal of a head that changed its own checks left the Definition of Done (entries 1.7 and 1.8), and a secret in the output of the instruction step no longer ends a job (1.5); the owner approved
+
+| Work | Where | Verdict | Action |
+|---|---|---|---|
+| the plan of epoch 3 E3 after its re-review round (coai session 1089eaa8, proceed) and the owner's answers, plan commit 60f3b5a0 | feat/v2-ep3-e3-roles, pushed | fits | kept |
+| the plan of epoch 3 E4 after its re-review round (coai session c0112e7a, proceed), plan commit 2a4ef2ee | feat/v2-ep3-e4-plan, pushed | fits | kept |
+  (The owner approved the revised plan on 2026-11-26, about 15:00 UTC, with the words «план принят», after a summary of the
+  whole of epoch 3 in Russian that covered every entry of epoch 1, from the first to 1.17, both rejected findings — F2 of the
+  E3 round and F3 of the E4 round — and what remains to be built in E3 and E4. The planner has this from the lead.)
+  (The table holds the two plan commits the owner read from. The code that was written under epoch 1 on the branches
+  feat/v2-ep3-e3-roles, feat/v2-ep3-e4-plan and feat/v2-ep3-e3-measure was not sorted by a judge for this record: no row
+  says of a code commit that it fits or that it is cut. That sorting is step 5 of the rule of plan changes, and it is open.)
+
+> Epoch 2 · approved 2026-11-26 · by owner · state: open
 
 ## Goal
 

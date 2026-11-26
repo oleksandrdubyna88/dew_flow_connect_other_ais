@@ -2,9 +2,9 @@
 
 > Status: **s1 to s3 are built (s3 t6 is open) and s4 is measured and judged; s5 to s8 are plan only, 2026-11-26.** Plan gate:
 > `proceed`, 2026-11-25 (section J); the changes after it (section K); second plan round: `proceed`, 2026-11-26 (section L).
-> **The owner's decisions of 2026-11-26 (section M) are plan changes: the parent plan is stopped for re-review
-> ([PLAN.md](../../PLAN.md), `## Plan changes`), and epoch 3 is revised and reviewed whole.** The re-review round of E3:
-> `proceed`, 2026-11-26, 3 findings accepted (section N). Sections J to N are in
+> The owner's decisions of 2026-11-26 (sections M and O) are plan changes in the parent plan's ledger
+> ([PLAN.md](../../PLAN.md), `## Plan changes`). The re-review round of E3: `proceed`, 2026-11-26, 3 findings accepted
+> (section N). The owner accepted the revised plan on 2026-11-26; epoch 2 of the ledger is open. Sections J to O are in
 > [SPEC_CHANGES.md](SPEC_CHANGES.md): a spec file may hold 64 KiB (B item 5). Scope: the server half (`src_mcp`, `shared/`,
 > `.coai/toolchain.yaml`). Written by the planner
 > (Fable) from `v2/` and the code at `feat/v2-ep3-e2-coder` `0e8e8941`, read-only. Parent plan: [PLAN.md](../../PLAN.md);
