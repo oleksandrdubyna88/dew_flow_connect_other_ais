@@ -1,0 +1,20 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t5-docs
+title: "Docs: the scout and judge roles, review_plan with featureFolder, the codex and agy coder in ARCHITECTURE.md and README.md; server.md records what E3 decided differently"
+kind: docs
+complexity: 3
+dependsOn:
+  - t4-coder-resume-paid-proof
+parallel: false
+files:
+  - ARCHITECTURE.md
+  - README.md
+  - v2/architecture/server.md
+  - research/module_server.md
+dod:
+  - id: d1
+    item: "ARCHITECTURE.md and README.md name the scout and judge roles with their envelopes, review_plan with featureFolder (validate first, the pack, the scope, the limits, what is approved) and the coder of each shipped vendor with the measured limits of its boundary and the release each was measured on (history); the list of roles in both files equals RoleDescriptors.Shipped (a test or a grep in the task result proves it)"
+  - id: d2
+    item: "the docs say that no version of the CLI of claude, codex or agy refuses or stops anything and none asks for a new measure (the owner's decision of 2026-11-26), that shared/coder-boundary-releases.json holds the verdicts and the history of the measures (measured on which release, when), where a person sees the installed version beside the measured one, and what still refuses a coder (the verdict, a flag the help does not declare, a preflight row, a launch check, a turn check); a new version of a CLI is no reason to edit a doc"
+  - id: d3
+    item: "server.md gets a section that records what this epic decided differently from its sections 2, 8, 10, 19, 20 and 23; research/module_server.md describes the code as it is"

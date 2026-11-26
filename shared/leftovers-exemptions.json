@@ -108,7 +108,9 @@
     {"file":"src_vs_code/scripts/seam-refusal.mjs","line":40,"sha256":"2c11f53896547040251daf81f822c7978f014b942d47046efe548e618e3ee766","class":"raw-temp","guards":["csharp"],"proof":"library"},
     {"file":"src_vs_code/scripts/seam-usage-counts.mjs","line":166,"sha256":"f81080338310e1ee914ecc4d146d6cb46652f51fad363fd8db32b2fb7b52f486","class":"raw-temp","guards":["csharp"],"proof":"library"},
     {"file":"src_vs_code/src/test/leftoversSweep.test.mjs","line":58,"sha256":"7551ace78b26063f8f6afa0809b4192b787f8ef6cdd1a7b5df4aee5c0a063b9a","class":"legacy-name","guards":["node"]},
-    {"file":"v2/epoch-3/e2-coder-one-task/comparison/mkjob.sh","line":8,"sha256":"470c343a654fe641b0344861557e9aa07d59dbe55320603de4f454a40777c5dc","class":"raw-worktree","guards":["csharp","node"]}
+    {"file":"v2/epoch-3/e2-coder-one-task/comparison/mkjob.sh","line":8,"sha256":"470c343a654fe641b0344861557e9aa07d59dbe55320603de4f454a40777c5dc","class":"raw-worktree","guards":["csharp","node"]},
+    {"file":"v2/spikes/e3s4_measure/mkrow.sh","line":12,"sha256":"2dd6e830819d16e11546c341f548cd9ae2cf75b72aeb0fa9c978465fb6bf83dd","class":"raw-worktree","guards":["csharp","node"]},
+    {"file":"v2/spikes/e3s4_measure/mkrow.sh","line":14,"sha256":"a1dd89b170d38221d68c42f0871375e85d65a501855514a10631bf5069c72cdc","class":"raw-worktree","guards":["csharp","node"]}
   ],
   "namedBy": [
     {"file":"deploy/bugs/deploy-cmd.sh","testFile":"src_vs_code/src/test/install.test.ts","why":"the text is read; no test runs it"},

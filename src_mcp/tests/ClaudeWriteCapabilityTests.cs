@@ -6,9 +6,9 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// What the installed claude must say before it is given the coder's write launch (epoch 3 E2 s2 t3, d3): a release at or above 2.1.330, the
-/// first the boundary was measured on, and a <c>--help</c> that declares <c>--restricted</c>, <c>--permission-prompts</c> and
-/// <c>acceptEdits</c> as a permission mode — each one read as an OPTION, never as a word in prose.
+/// What the installed claude must say before it is given the coder's write launch (epoch 3 E2 s2 t3, d3): a <c>--help</c> that declares <c>--restricted</c>, <c>--permission-prompts</c> and
+/// <c>acceptEdits</c> as a permission mode — each one read as an OPTION, never as a word in prose. The RELEASE is a record, never a condition (owner decision of
+/// 2026-11-26): an older, a newer or an unreadable release is ready, and is named as it was printed (or <c>unknown</c>).
 /// </summary>
 /// <remarks>
 /// The fixture is the REAL help text of claude 2.1.330 on the measuring machine (<c>fixtures/claude/help-2.1.330-wsl.txt</c>, captured 2026-11-23);
@@ -46,7 +46,7 @@ public sealed class ClaudeWriteCapabilityTests
     public void TheMeasuredClaude_IsReady_AndItsVersionIsRead()
     {
         ClaudeWriteCapability.Judge(Version, Help()).Should().Be(new ClaudeWriteCapability.Ready("2.1.330"));
-        ClaudeWriteCapability.VersionFloor.Should().Be(new System.Version(2, 1, 330));
+        ClaudeWriteCapability.LastMeasuredRelease.Should().Be("2.1.330", "the release the boundary was measured on is history, named beside the installed one");
     }
 
     [Theory]
@@ -60,25 +60,27 @@ public sealed class ClaudeWriteCapabilityTests
     }
 
     [Theory]
-    [InlineData("2.1.329 (Claude Code)")]
-    [InlineData("2.0.999")]
-    [InlineData("1.9.9999 (Claude Code)")]
-    public void ABelowTheFloor_IsRefused_WithTheCure_EvenWhenItsHelpLooksRight(string printed)
+    [InlineData("2.1.329 (Claude Code)", "2.1.329")]
+    [InlineData("2.0.999", "2.0.999")]
+    [InlineData("1.9.9999 (Claude Code)", "1.9.9999")]
+    public void AnOlderRelease_IsReady_AndItsReleaseIsRecorded_BecauseNoReleaseStopsAnything(string printed, string named)
     {
-        var refused = Refusal(printed + "\n", Help());
-
-        refused.Said.Should().Contain("2.1.330").And.Contain(printed.Split(' ')[0]);
-        refused.Cure.Should().Contain("update claude");
-        refused.CouldNotStart.Should().BeFalse();
+        ClaudeWriteCapability.Judge(printed + "\n", Help()).Should().Be(new ClaudeWriteCapability.Ready(named));
     }
 
     [Theory]
     [InlineData("")]
     [InlineData("claude")]
     [InlineData("Claude Code, a banner\n2.1.330 (Claude Code)")]
-    public void AVersionLineThatNamesNoRelease_IsRefused_NeverGuessed(string printed)
+    public void AVersionLineThatNamesNoRelease_IsReady_RecordedAsUnknown_NeverGuessed(string printed)
     {
-        Refusal(printed, Help()).Said.Should().Contain("--version");
+        ClaudeWriteCapability.Judge(printed, Help()).Should().Be(new ClaudeWriteCapability.Ready(ClaudeWriteCapability.UnknownRelease));
+    }
+
+    [Fact]
+    public void ANewReleaseWhoseHelpNoLongerDeclaresAFlag_IsStillRefusedByName_BecauseThatIsTheCLIsOptionsNotItsNumber()
+    {
+        Refusal("9.9.9 (Claude Code)\n", WithoutOption(Help(), "--restricted")).Said.Should().Contain("--restricted");
     }
 
     [Fact]
@@ -148,7 +150,7 @@ public sealed class ClaudeWriteCapabilityTests
     }
 
     [Fact]
-    public async Task AVersionThatTimedOut_IsRefused_NotReadAsAnOldClaude()
+    public async Task AVersionThatTimedOut_IsRecordedAsUnknown_AndTheHelpDecides()
     {
         var launcher = new WatchedLauncher(new ProcessLauncher(), request => request.Arguments switch
         {
@@ -158,8 +160,6 @@ public sealed class ClaudeWriteCapabilityTests
 
         var answer = await ClaudeWriteCapability.ProbeAsync(launcher, "claude", Path.GetFullPath("anywhere"), TestContext.Current.CancellationToken);
 
-        var refused = answer.Should().BeOfType<ClaudeWriteCapability.Refused>().Subject;
-        refused.Said.Should().Contain("--version").And.Contain("did not answer");
-        refused.CouldNotStart.Should().BeFalse();
+        answer.Should().Be(new ClaudeWriteCapability.Ready(ClaudeWriteCapability.UnknownRelease), "a release that did not answer is a record, never a condition: the help said every flag is declared");
     }
 }

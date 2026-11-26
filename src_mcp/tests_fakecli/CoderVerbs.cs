@@ -47,6 +47,35 @@ internal static class CoderVerbs
     }
 
     /// <summary>
+    /// The model map's <c>readFiles</c>: a JSON array of absolute paths, each tried for READING from inside the unit the fake runs in. One line for every path in <c>sidecars/&lt;pid&gt;.reads</c> of the record folder — <c>read</c> and the first 80 characters of
+    /// the file, <c>absent</c> when it is not there, <c>denied</c> when the OS refused — and NOTHING on stdout or stderr: what the fake sees is a fact a test reads, never a thing the vendor answer must carry.
+    /// </summary>
+    internal static void TryRead(string json, string recordFolder)
+    {
+        var lines = new List<string>();
+        foreach (var path in System.Text.Json.JsonSerializer.Deserialize<string[]>(json) ?? [])
+        {
+            try
+            {
+                var text = File.ReadAllText(path);
+                lines.Add($"{path}\tread\t{text.Replace('\n', ' ')[..Math.Min(text.Length, 80)]}");
+            }
+            catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException)
+            {
+                lines.Add($"{path}\tabsent\t");
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                lines.Add($"{path}\tdenied\t");
+            }
+        }
+
+        var folder = Path.Combine(recordFolder, "sidecars");
+        Directory.CreateDirectory(folder);
+        File.WriteAllLines(Path.Combine(folder, Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture) + ".reads"), lines);
+    }
+
+    /// <summary>
     /// <c>hold-in &lt;folder&gt; &lt;ms&gt;</c>: writes <c>ready</c> into the folder (the EVENT a test waits for, never a sleep), then waits <paramref name="milliseconds"/> and exits 0 — a coder that is working while something else happens to the main checkout.
     /// </summary>
     internal static int HoldIn(string folder, int milliseconds)

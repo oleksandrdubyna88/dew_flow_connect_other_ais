@@ -50,7 +50,7 @@ public sealed class AntigravityConsultant(
     public Task<ConsultantPreparation> PrepareAsync(ConsultantLaunch launch, IProcessLauncher launcher, CancellationToken ct) =>
         // The coder is claude only in this epoch (t3, d5): refused before the read-only folder is made for a launch that will not happen.
         launch.Confinement is LaunchConfinement.Coder
-            ? Task.FromResult<ConsultantPreparation>(CoderLaunches.NotClaude)
+            ? Task.FromResult<ConsultantPreparation>(CoderLaunches.NoCoder)
             : Task.FromResult<ConsultantPreparation>((prepare ?? DefaultPrepare)() switch
             {
                 AntigravityReadOnly.Prepared.Failed failed => new ConsultantPreparation.Refused(

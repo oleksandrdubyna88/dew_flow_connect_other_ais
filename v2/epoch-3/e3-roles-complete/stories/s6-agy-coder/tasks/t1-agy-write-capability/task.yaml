@@ -1,9 +1,10 @@
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: t1-agy-write-capability
-title: "AgyWriteCapability: the measured release as the floor and every flag of the measured set declared in the help, else a refusal with the cure"
+title: "AgyWriteCapability: every flag of the argv declared in the help of the installed agy; else a refusal that names the property; the installed version is recorded and gates nothing, so a self-update of agy stops nothing"
 kind: security
-complexity: 4
-dependsOn: []
+complexity: 6
+dependsOn:
+  - t7-agy-open-rows-measure
 parallel: false
 security: true
 files:
@@ -11,6 +12,10 @@ files:
   - src_mcp/tests/AAgyWriteCapabilityTests.cs
 dod:
   - id: d1
-    item: "V6: an agy below the release the rows were measured on, or whose help does not declare each flag of the measured set, is refused before the launch with the cure and is never started with a weaker set; asked on every launch and never cached"
+    item: "V6, the owner's decision of 2026-11-26 (SPEC section C2 item 2; it replaces id AG-P1 of the judgement, the pin by release and bytes): an agy coder is launched on whatever version is installed; no release, version or hash is compared with the table, and an older, a newer and an unnamed version are each launched; the capability asks only what the installed CLI declares: its help declares --mode with accept-edits, --agent, --add-dir, --conversation and the stream formats, and a flag that is not declared is a refusal that names the flag, never the version; asked on every launch, never cached, never started with a weaker set"
   - id: d2
-    item: "the release is in the job envelope; a CLI that cannot be started and a help that does not answer are refusals that say so"
+    item: "the installed version as the CLI printed it and the last measured release of the table are both in the job envelope and in the record of the job, for information; a CLI that cannot be started and a help that does not answer are refusals that say so; a test with a table whose history names one release proves that a version one patch above it, one patch below it and one the CLI does not name are each LAUNCHED, and that no sentence of the product asks for a new measure or a new judgement"
+  - id: d3
+    item: "judgement G9, id AG-P2, the program store: NOT built (the owner's decision of 2026-11-26: no pin and no store); coai keeps no copy of the agy program and launches the installed file; no file of a store is in this task"
+  - id: d4
+    item: "a self-update of agy between two jobs, and between two launches of one job, refuses nothing and stops nothing: a test replaces the stand-in installed file with one that prints another version, the next launch runs it, and the envelope names the new version beside the measured one"

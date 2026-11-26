@@ -462,7 +462,8 @@ public sealed class AWorkPlanValidatorTests
     public void NoLimitOfTheWorkMethod_IsATypedConstant_InTheValidatorSources()
     {
         var folder = Path.Combine(RepoPaths.Root(), "src_mcp", "core", "Work");
-        var files = Directory.EnumerateFiles(folder, "*.cs").ToList();
+        // The work pack (epoch 3 E3 s3) is not the validator: its constants are byte sizes of a pack and a fence, and never a limit of the work method.
+        var files = Directory.EnumerateFiles(folder, "*.cs").Where(file => !Path.GetFileName(file).StartsWith("WorkPack", StringComparison.Ordinal)).ToList();
         var declaring = files.Where(file => File.ReadAllText(file).Contains("const int", StringComparison.Ordinal)).Select(Path.GetFileName).Order().ToList();
 
         files.Count.Should().BeGreaterThan(8, "the walk found the sources");

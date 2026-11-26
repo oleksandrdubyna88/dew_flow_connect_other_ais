@@ -1,0 +1,18 @@
+stream tool events (distinct step_index): 12  hook payloads: 12
+stream tool_info keys seen: name,parameters,error
+hook stepIdx=31 toolCall.id=call_1612997 name=edit_file | stream step_index found name=edit_file states=ACTIVE>DONE
+hook stepIdx=33 toolCall.id=call_7348666 name=write_file | stream step_index found name=write_file states=ACTIVE>ERROR
+hook stepIdx=35 toolCall.id=call_1412547 name=write_file | stream step_index found name=write_file states=ACTIVE>ERROR
+hook stepIdx=37 toolCall.id=call_1779460 name=edit_file | stream step_index found name=edit_file states=ACTIVE>ERROR
+hook stepIdx=39 toolCall.id=call_8271673 name=edit_file | stream step_index found name=edit_file states=ACTIVE>ERROR
+hook stepIdx=41 toolCall.id=call_5101783 name=write_file | stream step_index found name=write_file states=ACTIVE>ERROR
+hook stepIdx=43 toolCall.id=call_5407771 name=write_file | stream step_index found name=write_file states=ACTIVE>ERROR
+hook stepIdx=45 toolCall.id=call_7734604 name=read_file | stream step_index found name=read_file states=ACTIVE>ERROR
+hook stepIdx=47 toolCall.id=call_1280731 name=edit_file | stream step_index found name=edit_file states=ACTIVE>ERROR
+hook stepIdx=49 toolCall.id=call_3028690 name=write_file | stream step_index found name=write_file states=ACTIVE>ERROR
+hook stepIdx=51 toolCall.id=call_1377728 name=read_file | stream step_index found name=read_file states=ACTIVE>ERROR
+hook stepIdx=53 toolCall.id=call_1794826 name=write_file | stream step_index found name=write_file states=ACTIVE>ERROR
+hook payload keys: artifactDirectoryPath,conversationId,cwd,hookEventName,lastUserInput,modelName,stepIdx,toolCall,transcriptPath,workspacePaths
+hook toolCall keys: args,id,name
+toolCall.id appears in the stream text: 0 of 12
+step_index matches stepIdx for 12 of 12 (by index; names compared by eye above)

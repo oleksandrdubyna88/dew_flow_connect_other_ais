@@ -1,0 +1,31 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t3-instruction-step
+title: "The instruction step: a command the repository declares in .coai/toolchain.yaml is run by coai before turn 0 in a check unit at the base commit, its output is kept for the prompt, and a declared step that cannot run refuses the job"
+kind: security
+complexity: 5
+dependsOn: []
+parallel: false
+security: true
+files:
+  - shared/toolchain.schema.json
+  - src_mcp/core/Toolchain/ToolchainModel.cs
+  - src_mcp/core/Toolchain/ToolchainParse.cs
+  - src_mcp/src/Server/RoleJobs/CoderInstructions.cs
+  - src_mcp/src/Server/RoleJobs/CoderEnvelope.cs
+  - .coai/toolchain.yaml
+  - src_mcp/tests/ACoderInstructionStepTests.cs
+dod:
+  - id: d1
+    item: "SPEC section C9 items 1 and 2: the file gets ONE optional top-level key, instructions, with argv (a block list, no shell, the refusal rule of the reader for argv text), perFile (optional: appended once for EACH entry of the files of the task; an item may hold {file}) and timeoutSeconds (1 to 300; 60 when absent); version stays 1; it is read at the BASE commit; an unknown member, an empty argv, {file} outside perFile and a number out of range are each toolchain-refused with the line; the schema file and the reader are held equal by a test; coai never reads an instruction file to find a command"
+  - id: d2
+    item: "V20, C9 items 3 and 4: for a job whose base declares the step coai runs it ONCE, before any model is launched, through CheckBoundary with the property list of a test step (no network, the own home of the job, no credential), in the worktree at the base commit; the tree and HEAD are compared before and after; standard output is kept in the job folder and used again by a later attempt of the same job; on a real unit a step cannot read a stand-in sign-in file of the home and cannot reach a listener on the host loopback, and a control shows that the same step sees both outside the unit"
+  - id: d3
+    item: "V21, C9 item 5, the failure path: a step that exits non-zero, runs past its time, prints more than 64 KiB, prints bytes that are not UTF-8 or changes the tree, and a unit that cannot start, EACH end the job with the stop instructions-failed before any model is launched: FakeCli records ZERO launches, there is no failover and no green, nothing is cut, and the envelope names the argv, the exit code, the size and the last lines of standard error (one test for each cause)"
+  - id: d4
+    item: "V22, C9 item 8: the envelope has instructions {declared, argv, exitCode, bytes, sha256, ms}; a job whose base declares no step runs nothing, and its envelope says declared false; no text of the output is in a log line or in the envelope"
+  - id: d5
+    item: "C9 item 9, this repository, measure first: the output size of the rule resolver's read for the files of three past tasks of this repository is in the task result; when each is at most 64 KiB, .coai/toolchain.yaml of this repository declares that argv with one --file pair for each file of the task, and a test reads the committed file; when one is larger the step is NOT declared with a cut text and the result says so. Measured: 334 362 bytes for each of the three. Decided by the owner on 2026-11-26: the limit stays 64 KiB, so the file of this repository declares no instructions step, says why in a comment, and a test holds that; the short form of the resolver that would let it declare one is a follow-up outside this epic (SPEC section G)"
+  - id: d6
+    item: "V23, C9 item 10, the owner's decision of 2026-11-26 (it replaces must-change M1 of the security verify of this task, which ended such a job instructions-failed): a secret-shaped text in the output of the step stops NOTHING; the output is searched with the classes of the redactor, the one road; on a hit the job goes on, the output is kept and reaches the turn-0 prompt as it was, and coai records the finding in a notice instructions-secret whose subject is the job, in the member secrets of instructions in the envelope (class and line; written only when there is a finding) and in one log line; each names the class of the secret and the line of the output, and no part of the value is in the notice, in the envelope, in the record of the job or in the log (a test searches all four for the value and for its tail); a step whose output holds no such text writes no notice and no secrets member; the notice is what the tab of epoch 4 e4-local-pages reads"
+  - id: d7
+    item: "V24, C9 item 5, the re-review round of 2026-11-26, finding F0: the failure record of the step keeps the argv and the last lines of standard error, and BOTH go through the redactor, the one road, before they are written to the envelope, to the record of the job or to a log line, or shown; the argv goes the same road wherever else it is recorded (the instructions member of the envelope of a job whose step passed); a test runs a step that fails with one sentinel secret in its standard error and another in an argv item, and neither sentinel, nor its tail, is in the record of the job, in the envelope or in the log, while the exit code and the size are; this is a rule of RECORDS: the argv that is run is the real one, and d6 still holds for the output that reaches the prompt"

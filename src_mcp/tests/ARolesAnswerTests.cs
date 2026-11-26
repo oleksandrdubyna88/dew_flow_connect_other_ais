@@ -31,8 +31,8 @@ public sealed class ARolesAnswerTests
         answer.GetProperty("mainAi").GetProperty("cli").GetString().Should().Be("claude");
         answer.GetProperty("mainAi").GetProperty("version").GetString().Should().Be("2.1.330");
         Models(answer, "orchestrator").Should().Equal("opus:claude");
-        Models(answer, "coder").Should().Equal("sonnet:claude");
-        Models(answer, "scout").Should().Equal("sonnet:claude"); // a role the setting did not name keeps its default
+        Models(answer, "coder").Should().Equal("sonnet:claude", "opus:claude", "terra:codex"); // the failover of section D: the codex entry comes with the default codex row, the agy entry waits for an agy row
+        Models(answer, "scout").Should().Equal("sonnet:claude", "haiku:claude", "terra:codex"); // a role the setting did not name keeps its default, and its failover (the codex entry comes with the default codex row)
         Models(answer, "ba").Should().Equal("fable:claude", "opus:claude"); // a second model to fail over to (epoch 3 E1 s2, risk 8)
         answer.GetProperty("complexityBands").EnumerateArray().Select(band => $"{band.GetProperty("min").GetInt32()}-{band.GetProperty("max").GetInt32()}={band.GetProperty("model").GetString()}")
             .Should().Equal("0-2=haiku", "3-6=sonnet", "7-8=opus", "9-10=fable");
@@ -72,6 +72,8 @@ public sealed class ARolesAnswerTests
         answer.GetProperty("notes").EnumerateArray().Select(note => note.GetString()).Should().Contain(note => note!.Contains("no measured model list"));
     }
 
+    private static bool AnotherVendorsName(string? model, string? vendor) => (model, vendor) is ("astra", "codex") or ("terra", "codex") or ("gemini-4-argon-medium", "agy");
+
     [Fact]
     public void EveryModelNameTheDefaultsFileHolds_IsOneTheRepositoryAlreadyNames()
     {
@@ -83,7 +85,7 @@ public sealed class ARolesAnswerTests
             .Select(entry => (Model: entry.GetProperty("model").GetString(), Vendor: entry.GetProperty("vendor").GetString(), HasSource: entry.TryGetProperty("source", out _)))
             .ToList();
 
-        names.Where(one => one.Vendor != "claude").Should().OnlyContain(one => one.Model == "astra" && one.HasSource, "a codex or agy name needs its source written beside it");
+        names.Where(one => one.Vendor != "claude").Should().OnlyContain(one => AnotherVendorsName(one.Model, one.Vendor) && one.HasSource, "a codex or agy name needs its source written beside it (astra: server.md §20; terra and gemini-4-argon-medium: the failover of SPEC E3 section D)");
         names.Where(one => one.Vendor == "claude").Select(one => one.Model).Distinct().Should().BeEquivalentTo(["opus", "sonnet", "haiku", "fable"]);
         foreach (var vendor in new[] { "codex", "agy" })
         {
@@ -101,7 +103,7 @@ public sealed class ARolesAnswerTests
             (RolesKeys.WorkMethod, """{"maxEpicsPerEpoch":3,"mvpEpics":{"min":2,"max":2}}""")));
 
         Models(answer, "coder").Should().Equal("opus:claude", "sonnet:claude");
-        Models(answer, "scout").Should().Equal("sonnet:claude"); // a role the setting did not name keeps its default
+        Models(answer, "scout").Should().Equal("sonnet:claude", "haiku:claude", "terra:codex"); // a role the setting did not name keeps its default, and its failover (the codex entry comes with the default codex row)
         answer.GetProperty("complexityBands").GetArrayLength().Should().Be(2);
         answer.GetProperty("haikuKinds").EnumerateArray().Select(kind => kind.GetString()).Should().Equal("translate", "lint");
         answer.GetProperty("workMethod").GetProperty("maxEpicsPerEpoch").GetInt32().Should().Be(3);
@@ -155,7 +157,7 @@ public sealed class ARolesAnswerTests
         var answer = Answer(Env((RolesKeys.Models, """{"coder":[{"model":"opus","vendor":"claude"}],"scout":[]}""")));
 
         Models(answer, "coder").Should().Equal("opus:claude");
-        Models(answer, "scout").Should().Equal("sonnet:claude"); // a role the setting did not name keeps its default
+        Models(answer, "scout").Should().Equal("sonnet:claude", "haiku:claude", "terra:codex"); // a role the setting did not name keeps its default, and its failover (the codex entry comes with the default codex row)
         answer.GetProperty("unrecognised").GetArrayLength().Should().Be(1);
     }
 

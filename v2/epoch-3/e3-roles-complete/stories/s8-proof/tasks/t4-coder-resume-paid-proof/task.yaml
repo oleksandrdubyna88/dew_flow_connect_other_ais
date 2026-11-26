@@ -1,0 +1,23 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t4-coder-resume-paid-proof
+title: "Real coder job of each shipped vendor with its smallest model, started by the product in the product's own unit: a repository whose instruction file orders a command, a planted red check, one fix turn in the session of turn 0, green"
+kind: measure
+complexity: 5
+dependsOn:
+  - t3-read-only-paid-proof
+  - t6-agy-boundary-scenarios
+parallel: false
+security: true
+files:
+  - v2/epoch-3/e3-roles-complete/RESULTS_roles_proof.md
+dod:
+  - id: d1
+    item: "for each vendor that is launchable (the verdict ship and the mark on): one real coder job with the smallest model of that vendor, on the version that is installed on the day (no version is waited for and none is measured again), on a fixture repository with its own toolchain file and a planted red check; the file holds the job id, the installed version beside the last measured one and the sha256 of the program that ran (history), the session id of turn 0 and of the fix turn (equal, read from the own stream of the CLI), fixTurns, green, the properties of the unit, the preflight rows by id, the answer of the turn check of each turn and the spend"
+  - id: d2
+    item: "the owner's cap of 2026-11-26: t3 and this task together spend at most 30 USD (it replaces 2 runs for a vendor and 0.50 USD here); the task starts from what t3 left and writes down every run and its spend (the count of tokens where the CLI names no cost); the cap is enforced before each call (d5), never by reading the ledger afterwards; a second run of a vendor only after a recorded change; the real sign-in file has the same bytes and modification time before and after, and the job's sign-in copy is gone after the job"
+  - id: d3
+    item: "a vendor the table refuses, or that is not launchable yet (its mark is off: the must-changes of its judgement are not built and green), is written as not run, with the reason, and is not a missing proof; with both so the task is done when the file says so"
+  - id: d4
+    item: "SPEC section C8, what the coder comparison of E2 could not show (a harness ran codex and agy in the unit shape of the s4 measure; the product ran neither): the job is started by start_role and runs in the unit, with the preflight rows, the turn check and, for agy, the handler of the product; the fixture repository carries an AGENTS.md that orders a command before any edit AND declares that command as its instruction step; the output of the step holds one rule that no file of the worktree holds (a name the new test must carry); turn 0 of each vendor is not refused, and the commit of the job follows that rule (read from the diff) — the effect of the step, not only the absence of a refusal; the file holds the instructions member of the envelope; the file holds the prompt id and the sha256 of the rendered turn-0 prompt, how the strict reader took the report (for codex: its null members), and for agy the permission_mode of the init line of each turn beside the value of the table"
+  - id: d5
+    item: "the re-review round of 2026-11-26, finding F3: the reservation rule of t3 d3 holds for every call of this task, with the budget t3 left; a coder job reserves for EVERY turn it may make (turn 0, the repair turns, the fix turns up to the cap of the fix loop); the price table holds the smallest model of each vendor that runs, also where the CLI names no cost (a subscription): its worst case is priced from the vendor's own price of that model, with the source and the date; a vendor whose model has no price in the table, or whose call cannot be bounded, is NOT launched and is written as not run with that reason; the file holds each reservation beside the actual cost (or the count of tokens priced by the same table)"

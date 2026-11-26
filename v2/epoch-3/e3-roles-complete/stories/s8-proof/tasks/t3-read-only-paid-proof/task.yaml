@@ -1,0 +1,17 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t3-read-only-paid-proof
+title: "Real scout job and real judge job with haiku on a scratch clone: the envelopes, the repair turns, the cost"
+kind: measure
+complexity: 4
+dependsOn:
+  - t2-epic-acceptance
+parallel: false
+files:
+  - v2/epoch-3/e3-roles-complete/RESULTS_roles_proof.md
+dod:
+  - id: d1
+    item: "one real scout job and one real judge job with haiku (a scratch data folder sets the scout list and the important list to haiku) on a scratch clone of this repository: the file holds the job id, route, attempts, repair turns, the counts of verified evidence and the cost from the ledger"
+  - id: d2
+    item: "the owner's cap of 2026-11-26: this task and t4 together spend at most 30 USD (it replaces 4 calls and 0.10 USD here); the file holds the spend of this task and what is left of the 30 USD for t4; the cap is enforced before each call (d3), never by reading the ledger afterwards; a second run of a role only after a recorded change; nobody edits the clone while a job runs"
+  - id: d3
+    item: "the re-review round of 2026-11-26, finding F3: the 30 USD cap is enforced BEFORE each call; before the first call the file holds a price table (for each model that will run: the price of input and of output tokens, its source and its date) and the budget left (30 USD); each call reserves its priced worst case: the smallest model of the vendor, a bound on the tokens of the call (the flag or setting of the CLI that bounds them where it has one; where it has none, the context window of the model and its largest output for EVERY turn the job may make: turn 0 and the repair turns), at the price of the table; a call whose reservation is more than the budget left is NOT launched, and neither is a call for which no bound or no price can be named; the file holds, for each call, the reservation beside the actual cost from the ledger, and the budget left after it is the budget before minus the actual cost; a dry run with a budget smaller than one reservation shows the refusal with no job started"

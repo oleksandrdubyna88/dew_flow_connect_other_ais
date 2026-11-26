@@ -1,0 +1,26 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t6-codex-open-rows-measure
+title: "Measure what the judgement left open for codex before any argv is frozen: a spawn_agent child, the JavaScript of functions.exec, a CODEX_HOME outside /tmp, late .codex files, the refresh texts and a copy with a placeholder refresh token"
+kind: measure
+complexity: 6
+dependsOn: []
+parallel: false
+security: true
+files:
+  - v2/spikes/RESULTS_codex_coder.md
+  - v2/spikes/RESULTS_codex_agy_write_boundary_judgement.md
+  - shared/coder-boundary-releases.json
+  - src_mcp/tests/fixtures/role-stops/codex-refresh-failed.json
+dod:
+  - id: d1
+    item: "judgement X1 a, with the smallest model, inside the unit and the flag set of RESULTS_codex_coder.md sections 2 and 3: a command run by a spawn_agent child, fresh and resumed, tries the rows B2, B6, B10 and B11 with the canaries of s4 t3 and prints its tool list; recorded: each answer, whether the stream names the agent call (so that coai can refuse a turn that used it), and whether any switch of the release removes the six collaboration tools"
+  - id: d2
+    item: "judgement X1 b: the JavaScript of functions.exec, without exec_command: a read of the main canary and of the job's auth.json, the environment, a new process, a network call; recorded: each answer, and where the JavaScript runs (in the CLI process or inside the sandbox)"
+  - id: d3
+    item: "judgement X1 c and d: one fresh call with CODEX_HOME in a folder that is not under /tmp (the place of a real job): which helper binaries and PATH entries codex makes, and the rows B2, B6, B10 and B11 again; on the resumed turn of d1 a .codex/config.toml and a hooks file that were written into the worktree AFTER turn 0 (as a check can write them) do not run and do not widen the limit, with a canary outside"
+  - id: d4
+    item: "judgement X1 e, with no model request where that is possible: a crafted copy with exp far away and last_refresh 9 days old makes no refresh POST (a local listener counts them); a crafted copy with exp in 60 s and the override at 127.0.0.1:9, run in a unit with no network, gives a text and an exit code that are saved as the fixture, and nothing in them names the vendor's own address; one paid pair: a copy with the REAL access token and a placeholder in place of the refresh token answers exec and exec resume"
+  - id: d5
+    item: "recorded: whether a model-free command prints the permission profile that exec will use for this CODEX_HOME and these flags (id CX-C4); 30 paid codex calls at most (the owner's cap of 2026-11-26; it replaces 8), every call and its tokens written down; the real sign-in file has the same bytes and modification time before and after; every copy is deleted; nothing in the results is a token or a part of one"
+  - id: d6
+    item: "the results are a new section of RESULTS_codex_coder.md under a heading with the release, with one line holds or does not hold for each of d1 to d4; the important model then writes an addendum of the judgement for that release (ship or refuse; which of the ids CX-T2, CX-T3, CX-T4, CX-C4 and CX-R4 enter the table and in which class), and ONE commit writes the addendum's verdict and the history record (measured on that release, the date, its two headings, the sha256 of the program file) into shared/coder-boundary-releases.json (SPEC section C2); the measure runs on the version of codex that is installed on the day, a version other than the one of sections 2 and 3 of RESULTS_codex_coder.md does not stop it, and the rows of s4 t3 are not measured again; the record is history: no later version of codex needs a commit of this kind to run (the owner's decision of 2026-11-26); with refuse the row of SPEC section C5 applies and the owner is asked before any code of this story"

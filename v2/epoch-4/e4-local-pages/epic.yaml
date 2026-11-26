@@ -6,3 +6,5 @@ dependsOn: []
 doneWhen:
   - "each page tested by running its shipped bundle"
   - "prompt overrides and facets (gates, review, documents, cons, consask, chat, roles, coder)"
+  - "the notifications page has a tab of its own for the secret findings of jobs (the owner, 2026-11-26: «секреты в выводе — не останавливают ничего. это нужно просто норм в интерфейсе в нотификациях отдельным табом показывать, что б человек мог узнать про это, и сам решит, проблема это или нет»): it lists the server notices `instructions-secret` of epoch 3 E3 s7 t3 (the job, the class of the secret and the line of the output; never the value) and is the place for the secret findings of other job kinds when they come; a finding stops nothing and the tab offers no action on the job; with a server that writes no such notice the tab is empty and says so; tested by running the shipped bundle against a notice ledger that holds such a record"
+  - "the tab is part of the lazily loaded page: nothing is added to activation, and the 2 s start budget of the shell (epoch 1 E2; architecture/extension.md section 2, M1 and M2) is measured again and holds"

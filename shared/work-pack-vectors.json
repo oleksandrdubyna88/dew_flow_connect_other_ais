@@ -1,0 +1,330 @@
+{
+ "$comment": "Test vectors of the work pack of a plan round over a feature folder (epoch 3 E3 s3 t3). Each vector is {name, covers, files, scope, order, dependencies | refused}: `files` maps a path inside the feature folder to its text; `scope` is the scope folder from the feature folder (empty is the whole feature); `order` is the feature-relative path of every file section in pack order; `dependencies` is the outside-dependency lines (node, title) in pack order; `refused` is a word the refusal sentence holds. A file value may be {prefix, line, times}. Server only (AWorkPackIsTopologicalTests).",
+ "vectors": [
+  {
+   "name": "ties go by the number in the id, not by the letters",
+   "covers": "P7",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Epoch epoch-1\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s10-ten/story.yaml": "id: s10-ten\ntitle: \"Story s10-ten\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s10-ten/tasks/t1-x/task.yaml": "id: t1-x\ntitle: \"Task t1-x\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-x.txt\ndod:\n  - id: d1\n    item: \"it works\"\n",
+    "epoch-1/e1-core/stories/s2-two/story.yaml": "id: s2-two\ntitle: \"Story s2-two\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s2-two/tasks/t1-x/task.yaml": "id: t1-x\ntitle: \"Task t1-x\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-x.txt\ndod:\n  - id: d1\n    item: \"it works\"\n",
+    "epoch-1/e1-core/stories/s1-one/story.yaml": "id: s1-one\ntitle: \"Story s1-one\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-one/tasks/t1-x/task.yaml": "id: t1-x\ntitle: \"Task t1-x\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-x.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "scope": "",
+   "order": [
+    "feature.yaml",
+    "epoch-1/epoch.yaml",
+    "epoch-1/e1-core/epic.yaml",
+    "epoch-1/e1-core/stories/s1-one/story.yaml",
+    "epoch-1/e1-core/stories/s1-one/tasks/t1-x/task.yaml",
+    "epoch-1/e1-core/stories/s2-two/story.yaml",
+    "epoch-1/e1-core/stories/s2-two/tasks/t1-x/task.yaml",
+    "epoch-1/e1-core/stories/s10-ten/story.yaml",
+    "epoch-1/e1-core/stories/s10-ten/tasks/t1-x/task.yaml"
+   ],
+   "dependencies": []
+  },
+  {
+   "name": "a story comes after the story it depends on, whatever its number",
+   "covers": "P7",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Epoch epoch-1\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-one/story.yaml": "id: s1-one\ntitle: \"Story s1-one\"\ndependsOn:\n  - s3-three\n",
+    "epoch-1/e1-core/stories/s1-one/tasks/t1-x/task.yaml": "id: t1-x\ntitle: \"Task t1-x\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-x.txt\ndod:\n  - id: d1\n    item: \"it works\"\n",
+    "epoch-1/e1-core/stories/s2-two/story.yaml": "id: s2-two\ntitle: \"Story s2-two\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s2-two/tasks/t1-x/task.yaml": "id: t1-x\ntitle: \"Task t1-x\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-x.txt\ndod:\n  - id: d1\n    item: \"it works\"\n",
+    "epoch-1/e1-core/stories/s3-three/story.yaml": "id: s3-three\ntitle: \"Story s3-three\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s3-three/tasks/t1-x/task.yaml": "id: t1-x\ntitle: \"Task t1-x\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-x.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "scope": "",
+   "order": [
+    "feature.yaml",
+    "epoch-1/epoch.yaml",
+    "epoch-1/e1-core/epic.yaml",
+    "epoch-1/e1-core/stories/s2-two/story.yaml",
+    "epoch-1/e1-core/stories/s2-two/tasks/t1-x/task.yaml",
+    "epoch-1/e1-core/stories/s3-three/story.yaml",
+    "epoch-1/e1-core/stories/s3-three/tasks/t1-x/task.yaml",
+    "epoch-1/e1-core/stories/s1-one/story.yaml",
+    "epoch-1/e1-core/stories/s1-one/tasks/t1-x/task.yaml"
+   ],
+   "dependencies": []
+  },
+  {
+   "name": "in a story a task comes after the task it depends on",
+   "covers": "P7",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Epoch epoch-1\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-one/story.yaml": "id: s1-one\ntitle: \"Story s1-one\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-one/tasks/t1-a/task.yaml": "id: t1-a\ntitle: \"Task t1-a\"\nkind: code\ncomplexity: 3\ndependsOn:\n  - t3-c\nparallel: false\nfiles:\n  - src/t1-a.txt\ndod:\n  - id: d1\n    item: \"it works\"\n",
+    "epoch-1/e1-core/stories/s1-one/tasks/t2-b/task.yaml": "id: t2-b\ntitle: \"Task t2-b\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t2-b.txt\ndod:\n  - id: d1\n    item: \"it works\"\n",
+    "epoch-1/e1-core/stories/s1-one/tasks/t3-c/task.yaml": "id: t3-c\ntitle: \"Task t3-c\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t3-c.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "scope": "",
+   "order": [
+    "feature.yaml",
+    "epoch-1/epoch.yaml",
+    "epoch-1/e1-core/epic.yaml",
+    "epoch-1/e1-core/stories/s1-one/story.yaml",
+    "epoch-1/e1-core/stories/s1-one/tasks/t2-b/task.yaml",
+    "epoch-1/e1-core/stories/s1-one/tasks/t3-c/task.yaml",
+    "epoch-1/e1-core/stories/s1-one/tasks/t1-a/task.yaml"
+   ],
+   "dependencies": []
+  },
+  {
+   "name": "a story that depends on a story of another epic comes after it, though its epic comes first",
+   "covers": "P7",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Epoch epoch-1\"\ndependsOn: []\nepics:\n  - e1-a\n  - e2-b\n",
+    "epoch-1/e1-a/epic.yaml": "id: e1-a\ntitle: \"Epic e1-a\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e2-b/epic.yaml": "id: e2-b\ntitle: \"Epic e2-b\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-a/stories/s1-a/story.yaml": "id: s1-a\ntitle: \"Story s1-a\"\ndependsOn:\n  - e2-b/s1-b\n",
+    "epoch-1/e1-a/stories/s1-a/tasks/t1-x/task.yaml": "id: t1-x\ntitle: \"Task t1-x\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-x.txt\ndod:\n  - id: d1\n    item: \"it works\"\n",
+    "epoch-1/e2-b/stories/s1-b/story.yaml": "id: s1-b\ntitle: \"Story s1-b\"\ndependsOn: []\n",
+    "epoch-1/e2-b/stories/s1-b/tasks/t1-x/task.yaml": "id: t1-x\ntitle: \"Task t1-x\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-x.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "scope": "",
+   "order": [
+    "feature.yaml",
+    "epoch-1/epoch.yaml",
+    "epoch-1/e1-a/epic.yaml",
+    "epoch-1/e2-b/epic.yaml",
+    "epoch-1/e2-b/stories/s1-b/story.yaml",
+    "epoch-1/e2-b/stories/s1-b/tasks/t1-x/task.yaml",
+    "epoch-1/e1-a/stories/s1-a/story.yaml",
+    "epoch-1/e1-a/stories/s1-a/tasks/t1-x/task.yaml"
+   ],
+   "dependencies": []
+  },
+  {
+   "name": "a story scope holds feature.yaml, the plan file, the ancestors and the spec of its epic, then its own tasks, and one line for each outside dependency",
+   "covers": "P6",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo\"\nplan: PLAN.md\nepochs:\n  - epoch-1\n",
+    "PLAN.md": "# The plan\n\nWhat the feature is.\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Epoch epoch-1\"\ndependsOn: []\nepics:\n  - e1-core\n  - e2-more\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\nspec: SPEC.md\n",
+    "epoch-1/e1-core/SPEC.md": "# Spec of the core\n",
+    "epoch-1/e2-more/epic.yaml": "id: e2-more\ntitle: \"Epic e2-more\"\nmvp: true\ndependsOn:\n  - e1-core\nspec: SPEC.md\n",
+    "epoch-1/e2-more/SPEC.md": "# Spec of more\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-a/task.yaml": "id: t1-a\ntitle: \"Task t1-a\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-a.txt\ndod:\n  - id: d1\n    item: \"it works\"\n",
+    "epoch-1/e2-more/stories/s1-more/story.yaml": "id: s1-more\ntitle: \"Story s1-more\"\ndependsOn:\n  - s1-first\n",
+    "epoch-1/e2-more/stories/s1-more/tasks/t1-m/task.yaml": "id: t1-m\ntitle: \"Task t1-m\"\nkind: code\ncomplexity: 3\ndependsOn:\n  - t1-a\nparallel: false\nfiles:\n  - src/t1-m.txt\ndod:\n  - id: d1\n    item: \"it works\"\n",
+    "epoch-1/e2-more/stories/s2-other/story.yaml": "id: s2-other\ntitle: \"Story s2-other\"\ndependsOn: []\n",
+    "epoch-1/e2-more/stories/s2-other/tasks/t1-o/task.yaml": "id: t1-o\ntitle: \"Task t1-o\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-o.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "scope": "epoch-1/e2-more/stories/s1-more",
+   "order": [
+    "feature.yaml",
+    "PLAN.md",
+    "epoch-1/epoch.yaml",
+    "epoch-1/e2-more/epic.yaml",
+    "epoch-1/e2-more/SPEC.md",
+    "epoch-1/e2-more/stories/s1-more/story.yaml",
+    "epoch-1/e2-more/stories/s1-more/tasks/t1-m/task.yaml"
+   ],
+   "dependencies": [
+    {
+     "node": "epoch-1/e1-core/s1-first",
+     "title": "Story s1-first"
+    },
+    {
+     "node": "epoch-1/e1-core/s1-first/t1-a",
+     "title": "Task t1-a"
+    }
+   ]
+  },
+  {
+   "name": "an epic scope holds the epoch above it and its own stories; a node of a sibling story is not in the pack",
+   "covers": "P6",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo\"\nplan: PLAN.md\nepochs:\n  - epoch-1\n",
+    "PLAN.md": "# The plan\n\nWhat the feature is.\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Epoch epoch-1\"\ndependsOn: []\nepics:\n  - e1-core\n  - e2-more\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\nspec: SPEC.md\n",
+    "epoch-1/e1-core/SPEC.md": "# Spec of the core\n",
+    "epoch-1/e2-more/epic.yaml": "id: e2-more\ntitle: \"Epic e2-more\"\nmvp: true\ndependsOn:\n  - e1-core\nspec: SPEC.md\n",
+    "epoch-1/e2-more/SPEC.md": "# Spec of more\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-a/task.yaml": "id: t1-a\ntitle: \"Task t1-a\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-a.txt\ndod:\n  - id: d1\n    item: \"it works\"\n",
+    "epoch-1/e2-more/stories/s1-more/story.yaml": "id: s1-more\ntitle: \"Story s1-more\"\ndependsOn:\n  - s1-first\n",
+    "epoch-1/e2-more/stories/s1-more/tasks/t1-m/task.yaml": "id: t1-m\ntitle: \"Task t1-m\"\nkind: code\ncomplexity: 3\ndependsOn:\n  - t1-a\nparallel: false\nfiles:\n  - src/t1-m.txt\ndod:\n  - id: d1\n    item: \"it works\"\n",
+    "epoch-1/e2-more/stories/s2-other/story.yaml": "id: s2-other\ntitle: \"Story s2-other\"\ndependsOn: []\n",
+    "epoch-1/e2-more/stories/s2-other/tasks/t1-o/task.yaml": "id: t1-o\ntitle: \"Task t1-o\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-o.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "scope": "epoch-1/e2-more",
+   "order": [
+    "feature.yaml",
+    "PLAN.md",
+    "epoch-1/epoch.yaml",
+    "epoch-1/e2-more/epic.yaml",
+    "epoch-1/e2-more/SPEC.md",
+    "epoch-1/e2-more/stories/s1-more/story.yaml",
+    "epoch-1/e2-more/stories/s1-more/tasks/t1-m/task.yaml",
+    "epoch-1/e2-more/stories/s2-other/story.yaml",
+    "epoch-1/e2-more/stories/s2-other/tasks/t1-o/task.yaml"
+   ],
+   "dependencies": [
+    {
+     "node": "epoch-1/e1-core",
+     "title": "Epic e1-core"
+    },
+    {
+     "node": "epoch-1/e1-core/s1-first",
+     "title": "Story s1-first"
+    },
+    {
+     "node": "epoch-1/e1-core/s1-first/t1-a",
+     "title": "Task t1-a"
+    }
+   ]
+  },
+  {
+   "name": "an epoch scope holds its epics in order and depends on the epoch before it",
+   "covers": "P6",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo\"\nplan: PLAN.md\nepochs:\n  - epoch-1\n  - epoch-2\n",
+    "PLAN.md": "# The plan\n\nWhat the feature is.\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Epoch epoch-1\"\ndependsOn: []\nepics:\n  - e1-core\n  - e2-more\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\nspec: SPEC.md\n",
+    "epoch-1/e1-core/SPEC.md": "# Spec of the core\n",
+    "epoch-1/e2-more/epic.yaml": "id: e2-more\ntitle: \"Epic e2-more\"\nmvp: true\ndependsOn:\n  - e1-core\nspec: SPEC.md\n",
+    "epoch-1/e2-more/SPEC.md": "# Spec of more\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-a/task.yaml": "id: t1-a\ntitle: \"Task t1-a\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-a.txt\ndod:\n  - id: d1\n    item: \"it works\"\n",
+    "epoch-1/e2-more/stories/s1-more/story.yaml": "id: s1-more\ntitle: \"Story s1-more\"\ndependsOn:\n  - s1-first\n",
+    "epoch-1/e2-more/stories/s1-more/tasks/t1-m/task.yaml": "id: t1-m\ntitle: \"Task t1-m\"\nkind: code\ncomplexity: 3\ndependsOn:\n  - t1-a\nparallel: false\nfiles:\n  - src/t1-m.txt\ndod:\n  - id: d1\n    item: \"it works\"\n",
+    "epoch-1/e2-more/stories/s2-other/story.yaml": "id: s2-other\ntitle: \"Story s2-other\"\ndependsOn: []\n",
+    "epoch-1/e2-more/stories/s2-other/tasks/t1-o/task.yaml": "id: t1-o\ntitle: \"Task t1-o\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-o.txt\ndod:\n  - id: d1\n    item: \"it works\"\n",
+    "epoch-2/epoch.yaml": "id: epoch-2\ntitle: \"Epoch epoch-2\"\ndependsOn:\n  - epoch-1\nepics:\n  - e1-next\n",
+    "epoch-2/e1-next/epic.yaml": "id: e1-next\ntitle: \"Epic e1-next\"\nmvp: true\ndependsOn:\n  - e1-core\n",
+    "epoch-2/e1-next/stories/s1-n/story.yaml": "id: s1-n\ntitle: \"Story s1-n\"\ndependsOn: []\n",
+    "epoch-2/e1-next/stories/s1-n/tasks/t1-n/task.yaml": "id: t1-n\ntitle: \"Task t1-n\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-n.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "scope": "epoch-2",
+   "order": [
+    "feature.yaml",
+    "PLAN.md",
+    "epoch-2/epoch.yaml",
+    "epoch-2/e1-next/epic.yaml",
+    "epoch-2/e1-next/stories/s1-n/story.yaml",
+    "epoch-2/e1-next/stories/s1-n/tasks/t1-n/task.yaml"
+   ],
+   "dependencies": [
+    {
+     "node": "epoch-1",
+     "title": "Epoch epoch-1"
+    },
+    {
+     "node": "epoch-1/e1-core",
+     "title": "Epic e1-core"
+    }
+   ]
+  },
+  {
+   "name": "a task scope holds its story file as an ancestor",
+   "covers": "P6",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo\"\nplan: PLAN.md\nepochs:\n  - epoch-1\n",
+    "PLAN.md": "# The plan\n\nWhat the feature is.\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Epoch epoch-1\"\ndependsOn: []\nepics:\n  - e1-core\n  - e2-more\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\nspec: SPEC.md\n",
+    "epoch-1/e1-core/SPEC.md": "# Spec of the core\n",
+    "epoch-1/e2-more/epic.yaml": "id: e2-more\ntitle: \"Epic e2-more\"\nmvp: true\ndependsOn:\n  - e1-core\nspec: SPEC.md\n",
+    "epoch-1/e2-more/SPEC.md": "# Spec of more\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-a/task.yaml": "id: t1-a\ntitle: \"Task t1-a\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-a.txt\ndod:\n  - id: d1\n    item: \"it works\"\n",
+    "epoch-1/e2-more/stories/s1-more/story.yaml": "id: s1-more\ntitle: \"Story s1-more\"\ndependsOn:\n  - s1-first\n",
+    "epoch-1/e2-more/stories/s1-more/tasks/t1-m/task.yaml": "id: t1-m\ntitle: \"Task t1-m\"\nkind: code\ncomplexity: 3\ndependsOn:\n  - t1-a\nparallel: false\nfiles:\n  - src/t1-m.txt\ndod:\n  - id: d1\n    item: \"it works\"\n",
+    "epoch-1/e2-more/stories/s2-other/story.yaml": "id: s2-other\ntitle: \"Story s2-other\"\ndependsOn: []\n",
+    "epoch-1/e2-more/stories/s2-other/tasks/t1-o/task.yaml": "id: t1-o\ntitle: \"Task t1-o\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-o.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "scope": "epoch-1/e2-more/stories/s1-more/tasks/t1-m",
+   "order": [
+    "feature.yaml",
+    "PLAN.md",
+    "epoch-1/epoch.yaml",
+    "epoch-1/e2-more/epic.yaml",
+    "epoch-1/e2-more/SPEC.md",
+    "epoch-1/e2-more/stories/s1-more/story.yaml",
+    "epoch-1/e2-more/stories/s1-more/tasks/t1-m/task.yaml"
+   ],
+   "dependencies": [
+    {
+     "node": "epoch-1/e1-core/s1-first/t1-a",
+     "title": "Task t1-a"
+    }
+   ]
+  },
+  {
+   "name": "a scope that names no node of the folder is refused",
+   "covers": "P6",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo\"\nplan: PLAN.md\nepochs:\n  - epoch-1\n",
+    "PLAN.md": "# The plan\n\nWhat the feature is.\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Epoch epoch-1\"\ndependsOn: []\nepics:\n  - e1-core\n  - e2-more\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\nspec: SPEC.md\n",
+    "epoch-1/e1-core/SPEC.md": "# Spec of the core\n",
+    "epoch-1/e2-more/epic.yaml": "id: e2-more\ntitle: \"Epic e2-more\"\nmvp: true\ndependsOn:\n  - e1-core\nspec: SPEC.md\n",
+    "epoch-1/e2-more/SPEC.md": "# Spec of more\n",
+    "epoch-1/e1-core/stories/s1-first/story.yaml": "id: s1-first\ntitle: \"Story s1-first\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-first/tasks/t1-a/task.yaml": "id: t1-a\ntitle: \"Task t1-a\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-a.txt\ndod:\n  - id: d1\n    item: \"it works\"\n",
+    "epoch-1/e2-more/stories/s1-more/story.yaml": "id: s1-more\ntitle: \"Story s1-more\"\ndependsOn:\n  - s1-first\n",
+    "epoch-1/e2-more/stories/s1-more/tasks/t1-m/task.yaml": "id: t1-m\ntitle: \"Task t1-m\"\nkind: code\ncomplexity: 3\ndependsOn:\n  - t1-a\nparallel: false\nfiles:\n  - src/t1-m.txt\ndod:\n  - id: d1\n    item: \"it works\"\n",
+    "epoch-1/e2-more/stories/s2-other/story.yaml": "id: s2-other\ntitle: \"Story s2-other\"\ndependsOn: []\n",
+    "epoch-1/e2-more/stories/s2-other/tasks/t1-o/task.yaml": "id: t1-o\ntitle: \"Task t1-o\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-o.txt\ndod:\n  - id: d1\n    item: \"it works\"\n"
+   },
+   "scope": "epoch-1/e9-nothing",
+   "refused": "names no node"
+  },
+  {
+   "name": "a pack over 256 KiB is refused with its size and its three largest sections, and nothing is cut",
+   "covers": "P5",
+   "files": {
+    "feature.yaml": "id: demo\ntitle: \"Demo\"\nepochs:\n  - epoch-1\n",
+    "epoch-1/epoch.yaml": "id: epoch-1\ntitle: \"Epoch epoch-1\"\ndependsOn: []\nepics:\n  - e1-core\n",
+    "epoch-1/e1-core/epic.yaml": "id: e1-core\ntitle: \"Epic e1-core\"\nmvp: true\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-one/story.yaml": "id: s1-one\ntitle: \"Story s1-one\"\ndependsOn: []\n",
+    "epoch-1/e1-core/stories/s1-one/tasks/t1-a/task.yaml": {
+     "prefix": "id: t1-a\ntitle: \"Task t1-a\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t1-a.txt\ndod:\n  - id: d1\n    item: \"it works\"\n",
+     "line": "# padding of the pack limit test, padding padding padding padding padding\n",
+     "times": 850
+    },
+    "epoch-1/e1-core/stories/s1-one/tasks/t2-b/task.yaml": {
+     "prefix": "id: t2-b\ntitle: \"Task t2-b\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t2-b.txt\ndod:\n  - id: d1\n    item: \"it works\"\n",
+     "line": "# padding of the pack limit test, padding padding padding padding padding\n",
+     "times": 855
+    },
+    "epoch-1/e1-core/stories/s1-one/tasks/t3-c/task.yaml": {
+     "prefix": "id: t3-c\ntitle: \"Task t3-c\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t3-c.txt\ndod:\n  - id: d1\n    item: \"it works\"\n",
+     "line": "# padding of the pack limit test, padding padding padding padding padding\n",
+     "times": 860
+    },
+    "epoch-1/e1-core/stories/s1-one/tasks/t4-d/task.yaml": {
+     "prefix": "id: t4-d\ntitle: \"Task t4-d\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t4-d.txt\ndod:\n  - id: d1\n    item: \"it works\"\n",
+     "line": "# padding of the pack limit test, padding padding padding padding padding\n",
+     "times": 865
+    },
+    "epoch-1/e1-core/stories/s1-one/tasks/t5-e/task.yaml": {
+     "prefix": "id: t5-e\ntitle: \"Task t5-e\"\nkind: code\ncomplexity: 3\ndependsOn: []\nparallel: false\nfiles:\n  - src/t5-e.txt\ndod:\n  - id: d1\n    item: \"it works\"\n",
+     "line": "# padding of the pack limit test, padding padding padding padding padding\n",
+     "times": 870
+    }
+   },
+   "scope": "",
+   "refused": "three largest"
+  }
+ ]
+}

@@ -14,4 +14,6 @@ dod:
   - id: d1
     item: "the reader accepts {status: ok, facts:[{claim, evidence:[{file, line, text}]}], files, unknown} and {status: refused, reason}; an unknown member, a fact with no evidence, more than 40 facts, 5 evidence items, 60 files or 20 unknown lines, and a text over its length are errors that name the member"
   - id: d2
+    item: "S12: an evidence text that is empty or only white space is an error of the reader too, with the member named; a claim and an unknown line that are only white space are errors as well"
+  - id: d3
     item: "a test holds the schema file and the tables of the reader equal; the contract tests of the ba and the coder pass unchanged"

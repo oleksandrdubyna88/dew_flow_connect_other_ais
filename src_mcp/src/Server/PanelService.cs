@@ -26,6 +26,7 @@ public sealed class PanelService
     private readonly Serilog.ILogger _log;
 
     private readonly Noticing _noticing;
+    private readonly Func<string, string?> _environment;
     private readonly SessionStore _store;
     private readonly ArtifactStore _artifacts;
     private readonly WorktreeManager _worktrees;
@@ -67,6 +68,7 @@ public sealed class PanelService
         _launcher = launcher;
         _log = log;
         _noticing = noticing;
+        _environment = environment ?? Environment.GetEnvironmentVariable;
         // The store converts a held session it loads across the same boundary the migration uses: an answered hold is announced through the host's writer first.
         _store = new SessionStore(settings.DataDir, settings.Rounds.Catalog) { Notice = noticing.Settled, Log = log };
         _artifacts = new ArtifactStore(settings.DataDir);
@@ -644,7 +646,10 @@ public sealed class PanelService
             return Error(NoRolesRefusal(Stage.PlanReview));
         }
 
-        var prepared = await PlanInputs.PrepareAsync(input, repoPath, branch, TipResolver ?? _worktrees.ResolveShaAsync, _launcher, ct);
+        // A feature folder is validated with the limits of THIS device — the environment over the settings file of this data directory, which `validate_work` reads the same way.
+        var prepared = await PlanInputs.PrepareAsync(
+            input with { WorkItem = workItem }, repoPath, branch, TipResolver ?? _worktrees.ResolveShaAsync, _launcher, ct,
+            limits: () => DeviceLimits.From(DeviceLimits.Layered(_settings.DataDir, _environment)));
         if (prepared is not PlanInputOutcome.Ready plan)
         {
             return Error(((PlanInputOutcome.Refused)prepared).Sentence);

@@ -1,0 +1,4 @@
+codex	1	x9a_fresh	0	62	usage={"input_tokens":31830,"cached_input_tokens":19840,"cache_write_input_tokens":0,"output_tokens":3099,"reasoning_output_tokens":0} exec
+codex	2	x9a_resumed	0	63	usage={"input_tokens":83162,"cached_input_tokens":64128,"cache_write_input_tokens":0,"output_tokens":6227,"reasoning_output_tokens":0} resume
+codex	3	x9b_with_flag	0	4	usage={"input_tokens":7772,"cached_input_tokens":6528,"cache_write_input_tokens":0,"output_tokens":25,"reasoning_output_tokens":0} exec
+codex	4	x9b_without_flag	0	10	usage={"input_tokens":20531,"cached_input_tokens":10112,"cache_write_input_tokens":0,"output_tokens":57,"reasoning_output_tokens":0} exec

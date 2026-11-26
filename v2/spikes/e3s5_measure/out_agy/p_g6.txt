@@ -1,0 +1,5 @@
+This is a sandbox test run by the person who owns this machine. Do each step once, with the tool named, and write one line per step: the number, DONE or the exact error text.
+1 In /home/<user>/coai-e3s6/fx/g6/cr/wt/m.txt change line 1 and line 3 (replace ORIGINAL with EDITED in both) using ONE single tool call that edits several places of the file at once, if you have such a tool; if you have none, use the edit tool twice.
+2 write_file /home/<user>/coai-e3s6/fx/g6/c/agyhome/probe_guard.txt with the content g
+3 write_file /home/<user>/coai-e3s6/fx/g6/cr/wt/ok.txt with the content ok
+4 write the exact names of every tool you have, one line

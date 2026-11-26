@@ -62,6 +62,9 @@ internal sealed class CoderRig : IAsyncDisposable
     /// <summary>The machine as the OS layer sees it: this host, the stand-in as the person's home, no PATH to look programs up in.</summary>
     internal BoundaryHost Host => OnHost(BoundaryHost.Current() with { RealHome = _home.Path, NuGetPackages = string.Empty, Path = string.Empty });
 
+    /// <summary>The vendors a coder of the job may be launched on: the product's set, or a test's own table with its own test vendor (epoch 3 E3 s7 t2). Read when the job's work is made.</summary>
+    internal CoderVendorSet Vendors { get; set; } = CoderVendors.Shipped;
+
     /// <summary>A test-only change of the machine (no user manager, another operating system) — read when the job's work is made.</summary>
     internal Func<BoundaryHost, BoundaryHost> OnHost { get; set; } = host => host;
 
@@ -94,8 +97,9 @@ internal sealed class CoderRig : IAsyncDisposable
     /// <summary>
     /// The rig. A coder launch needs a systemd user manager, so without one the test is SKIPPED, with the reason — unless <paramref name="needsLayer"/> is false, for a scenario in which no coder is ever launched.
     /// </summary>
+    /// <param name="toolchainOf">The same, made from the path of the rig's stand-in for the person's home — for a scenario whose files must name it.</param>
     /// <param name="toolchain">The text of <c>.coai/toolchain.yaml</c> the BASE commit holds: null is <see cref="DefaultToolchain"/> (a build and a test that pass until a file says otherwise), empty is a repository with no toolchain file.</param>
-    internal static async Task<CoderRig> CreateAsync(bool needsLayer = true, string? toolchain = null, IReadOnlyDictionary<string, string>? extra = null)
+    internal static async Task<CoderRig> CreateAsync(bool needsLayer = true, string? toolchain = null, IReadOnlyDictionary<string, string>? extra = null, Func<string, string>? toolchainOf = null)
     {
         if (needsLayer)
         {
@@ -103,7 +107,7 @@ internal sealed class CoderRig : IAsyncDisposable
         }
 
         var rig = new CoderRig(await RoleFailoverRig.CreateAsync());
-        rig.Base = await LayFixtureAsync(rig.Rig.Git, toolchain, extra);
+        rig.Base = await LayFixtureAsync(rig.Rig.Git, toolchainOf is null ? toolchain : toolchainOf(rig._home.Path), extra);
         Environment.SetEnvironmentVariable("FAKECLI_VERSION_STDOUT", "2.1.330 (Claude Code)\n");
         Environment.SetEnvironmentVariable("FAKECLI_HELP_STDOUT", File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "fixtures", "claude", "help-2.1.330-wsl.txt")));
 
@@ -143,7 +147,7 @@ internal sealed class CoderRig : IAsyncDisposable
     /// One launch of the fake coder: the files it writes below its working folder, what it says, how long it waits before it answers, and — a coder that goes where it must not — the ABSOLUTE paths it tries to write (what the OS refuses
     /// goes to its stderr).
     /// </summary>
-    internal sealed record Launch(IReadOnlyDictionary<string, string>? Edits, string Answer, int SleepMs = 0, IReadOnlyList<string>? TryWrites = null, string Session = "", int Exit = 0, string Stderr = "", string Stdout = "", IReadOnlyDictionary<string, string>? HomeFiles = null, bool IgnoreTerm = false);
+    internal sealed record Launch(IReadOnlyDictionary<string, string>? Edits, string Answer, int SleepMs = 0, IReadOnlyList<string>? TryWrites = null, string Session = "", int Exit = 0, string Stderr = "", string Stdout = "", IReadOnlyDictionary<string, string>? HomeFiles = null, IReadOnlyList<string>? Reads = null, bool IgnoreTerm = false);
 
     /// <summary>
     /// What FakeCli does for <paramref name="model"/>, launch by launch (the last repeats). The steering file — the coder's child reads only that — is written again with every call.
@@ -186,6 +190,11 @@ internal sealed class CoderRig : IAsyncDisposable
             entry["homeFiles"] = launch.HomeFiles;
         }
 
+        if (launch.Reads is not null)
+        {
+            entry["readFiles"] = launch.Reads;
+        }
+
         if (launch.IgnoreTerm)
         {
             entry["ignoreTerm"] = true;
@@ -217,7 +226,7 @@ internal sealed class CoderRig : IAsyncDisposable
     internal static IReadOnlyDictionary<string, string> Edits(params string[] names) => names.ToDictionary(name => name, name => $"the coder wrote {name}\n");
 
     internal RoleDescriptor Descriptor(Action<string>? boundary = null) =>
-        new(RoleDescriptors.Coder, "the coder", () => new CoderWork { Boundary = boundary, Turns = TurnsOf(Host, Degrade), AttemptTimeout = AttemptTimeout, Ladder = [TimeSpan.FromMinutes(5)] }, RouteAs: "coder", Check: CoderTask.Refusal);
+        new(RoleDescriptors.Coder, "the coder", () => new CoderWork { Boundary = boundary, Vendors = Vendors, Turns = TurnsOf(Host, Degrade), AttemptTimeout = AttemptTimeout, Ladder = [TimeSpan.FromMinutes(5)] }, RouteAs: "coder", Check: CoderTask.Refusal);
 
     /// <summary>The job's turns over the stand-in machine: the real boundary code, the host and the degrade this rig holds at the moment the descriptor is made.</summary>
     private static Func<IProcessLauncher, CoderTurns> TurnsOf(BoundaryHost host, Func<IReadOnlyList<string>, IReadOnlyList<string>>? degrade) =>

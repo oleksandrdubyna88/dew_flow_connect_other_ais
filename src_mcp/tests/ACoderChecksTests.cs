@@ -115,9 +115,8 @@ public sealed class ACoderChecksTests
 
         (ended.State, ended.Stop).Should().Be((RoleJobStates.Failed, "toolchain-refused"));
         var envelope = rig.Envelope(job);
-        envelope.GetProperty("green").GetBoolean().Should().BeFalse();
-        envelope.GetProperty("checksState").GetString().Should().Be("toolchain_refused");
-        Checks(envelope).GetArrayLength().Should().Be(0);
+        envelope.TryGetProperty("green", out _).Should().BeFalse("the file at the base is refused before any model is launched (E3 s7 t3, security verify M2): there is no round of checks to be green");
+        rig.Launches(job).Should().BeEmpty("a file the reader refuses may hide an instruction step, so no model is launched on it");
     }
 
     [Fact]

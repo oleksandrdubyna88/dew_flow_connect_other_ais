@@ -115,10 +115,74 @@ public sealed class CheckBoundary(IProcessLauncher launcher, BoundaryHost host)
     private async Task<IReadOnlyList<PreflightRow>> PreflightAsync(BoundaryJob job, CheckNetwork network, string program, CancellationToken ct)
     {
         var unit = BoundaryUnit.UnitName(job, network == CheckNetwork.Private ? "pre-none" : "pre-host");
-        var command = BoundaryPreflight.Command(job, host, network, program);
-        var started = await StartAsync(job, unit, network, PreflightBudget, new Dictionary<string, string?>(), command, ct);
+        var other = PlantAnotherJob(job);
+        try
+        {
+            var command = BoundaryPreflight.Command(job, host, network, program, other);
+            var started = await StartAsync(job, unit, network, PreflightBudget, new Dictionary<string, string?>(), command, ct);
 
-        return BoundaryPreflight.Rows(started, started.Problem.Length == 0 && await _units.EnsureGoneAsync(unit), BoundaryPreflight.ItemsFor(job));
+            return BoundaryPreflight.Rows(started, started.Problem.Length == 0 && await _units.EnsureGoneAsync(unit), BoundaryPreflight.ItemsFor(job));
+        }
+        finally
+        {
+            RemoveAnotherJob(other);
+        }
+    }
+
+    /// <summary>The name of the stand-in for another job's folder beside the job folder <paramref name="jobId"/>: <see cref="CoderJobFolders"/> removes it with the job's own folders when a killed runner left it.</summary>
+    internal static string StandInName(string jobId) => $"coai-preflight-other-{jobId}";
+
+    /// <summary>
+    /// A stand-in for another job's folder, ALWAYS made in the folder that really holds the job folders (<c>Path.GetDirectoryName(JobRoot)</c>, not <see cref="BoundaryJob.JobCover"/>) beside the job's own — a folder with a canary file, which a unit of THIS job must not see
+    /// (E3 s7 t5, K2; security verify pass 2, M5). When the holding folder cannot be covered the job folder is its own cover, and then another job's folder IS in the unit unless the folder is out of sight some other way: that layout is asked about too, never assumed. Empty when no stand-in could
+    /// be made (no holding folder, a name taken by something that is not a folder, a full disk): the row then says it observed nothing, and that is a refusal, never an "ok". A leftover FOLDER of that name (a killed runner's) is replaced; a file or a link is never touched.
+    /// </summary>
+    private static string PlantAnotherJob(BoundaryJob job)
+    {
+        try
+        {
+            var holding = Path.GetDirectoryName(job.JobRoot.TrimEnd(Path.DirectorySeparatorChar));
+            if (string.IsNullOrEmpty(holding))
+            {
+                return string.Empty;
+            }
+
+            var folder = Path.Combine(holding, StandInName(job.JobId));
+            switch (Files.RealPath.Lstat(folder).Kind)
+            {
+                case Files.EntryKind.Missing:
+                    break;
+                case Files.EntryKind.Directory:
+                    Files.GitScratch.DeleteEvenIfReadOnly(folder);
+                    break;
+                default:
+                    return string.Empty;
+            }
+
+            Directory.CreateDirectory(folder);
+            File.WriteAllText(Path.Combine(folder, "canary.txt"), "a stand-in for another job's coder home\n");
+
+            return folder;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return string.Empty;
+        }
+    }
+
+    private static void RemoveAnotherJob(string folder)
+    {
+        try
+        {
+            if (folder.Length > 0 && Directory.Exists(folder))
+            {
+                Files.GitScratch.DeleteEvenIfReadOnly(folder);
+            }
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // A stand-in the preflight could not remove (or a killed runner left) stays under its own name beside the job folder; the retention of the job's folders removes it (CoderJobFolders.RemoveOf), and a later preflight of the same job replaces it.
+        }
     }
 
     /// <summary>Runs one step inside its unit: the program with the argv, <c>env -i</c> and the allow-list set inside, the deadline and the cancel honoured, and the unit asked after and stopped if it is still there.</summary>

@@ -1,0 +1,33 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t7-agy-open-rows-measure
+title: "Measure what the judgement left open for agy before any code of this story: B13 on a resumed turn, the guard folder read-only, the stream beside the hook, the mode the init line names, a sign-in copy with no refresh token, the program from a read-only copy, agy behind a proxy; the owner accepted the risks A1 to A9 on 2026-11-26, so the verdict and the history record enter the table on the addendum; the measure runs on the version that is installed now"
+kind: measure
+complexity: 6
+dependsOn: []
+parallel: false
+security: true
+files:
+  - v2/spikes/RESULTS_agy_coder.md
+  - v2/spikes/RESULTS_codex_agy_write_boundary_judgement.md
+  - shared/coder-boundary-releases.json
+  - src_mcp/tests/fixtures/role-stops/agy-mode-fallback.json
+  - src_mcp/tests/fixtures/role-stops/agy-copy-expired.json
+dod:
+  - id: d1
+    item: "before anything else the installed release is read with a scratch home and written down beside the release of RESULTS_agy_coder.md (1.5.17; agy updated itself to 1.5.18 on 2026-11-26); the task runs on the version that is installed NOW, whatever it is (the owner's decision of 2026-11-26: a new version stops nothing); the rows of s4 t5 are NOT measured again on it; the sha256 of the program file that ran is recorded, as history"
+  - id: d2
+    item: "judgement G1, row B13, with the smallest model, the coder agent, the guard and the unit of RESULTS_agy_coder.md sections 2 and 3, cwd = the guard folder, the worktree an --add-dir root: a RESUMED turn with canary PreToolUse and SessionStart hooks, an agent and a rule committed in .agents of the worktree; and a resumed turn after a hooks file and an agent file were written into the worktree between the turns (as a check can write them); recorded for each: no canary hook ran, and the guard still saw and decided every tool call"
+  - id: d3
+    item: "the guard folder bound read-only in the unit: does a turn work, and what agy writes into its cwd at all (the tree diff of the guard folder); the tool events of the stream beside the hook payloads: is the id of a tool event the toolCall.id the hook saw, which name the stream uses, how a denied tool looks; where the stream names the mode; the stderr line of a mode fall-back saved as the fixture; the hook name of the multi-edit tool when the model can be made to use it"
+  - id: d4
+    item: "judgement G10, the sign-in: a copy with a valid access token and NO refresh token: agy models and one turn; the text and exit code of such a copy whose expiry is in the past, saved as the fixture; agy models in a unit with no repository refreshes an expired full copy, and a full copy whose expiry was set to the past is refreshed at the start; the 8-hex fingerprint of the refresh token (never the value) is the same after each"
+  - id: d5
+    item: "judgement G9, the program from a read-only copy: NOT measured and not built (the owner's decision of 2026-11-26: no pin and no program store); no turn of the cap is spent on it"
+  - id: d6
+    item: "judgement G11, the network: a unit with PrivateNetwork=yes and the proxy variables at a relay inside the unit that passes each connection through a unix socket to a forwarder outside (harness scripts; they log host and port only): do agy models and one turn work; the list of hosts; which connection, if any, does not use the proxy"
+  - id: d7
+    item: "30 paid agy turns at most (the owner's cap of 2026-11-26; it replaces 12), every call and its tokens written down; a row of d2 to d4, d6 or d9 that does not fit in the cap is recorded as not measured, and the addendum of d8 names it and says what the verdict rests on without it; the real sign-in file and the manifest of the real ~/.gemini are the same before and after; no agy command runs in the real home; every copy is deleted; nothing in the results is a token or a part of one"
+  - id: d8
+    item: "the results are a new section of RESULTS_agy_coder.md under a heading with the release, with one line holds, does not hold or not measured for each of d2 to d4, d6 and d9; the important model writes an addendum of the judgement (ship or refuse; which of the ids AG-G5, AG-B2, AG-B3 and AG-R2 enter the table — AG-P2, the store, does not; and which of AG-M3 and AG-M4; the accepted risks of its section 7 as they then stand); the owner accepted the risks A1 to A9 on 2026-11-26 (SPEC section H, risk 9), so with the verdict ship ONE commit writes the verdict and the history record (measured on the installed release, the date, its two headings, the sha256) into shared/coder-boundary-releases.json (SPEC section C2) and no further word of the owner is needed; the record is history, and no later version of agy needs a commit of this kind to run; only a risk the addendum ADDS, or one it makes wider than the text of section 7, is put to the owner first, and the commit waits for that risk alone; when B13 does not hold on a resumed turn the addendum says refuse and the row of SPEC section C5 applies"
+  - id: d9
+    item: "addendum 1 of the judgement (2026-11-26), G14 (the coder comparison of E2 saw permission_mode request-review in the init line while --mode accept-edits was on the argv): the permission_mode of the init line is recorded for EVERY turn of this task, fresh and resumed, and for a start with no --mode, with --mode plan and with --mode auto (the fall-back), each with no model turn (standard input closed before a message) when agy prints the line so — a start that needs a model turn counts in the cap of d7 and comes last; recorded: the value for each, and whether the value for accept-edits differs from the value of the default mode and of the fall-back on every start; when it differs the value goes into the table with the release (id AG-M3, class turn), when it does not, one resumed turn of a scratch agent that has a command tool shows whether a command is still denied under accept-edits, and the addendum names AG-M4 (class release) and the accepted risk A9, which the owner accepted on 2026-11-26"

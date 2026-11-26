@@ -1,5 +1,6 @@
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: s5-codex-coder
-title: "The codex coder: the write launch inside the OS layer, each fix turn in the same thread with exec resume"
+title: "The codex coder: the write launch inside the OS layer on whatever version of codex is installed (the measured release is history), each fix turn in the same thread with exec resume"
 dependsOn:
   - s4-codex-agy-measure
+  - s7-vendor-seam-rows

@@ -1,4 +1,5 @@
 using CoaiMcp.Core.Coder;
+using CoaiMcp.Core.Roles;
 using CoaiMcp.Roles;
 using CoaiMcp.Runners.Collecting;
 using CoaiMcp.Runners.Consultation;
@@ -44,6 +45,9 @@ internal sealed class CoderWork : IRoleWork
     /// </summary>
     public Action<string>? Boundary { get; init; }
 
+    /// <summary>The vendors a coder of this job may be launched on (epoch 3 E3 s7 t2): the product's set, or one a test injects with its own table and its own test vendor.</summary>
+    internal CoderVendorSet Vendors { get; init; } = CoderVendors.Shipped;
+
     /// <summary>
     /// For a test only: makes the <see cref="CoderTurns"/> of the job from the job's one launcher — over a stand-in for the person's home (never the real one), a machine with no user manager, or units with a property taken away so the preflight
     /// refuses. Null in the product (<see cref="CoderOsLayer.ShippedTurns"/>): the boundary of this machine.
@@ -78,25 +82,54 @@ internal sealed class CoderWork : IRoleWork
         }
 
         // ONE loop for the whole job: the fix turns used and the rounds run are the job's, whichever models take part.
-        var loop = new CoderFixLoop(run, git, layer, prepared.Tree, prepared.BaseSha, site, started) { Cap = cap, AttemptTimeout = AttemptTimeout, Boundary = Boundary };
+        var loop = new CoderFixLoop(run, git, layer, prepared.Tree, prepared.BaseSha, site, started) { Cap = cap, AttemptTimeout = AttemptTimeout, Boundary = Boundary, Vendors = Vendors };
+        // The instruction step (epoch 3 E3 s7 t3; SPEC C9): a command the base commit declares, run ONCE here, before any model is launched. A declared step that cannot run ends the job: no half instruction, no launch.
+        var instructed = await new CoderInstructions(run, git, layer, prepared.Tree, prepared.BaseSha, site).RunAsync(ct);
+        if (instructed is CoderInstructionsOutcome.Cancelled)
+        {
+            return new RoleWorkOutcome.Stopped();
+        }
+
+        if (instructed is CoderInstructionsOutcome.Failed unrun)
+        {
+            return new RoleWorkOutcome.Failed(unrun.Stop, unrun.Reason, new CoderEnvelope(run.Request.JobId, prepared.BaseSha, prepared.BaseSha, prepared.Branch, false, 0, [], null) { Instructions = unrun.Record }.ToJson());
+        }
+
+        var instructions = instructed is CoderInstructionsOutcome.Ran ran ? ran.Record : CoderInstructionsRecord.NotDeclared;
+
+        // The turn-0 prompt of EACH model is its vendor's own (SPEC C7) with the one block coai writes after it (C9): a failover to another vendor, or a new session of the same one, is sent it whole again. The envelope keeps its id and hash, never its text.
+        var prompts = new RolePrompts(run.DataDir);
+        var sent = new Dictionary<string, CoderPromptRecord>(StringComparer.Ordinal);
+        string PromptFor(ModelRef model)
+        {
+            var vendor = Vendors.Resolve(model.Vendor) is CoderVendorResolution.Launchable found ? found.Vendor : CoderVendors.Claude;
+            var text = CoderPrompt.Build(site.PromptInputs, prompts, vendor) + CoderPrompt.InstructionsBlock(instructed, vendor);
+            sent[RoleRoute.Format(model)] = new CoderPromptRecord(vendor.PromptId, Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(text))));
+
+            return text;
+        }
+
         var answers = 0;
         RoleFailover? failover = null;
         var judge = new CoderJudge(site.DodIds, () => failover!.RepairTurnsUsed);
         var confinement = new LaunchConfinement.Coder(run.Request.JobId, prepared.Tree.Root);
         failover = new RoleFailover(run, judge.Judge)
         {
+            Vendors = Vendors,
             MaxRepairTurns = RepairTurns,
             AttemptTimeout = AttemptTimeout,
             Ladder = Ladder,
             Coder = confinement,
             OsLayer = layer,
-            Follow = (answered, token) => FollowAsync(run, git, prepared, site, loop, judge.Accepted, new CoderFixSession(answered.Model, answered.Handle, confinement, answered.KeyId, answered.Secret), ++answers, layer, cap, note, token),
+            Follow = (answered, token) => FollowAsync(run, git, prepared, site, loop, judge.Accepted, new CoderFixSession(answered.Model, answered.Handle, confinement, answered.KeyId, answered.Secret), ++answers, layer, cap, note, instructions, sent.GetValueOrDefault(RoleRoute.Format(answered.Model)) ?? CoderPromptRecord.None, new CoderCliRecord(answered.Model.Vendor, answered.CliVersion, Vendors.LastMeasured(answered.Model.Vendor)), token),
             Restore = token => CoderRestore.RestoreAsync(git, prepared.Tree, loop.LastCommit, token),
+            // A job that leaves a vendor for another deletes what that vendor kept in the job's home before the next unit starts (epoch 3 E3 s8 t1).
+            VendorLeft = left => Vendors.Resolve(left) is CoderVendorResolution.Launchable found ? layer.LeaveVendor(found.Vendor) : string.Empty,
         };
 
         try
         {
-            return await failover.RunAsync(CoderPrompt.Build(site.PromptInputs, new RolePrompts(run.DataDir)), ct);
+            return await failover.RunAsync(PromptFor, ct);
         }
         finally
         {
@@ -169,21 +202,21 @@ internal sealed class CoderWork : IRoleWork
     /// crash is the attempt's stop: the job goes on with the next model (<see cref="RoleFollowed.FailsOver"/>), after the worktree is put back to the last coai commit.
     /// </summary>
     /// <param name="answers">How many models have answered turn 0 so far, this one included: the second and later turn 0 commits say which attempt made them.</param>
-    private async Task<RoleFollowed> FollowAsync(IRoleRun run, GitHistory git, Prepared prepared, CoderTaskSite site, CoderFixLoop loop, CoderReport? report, CoderFixSession session, int answers, CoderOsLayer layer, int cap, string note, CancellationToken ct)
+    private async Task<RoleFollowed> FollowAsync(IRoleRun run, GitHistory git, Prepared prepared, CoderTaskSite site, CoderFixLoop loop, CoderReport? report, CoderFixSession session, int answers, CoderOsLayer layer, int cap, string note, CoderInstructionsRecord instructions, CoderPromptRecord prompt, CoderCliRecord cli, CancellationToken ct)
     {
         var message = answers == 1 ? CoderCommits.Message(run.Request.JobId, site.Id) : CoderCommits.AttemptMessage(run.Request.JobId, site.Id, answers);
         var ended = await loop.RunAsync(report, message, session, ct);
 
         return ended switch
         {
-            CoderLoopEnd.Done done => new RoleFollowed.Ended(await EnvelopeAsync(run, git, prepared, layer, done, new CoderChecksReport(done.Rounds, cap, note), ct)),
+            CoderLoopEnd.Done done => new RoleFollowed.Ended(await EnvelopeAsync(run, git, prepared, layer, done, new CoderChecksReport(done.Rounds, cap, note), instructions, prompt, cli, ct)),
             CoderLoopEnd.FailOver failOver => new RoleFollowed.FailsOver(failOver.Why),
             _ => new RoleFollowed.Ended(((CoderLoopEnd.Halted)ended).Outcome),
         };
     }
 
     /// <summary>The loop ended with something to show: list the files from git, compare the generation again, and make the envelope — a success when it is green, a failure carrying the same envelope when it is not.</summary>
-    private async Task<RoleWorkOutcome> EnvelopeAsync(IRoleRun run, GitHistory git, Prepared prepared, CoderOsLayer layer, CoderLoopEnd.Done end, CoderChecksReport checks, CancellationToken ct)
+    private async Task<RoleWorkOutcome> EnvelopeAsync(IRoleRun run, GitHistory git, Prepared prepared, CoderOsLayer layer, CoderLoopEnd.Done end, CoderChecksReport checks, CoderInstructionsRecord instructions, CoderPromptRecord prompt, CoderCliRecord cli, CancellationToken ct)
     {
         var changes = end.Head == prepared.BaseSha ? [] : await CoderCommits.ChangesAsync(git, prepared.Tree, prepared.BaseSha, end.Head, ct);
         if (changes is null)
@@ -197,7 +230,7 @@ internal sealed class CoderWork : IRoleWork
             return new RoleWorkOutcome.Stopped();
         }
 
-        var json = new CoderEnvelope(run.Request.JobId, prepared.BaseSha, end.Head, prepared.Branch, end.Report is not null, end.FixTurns, changes, end.Report, layer.Evidence, checks).ToJson();
+        var json = new CoderEnvelope(run.Request.JobId, prepared.BaseSha, end.Head, prepared.Branch, end.Report is not null, end.FixTurns, changes, end.Report, layer.Evidence, checks) { Instructions = instructions, Prompt = prompt, Cli = cli }.ToJson();
 
         return end.Stop.Length == 0 ? new RoleWorkOutcome.Succeeded(json) : new RoleWorkOutcome.Failed(end.Stop, end.Reason, json);
     }

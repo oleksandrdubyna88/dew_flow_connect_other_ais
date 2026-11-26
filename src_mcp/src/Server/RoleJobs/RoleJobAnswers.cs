@@ -53,6 +53,12 @@ internal static class RoleJobAnswers
             json.WriteString("reason", attempt.Reason);
             json.WriteString("evidenceRef", attempt.EvidenceRef);
             json.WriteString("keyId", attempt.KeyId);
+            if (attempt.CliVersion.Length > 0 || attempt.LastMeasuredVersion.Length > 0)
+            {
+                json.WriteString("cliVersion", attempt.CliVersion);
+                json.WriteString("lastMeasuredVersion", attempt.LastMeasuredVersion);
+            }
+
             json.WriteEndObject();
         }
 

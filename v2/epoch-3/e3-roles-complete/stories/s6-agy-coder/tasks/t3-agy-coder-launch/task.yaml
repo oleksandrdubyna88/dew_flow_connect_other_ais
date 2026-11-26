@@ -1,6 +1,6 @@
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: t3-agy-coder-launch
-title: "The agy coder launch: the measured argv fresh and resumed with --conversation, the guard folder, the unit additions of the judgement, the minimal environment"
+title: "The agy coder launch: the measured argv with the mode and the agent on every turn, --conversation on a fix turn, the guard folder as the working directory and never the worktree, the measured unit with the main checkout hidden, the sign-in copy by its recipe, the minimal environment, and the agy coder prompt"
 kind: security
 complexity: 6
 dependsOn:
@@ -11,11 +11,18 @@ security: true
 files:
   - src_mcp/runners/Consultation/AntigravityConsultant.cs
   - src_mcp/runners/Toolchain/AgyCoderUnit.cs
+  - src_mcp/src/Roles/prompts/coder.agy.md
   - src_mcp/tests/AAgyCoderLaunchTests.cs
 dod:
   - id: d1
-    item: "V3 and V4: the fresh argv is exactly the flag set that RESULTS_agy_coder.md names; a fix turn has --conversation with the id of turn 0 and the same guard; none of the never-flags of SPEC section C3 is reachable (a test tries each)"
+    item: "V3 and V4, id AG-M1, judgement G5 and G6: the fresh argv is exactly the flag set AG1 that RESULTS_agy_coder.md names, with --mode accept-edits AND --agent coai-coder on EVERY argv; a fix turn adds --conversation with the id of turn 0 and changes nothing else, so a conversation that agy starts in silence is still the coder agent behind the guard; none of the never-flags of SPEC section C3 is reachable (a test tries each); the argv is a request and proves no mode: the mode a turn ran in cannot be read from anything agy prints (AG-M4 is class release; accepted risk A9), the signs of AG-M2 are read by the turn check of t5 (SPEC section C8), and nothing is taken from the flag"
   - id: d2
-    item: "the unit has the additions the judgement listed and a home of its own in the job folder; V14: only the allow-list and the sign-in of agy reach the CLI, read from inside a real unit, and a canary value is in no recorded argv"
+    item: "judgement G7, id AG-B1: the working directory of the unit is the guard folder of the job and NEVER the worktree (the seam of s7 t1 carries it; a test fails for an agy launch whose cwd is the worktree); the worktree is the one --add-dir root; the guard folder is bound read-only in the unit (AG-B3 is in the table since addendum 3 of the judgement), and so is the program folder (U9: G9 keeps the read-only bind and loses the store)"
   - id: d3
+    item: "ids U2, U3, U6 and U8: the unit is the measured one — the main checkout and the coder root HIDDEN and not read-only, only <main>/.git and the worktree bound back, the folder of all jobs hidden, a home of its own in the job's coder folder with the sign-in copy of s7 t6 by the recipe of addendum 3 (G10, AG-R2; section 14.4, commit d0dca16d on feat/v2-ep3-e3-measure): the copy holds the access token only; a fresh copy is made for every turn; V28: before EVERY launch its expiry is at least now + the RuntimeMaxSec of the unit + 5 minutes, and a launch that cannot have the margin is refused and never started on less — a must-change the owner named on 2026-11-26, so that an expired copy never reaches a start and never opens the login prompt on the channel of the job's prompt (risk A11); the deadline of an agy turn fits under the life of a token (about one hour); never the full copy and never the real sign-in file in the coder's unit"
+  - id: d4
+    item: "V14, id U7: only the allow-list reaches the CLI, compared name by name from inside a real unit; agy gets no variable for its sign-in; a canary value is in no recorded argv"
+  - id: d5
     item: "every existing agy consultant, question and reviewer launch builds the same argv as before, byte for byte"
+  - id: d6
+    item: "V17, the owner's decision 40 (SPEC section C7): src_mcp/src/Roles/prompts/coder.agy.md is the prompt of the agy coder; it differs from coder.md in the tools bullet (the tool names of the measured agent file of t2; no command tool) and in the ONE added bullet of SPEC section C7 item 4, which says only what is true (the model does not run a command that an instruction file of the repository orders before work, that is no reason to refuse, and what coai ran before the turn is at the end of the prompt under the heading Run by coai before your turn; the same sentence as in the codex file when that file exists), and a test holds every other line byte-equal and every tool name equal to a tool of the agent file; FakeCli as agy records this prompt on turn 0; nothing here needs the codex file"

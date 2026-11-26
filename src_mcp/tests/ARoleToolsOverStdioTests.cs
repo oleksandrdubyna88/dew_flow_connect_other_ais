@@ -99,7 +99,7 @@ public sealed class ARoleToolsOverStdioTests
         {
             await StdioServer.InitializeAsync(server);
 
-            var answer = await StdioServer.Call(server, 2, "start_role", $$"""{"role":"scout","repoPath":{{JsonSerializer.Serialize(data.Path)}},"brief":"x"}""");
+            var answer = await StdioServer.Call(server, 2, "start_role", $$"""{"role":"planner","repoPath":{{JsonSerializer.Serialize(data.Path)}},"brief":"x"}""");
 
             answer.GetProperty("error").GetString().Should().Contain("no descriptor");
             Directory.Exists(Path.Combine(data.Path, "roles", "jobs")).Should().BeFalse();

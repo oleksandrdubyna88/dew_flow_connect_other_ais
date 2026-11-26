@@ -6,6 +6,9 @@ using CoaiMcp.Work;
 
 namespace CoaiMcp.Server.RoleJobs;
 
+/// <summary>The worktree as git sees it: HEAD and the porcelain status (tracked changes and untracked files that are not ignored), or the sentence that says git could not answer (<see cref="CoderChecks.StateAsync"/>).</summary>
+internal sealed record CoderTreeState(string Head, string Status, string Sentence);
+
 /// <summary>One step of one round of checks as the envelope's <c>checks</c> lists it (<c>server.md</c> § 10): what ran, how it ended, how long it took and where its log is.</summary>
 /// <param name="Project">The project of the toolchain file the step belongs to (<c>app</c>, <c>src_mcp</c>); there can be several projects, each with a build and a test.</param>
 /// <param name="Step">"restore", "build", "typecheck" or "test".</param>
@@ -111,7 +114,7 @@ internal sealed class CoderChecks(IRoleRun run, GitHistory git, CoderOsLayer lay
             return Unverified(turn, head, clean) with { Format = format ?? FormatResult.NotConfigured };
         }
 
-        var before = await StateAsync(ct);
+        var before = await StateAsync(git, tree, ct);
         if (before.Sentence.Length > 0 || before.Head != head)
         {
             return Unverified(turn, head, before.Sentence.Length > 0 ? before.Sentence : $"the worktree is at {before.Head}, not at the commit {head} the checks were to run on; nothing was run");
@@ -124,7 +127,7 @@ internal sealed class CoderChecks(IRoleRun run, GitHistory git, CoderOsLayer lay
         RecordRefusal(result, logs);
         RecordDefinitions(result, logs);
         ct.ThrowIfCancellationRequested();
-        var after = await StateAsync(ct);
+        var after = await StateAsync(git, tree, ct);
         if (Moved(before, after) is { Length: > 0 } moved)
         {
             return Unverified(turn, head, moved, Steps(result));
@@ -326,26 +329,24 @@ internal sealed class CoderChecks(IRoleRun run, GitHistory git, CoderOsLayer lay
         return Directory.EnumerateFileSystemEntries(root, ".git", options).Any(entry => !string.Equals(entry, own, StringComparison.Ordinal));
     }
 
-    /// <summary>The worktree as git sees it: HEAD and the porcelain status (tracked changes and untracked files that are not ignored), or the sentence that says git could not answer.</summary>
-    private sealed record TreeState(string Head, string Status, string Sentence);
-
-    private async Task<TreeState> StateAsync(CancellationToken ct)
+    /// <summary>The worktree as git sees it — HEAD and the porcelain status — or the sentence that says git could not answer; the same reading before and after anything that must leave the tree as it found it.</summary>
+    internal static async Task<CoderTreeState> StateAsync(GitHistory git, CoderTree tree, CancellationToken ct)
     {
         var head = await CoderCommits.HeadAsync(git, tree, ct);
         if (head.Failure is { } failure)
         {
-            return new TreeState(string.Empty, string.Empty, $"coai could not read the worktree's HEAD, so the checks are not trusted: {failure.Reason}");
+            return new CoderTreeState(string.Empty, string.Empty, $"coai could not read the worktree's HEAD, so the checks are not trusted: {failure.Reason}");
         }
 
         var status = await git.InCoderTreeAsync(tree, ["--no-optional-locks", "status", "--porcelain=v1", "-z", "--untracked-files=all"], ct);
 
         return status.Ran && status.Ok
-            ? new TreeState(head.Head, status.Out, string.Empty)
-            : new TreeState(head.Head, string.Empty, status.Refusal.Length > 0 ? status.Refusal : "git could not read the worktree's status, so the checks are not trusted");
+            ? new CoderTreeState(head.Head, status.Out, string.Empty)
+            : new CoderTreeState(head.Head, string.Empty, status.Refusal.Length > 0 ? status.Refusal : "git could not read the worktree's status, so the checks are not trusted");
     }
 
     /// <summary>The sentence for a worktree or HEAD that moved through the run, or empty. Names the paths.</summary>
-    private static string Moved(TreeState before, TreeState after)
+    internal static string Moved(CoderTreeState before, CoderTreeState after)
     {
         if (after.Sentence.Length > 0)
         {

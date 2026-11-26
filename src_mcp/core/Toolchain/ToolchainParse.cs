@@ -12,13 +12,14 @@ namespace CoaiMcp.Core.Toolchain;
 internal sealed partial class ToolchainParse
 {
     private readonly List<string> _faults = [];
+    private readonly List<string> _instructionFaults = [];
 
     internal static ToolchainRead Run(YamlNode root)
     {
         var parse = new ToolchainParse();
         var toolchain = root is YamlMap map ? parse.Whole(map) : parse.NotAMap(root);
 
-        return parse._faults.Count == 0 ? new ToolchainRead.Configured(toolchain) : new ToolchainRead.Refused([.. parse._faults]);
+        return parse._faults.Count == 0 ? new ToolchainRead.Configured(toolchain) : new ToolchainRead.Refused([.. parse._faults]) { InstructionFaults = [.. parse._instructionFaults] };
     }
 
     private void Fault(string sentence) => _faults.Add(sentence);
@@ -35,7 +36,7 @@ internal sealed partial class ToolchainParse
         Keys(map, ToolchainTables.Root, ToolchainTables.Root.Name);
         Version(map);
 
-        return new RepoToolchain(Projects(map), Skip(map), Timeouts(map));
+        return new RepoToolchain(Projects(map), Skip(map), Timeouts(map)) { Instructions = Instructions(map) };
     }
 
     /// <summary>The keys of a map: one fault for each that is not in the table and one for each required key that is not there.</summary>
@@ -298,6 +299,76 @@ internal sealed partial class ToolchainParse
         {
             Fault($"line {entry.Line}: '{key}' of {where} holds text that looks like a credential ({kind}); a secret never goes in argv");
         }
+    }
+
+    // ---------- the instruction step ----------
+
+    /// <summary>
+    /// The optional <c>instructions</c> key (epoch 3 E3 s7 t3; SPEC C9 item 1): an <c>argv</c>, an optional <c>perFile</c> and an optional <c>timeoutSeconds</c>. Every fault is also remembered as a fault of THIS key, so a job can tell "the step cannot be read" from "the file is wrong elsewhere".
+    /// </summary>
+    private ToolchainInstructions Instructions(YamlMap map)
+    {
+        if (map.Find("instructions") is not { } entry)
+        {
+            return ToolchainInstructions.None;
+        }
+
+        var before = _faults.Count;
+        var read = InstructionsOf(entry);
+
+        // Every fault of this key says where the key is when it has no line of its own (a missing member has none).
+        for (var at = before; at < _faults.Count; at++)
+        {
+            _faults[at] = _faults[at].StartsWith("line ", StringComparison.Ordinal) ? _faults[at] : $"line {entry.Line}: {_faults[at]}";
+        }
+
+        _instructionFaults.AddRange(_faults.Skip(before));
+
+        return read;
+    }
+
+    private ToolchainInstructions InstructionsOf(YamlEntry entry)
+    {
+        if (entry.Value is not YamlMap inner)
+        {
+            Fault($"line {entry.Line}: 'instructions' must be a map of keys ({string.Join(", ", ToolchainTables.Instructions.Fields.Keys)}), not {Shown(entry.Value)}");
+
+            return ToolchainInstructions.None;
+        }
+
+        Keys(inner, ToolchainTables.Instructions, "instructions");
+        var argv = Command(inner, "argv", "instructions");
+        if (argv.Stated && argv.Argv.Count == 0)
+        {
+            Fault($"line {inner.Find("argv")!.Line}: 'argv' of instructions is empty; the step needs a program to run");
+        }
+
+        if (argv.Argv.Select((item, at) => (item, at)).FirstOrDefault(pair => pair.item.Contains(ToolchainTables.FilePlaceholder, StringComparison.Ordinal)) is { item: not null } misplaced)
+        {
+            // The item is not repeated (security verify M3): it may be a typed credential with the placeholder in it. Its place says which.
+            Fault($"line {inner.Find("argv")!.Line}: 'argv' of instructions holds {ToolchainTables.FilePlaceholder} in its item {misplaced.at + 1} ({misplaced.item.Length} characters); the placeholder belongs only in 'perFile'");
+        }
+
+        var perFile = Command(inner, "perFile", "instructions");
+
+        return new ToolchainInstructions(true, argv.Argv, perFile.Argv, InstructionsTimeout(inner));
+    }
+
+    private int InstructionsTimeout(YamlMap inner)
+    {
+        if (inner.Find("timeoutSeconds") is not { } entry)
+        {
+            return ToolchainTables.InstructionsTimeoutDefault;
+        }
+
+        if (entry.Value is YamlScalar { Kind: YamlScalarKind.Integer } number && number.Integer is >= ToolchainTables.InstructionsTimeoutMin and <= ToolchainTables.InstructionsTimeoutMax)
+        {
+            return (int)number.Integer;
+        }
+
+        Fault($"line {entry.Line}: 'timeoutSeconds' of instructions must be a whole number from {ToolchainTables.InstructionsTimeoutMin} to {ToolchainTables.InstructionsTimeoutMax}, not {Shown(entry.Value)}");
+
+        return ToolchainTables.InstructionsTimeoutDefault;
     }
 
     // ---------- skip and timeouts ----------

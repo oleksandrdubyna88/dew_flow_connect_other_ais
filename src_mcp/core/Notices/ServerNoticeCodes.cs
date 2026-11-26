@@ -106,6 +106,12 @@ public static class ServerNoticeCodes
     /// </summary>
     public const string ClaudePersonSignInUsed = "claude-person-sign-in-used";
 
+    /// <summary>
+    /// The instruction step of a coder job printed text that looks like a credential (epoch 3 E3, owner decision of 2026-11-26): the job went on and the output reached the prompt as it was, and this records the finding. Subject is the job id; the title and detail
+    /// name the class of the secret and the line, NEVER the value. Read by the extension's notifications like every notice; a later screen may show the findings in a tab of their own.
+    /// </summary>
+    public const string InstructionsSecret = "instructions-secret";
+
     /// <summary>Every code, for the test that asserts the redactor rewrites none of them.</summary>
     public static IReadOnlyList<string> All =>
     [
@@ -135,5 +141,6 @@ public static class ServerNoticeCodes
         ClaudeKeysExhausted,
         ClaudeKeysEmpty,
         ClaudePersonSignInUsed,
+        InstructionsSecret,
     ];
 }

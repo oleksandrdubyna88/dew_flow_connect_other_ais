@@ -202,6 +202,12 @@ if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor" || minimal is
 
     var steering = Steering.For(prompt.Text, read, CoaiMcp.FakeCli.ModelMap.For(args, read));
 
+    // A coder that looks at what its unit shows it (model map `readFiles`): absolute paths, each tried for reading BEFORE this launch writes anything; the answer of each goes to a sidecar of the record folder, never to stdout.
+    if (steering.Get("READ_FILES") is { Length: > 0 } readFiles && read("FAKECLI_RECORD_DIR") is { Length: > 0 } readRecord)
+    {
+        CoaiMcp.FakeCli.CoderVerbs.TryRead(readFiles, readRecord);
+    }
+
     // A coder's edits (model map `writeFiles`): files below the working folder, written before the answer and before any wait.
     if (steering.Get("WRITE_FILES") is { Length: > 0 } writeFiles && CoaiMcp.FakeCli.CwdWrites.Apply(CoaiMcp.FakeCli.PoolKey.Fill(writeFiles), Directory.GetCurrentDirectory()) is { Length: > 0 } notWritten)
     {

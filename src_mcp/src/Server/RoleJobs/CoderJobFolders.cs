@@ -35,7 +35,7 @@ internal static class CoderJobFolders
         Named(job.JobRoot, jobId) && Remove(job.MountsFolder, failed) == Outcome.Removed;
 
     /// <summary>
-    /// Removes what the coder job <paramref name="jobId"/> left in the coder-jobs folder named by <paramref name="settings"/> (<see cref="CoderOsLayer.JobsVariable"/> or the machine-local folder): its job folder and its mounts folder. Never anything but those two names.
+    /// Removes what the coder job <paramref name="jobId"/> left in the coder-jobs folder named by <paramref name="settings"/> (<see cref="CoderOsLayer.JobsVariable"/> or the machine-local folder): its job folder, its mounts folder and the stand-in the check preflight may have left beside it. Never anything but those three names.
     /// True when none of them is left as a folder of coai's: the record of the job may go.
     /// </summary>
     public static bool RemoveOf(Func<string, string?> settings, string jobId, Action<Exception> failed)
@@ -48,8 +48,10 @@ internal static class CoderJobFolders
         var folder = CoderOsLayer.JobFolder(settings, _ => { }, jobId);
         var first = Remove(folder, failed);
         var second = Remove(folder + ".mounts", failed);
+        // The preflight's stand-in for another job's folder (K2) lies beside the job folder; a killed runner leaves it (security verify pass 2, S13).
+        var third = Remove(Path.Combine(Path.GetDirectoryName(folder) ?? string.Empty, CheckBoundary.StandInName(jobId)), failed);
 
-        return first != Outcome.Stays && second != Outcome.Stays;
+        return first != Outcome.Stays && second != Outcome.Stays && third != Outcome.Stays;
     }
 
     /// <summary>Whether the job folder is the one named for <paramref name="jobId"/>: its last segment is the id, which is of the strict shape.</summary>

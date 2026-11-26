@@ -168,7 +168,7 @@ public static class KimiLaunch
 
         return after.Length > 0
             ? Given(attempt, after, asked.CliMissing && asked.Refusal.Length > 0 ? RefusalCause.CliMissing : RefusalCause.LaunchControl)
-            : LaunchTurn.Holding(attempt, Joined(warning, WarningFor(asked.Version)), "kimi " + asked.Version);
+            : LaunchTurn.Holding(attempt, Joined(Joined(warning, WarningFor(asked.Version)), asked.Note), "kimi " + (asked.Version.Length > 0 ? asked.Version : "unknown"));
     }
 
     /// <summary>
@@ -309,9 +309,10 @@ public static class KimiLaunch
             var asked = await launcher.RunAsync(probe, ct);
             var version = VersionWarnings.VersionIn(asked.StdOut);
 
-            return asked.ExitCode == 0 && version.Length > 0
-                ? new VersionAnswer(version, string.Empty)
-                : new VersionAnswer(string.Empty, $"`{places.Executable} --version` answered no version (exit {asked.ExitCode}): {OneLine(asked.StdOut + " " + asked.StdErr)}");
+            // A release is a RECORD, never a condition (owner decision of 2026-11-26): an answer that exits 0 and prints no release coai can read goes on, recorded as unknown, with a warning. A `--version` that FAILS is a CLI that does not run, and says so.
+            return asked.ExitCode != 0
+                ? new VersionAnswer(string.Empty, $"`{places.Executable} --version` answered no version (exit {asked.ExitCode}): {OneLine(asked.StdOut + " " + asked.StdErr)}")
+                : version.Length > 0 ? new VersionAnswer(version, string.Empty) : new VersionAnswer(string.Empty, string.Empty, Note: $"`{places.Executable} --version` printed no release coai can read, so the release is recorded as unknown and the launch goes on");
         }
         catch (Win32Exception e)
         {
@@ -320,7 +321,7 @@ public static class KimiLaunch
     }
 
     /// <summary>The asked version, or why there is none — and whether the reason is that the OS could not start the CLI at all (a missing CLI, not a refusal).</summary>
-    private sealed record VersionAnswer(string Version, string Refusal, bool CliMissing = false);
+    private sealed record VersionAnswer(string Version, string Refusal, bool CliMissing = false, string Note = "");
 
     /// <summary>Why the gate could not be taken: the key sentence when the folder cannot be named by its handle, else the lock's own.</summary>
     private static string LockRefusal(Hold.Unusable unusable, string target) =>

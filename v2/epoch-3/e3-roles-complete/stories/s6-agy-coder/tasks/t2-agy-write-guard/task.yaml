@@ -1,9 +1,10 @@
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: t2-agy-write-guard
-title: "The agy write guard: a coder agent with the readers and the measured write tools, and a hook that allows a write only inside the worktree of the job"
+title: "The agy write guard: the measured coder agent, and a hook handler of coai's own that is closed by construction — an explicit decision for every input, allow only for a measured file tool inside the worktree of the job, one record for each decision"
 kind: security
 complexity: 6
-dependsOn: []
+dependsOn:
+  - t7-agy-open-rows-measure
 parallel: false
 security: true
 files:
@@ -13,8 +14,12 @@ files:
   - src_mcp/tests/AAgyCoderGuardTests.cs
 dod:
   - id: d1
-    item: "V15: the handler allows a measured write tool only when the target, resolved through links, is inside the worktree of the job and is not .git; it denies a write outside, a command tool, a tool it does not know and a payload it cannot read; the agent file lists the readers and the measured write tools and nothing else"
+    item: "V15, judgement G3: the handler allows only read_file, write_file and edit_file (the names the hook sees) and only when Path, resolved through links, is inside the worktree that coai wrote into the guard's own file AND that the payload's workspacePaths hold, and is not under .git, .agents or .codex of it; it denies a write or a read outside, a file link and a folder link out, the guard folder, the home and the sign-in file, run_command, every network tool, manage_task, a tool it does not know and a payload it cannot read; the coder case is chosen by the guard's own file in the handler's folder, never by a field of the payload"
   - id: d2
-    item: "the folder of the guard is the own folder of the job (under the job folder), written and read back before every launch; the read-only agent, hook and folder are byte for byte what they were (their tests pass unchanged)"
+    item: "judgement G2, closed by construction: the handler is this binary (--agy-hook), started by the hook's command with exec and nothing else; it writes an explicit decision for EVERY input — an empty input, text that is not JSON and a payload with no Path are each deny; a deadline of its own (5 s, under the hook's 10 s) ends in deny; an exception ends in deny; a decision that cannot be written is a non-zero exit; tests give it each of these and a closed standard output, and NONE ends with exit 0 and no output (the one answer agy 1.5.17 takes as allow)"
   - id: d3
+    item: "judgement G4 as G15 amends it (addendum 3, section 14.4, commit d0dca16d on feat/v2-ep3-e3-measure; a must-change the owner named on 2026-11-26): the handler appends one record for each decision — the conversation id, the step index, the tool name and the decision; never the content of a write; the id the hook sees is in no stream, so it is not the tie — to a file of the job's coder folder that is outside the worktree and outside the guard folder; a record that cannot be written is a deny"
+  - id: d4
+    item: "judgement G5: the agent file is the measured bytes of RESULTS_agy_coder.md section 2 and nothing else; the folder of the guard is the own folder of the job (under the job's coder folder), written and read back before EVERY launch; the read-only agent, hook and folder are byte for byte what they were (their tests pass unchanged)"
+  - id: d5
     item: "no new one-shot mode is added (the handler stays --agy-hook); if one is needed it is listed in .agents/PROJECT.md and never exits 64"

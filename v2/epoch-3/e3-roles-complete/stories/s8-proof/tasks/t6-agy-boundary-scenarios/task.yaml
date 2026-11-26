@@ -1,0 +1,20 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t6-agy-boundary-scenarios
+title: "Boundary scenarios with FakeCli as the agy coder inside the real unit: writes outside, reads of what is hidden, a new unit, a Windows program (moved here from s6, which is at the limit of 6 tasks)"
+kind: test
+complexity: 5
+dependsOn: []
+parallel: false
+security: true
+files:
+  - src_mcp/tests/AAgyCoderBoundaryTests.cs
+  - shared/coder-boundary-releases.json
+dod:
+  - id: d1
+    item: "V7: the fake coder writes the main checkout, a folder beside the worktree, the .git pointer and the stand-in home: each is stopped by the OS, the job ends coder-boundary and is never green, and the main checkout is byte-equal"
+  - id: d2
+    item: "V8: a child command of the fake cannot read a file of the hidden main checkout, the worktree of another job, the folder of another job or the sign-in files of the stand-in REAL home, cannot start a unit and cannot run a Windows .exe; a control unit without the additions shows that the same reads then work"
+  - id: d3
+    item: "said by a test, so that nobody reads the unit as more than it is: a child command of the fake CAN read the job's own sign-in copy inside the unit (accepted risk A1 of the judgement) — for agy only the agent file, the guard and the mode keep a command from existing"
+  - id: d4
+    item: "V29, the owner's condition of 2026-11-26 (SPEC section C2 item 1 and section C6; ledger entry 1.16): the agy coder becomes launchable by ONE commit of this task, the last task of agy, which turns on the mark launchable of the agy row of shared/coder-boundary-releases.json — and only when the must-changes of the judgement's addendum 3 are built and green: the guard's record with the conversation id and the step index (s6 t2 d3), G15 and the signs of AG-M2 (s6 t5 d3), the read-only guard folder (s6 t3 d2), the copy with no refresh token, the margin before every launch and the refresh unit (s6 t3 d3, s7 t6), the preflight rows (s6 t4) and the failover texts (s6 t5 d2); the commit names the green run of the whole MCP suite it rests on; before it the product refuses an agy coder by data, and a test holds the mark off until then"

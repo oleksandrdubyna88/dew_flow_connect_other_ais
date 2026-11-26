@@ -1,0 +1,2 @@
+warning: Untrusted project-local configuration is disabled. Run `codex exec --trust` to allow project configuration and MCP servers for this and future chats in the project, including MCP commands outside the sandbox. Explicitly untrusted projects must have their trust setting updated first.
+2026-11-26T11:39:35.656687Z ERROR codex_core::tools::router: error=patch rejected: writing outside of the project; rejected by user approval settings

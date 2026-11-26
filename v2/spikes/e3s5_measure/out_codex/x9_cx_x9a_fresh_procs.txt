@@ -1,0 +1,3 @@
+538333 325 codex mnt:[4026532223] pid:[4026532217] user:[4026532219] :: codex exec --json -m gpt-6-luna -c model_reasoning_effort=lo
+538809 538333 codex-linux-san mnt:[4026532223]   :: 
+542135 538333 codex-code-mode mnt:[4026532223] pid:[4026532217] user:[4026532219] :: /home/<user>/.codex/packages/standalone/releases/0.171.0-x86_6

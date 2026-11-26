@@ -71,7 +71,7 @@ public sealed class AThisRepositoryToolchainFileTests
         // The strict reader refuses a flow list or map by name (a test of it is AToolchainFileTests); this holds the committed text to it where it can be seen without the reader.
         var flow = CommittedText().Split('\n').Where(line => !line.TrimStart().StartsWith('#')).Where(line => line.Contains('[') || line.Contains('{')).ToList();
 
-        flow.Should().OnlyContain(line => line.Contains("{jobs}", StringComparison.Ordinal) && line.TrimStart().StartsWith("- \"", StringComparison.Ordinal), "only the quoted {jobs} placeholder carries a brace");
+        flow.Should().OnlyContain(line => (line.Contains("{jobs}", StringComparison.Ordinal) || line.Contains("{file}", StringComparison.Ordinal)) && line.TrimStart().StartsWith("- \"", StringComparison.Ordinal), "only the quoted {jobs} and {file} placeholders carry a brace");
     }
 
     [Fact]

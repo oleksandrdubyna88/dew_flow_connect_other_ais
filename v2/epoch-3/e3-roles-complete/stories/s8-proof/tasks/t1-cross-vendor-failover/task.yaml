@@ -1,0 +1,19 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t1-cross-vendor-failover
+title: "Failover of a coder across vendors, for each combination of verdicts: from the last coai commit, in a new session of the new vendor, in a unit that holds only that vendor"
+kind: code
+complexity: 6
+dependsOn: []
+parallel: false
+files:
+  - src_mcp/src/Server/RoleJobs/RoleFailover.cs
+  - src_mcp/src/Server/RoleJobs/CoderWork.cs
+  - src_mcp/src/Server/RoleJobs/CoderOsLayer.cs
+  - src_mcp/tests/ACoderFailsOverAcrossVendorsTests.cs
+dod:
+  - id: d1
+    item: "V12 with FakeCli and an injected table, once for EACH of the four combinations of ship and refuse for codex and agy: the job fails over through exactly the shipped vendors in route order (both: claude, codex, agy; one: claude and that one; none: the claude models only), each switch from the last coai commit (git status clean) in a new session with a handle bound to the new vendor, one switch line and one notice that names the vendor"
+  - id: d2
+    item: "in every combination the fake records ZERO launches of a refused vendor, a model the caller named on a refused vendor is refused before any folder, and no test of a combination needs or waits for a launch of a refused vendor; a vendor with the verdict ship whose mark launchable is off (the must-changes of its judgement are not built and green yet) counts as refused; a vendor whose installed version is not the measured one is shipped like any other"
+  - id: d3
+    item: "the unit of each vendor holds only the sign-in copy or the variable name of that vendor (read from the properties of the unit and from inside it); the sign-in copy of the vendor that was left is deleted before the unit of the next vendor starts; the fix-turn count stays the count of the job; a spent quota skips only the other models of that vendor"

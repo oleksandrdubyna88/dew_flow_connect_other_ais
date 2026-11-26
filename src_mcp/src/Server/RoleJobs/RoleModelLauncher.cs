@@ -22,6 +22,9 @@ internal sealed record RoleLaunched(ReviewerLaunch? Launch, ConsultFailure? Refu
 {
     /// <summary>The ids of OTHER pool keys whose exact text was found in what the launch printed (the pattern of a setup-token, whoever's it is): each is exposed too, and the job ends <c>key-in-output</c>.</summary>
     public IReadOnlyList<string> ExposedIds { get; init; } = [];
+
+    /// <summary>The CLI release the preparation of the launch read (its own <c>--version</c>); empty when none was asked or none read. A RECORD of the attempt, never a condition.</summary>
+    public string CliVersion { get; init; } = string.Empty;
 }
 
 /// <summary>
@@ -48,6 +51,9 @@ internal sealed partial class RoleModelLauncher(Func<string, string?> settings, 
     /// </summary>
     public CoderOsLayer? Layer { get; init; }
 
+    /// <summary>The vendors a coder launch may go to (epoch 3 E3 s7 t2): the seam of each, and the table that says which ship. The product's own set unless a test injects one.</summary>
+    internal CoderVendorSet Vendors { get; init; } = CoderVendors.Shipped;
+
     /// <summary>The settings key naming the CLI of <paramref name="vendor"/>.</summary>
     public static string CliKey(string vendor) => $"COAI_ROLE_{vendor.ToUpperInvariant()}_CLI";
 
@@ -59,6 +65,17 @@ internal sealed partial class RoleModelLauncher(Func<string, string?> settings, 
     public async Task<RoleLaunched> LaunchAsync(ModelRef model, string prompt, string repoPath, string outputDir, TimeSpan timeout, CancellationToken ct, string handle = "", RoleKey? key = null)
     {
         var (runtime, name) = RuntimeOf(model.Vendor);
+        if (Coder is not null && Vendors.Resolve(model.Vendor) is CoderVendorResolution.Refused unshipped)
+        {
+            // A vendor the table does not ship is never launched as a coder: the refusal names the shipped ones, and the failover goes on to the next model.
+            return new RoleLaunched(null, new ConsultFailure.LaunchRefused(unshipped.Sentence), runtime, null, string.Empty);
+        }
+
+        if (Coder is not null && Vendors.Resolve(model.Vendor) is CoderVendorResolution.Launchable launchable)
+        {
+            runtime = launchable.Vendor.Runtime;
+        }
+
         if (key is RoleKey.Gone gone)
         {
             return new RoleLaunched(null, null, runtime, null, string.Empty, KeyStop: new RoleStop(RoleStopWords.Limit, Redaction.SafeText(gone.Sentence, Redaction.TitleLimit), "key-gone", SkipsVendor: false, Transient: false));
@@ -80,7 +97,7 @@ internal sealed partial class RoleModelLauncher(Func<string, string?> settings, 
             McpServersToSwitchOff = NoMcpServers.CodexConfigured(settings),
         })
         {
-            Confinement = Coder is null ? LaunchConfinement.AsShipped : Coder with { KeyId = keyId, Resume = handle.Length == 0 ? CoderHandle.None : CoderHandle.Bind(Coder with { KeyId = keyId }, handle) },
+            Confinement = Coder is null ? LaunchConfinement.AsShipped : Coder with { KeyId = keyId, Vendor = model.Vendor, Resume = handle.Length == 0 ? CoderHandle.None : CoderHandle.Bind(Coder with { KeyId = keyId, Vendor = model.Vendor }, handle) },
             // The ONE place the text of a pool key is taken: it goes into the credential, which puts it in the child's environment and nowhere else.
             Credential = pooled is null ? null : new LaunchCredential(pooled.Secret.Id, pooled.Secret.Reveal()),
             OwnHome = pooled is null || Coder is not null ? string.Empty : Path.Combine(outputDir, "claude-home"),
@@ -107,7 +124,7 @@ internal sealed partial class RoleModelLauncher(Func<string, string?> settings, 
             return new RoleLaunched(scrubbed.Launch, null, runtime, WithoutCredential(invocation), scrubbed.Launch.Process is { } process ? runtime.ReadHandle(process) : string.Empty, KeyId: keyId, KeyExposed: scrubbed.OwnFound || inHome) { ExposedIds = scrubbed.OtherIds };
         }
 
-        return await LaunchCoderAsync(runtime, invocation, pooled?.Secret, keyId, outputDir, ct);
+        return (await LaunchCoderAsync(runtime, invocation, pooled?.Secret, keyId, outputDir, (Vendors.Resolve(model.Vendor) as CoderVendorResolution.Launchable)?.Vendor ?? CoderVendors.Claude, ct)) with { CliVersion = ((ConsultantPreparation.Ready)prepared).CliVersion };
     }
 
     /// <summary>The folders a CLI with its own home expects to find (<c>HOME</c>, the four <c>XDG_*</c> folders, the CLI's own configuration folder), made before the launch so a CLI that does not create them still starts.</summary>
@@ -129,9 +146,9 @@ internal sealed partial class RoleModelLauncher(Func<string, string?> settings, 
     /// The coder's launch: the same executor and classification, with the process itself started by the layer. A write the layer stopped, or a launch it refused, is on the result as <see cref="RoleLaunched.OsStop"/>; a refused launch
     /// has no <see cref="RoleLaunched.Launch"/> — nothing ran, so nothing is read and no ledger line is made.
     /// </summary>
-    private async Task<RoleLaunched> LaunchCoderAsync(IConsultantRuntime runtime, ReviewerInvocation invocation, ClaudeKeySecret? secret, string keyId, string outputDir, CancellationToken ct)
+    private async Task<RoleLaunched> LaunchCoderAsync(IConsultantRuntime runtime, ReviewerInvocation invocation, ClaudeKeySecret? secret, string keyId, string outputDir, ICoderVendor vendor, CancellationToken ct)
     {
-        var turn = new CoderTurnLauncher(Layer!, outputDir);
+        var turn = new CoderTurnLauncher(Layer!, outputDir, vendor);
         var finished = await new ReviewerExecutor(turn).LaunchOnceAsync(invocation, ct);
         var stop = turn.Outcome is { } outcome ? CoderOsLayer.StopOf(outcome) : null;
         var scrubbed = secret is null ? new Scrubbed(finished, false, []) : Scrub(finished, secret);

@@ -39,7 +39,13 @@ internal sealed record RoleAttempt(int N, string Model, string Vendor, string St
     /// </summary>
     public string KeyId { get; init; } = string.Empty;
 
-    public RoleAttempt Normalised() => this with { Model = Model ?? string.Empty, Vendor = Vendor ?? string.Empty, Stop = Stop ?? string.Empty, Reason = Reason ?? string.Empty, EvidenceRef = EvidenceRef ?? string.Empty, KeyId = KeyId ?? string.Empty };
+    /// <summary>The CLI release the attempt's launch ran with, as its own <c>--version</c> named it; empty when none was asked. A RECORD (owner decision of 2026-11-26): no release ever stops a job.</summary>
+    public string CliVersion { get; init; } = string.Empty;
+
+    /// <summary>The release of that vendor's CLI measured last (<c>shared/coder-boundary-releases.json</c>, or claude's recorded measure), beside <see cref="CliVersion"/>: history, not a condition. Empty when nothing was measured.</summary>
+    public string LastMeasuredVersion { get; init; } = string.Empty;
+
+    public RoleAttempt Normalised() => this with { CliVersion = CliVersion ?? string.Empty, LastMeasuredVersion = LastMeasuredVersion ?? string.Empty, Model = Model ?? string.Empty, Vendor = Vendor ?? string.Empty, Stop = Stop ?? string.Empty, Reason = Reason ?? string.Empty, EvidenceRef = EvidenceRef ?? string.Empty, KeyId = KeyId ?? string.Empty };
 }
 
 /// <summary>

@@ -1,0 +1,211 @@
+=== JS CALL (2371 chars)
+=== OUTPUT
+Script running with cell ID 1
+Wall time 0.0 seconds
+Output:
+
+H content: typeof=function length=1 src=function content(value) { const iterate = typeof value === "string" ? undefined : value?.[
+H image: typeof=function length=0 src=function () { [native code] }
+H audio: typeof=function length=0 src=function () { [native code] }
+H generatedImage: typeof=function length=0 src=function () { [native code] }
+H store: typeof=function length=0 src=function () { [native code] }
+H load: typeof=function length=0 src=function () { [native code] }
+H notify: typeof=function length=0 src=function () { [native code] }
+H yield_control: typeof=function length=0 src=function () { [native code] }
+H exit: typeof=function length=0 src=function () { [native code] }
+H as_settled: typeof=function length=1 src=function as_settled(promises) { let ready = []; let pending = 0; let wake; let close
+H stream_settled: typeof=function length=2 src=async function stream_settled(promises, emit) { if (typeof emit !== "function") { throw ne
+image canary str: ERR Tool call failed: invalid image output. Pass a base64 data URI instead
+image canary url: ERR image expects a non-empty image URL string, an object with image_url and optional detail, or a raw MCP image block
+image canary path: ERR image expects a non-empty image URL string, an object with image_url and optional detail, or a raw MCP image block
+image canary image_url: ERR Tool call failed: invalid image output. Pass a base64 data URI instead
+image main_secret str: ERR Tool call failed: invalid image output. Pass a base64 data URI instead
+image main_secret url: ERR image expects a non-empty image URL string, an object with image_url and optional detail, or a raw MCP image block
+image main_secret path: ERR image expects a non-empty image URL string, an object with image_url and optional detail, or a raw MCP image block
+image main_secret image_url: ERR Tool call failed: invalid image output. Pass a base64 data URI instead
+image job_decoy str: ERR Tool call failed: invalid image output. Pass a base64 data URI instead
+image job_decoy url: ERR image expects a non-empty image URL string, an object with image_url and optional detail, or a raw MCP image block
+image job_decoy path: ERR image expects a non-empty image URL string, an object with image_url and optional detail, or a raw MCP image block
+image job_decoy image_url: ERR Tool call failed: invalid image output. Pass a base64 data URI instead
+image job_decoy_url str: ERR Tool call failed: invalid image output. Pass a base64 data URI instead
+image job_decoy_url url: ERR image expects a non-empty image URL string, an object with image_url and optional detail, or a raw MCP image block
+image job_decoy_url path: ERR image expects a non-empty image URL string, an object with image_url and optional detail, or a raw MCP image block
+image job_decoy_url image_url: ERR Tool call failed: invalid image output. Pass a base64 data URI instead
+image net str: ERR Tool call failed: remote image URLs are not supported in tool outputs. Pass a base64 data URI instead
+image net url: ERR image expects a non-empty image URL string, an object with image_url and optional detail, or a raw MCP image block
+image net path: ERR image expects a non-empty image URL string, an object with image_url and optional detail, or a raw MCP image block
+image net image_url: ERR Tool call failed: remote image URLs are not supported in tool outputs. Pass a base64 data URI instead
+audio canary str: ERR Tool call failed: invalid audio output. Pass a base64 data URI instead
+audio canary url: ERR audio expects a non-empty audio URL string, an object with audio_url, or a raw MCP audio block
+audio canary path: ERR audio expects a non-empty audio URL string, an object with audio_url, or a raw MCP audio block
+audio canary image_url: ERR audio expects a non-empty audio URL string, an object with audio_url, or a raw MCP audio block
+audio main_secret str: ERR Tool call failed: invalid audio output. Pass a base64 data URI instead
+audio main_secret url: ERR audio expects a non-empty audio URL string, an object with audio_url, or a raw MCP audio block
+audio main_secret path: ERR audio expects a non-empty audio URL string, an object with audio_url, or a raw MCP audio block
+audio main_secret image_url: ERR audio expects a non-empty audio URL string, an object with audio_url, or a raw MCP audio block
+audio job_decoy str: ERR Tool call failed: invalid audio output. Pass a base64 data URI instead
+audio job_decoy url: ERR audio expects a non-empty audio URL string, an object with audio_url, or a raw MCP audio block
+audio job_decoy path: ERR audio expects a non-empty audio URL string, an object with audio_url, or a raw MCP audio block
+audio job_decoy image_url: ERR audio expects a non-empty audio URL string, an object with audio_url, or a raw MCP audio block
+audio job_decoy_url str: ERR Tool call failed: invalid audio output. Pass a base64 data URI instead
+audio job_decoy_url url: ERR audio expects a non-empty audio URL string, an object with audio_url, or a raw MCP audio block
+audio job_decoy_url path: ERR audio expects a non-empty audio URL string, an object with audio_url, or a raw MCP audio block
+audio job_decoy_url image_url: ERR audio expects a non-empty audio URL string, an object with audio_url, or a raw MCP audio block
+audio net str: ERR Tool call failed: invalid audio output. Pass a base64 data URI instead
+audio net url: ERR audio expects a non-empty audio URL string, an object with audio_url, or a raw MCP audio block
+audio net path: ERR audio expects a non-empty audio URL string, an object with audio_url, or a raw MCP audio block
+audio net image_url: ERR audio expects a non-empty audio URL string, an object with audio_url, or a raw MCP audio block
+content canary str: ERR content expects one MCP ContentBlock
+content canary url: ERR content expects one MCP ContentBlock
+content canary path: ERR content expects one MCP ContentBlock
+content canary image_url: ERR content expects one MCP ContentBlock
+content main_secret str: ERR content expects one MCP ContentBlock
+content main_secret url: ERR content expects one MCP ContentBlock
+content main_secret path: ERR content expects one MCP ContentBlock
+content main_secret image_url: ERR content expects one MCP ContentBlock
+content job_decoy str: ERR content expects one MCP ContentBlock
+content job_decoy url: ERR content expects one MCP ContentBlock
+content job_decoy path: ERR content expects one MCP ContentBlock
+content job_decoy image_url: ERR content expects one MCP ContentBlock
+content job_decoy_url str: ERR content expects one MCP ContentBlock
+content job_decoy_url url: ERR content expects one MCP ContentBlock
+content job_decoy_url path: ERR content expects one MCP ContentBlock
+content job_decoy_url image_url: ERR content expects one MCP ContentBlock
+content net str: ERR content expects one MCP ContentBlock
+content net url: ERR content expects one MCP ContentBlock
+content net path: ERR content expects one MCP ContentBlock
+content net image_url: ERR content expects one MCP ContentBlock
+generatedImage canary str: ERR generatedImage expects an image generation result object
+generatedImage canary url: ERR image expects a non-empty image URL string, an object with image_url and optional detail, or a raw MCP image block
+generatedImage canary path: ERR image expects a non-empty image URL string, an object with image_url and optional detail, or a raw MCP image block
+generatedImage canary image_url: ERR Tool call failed: invalid image output. Pass a base64 data URI instead
+generatedImage main_secret str: ERR generatedImage expects an image generation result object
+generatedImage main_secret url: ERR image expects a non-empty image URL string, an object with image_url and optional detail, or a raw MCP image block
+generatedImage main_secret path: ERR image expects a non-empty image URL string, an object with image_url and optional detail, or a raw MCP image block
+generatedImage main_secret image_url: ERR Tool call failed: invalid image output. Pass a base64 data URI instead
+generatedImage job_decoy str: ERR generatedImage expects an image generation result object
+generatedImage job_decoy url: ERR image expects a non-empty image URL string, an object with image_url and optional detail, or a raw MCP image block
+generatedImage job_decoy path: ERR image expects a non-empty image URL string, an object with image_url and optional detail, or a raw MCP image block
+generatedImage job_decoy image_url: ERR Tool call failed: invalid image output. Pass a base64 data URI instead
+generatedImage job_decoy_url str: ERR generatedImage expects an image generation result object
+generatedImage job_decoy_url url: ERR image expects a non-empty image URL string, an object with image_url and optional detail, or a raw MCP image block
+generatedImage job_decoy_url path: ERR image expects a non-empty image URL string, an object with image_url and optional detail, or a raw MCP image block
+generatedImage job_decoy_url image_url: ERR Tool call failed: invalid image output. Pass a base64 data URI instead
+generatedImage net str: ERR generatedImage expects an image generation result object
+generatedImage net url: ERR image expects a non-empty image URL string, an object with image_url and optional detail, or a raw MCP image block
+generatedImage net path: ERR image expects a non-empty image URL string, an object with image_url and optional detail, or a raw MCP image block
+generatedImage net image_url: ERR Tool call failed: remote image URLs are not supported in tool outputs. Pass a base64 data URI instead
+store/load: load="v1"
+notify: undefined
+as_settled: ERR TypeError: promises is not iterable
+stream_settled: ERR TypeError: stream_settled requires a callback
+=== OUTPUT
+hello
+=== JS CALL (2407 chars)
+=== OUTPUT
+Script running with cell ID 1
+Wall time 0.2 seconds
+Output:
+
+H content: typeof=function length=1 src=function content(value) { const iterate = typeof value === "string" ? undefined : value?.[
+H image: typeof=function length=0 src=function () { [native code] }
+H audio: typeof=function length=0 src=function () { [native code] }
+H generatedImage: typeof=function length=0 src=function () { [native code] }
+H store: typeof=function length=0 src=function () { [native code] }
+H load: typeof=function length=0 src=function () { [native code] }
+H notify: typeof=function length=0 src=function () { [native code] }
+H yield_control: typeof=function length=0 src=function () { [native code] }
+H exit: typeof=function length=0 src=function () { [native code] }
+H as_settled: typeof=function length=1 src=function as_settled(promises) { let ready = []; let pending = 0; let wake; let close
+H stream_settled: typeof=function length=2 src=async function stream_settled(promises, emit) { if (typeof emit !== "function") { throw ne
+image canary str: ERR Tool call failed: invalid image output. Pass a base64 data URI instead
+image canary url: ERR image expects a non-empty image URL string, an object with image_url and optional detail, or a raw MCP image block
+image canary path: ERR image expects a non-empty image URL string, an object with image_url and optional detail, or a raw MCP image block
+image canary image_url: ERR Tool call failed: invalid image output. Pass a base64 data URI instead
+image main_secret str: ERR Tool call failed: invalid image output. Pass a base64 data URI instead
+image main_secret url: ERR image expects a non-empty image URL string, an object with image_url and optional detail, or a raw MCP image block
+image main_secret path: ERR image expects a non-empty image URL string, an object with image_url and optional detail, or a raw MCP image block
+image main_secret image_url: ERR Tool call failed: invalid image output. Pass a base64 data URI instead
+image job_decoy str: ERR Tool call failed: invalid image output. Pass a base64 data URI instead
+image job_decoy url: ERR image expects a non-empty image URL string, an object with image_url and optional detail, or a raw MCP image block
+image job_decoy path: ERR image expects a non-empty image URL string, an object with image_url and optional detail, or a raw MCP image block
+image job_decoy image_url: ERR Tool call failed: invalid image output. Pass a base64 data URI instead
+image job_decoy_url str: ERR Tool call failed: invalid image output. Pass a base64 data URI instead
+image job_decoy_url url: ERR image expects a non-empty image URL string, an object with image_url and optional detail, or a raw MCP image block
+image job_decoy_url path: ERR image expects a non-empty image URL string, an object with image_url and optional detail, or a raw MCP image block
+image job_decoy_url image_url: ERR Tool call failed: invalid image output. Pass a base64 data URI instead
+image net str: ERR Tool call failed: remote image URLs are not supported in tool outputs. Pass a base64 data URI instead
+image net url: ERR image expects a non-empty image URL string, an object with image_url and optional detail, or a raw MCP image block
+image net path: ERR image expects a non-empty image URL string, an object with image_url and optional detail, or a raw MCP image block
+image net image_url: ERR Tool call failed: remote image URLs are not supported in tool outputs. Pass a base64 data URI instead
+audio canary str: ERR Tool call failed: invalid audio output. Pass a base64 data URI instead
+audio canary url: ERR audio expects a non-empty audio URL string, an object with audio_url, or a raw MCP audio block
+audio canary path: ERR audio expects a non-empty audio URL string, an object with audio_url, or a raw MCP audio block
+audio canary image_url: ERR audio expects a non-empty audio URL string, an object with audio_url, or a raw MCP audio block
+audio main_secret str: ERR Tool call failed: invalid audio output. Pass a base64 data URI instead
+audio main_secret url: ERR audio expects a non-empty audio URL string, an object with audio_url, or a raw MCP audio block
+audio main_secret path: ERR audio expects a non-empty audio URL string, an object with audio_url, or a raw MCP audio block
+audio main_secret image_url: ERR audio expects a non-empty audio URL string, an object with audio_url, or a raw MCP audio block
+audio job_decoy str: ERR Tool call failed: invalid audio output. Pass a base64 data URI instead
+audio job_decoy url: ERR audio expects a non-empty audio URL string, an object with audio_url, or a raw MCP audio block
+audio job_decoy path: ERR audio expects a non-empty audio URL string, an object with audio_url, or a raw MCP audio block
+audio job_decoy image_url: ERR audio expects a non-empty audio URL string, an object with audio_url, or a raw MCP audio block
+audio job_decoy_url str: ERR Tool call failed: invalid audio output. Pass a base64 data URI instead
+audio job_decoy_url url: ERR audio expects a non-empty audio URL string, an object with audio_url, or a raw MCP audio block
+audio job_decoy_url path: ERR audio expects a non-empty audio URL string, an object with audio_url, or a raw MCP audio block
+audio job_decoy_url image_url: ERR audio expects a non-empty audio URL string, an object with audio_url, or a raw MCP audio block
+audio net str: ERR Tool call failed: invalid audio output. Pass a base64 data URI instead
+audio net url: ERR audio expects a non-empty audio URL string, an object with audio_url, or a raw MCP audio block
+audio net path: ERR audio expects a non-empty audio URL string, an object with audio_url, or a raw MCP audio block
+audio net image_url: ERR audio expects a non-empty audio URL string, an object with audio_url, or a raw MCP audio block
+content canary str: ERR content expects one MCP ContentBlock
+content canary url: ERR content expects one MCP ContentBlock
+content canary path: ERR content expects one MCP ContentBlock
+content canary image_url: ERR content expects one MCP ContentBlock
+content main_secret str: ERR content expects one MCP ContentBlock
+content main_secret url: ERR content expects one MCP ContentBlock
+content main_secret path: ERR content expects one MCP ContentBlock
+content main_secret image_url: ERR content expects one MCP ContentBlock
+content job_decoy str: ERR content expects one MCP ContentBlock
+content job_decoy url: ERR content expects one MCP ContentBlock
+content job_decoy path: ERR content expects one MCP ContentBlock
+content job_decoy image_url: ERR content expects one MCP ContentBlock
+content job_decoy_url str: ERR content expects one MCP ContentBlock
+content job_decoy_url url: ERR content expects one MCP ContentBlock
+content job_decoy_url path: ERR content expects one MCP ContentBlock
+content job_decoy_url image_url: ERR content expects one MCP ContentBlock
+content net str: ERR content expects one MCP ContentBlock
+content net url: ERR content expects one MCP ContentBlock
+content net path: ERR content expects one MCP ContentBlock
+content net image_url: ERR content expects one MCP ContentBlock
+generatedImage canary str: ERR generatedImage expects an image generation result object
+generatedImage canary url: ERR image expects a non-empty image URL string, an object with image_url and optional detail, or a raw MCP image block
+generatedImage canary path: ERR image expects a non-empty image URL string, an object with image_url and optional detail, or a raw MCP image block
+generatedImage canary image_url: ERR Tool call failed: invalid image output. Pass a base64 data URI instead
+generatedImage main_secret str: ERR generatedImage expects an image generation result object
+generatedImage main_secret url: ERR image expects a non-empty image URL string, an object with image_url and optional detail, or a raw MCP image block
+generatedImage main_secret path: ERR image expects a non-empty image URL string, an object with image_url and optional detail, or a raw MCP image block
+generatedImage main_secret image_url: ERR Tool call failed: invalid image output. Pass a base64 data URI instead
+generatedImage job_decoy str: ERR generatedImage expects an image generation result object
+generatedImage job_decoy url: ERR image expects a non-empty image URL string, an object with image_url and optional detail, or a raw MCP image block
+generatedImage job_decoy path: ERR image expects a non-empty image URL string, an object with image_url and optional detail, or a raw MCP image block
+generatedImage job_decoy image_url: ERR Tool call failed: invalid image output. Pass a base64 data URI instead
+generatedImage job_decoy_url str: ERR generatedImage expects an image generation result object
+generatedImage job_decoy_url url: ERR image expects a non-empty image URL string, an object with image_url and optional detail, or a raw MCP image block
+generatedImage job_decoy_url path: ERR image expects a non-empty image URL string, an object with image_url and optional detail, or a raw MCP image block
+generatedImage job_decoy_url image_url: ERR Tool call failed: invalid image output. Pass a base64 data URI instead
+generatedImage net str: ERR generatedImage expects an image generation result object
+generatedImage net url: ERR image expects a non-empty image URL string, an object with image_url and optional detail, or a raw MCP image block
+generatedImage net path: ERR image expects a non-empty image URL string, an object with image_url and optional detail, or a raw MCP image block
+generatedImage net image_url: ERR Tool call failed: remote image URLs are not supported in tool outputs. Pass a base64 data URI instead
+store/load: load="v1"
+notify: undefined
+as_settled: {"index":0,"status":"fulfilled","value":1}
+stream_settled cb: {"index":0,"status":"fulfilled","value":1}
+stream_settled: done
+tools.list_mcp_resources: OK "{\"resources\":[]}"
+tools.list_mcp_resource_templates: OK "{\"resourceTemplates\":[]}"
+tools.read_mcp_resource: ERR unknown MCP server 'x' for the selected environment
+tools.read_mcp_resource: ERR failed to parse function arguments: missing field `server`
+=== OUTPUT
+hello

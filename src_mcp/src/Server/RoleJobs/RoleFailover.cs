@@ -73,8 +73,8 @@ internal static class RoleAnswers
     }
 }
 
-/// <summary>The session an attempt's answer came from: the model, the handle its first turn reported (empty when the vendor named none) and the key the session runs on (<see cref="RoleKey.KeyId"/>; empty for a launch with no key) — every later turn of the session uses the SAME key.</summary>
-internal sealed record RoleSession(ModelRef Model, string Handle, string KeyId = "", Server.Keys.ClaudeKeySecret? Secret = null);
+/// <summary>The session an attempt's answer came from: the model, the handle its first turn reported (empty when the vendor named none) and the key the session runs on (<see cref="RoleKey.KeyId"/>; empty for a launch with no key) — every later turn of the session uses the SAME key — and the CLI release the session ran with (a record, never a condition).</summary>
+internal sealed record RoleSession(ModelRef Model, string Handle, string KeyId = "", Server.Keys.ClaudeKeySecret? Secret = null, string CliVersion = "");
 
 /// <summary>What a role made of an attempt AFTER the model's first valid answer (<see cref="RoleFailover.Follow"/>): the job's end, or a stop of the same model that goes on to the next one.</summary>
 internal abstract record RoleFollowed
@@ -135,10 +135,19 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
     public Func<CancellationToken, Task<string>>? Restore { get; init; }
 
     /// <summary>
+    /// Set for the coder (epoch 3 E3 s8 t1): called with the id of the vendor the job is LEAVING, when the next attempt is on another vendor and before anything of that attempt is made — deletes what the left vendor kept in the job's home (its sign-in copy, SPEC E7), so the unit of the next vendor
+    /// cannot see it. Returns empty when nothing is left; any other text ends the job as <c>coder-boundary</c>: no vendor is started beside a copy of another's sign-in. Null for the read-only roles.
+    /// </summary>
+    public Func<string, string>? VendorLeft { get; init; }
+
+    /// <summary>
     /// The session the answer came from, once an attempt ended with one: the model and the handle of its FIRST turn. A coder's fix turns (<see cref="CoderFixLoop"/>) resume exactly this session — never a new one, and never the handle a later turn
     /// reported. Null until an attempt answered.
     /// </summary>
     public RoleSession? Session { get; private set; }
+
+    /// <summary>The vendors a coder can be launched on, and the check of each one's own stream (epoch 3 E3 s7 t2). The product's set unless a test injects another; read only when <see cref="Coder"/> is set.</summary>
+    internal CoderVendorSet Vendors { get; init; } = CoderVendors.Shipped;
 
     /// <summary>The repair turns the LAST attempt used — what the role reports of how it got its answer.</summary>
     public int RepairTurnsUsed { get; private set; }
@@ -164,11 +173,17 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
     private string _poolSentence = string.Empty;
     private bool _poolExhausted;
     private bool _warnedNoSnapshot;
+    private string _lastVendor = string.Empty;
 
     /// <summary>The road to the claude key pool of this job's data folder; made once, on the first claude launch.</summary>
     private RoleKeyRoad Keys => _keys ??= RoleKeyRoad.For(run);
 
-    public async Task<RoleWorkOutcome> RunAsync(string prompt, CancellationToken ct)
+    public Task<RoleWorkOutcome> RunAsync(string prompt, CancellationToken ct) => RunAsync(_ => prompt, ct);
+
+    /// <summary>
+    /// The attempt loop with a prompt for EACH model (epoch 3 E3 s7 t2): a coder's turn-0 prompt is the vendor's own (SPEC C7), so a failover to another vendor sends that vendor's, and a new session after a failover carries the instruction block again (C9).
+    /// </summary>
+    public async Task<RoleWorkOutcome> RunAsync(Func<ModelRef, string> promptFor, CancellationToken ct)
     {
         var route = RouteOf(run.Job.Route);
         if (route.Count == 0 || route.Count != run.Job.Route.Count || route.Any(model => !RoleModelLauncher.Knows(model.Vendor)))
@@ -192,7 +207,7 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
                 continue;
             }
 
-            var step = await ModelAsync(route, index, prompt, started, ct);
+            var step = await ModelAsync(route, index, promptFor, started, ct);
             if (step is Step.Finished finished)
             {
                 return finished.Outcome;
@@ -209,12 +224,12 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
     }
 
     /// <summary>One model, with the last model's ladder: finished (success, a stop that ends the job, the exhausted list) or move on to the next model.</summary>
-    private async Task<Step> ModelAsync(IReadOnlyList<ModelRef> route, int index, string prompt, long started, CancellationToken ct)
+    private async Task<Step> ModelAsync(IReadOnlyList<ModelRef> route, int index, Func<ModelRef, string> promptFor, long started, CancellationToken ct)
     {
         var model = route[index];
         for (var wait = 0; ; wait++)
         {
-            var end = await AttemptAsync(model, prompt, started, ct);
+            var end = await AttemptAsync(model, promptFor(model), started, ct);
             if (end is Ended.Stopped)
             {
                 return new Step.Finished(new RoleWorkOutcome.Stopped());
@@ -343,12 +358,19 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
 
         _lastKeyId = key.KeyId;
 
+        // Another vendor is next: what the vendor left kept in the job's home goes first. A copy that stays ends the job (a boundary stop: the next vendor would meet the same copy).
+        if (_attempts > 0 && _lastVendor.Length > 0 && _lastVendor != model.Vendor && VendorLeft?.Invoke(_lastVendor) is { Length: > 0 } notLeft)
+        {
+            return new Ended.Final(new RoleWorkOutcome.Failed(RoleStopWords.CoderBoundary, notLeft));
+        }
+
         if (_attempts > 0 && Restore is not null && await Restore(ct) is { Length: > 0 } notRestored)
         {
             return ct.IsCancellationRequested ? new Ended.Stopped() : new Ended.Final(new RoleWorkOutcome.Failed("coder-worktree", notRestored));
         }
 
         var n = ++_attempts;
+        _lastVendor = model.Vendor;
         run.Phase("attempt", n);
         if (!run.Trying(RoleRoute.Format(model)))
         {
@@ -377,7 +399,7 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
                 return Interrupted(model, attempt, launched);
             }
 
-            var read = await ReadAsync(model, launched, attempt.Before, ct);
+            var read = await ReadAsync(model, launched, attempt.Before, turn == 0 ? string.Empty : attempt.Handle, ct);
             KeepTurn(attempt, turn, launched);
             var blocked = read.Repair is { } wanted ? CannotRepair(wanted, turn, launched.Handle) : null;
             if (read.Repair is null || blocked is not null)
@@ -405,7 +427,7 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
     private async Task<RoleLaunched> LaunchTurnAsync(ModelRef model, string prompt, AttemptRun attempt, RoleKey key, TimeSpan left, CancellationToken ct)
     {
         attempt.TurnBegun = run.Clock.GetUtcNow().UtcDateTime;
-        var launched = await new RoleModelLauncher(run.Settings, run.Children) { Coder = Coder, Layer = OsLayer }
+        var launched = await new RoleModelLauncher(run.Settings, run.Children) { Coder = Coder, Layer = OsLayer, Vendors = Vendors }
             .LaunchAsync(model, prompt, run.Request.RepoPath, attempt.Folder, left < AttemptTimeout ? left : AttemptTimeout, ct, attempt.Handle, key);
         attempt.TurnEnded = run.Clock.GetUtcNow().UtcDateTime;
         attempt.Add(launched);
@@ -433,7 +455,7 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
     /// </summary>
     private async Task<Ended> FollowedAsync(ModelRef model, AttemptRun attempt, CancellationToken ct)
     {
-        var session = new RoleSession(model, attempt.FirstHandle, attempt.KeyId, attempt.Secret);
+        var session = new RoleSession(model, attempt.FirstHandle, attempt.KeyId, attempt.Secret, attempt.CliVersion);
         Session = session;
         RoleFollowed followed;
         try
@@ -473,7 +495,7 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
 
         if (stop is null)
         {
-            Session = new RoleSession(model, attempt.FirstHandle, attempt.KeyId, attempt.Secret);
+            Session = new RoleSession(model, attempt.FirstHandle, attempt.KeyId, attempt.Secret, attempt.CliVersion);
         }
 
         return stop is null ? new Ended.Answer(result) : new Ended.Stop(stop);
@@ -505,7 +527,7 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
     private sealed record Read(RoleStop? Stop, string Result, RoleAnswerVerdict.Repair? Repair = null);
 
     /// <summary>The stop of a finished launch, or null with the role's result: the tree first (a changed tree ends the job whatever the model said), then the launch, then the answer.</summary>
-    private async Task<Read> ReadAsync(ModelRef model, RoleLaunched launched, FilesystemSnapshot? before, CancellationToken ct)
+    private async Task<Read> ReadAsync(ModelRef model, RoleLaunched launched, FilesystemSnapshot? before, string expectedSession, CancellationToken ct)
     {
         if (await ChangedAsync(before, ct) is { Length: > 0 } sentence)
         {
@@ -515,6 +537,12 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
         if (StopOfLaunch(model, launched) is { } stopped)
         {
             return new Read(stopped, string.Empty);
+        }
+
+        // The check of the turn's own stream, before the role reads the answer and so before anything of the turn is committed (a coder only; the vendor's seam says what is wrong).
+        if (Coder is not null && CoderTurnCheck.Stop(Vendors, model, launched, expectedSession) is { } wrong)
+        {
+            return new Read(wrong, string.Empty);
         }
 
         var launch = launched.Launch!;
@@ -640,6 +668,8 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
             TokensIn = attempt.Total.TokensIn,
             TokensOut = attempt.Total.TokensOut,
             KeyId = attempt.KeyId,
+            CliVersion = attempt.CliVersion,
+            LastMeasuredVersion = Coder is null ? string.Empty : Vendors.LastMeasured(model.Vendor),
         });
 
     /// <summary>One ledger line for the launch of one turn — never for a preparation that refused before anything started. A cumulative vendor's report is cut to this turn's share. Never throws.</summary>
@@ -709,8 +739,16 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
         /// <summary>The cumulative vendor's counter as the last launch reported it: what the next report is measured against.</summary>
         public ConsultationBilled CounterBefore { get; private set; } = new();
 
+        /// <summary>The CLI release the last launch of the attempt reported (empty until one did) — a record, never a condition.</summary>
+        public string CliVersion { get; private set; } = string.Empty;
+
         public void Add(RoleLaunched launched)
         {
+            if ((launched.CliVersion.Length > 0 ? launched.CliVersion : launched.Launch?.CliVersion) is { Length: > 0 } installed)
+            {
+                CliVersion = installed;
+            }
+
             var reported = launched.Launch?.Usage ?? Usage.None;
             Total = ConsultationUsage.OfTwoLaunches(launched.Runtime.UsageIsCumulative, Total, reported);
             if (ConsultationUsage.CarriesACounter(reported) && launched.Runtime.UsageIsCumulative)

@@ -39,6 +39,20 @@ public sealed class ACoderJobFoldersTests : IDisposable
     private Func<string, string?> Settings => name => name == CoderOsLayer.JobsVariable ? _jobs.Path : null;
 
     [Fact]
+    public void ThePreflightsStandInOfAnotherJob_ALeftoverOfAKilledRunner_IsRemovedWithTheJob_AndAnotherJobsIsNot()
+    {
+        Make(Job);
+        Make("coai-preflight-other-" + Job, "canary.txt");
+        Make("coai-preflight-other-" + Other, "canary.txt");
+
+        CoderJobFolders.RemoveOf(Settings, Job, _failures.AsFailureSink()).Should().BeTrue(string.Join("; ", _failures));
+
+        Directory.Exists(Folder(Job)).Should().BeFalse();
+        Directory.Exists(Folder("coai-preflight-other-" + Job)).Should().BeFalse("the stand-in a killed runner left is litter of this job and goes with it");
+        Directory.Exists(Folder("coai-preflight-other-" + Other)).Should().BeTrue("another job's stand-in is not this job's to remove");
+    }
+
+    [Fact]
     public void TheMountsOfAJob_AreRemoved_ReadOnlyFilesIncluded_AndItsOwnFolderAndAnotherJobsMountsAreNot()
     {
         Make(Job);

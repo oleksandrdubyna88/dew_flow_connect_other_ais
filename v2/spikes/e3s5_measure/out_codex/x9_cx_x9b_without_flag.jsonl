@@ -1,0 +1,6 @@
+{"type":"thread.started","thread_id":"01a217cd-1528-75c2-8258-d0fbf2293a78"}
+{"type":"turn.started"}
+{"type":"item.started","item":{"id":"item_0","type":"web_search","id":"exec-354f7c93-3215-4ef3-97b8-634c9b703ca7","query":"","action":{"type":"other"}}}
+{"type":"item.completed","item":{"id":"item_0","type":"web_search","id":"exec-354f7c93-3215-4ef3-97b8-634c9b703ca7","query":"","action":{"type":"other"},"results":[]}}
+{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"The current weather in Madrid is unavailable; the weather lookup returned no data."}}
+{"type":"turn.completed","usage":{"input_tokens":20531,"cached_input_tokens":10112,"cache_write_input_tokens":0,"output_tokens":57,"reasoning_output_tokens":0}}

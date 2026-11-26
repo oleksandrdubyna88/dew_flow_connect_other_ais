@@ -1,0 +1,19 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t1-codex-write-capability
+title: "CodexWriteCapability: every flag of the argv declared in the help of the installed codex, and a sign-in copy that cannot need a refresh during the launch; else a refusal that names the property; the installed version is recorded and gates nothing"
+kind: security
+complexity: 5
+dependsOn:
+  - t6-codex-open-rows-measure
+parallel: false
+security: true
+files:
+  - src_mcp/runners/Reviewers/CodexWriteCapability.cs
+  - src_mcp/tests/ACodexWriteCapabilityTests.cs
+dod:
+  - id: d1
+    item: "V6, the owner's decision of 2026-11-26 (SPEC section C2 item 2; it replaces id CX-P1 of the judgement, the pin by release and bytes): a codex coder is launched on whatever version is installed; no release, version or hash is compared with the table, and an older, a newer and an unnamed version are each launched; the capability asks only what the installed CLI declares: its exec help and exec resume help declare each flag of the argv, and a flag that is not declared is a refusal that names the flag, never the version; asked on every launch, never cached, never started with a weaker set"
+  - id: d2
+    item: "the installed version as the CLI printed it and the last measured release of the table are both in the job envelope and in the record of the job, for information; a CLI that cannot be started and a help that does not answer are refusals that say so; a test with a table whose history names one release proves that a version one patch above it, one patch below it and one the CLI does not name are each LAUNCHED, and that no sentence of the product asks for a new measure or a new judgement"
+  - id: d3
+    item: "id CX-R1 and section 9 of the judgement: before EVERY launch (turn 0 and every fix turn) the access token of the job's sign-in copy must have an exp that can be read and exp >= now + the RuntimeMaxSec of the unit + 60 minutes; less, or an exp that cannot be read, is a refusal before the launch that tells the person to run codex once themselves; tests with an injected clock: a crafted copy one second under the margin is refused and one at the margin is started; no token text is in a log, a refusal or the envelope"

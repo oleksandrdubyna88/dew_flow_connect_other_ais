@@ -56,7 +56,7 @@ public sealed class AToolchainSchemaAgreesWithTheReaderTests
                     ToolchainField.Integer => "integer",
                     ToolchainField.Text => "string",
                     ToolchainField.Argv or ToolchainField.SkipList or ToolchainField.TextList or ToolchainField.Projects => "array",
-                    ToolchainField.Timeouts => "object",
+                    ToolchainField.Timeouts or ToolchainField.Instructions => "object",
                     _ => throw new InvalidOperationException(),
                 },
                 $"{name}.{key}");
@@ -70,7 +70,7 @@ public sealed class AToolchainSchemaAgreesWithTheReaderTests
             return reference.GetString() switch
             {
                 "#/$defs/argv" => "array",
-                "#/$defs/timeouts" => "object",
+                "#/$defs/timeouts" or "#/$defs/instructions" => "object",
                 var other => throw new InvalidOperationException($"unexpected reference {other}"),
             };
         }
@@ -113,5 +113,16 @@ public sealed class AToolchainSchemaAgreesWithTheReaderTests
         var timeouts = Defs().GetProperty("timeouts").GetProperty("properties");
         timeouts.GetProperty("build").GetProperty("pattern").GetString().Should().Be(ToolchainTables.DurationPattern);
         timeouts.GetProperty("test").GetProperty("pattern").GetString().Should().Be(ToolchainTables.DurationPattern);
+    }
+
+    [Fact]
+    public void TheInstructionsRange_IsTheTables()
+    {
+        var seconds = Defs().GetProperty("instructions").GetProperty("properties").GetProperty("timeoutSeconds");
+
+        seconds.GetProperty("minimum").GetInt32().Should().Be(ToolchainTables.InstructionsTimeoutMin);
+        seconds.GetProperty("maximum").GetInt32().Should().Be(ToolchainTables.InstructionsTimeoutMax);
+        Defs().GetProperty("instructions").GetProperty("properties").GetProperty("argv").GetProperty("minItems").GetInt32().Should().Be(1, "the reader refuses an empty argv, and so does the schema");
+        ToolchainTables.InstructionsTimeoutDefault.Should().BeInRange(ToolchainTables.InstructionsTimeoutMin, ToolchainTables.InstructionsTimeoutMax);
     }
 }

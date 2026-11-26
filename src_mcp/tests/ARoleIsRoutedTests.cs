@@ -2,6 +2,7 @@ using System.Text.Json;
 using CoaiMcp.Core.Roles;
 using CoaiMcp.Core.Work;
 using CoaiMcp.Roles;
+using CoaiMcp.Server.RoleJobs;
 using FluentAssertions;
 using Xunit;
 
@@ -14,7 +15,7 @@ namespace CoaiMcp.Tests;
 /// </summary>
 public sealed class ARoleIsRoutedTests
 {
-    private sealed record Vector(string Name, string Table, RouteRequest Request, IReadOnlyList<string> Models, string Why, string Refusal);
+    private sealed record Vector(string Name, string Table, RouteRequest Request, IReadOnlyList<string> Models, string Why, string Refusal, string Narrow);
 
     private static JsonElement Document() => JsonDocument.Parse(File.ReadAllText(Path.Combine(RepoPaths.Root(), "shared", "role-route-vectors.json"))).RootElement.Clone();
 
@@ -43,7 +44,8 @@ public sealed class ARoleIsRoutedTests
                 request,
                 expect.TryGetProperty("models", out var models) ? [.. models.EnumerateArray().Select(entry => entry.GetString()!)] : [],
                 expect.TryGetProperty("why", out var why) ? why.GetString()! : string.Empty,
-                expect.TryGetProperty("refused", out var refused) ? refused.GetString()! : string.Empty);
+                expect.TryGetProperty("refused", out var refused) ? refused.GetString()! : string.Empty,
+                vector.TryGetProperty("narrow", out var narrow) ? narrow.GetString()! : string.Empty);
         }),
     ];
 
@@ -56,7 +58,8 @@ public sealed class ARoleIsRoutedTests
         var vector = Vectors().Single(one => one.Name == name);
         var table = TableOf(Document().GetProperty("tables").GetProperty(vector.Table));
 
-        var result = RoleRouter.Route(vector.Request, table);
+        var routed = RoleRouter.Route(vector.Request, table);
+        var result = vector.Narrow == "judge" ? JudgeRoute.Narrow(routed, vector.Request.Model, table.Roles.FirstOrDefault(role => role.Role == RoleRouter.ImportantRole).Models ?? []) : routed;
 
         if (vector.Refusal.Length > 0)
         {
@@ -65,11 +68,11 @@ public sealed class ARoleIsRoutedTests
             return;
         }
 
-        var routed = result.Should().BeOfType<RouteResult.Routed>(result is RouteResult.Refused refused ? refused.Reason : string.Empty).Subject;
-        routed.Models.Select(model => $"{model.Model}@{model.Vendor}").Should().Equal(vector.Models);
+        var chosen = result.Should().BeOfType<RouteResult.Routed>(result is RouteResult.Refused refused ? refused.Reason : string.Empty).Subject;
+        chosen.Models.Select(model => $"{model.Model}@{model.Vendor}").Should().Equal(vector.Models);
         if (vector.Why.Length > 0)
         {
-            routed.Why.Should().Contain(vector.Why);
+            chosen.Why.Should().Contain(vector.Why);
         }
     }
 
@@ -80,7 +83,7 @@ public sealed class ARoleIsRoutedTests
 
         vectors.Select(vector => vector.Name).Should().OnlyHaveUniqueItems();
         // The rules, in the spec's order: important (three triggers, an explicit model in and out), explicit model, band, role list, no duplicates, vendor routing, empty list.
-        new[] { "security: true", "kind: security", "complexity 10", "caller named", "band", "coder list", "ba list", "vendor-routing", "COAI_ROLES_MODELS", "is not a name the claude CLI is known to accept", "COAI_ROLES_BANDS", "the model argument of start_role" }
+        new[] { "security: true", "kind: security", "complexity 10", "caller named", "band", "coder list", "ba list", "vendor-routing", "COAI_ROLES_MODELS", "is not a name the claude CLI is known to accept", "COAI_ROLES_BANDS", "the model argument of start_role", "the judge runs only on the important list", "important list" }
             .Should().OnlyContain(word => vectors.Any(vector => vector.Why.Contains(word) || vector.Refusal.Contains(word)), "each rule of the router has a vector that names it");
     }
 

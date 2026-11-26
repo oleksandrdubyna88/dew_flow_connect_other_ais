@@ -93,8 +93,12 @@ internal interface IRoleWork
 /// A role's own look at a request, made at the start BEFORE the router and before any folder is made: the empty string when the request is fit for the role, else the sentence that refuses it (the BA refuses an epic that already has
 /// a story). Null for a role with nothing to check.
 /// </param>
+/// <param name="NeedsBrief">
+/// True for a role that answers a QUESTION (the scout, the judge): <c>brief</c> is required and <c>taskFile</c> is optional, the file the question is about. False, the default, keeps the rule of the BA and the coder: exactly one of
+/// <c>taskFile</c> and <c>brief</c>.
+/// </param>
 /// <param name="RouteAs">
 /// The role-table name the router reads for this role's models (<c>ba</c>, <c>coder</c>…), or empty for a role that asks no model — the <c>probe</c>, whose route is empty. A start for a role whose list is empty is refused
 /// naming <c>COAI_ROLES_MODELS</c> before any folder is made (epoch 3 E1 s3).
 /// </param>
-internal sealed record RoleDescriptor(string Role, string Summary, Func<IRoleWork> CreateWork, string RouteAs = "", Func<RoleJobRequest, string>? Check = null);
+internal sealed record RoleDescriptor(string Role, string Summary, Func<IRoleWork> CreateWork, string RouteAs = "", Func<RoleJobRequest, string>? Check = null, bool NeedsBrief = false);

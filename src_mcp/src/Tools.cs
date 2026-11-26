@@ -84,23 +84,37 @@ internal static class Tools
             });
 
         yield return McpServerTool.Create(
-            // `planText`, `committedPlan` and `expectedCommit` are optional WITH C# defaults — the `resolve` lesson: without
-            // one the SDK publishes an argument as required. Exactly one of the first two is wanted — a refusal says so.
-            async (string repoPath, string branch, string? planText = null, string? committedPlan = null, string? expectedCommit = null, string? workItem = null) =>
+            // `planText`, `committedPlan`, `featureFolder` and `expectedCommit` are optional WITH C# defaults — the `resolve` lesson: without
+            // one the SDK publishes an argument as required. Exactly one of the first three is wanted — a refusal says so.
+            async (string repoPath, string branch, string? planText = null, string? committedPlan = null, string? expectedCommit = null, string? workItem = null, string? featureFolder = null) =>
                 await (await host.CurrentAsync()).ReviewPlanAsync(
-                    repoPath, branch, new PlanInput(planText ?? string.Empty, committedPlan ?? string.Empty, expectedCommit ?? string.Empty) { WorkItem = workItem ?? string.Empty }),
+                    repoPath, branch,
+                    new PlanInput(planText ?? string.Empty, committedPlan ?? string.Empty, expectedCommit ?? string.Empty) { WorkItem = workItem ?? string.Empty, FeatureFolder = featureFolder ?? string.Empty }),
             new McpServerToolCreateOptions
             {
                 Name = "review_plan",
                 Title = "Send the plan to every enabled provider for independent critique",
                 Description = """
                     The plan gate. One reviewer per enabled provider reads the plan and nothing else (no checkout), and
-                    answers findings. Give the plan ONE way: `planText` (the plan document, verbatim) or `committedPlan`
+                    answers findings. Give the plan ONE way: `planText` (the plan document, verbatim), `committedPlan`
                     (the repo-relative path of a plan file that is COMMITTED — the server reads it from git at the
-                    branch's tip, so a large plan never passes through you). `committedPlan` is refused, before any
+                    branch's tip, so a large plan never passes through you) or `featureFolder` (the repo-relative folder
+                    of a COMMITTED work plan, the one that holds feature.yaml, such as `v2`). `committedPlan` is refused, before any
                     round is spent, when the file is not in that commit, is not a regular UTF-8 text file of 1 byte to
                     256 KiB, is a credential-shaped name, or is edited or staged in the checkout (when the checkout is on that commit; otherwise nothing is compared and the round notes it); commit it first.
-                    `expectedCommit` (40 hex, only with `committedPlan`) refuses the round if the branch tip moved.
+                    `expectedCommit` (40 hex, only with `committedPlan` or `featureFolder`) refuses the round if the branch tip moved.
+
+                    With `featureFolder` the server reads the folder from git at the branch tip (never the working tree), validates
+                    the whole feature with this device's work-method limits — an invalid folder is refused with its first 10 errors
+                    (code, node, message), the total and the limits' source, before any reviewer, round or worktree — and packs the
+                    SCOPE for the reviewers in topological order: feature.yaml, the plan file, the ancestors, then each story after the stories it depends
+                    on, with one line for each outside dependency and a line `Not sent` naming what they did not get (the architecture files, free
+                    markdown files, the count of other nodes). The scope is the node `workItem` names (an epoch, epic, story or task folder
+                    inside the feature folder); with no `workItem` it is the whole feature. A file over 64 KiB, a folder over 2 000 entries or a pack over
+                    256 KiB is refused, never cut; an edited, staged or untracked plan file under the scope is refused when the checkout is on that commit.
+                    The approval of such a round is an id over every file the reviewers read and every outside dependency: a coder job is bound only when its
+                    task is inside the scope, and a later change to what the reviewers read — not a new RESULTS file — refuses its start and names the
+                    first path or node that differs; the cure is a new plan round.
                     Every reviewer is told the plan ends at its `END OF PLAN` line; one that did not receive it
                     whole does not count as answering. The reply
                     carries the merged, de-duplicated findings, the honest reviewer count, the
@@ -561,12 +575,16 @@ internal static class Tools
                 Description = """
                     Starts `role` as a DETACHED job and answers at once with `{jobId, state, route[], launcher}` — it never waits for the role. The job outlives this call, this server and
                     your session: it is run by its own process, which holds the job's lease and writes the result into the job's folder. Read it with `role_status`, stop it with `role_cancel`.
-                    Send exactly one of `taskFile` (a path inside `repoPath`, written from its top level) or `brief` (text, at most 64 KiB). `model` is optional and names one model;
+                    Send exactly one of `taskFile` (a path inside `repoPath`, written from its top level) or `brief` (text, at most 64 KiB) — except `scout` and `judge`, which answer a question: they need `brief` (the question) and may add `taskFile`, the file it is about. `model` is optional and names one model;
                     `timeoutMinutes` is 1 to 1440 (default 30); `workItem` is the plan item the job is for; `baseSha` (the coder only) is the full 40-character commit the coder's worktree starts at — without it, the HEAD of `repoPath` at this call. At most `COAI_ROLE_JOBS_MAX` jobs run at once (3, and 2 on WSL): a start past the
                     cap is REFUSED with the live job ids, never queued. A role with no descriptor in this build is refused naming the roles that can be started (today: `ba`, which plans
                     the epic named by `taskFile` (an `epic.yaml` with no stories) into stories and tasks and writes them after `validate_work`'s rules pass; `coder`, which works on ONE task —
                     `taskFile` is its `task.yaml` — in its own git worktree made at `baseSha` and answers with the branch `coder/<jobId>`, the one commit coai made of its work, the files that
-                    changed (from git) and the coder's report, as `result` of `role_status`; there is no `start_coder` tool, the coder is this case; and `probe`, a diagnostic
+                    changed (from git) and the coder's report, as `result` of `role_status`; there is no `start_coder` tool, the coder is this case, and it is launched only on a launchable coder vendor — claude, and codex or agy only where the coder boundary table (`shared/coder-boundary-releases.json`) holds the verdict ship AND the mark launchable for them (neither is launchable today); a model of another vendor is dropped from its route with the reason, and one you name on such a vendor is refused naming the launchable vendors; `scout`, which answers the question in `brief` (about
+                    the file `taskFile`, when one is given) READ-ONLY on the `scout` models, as `result` = `{status, facts[{claim, evidence[{file, line, text, verified, why}]}], files[{path, exists}], unknown[], counts, repairTurns, commit}` —
+                    coai checks every evidence item against the file itself (`verified`), and a text that is blank or a path that leaves the repository is an error of the answer; `judge`, which decides or reviews
+                    the question in `brief` READ-ONLY on the `important` models only (a `model` outside that list is refused) and answers `{status, verdict: approve|revise|reject, summary, findings[{id, severity,
+                    title, detail, evidence[], fix}], decision, counts, repairTurns, commit}` with the same checked evidence; it writes no file; and `probe`, a diagnostic
                     that runs a scripted brief — `succeed`, `sleep N`, `fail WHY`, `child N` — and asks no model anything).
                     """,
                 ReadOnly = false,
@@ -585,7 +603,7 @@ internal static class Tools
                     Answers `{state, generation, attempts[{n, model, vendor, stop, reason, evidenceRef, keyId}], stalled, result}` for `jobId` (`keyId`: the claude pool key the attempt ran on — an id, `person-sign-in`, or empty), plus the role, launcher, route, stop and reason, and the
                     times. `maxSeconds` (0 to 50, default 0) waits up to that long for the job to END before answering. States: queued, starting, running, succeeded, failed, cancelled, lost.
                     `lost` means the job's runner died without a result (nothing held its lease any more); `stalled: true` means the runner is alive but has shown no sign of life for two
-                    minutes — it is NOT taken over; wait, or `role_cancel` it. `result` is the role's JSON answer once `succeeded` — for a coder the envelope `{jobId, baseSha, headSha, branch, schemaValid, fixTurns, filesChanged[], report, mainCheckout}` (`mainCheckout` is evidence only: what changed in the repository while the coder ran, never a failure), the same JSON as the job's `result.json` — else null. A call is also what closes a dead runner's job as
+                    minutes — it is NOT taken over; wait, or `role_cancel` it. `result` is the role's JSON answer once `succeeded` — for the scout and the judge the envelope described under `start_role`, for a coder the envelope `{jobId, baseSha, headSha, branch, schemaValid, fixTurns, filesChanged[], report, mainCheckout}` (`mainCheckout` is evidence only: what changed in the repository while the coder ran, never a failure), the same JSON as the job's `result.json` — else null. A call is also what closes a dead runner's job as
                     `lost` and writes the one notice about a stall.
                     """,
                 ReadOnly = false,

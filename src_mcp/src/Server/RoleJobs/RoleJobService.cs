@@ -39,6 +39,9 @@ internal sealed class RoleJobService(string dataDir, Func<string, string?> setti
 
     internal bool OnWsl { get; init; } = RoleJobSettings.OnWsl;
 
+    /// <summary>The vendors a coder start may route to (epoch 3 E3 s8 t1): the product's set, or one a test injects with its own table.</summary>
+    internal CoaiMcp.Runners.Consultation.CoderVendorSet CoderSet { get; init; } = CoaiMcp.Runners.Consultation.CoderVendors.Shipped;
+
     /// <summary>The process environment the runner's <c>env.json</c> is taken from.</summary>
     internal IDictionary EnvironmentSource { get; init; } = Environment.GetEnvironmentVariables();
 
@@ -74,7 +77,7 @@ internal sealed class RoleJobService(string dataDir, Func<string, string?> setti
         }
 
         // The router first, before anything is made: a role whose list is empty, or a model the task may not take, is refused here with the setting that fixes it — no folder, no runner.
-        var (plan, routeRefusal) = RoleRouting.Plan(RoleDescriptors.Find(Descriptors, role)!, request, settings);
+        var (plan, routeRefusal) = RoleRouting.Plan(RoleDescriptors.Find(Descriptors, role)!, request, settings, CoderSet);
         if (plan is null)
         {
             return RoleJobAnswers.Refused(routeRefusal);
@@ -182,9 +185,10 @@ internal sealed class RoleJobService(string dataDir, Func<string, string?> setti
 
         var (file, fileRefusal) = RoleRequestChecks.RelativeFile(taskFile, "taskFile");
         var text = brief ?? string.Empty;
-        if (fileRefusal.Length > 0 || (file.Length == 0) == string.IsNullOrWhiteSpace(text) || text.Length > RoleRequestChecks.MaxBriefLength)
+        var inputRefusal = fileRefusal.Length > 0 ? fileRefusal : RoleRequestChecks.InputRefusal(RoleDescriptors.Find(Descriptors, role)!, file, text);
+        if (inputRefusal.Length > 0)
         {
-            return (none, fileRefusal.Length > 0 ? fileRefusal : $"send exactly one of taskFile (a path inside the repository) or brief (text of at most {RoleRequestChecks.MaxBriefLength} characters)");
+            return (none, inputRefusal);
         }
 
         var (request, bounded) = Bounded(none with { Role = role, RepoPath = Path.GetFullPath(repoPath), TaskFile = file, Brief = text }, model, timeoutMinutes, workItem);

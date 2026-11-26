@@ -33,4 +33,6 @@ cornerstones:
   - "epoch-3/e1 router + failover + job lease"
   - "epoch-3/e1 work-plan schema"
   - "epoch-3/e2 plan binding + envelope/report schema"
+  - "epoch-3/e3 plan round over a feature folder: what is approved (s3)"
+  - "epoch-3/e3 codex + agy write boundary: measure + judgement (s4)"
   - "epoch-3/e5 host slots + merge on candidate SHA"

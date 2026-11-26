@@ -1,0 +1,10 @@
+stream tool events (distinct step_index): 4  hook payloads: 4
+stream tool_info keys seen: name,parameters,output,error
+hook stepIdx=2 toolCall.id=call_9444765 name=read_file | stream step_index found name=read_file states=ACTIVE>DONE
+hook stepIdx=4 toolCall.id=call_1796610 name=edit_file | stream step_index found name=edit_file states=ACTIVE>DONE
+hook stepIdx=6 toolCall.id=call_1466096 name=write_file | stream step_index found name=write_file states=ACTIVE>ERROR
+hook stepIdx=8 toolCall.id=call_1679652 name=write_file | stream step_index found name=write_file states=ACTIVE>DONE
+hook payload keys: artifactDirectoryPath,conversationId,cwd,hookEventName,lastUserInput,modelName,stepIdx,toolCall,transcriptPath,workspacePaths
+hook toolCall keys: args,id,name
+toolCall.id appears in the stream text: 0 of 4
+step_index matches stepIdx for 4 of 4 (by index; names compared by eye above)

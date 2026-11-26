@@ -5,8 +5,32 @@
       "cli": "claude",
       "roles": {
         "orchestrator": [ { "model": "opus", "vendor": "claude" } ],
-        "coder": [ { "model": "sonnet", "vendor": "claude" } ],
-        "scout": [ { "model": "sonnet", "vendor": "claude" } ],
+        "coder": [
+          { "model": "sonnet", "vendor": "claude" },
+          { "model": "opus", "vendor": "claude" },
+          {
+            "model": "terra",
+            "vendor": "codex",
+            "whenVendorRow": "codex",
+            "source": "SPEC E3 section D, accepted by the owner 2026-11-25 (decision 35): the coder fails over to codex terra, and the route keeps it only while the table of coder boundaries (shared/coder-boundary-releases.json) ships codex; the name is measured (shared/role-model-names.json)"
+          },
+          {
+            "model": "gemini-4-argon-medium",
+            "vendor": "agy",
+            "whenVendorRow": "agy",
+            "source": "SPEC E3 section D, accepted by the owner 2026-11-25 (decision 35): the coder fails over to agy gemini-4-argon-medium, and the route keeps it only while the table of coder boundaries ships agy; the name is in the list of agy 1.5.17 (RESULTS_model_lists.md)"
+          }
+        ],
+        "scout": [
+          { "model": "sonnet", "vendor": "claude" },
+          { "model": "haiku", "vendor": "claude" },
+          {
+            "model": "terra",
+            "vendor": "codex",
+            "whenVendorRow": "codex",
+            "source": "SPEC E3 section D, accepted by the owner 2026-11-25 (decision 35): the scout fails over sonnet, haiku, then codex terra, only with a codex row"
+          }
+        ],
         "important": [
           { "model": "fable", "vendor": "claude" },
           {

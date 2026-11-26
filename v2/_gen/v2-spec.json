@@ -39,6 +39,8 @@
       "epoch-3/e1 router + failover + job lease",
       "epoch-3/e1 work-plan schema",
       "epoch-3/e2 plan binding + envelope/report schema",
+      "epoch-3/e3 plan round over a feature folder: what is approved (s3)",
+      "epoch-3/e3 codex + agy write boundary: measure + judgement (s4)",
       "epoch-3/e5 host slots + merge on candidate SHA"
     ]
   },
@@ -1864,13 +1866,15 @@
             "title": "Roles complete: scout, important/judge, codex + agy rows, review_plan(featureFolder)",
             "half": "server",
             "dependsOn": [
-              "e1-role-jobs-ba"
+              "e1-role-jobs-ba",
+              "e2-coder-one-task"
             ],
             "doneWhen": [
               "scout and judge strict JSON outputs",
               "codex and agy coder sessions resumed",
               "review_plan(featureFolder) validates first, packs in topological order"
-            ]
+            ],
+            "spec": "SPEC.md"
           }
         },
         {

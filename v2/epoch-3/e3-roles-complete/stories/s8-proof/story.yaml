@@ -1,7 +1,9 @@
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: s8-proof
-title: "Proof: the real binary over stdio with FakeCli, small paid runs where only a real CLI can show it, docs"
+title: "Proof: failover and acceptance for each combination of verdicts on the real binary with FakeCli, small paid runs where only a real CLI can show it, docs"
 dependsOn:
   - s2-scout-judge-roles
   - s3-plan-round-feature-folder
-  - s7-vendor-rows-failover
+  - s5-codex-coder
+  - s6-agy-coder
+  - s7-vendor-seam-rows

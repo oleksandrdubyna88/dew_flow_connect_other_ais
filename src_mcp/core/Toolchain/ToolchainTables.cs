@@ -10,6 +10,7 @@ public enum ToolchainField
     TextList,
     Projects,
     Timeouts,
+    Instructions,
 }
 
 /// <summary>One map of the file: its keys with their types, and the keys that must be there.</summary>
@@ -29,6 +30,16 @@ public static class ToolchainTables
 
     /// <summary>The largest file read: the YAML reader's own limit, so a bigger file is refused by name before it is parsed.</summary>
     public const int MaxBytes = Work.StrictYamlReader.MaxBytes;
+
+    /// <summary>The placeholder an item of <c>instructions.perFile</c> may hold: replaced by each file of the task.</summary>
+    public const string FilePlaceholder = "{file}";
+
+    /// <summary>The range of <c>instructions.timeoutSeconds</c>, and what a file that names none gets.</summary>
+    public const int InstructionsTimeoutMin = 1;
+
+    public const int InstructionsTimeoutMax = 300;
+
+    public const int InstructionsTimeoutDefault = 60;
 
     public const int MemoryMbMin = 1;
 
@@ -59,6 +70,7 @@ public static class ToolchainTables
             ["projects"] = ToolchainField.Projects,
             ["skip"] = ToolchainField.SkipList,
             ["timeouts"] = ToolchainField.Timeouts,
+            ["instructions"] = ToolchainField.Instructions,
         },
         ["version", "projects"]);
 
@@ -83,5 +95,10 @@ public static class ToolchainTables
         new Dictionary<string, ToolchainField> { ["build"] = ToolchainField.Text, ["test"] = ToolchainField.Text },
         []);
 
-    public static readonly IReadOnlyList<ToolchainLevel> Levels = [Root, Project, Timeouts];
+    public static readonly ToolchainLevel Instructions = new(
+        "instructions",
+        new Dictionary<string, ToolchainField> { ["argv"] = ToolchainField.Argv, ["perFile"] = ToolchainField.Argv, ["timeoutSeconds"] = ToolchainField.Integer },
+        ["argv"]);
+
+    public static readonly IReadOnlyList<ToolchainLevel> Levels = [Root, Project, Timeouts, Instructions];
 }

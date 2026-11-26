@@ -404,6 +404,13 @@ test('a hash that is not hex of a plausible length makes the whole line unusable
   assert.equal(reviewedFrom(committed({ blob: 'not-a-blob' })), '', 'a blob that is not hex');
 });
 
+test('a folder source - an origin a later server writes for a plan round over a feature folder - reads as no source and throws nothing', () => {
+  const folder = { origin: 'folder', commit: COMMIT, path: 'v2/epoch-3/e3-roles-complete', blob: 'c'.repeat(64), bytes: 91234, textId: '0123456789abcdef' };
+
+  assert.equal(reviewedFrom(folder), '');
+  assert.equal(reviewedFrom({ ...folder, origin: 'Folder' }), '');
+});
+
 test('a pasted plan with an empty text id is unusable, not a line with a hole in it', () => {
   assert.equal(reviewedFrom(pasted({ textId: '' })), '');
 });

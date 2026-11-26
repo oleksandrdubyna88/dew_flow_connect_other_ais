@@ -1,3 +1,5 @@
+using CoaiMcp.Core.Roles;
+
 namespace CoaiMcp.Server.RoleJobs;
 
 /// <summary>
@@ -5,7 +7,7 @@ namespace CoaiMcp.Server.RoleJobs;
 /// </summary>
 /// <remarks>
 /// <para>Story s1 shipped <c>probe</c>, a diagnostic that proves the whole detached road — launcher, lease, heartbeat, cancel, result — on a machine without asking a model anything and without
-/// touching the repository (<see cref="ProbeWork"/>). Story s4 adds <c>ba</c> (<see cref="BaWork"/>), routed as the <c>ba</c> list of the roles table; epic 3 E2 story s3 adds <c>coder</c> (<see cref="CoderWork"/>), routed as the <c>coder</c> list and checked by <see cref="CoderTask.Refusal"/>; the other roles are registered here by the epics that build them.</para>
+/// touching the repository (<see cref="ProbeWork"/>). Story s4 adds <c>ba</c> (<see cref="BaWork"/>), routed as the <c>ba</c> list of the roles table; epic 3 E2 story s3 adds <c>coder</c> (<see cref="CoderWork"/>), routed as the <c>coder</c> list and checked by <see cref="CoderTask.Refusal"/>; epic 3 E3 story s2 adds <c>scout</c> (<see cref="ScoutWork"/>, routed as the <c>scout</c> list) and <c>judge</c> (<see cref="JudgeWork"/>, routed as the <c>important</c> list, narrowed by <see cref="JudgeRoute"/>), both read-only and both asking a question (<c>brief</c>); the other roles are registered here by the epics that build them.</para>
 /// <para>A list rather than a switch, so a test hands the service its own (<see cref="RoleJobService"/>) and so the refusal can NAME the legal roles.</para>
 /// </remarks>
 internal static class RoleDescriptors
@@ -16,11 +18,17 @@ internal static class RoleDescriptors
 
     public const string Coder = "coder";
 
+    public const string Scout = "scout";
+
+    public const string Judge = "judge";
+
     public static IReadOnlyList<RoleDescriptor> Shipped { get; } =
     [
         new(Probe, "a diagnostic role: runs a scripted brief (succeed, sleep N, fail WHY, child N) and asks no model anything", () => new ProbeWork()),
         new(Ba, "the BA: plans one epic that has no stories (taskFile: its epic.yaml) into stories and tasks, checks the plan with validate_work's rules, writes the files atomically with a manifest", () => new BaWork(), RouteAs: Ba, Check: BaEpic.Refusal),
         new(Coder, "the coder: works on ONE task of a work plan (taskFile: its task.yaml) in its own git worktree, and answers with a branch coder/<jobId>, the commit coai made of the work, the files that changed and the coder's report", () => new CoderWork(), RouteAs: Coder, Check: CoderTask.Refusal),
+        new(Scout, "the scout: answers a question (brief, and taskFile when it is about one file) about the repository with facts, each with checked evidence {file, line, text}, the files a reader needs and what it did not find", () => new ScoutWork(), RouteAs: Scout, Check: ReadOnlyRoleRequest.Refusal, NeedsBrief: true),
+        new(Judge, "the judge: decides or reviews (brief, and taskFile when it is about one file) on the important models and answers with a verdict, findings with checked evidence and, when asked to choose, a decision; it writes no file", () => new JudgeWork(), RouteAs: RoleRouter.ImportantRole, Check: ReadOnlyRoleRequest.Refusal, NeedsBrief: true),
     ];
 
     public static RoleDescriptor? Find(IReadOnlyList<RoleDescriptor> descriptors, string role) =>

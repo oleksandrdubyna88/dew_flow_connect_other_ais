@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coai.dev/schemas/scout-output.schema.json",
+  "$comment": "What the scout role (epoch 3 E3 s1) returns: ONE JSON object. The scout is read-only (Read, Glob, Grep) and writes nothing. Arm `ok` carries the facts it found, each with 1 to 5 pieces of evidence, the repository files a reader of the task needs, and what it looked for and did not find; arm `refused` carries a reason. An evidence item is {file, line, text}: coai runs the check ITSELF — the file must be inside the repository and the line must hold the text once white space is collapsed; a text that is empty or only white space is an error (it is judged before any line is read, so it can never be verified), and so is a path that is absolute, has a drive or `..`, runs through a link, is a `.git` path or is named like a credential file. coai builds the envelope of result.json from the answer and the check; a model's `verified` is never read (and an unknown key is an error). The limits are the tables of src_mcp/core/Roles/ScoutOutput.cs; neither half of the product has a JSON Schema engine, so coai-mcp reads this shape with its own strict reader and AScoutContractTests holds the file and the reader equal.",
+  "title": "coai scout output",
+  "type": "object",
+  "required": ["status"],
+  "additionalProperties": false,
+  "properties": {
+    "status": { "enum": ["ok", "refused"] },
+    "reason": { "type": "string", "minLength": 1 },
+    "facts": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 40,
+      "items": { "$ref": "#/$defs/fact" }
+    },
+    "files": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 60,
+      "items": { "type": "string", "minLength": 1, "maxLength": 512 }
+    },
+    "unknown": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 20,
+      "items": { "type": "string", "minLength": 1, "maxLength": 300 }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "ok" } } },
+      "then": {
+        "required": ["facts", "files", "unknown"],
+        "properties": { "status": {}, "facts": {}, "files": {}, "unknown": {} },
+        "additionalProperties": false
+      }
+    },
+    {
+      "if": { "properties": { "status": { "const": "refused" } } },
+      "then": {
+        "required": ["reason"],
+        "properties": { "status": {}, "reason": {} },
+        "additionalProperties": false
+      }
+    }
+  ],
+  "$defs": {
+    "fact": {
+      "type": "object",
+      "required": ["claim", "evidence"],
+      "additionalProperties": false,
+      "properties": {
+        "claim": { "type": "string", "minLength": 1, "maxLength": 400 },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 5,
+          "items": { "$ref": "#/$defs/evidence" }
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "required": ["file", "line", "text"],
+      "additionalProperties": false,
+      "properties": {
+        "file": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "line": { "type": "integer", "minimum": 1 },
+        "text": { "type": "string", "minLength": 1, "maxLength": 300, "pattern": "\\S" }
+      }
+    }
+  }
+}
