@@ -299,8 +299,8 @@ then of the code). Depends on nothing in this epic; S3 and S4 depend on it. Serv
   of CoAI: hosts read over ssh.* (W12, with gate E2-G1's F7.) The road asks
   the door before EVERY spawn of a press (`readOnce`), and a later spawn never asks a person: any answer but `yes`
   stops it with that answer's sentence. The two todo files
-  ([PLAN_a_waiting_marker_has_its_own_door_sentence.md](PLAN_a_waiting_marker_has_its_own_door_sentence.md),
-  [PLAN_a_press_rereads_the_consent_before_each_spawn.md](PLAN_a_press_rereads_the_consent_before_each_spawn.md))
+  (`PLAN_a_waiting_marker_has_its_own_door_sentence.md` (deleted by E2.S1),
+  `PLAN_a_press_rereads_the_consent_before_each_spawn.md` (deleted by E2.S1))
   and their rows in `todo/README.md` are deleted in the commit that turns E2S1-T12 and T13 green.
 - **What the spec must settle** — **all twelve settled** by the spec's § P2 (gate E2-G1): 1 → `may` and the order of
   § P8; 2 → a malformed grant is no grant (J5); 3 → § P4; 4 → an *Allow* removes what it cannot read, after the floor
