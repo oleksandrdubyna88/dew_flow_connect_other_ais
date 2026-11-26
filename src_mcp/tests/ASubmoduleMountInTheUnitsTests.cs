@@ -1,4 +1,5 @@
 using CoaiMcp.Core.Toolchain;
+using CoaiMcp.Runners.Files;
 using CoaiMcp.Runners.Toolchain;
 using CoaiMcp.Runners.Worktrees;
 using FluentAssertions;
@@ -80,8 +81,51 @@ public sealed class ASubmoduleMountInTheUnitsTests
         At("/data/jobs/j1", "/w/coai-coder-j1", "/data/jobs/main").JobCover.Should().Be("/data/jobs/j1", "the folder holds the main checkout, which the unit is given at that path");
     }
 
+    /// <summary>A real folder with a link beside it that points at it — the data folder spelled through a link. Returns (link, real) with the real path as the disk answers it.</summary>
+    private static (string Link, string Real) LinkedFolder(TempDir temp)
+    {
+        var real = Path.Combine(Runners.Files.RealPath.Resolve(temp.Path).Path, "real-data");
+        Directory.CreateDirectory(Path.Combine(real, "keys"));
+        File.WriteAllText(Path.Combine(real, "keys.txt"), "made-up\n");
+        var link = Path.Combine(temp.Path, "linked-data");
+        Directory.CreateSymbolicLink(link, real);
+
+        return (link, real);
+    }
+
     [Fact]
-    public void TheChecksUnit_HidesTheKeyFolderAndTheKeysFile_WhereverTheyLie_AsTheCodersUnitDoes()
+    public void TheKeyPaths_AreResolvedWhereTheJobIsMade_SoEveryUnitHidesTheRealPath_NotTheSpelling()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "a symbolic link needs a privilege on Windows");
+        using var temp = TempDir.For("coai-m3-");
+        var (link, real) = LinkedFolder(temp);
+
+        var job = Job() with { KeysFolder = Path.Combine(link, "keys"), KeysFile = Path.Combine(link, "keys.txt") };
+
+        job.KeysFolder.Should().Be(Path.Combine(real, "keys"));
+        job.KeysFile.Should().Be(Path.Combine(real, "keys.txt"));
+        var hidden = new[] { $"InaccessiblePaths=-{real}/keys", $"InaccessiblePaths=-{real}/keys.txt" };
+        BoundaryUnit.Properties(NoHome(), job, CheckNetwork.Host, TimeSpan.FromMinutes(5)).Should().Contain(hidden).And.NotContain(property => property.Contains("linked-data", StringComparison.Ordinal));
+        CoderUnit.KeysHidden(NoHome() with { BindSignIn = false }, job).Should().Equal(hidden);
+        BoundaryPreflight.Command(job, NoHome(), CheckNetwork.Host, string.Empty).Should().Contain($"{real}/keys {real}/keys.txt", "the row reads the real paths too");
+    }
+
+    [Fact]
+    public void ThePersonsSignInFile_IsHiddenAtItsRealPath_WhenTheHomeIsSpelledThroughALink()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "a symbolic link needs a privilege on Windows");
+        using var temp = TempDir.For("coai-m3-");
+        var (link, real) = LinkedFolder(temp);
+        Directory.CreateDirectory(Path.Combine(real, ".claude"));
+        File.WriteAllText(Path.Combine(real, ".claude", ".credentials.json"), "made-up-sign-in-line-not-a-credential\n");
+        var host = NoHome() with { RealHome = link };
+
+        BoundaryUnit.SignInHidden(host).Should().Equal($"InaccessiblePaths=-{real}/.claude/.credentials.json");
+        BoundaryPreflight.Command(Job(), host, CheckNetwork.Host, string.Empty).Should().Contain(real).And.NotContain(link, "the rows read the resolved home");
+    }
+
+    [Fact]
+    public void TheChecksUnit_HidesTheKeyFolderAndTheKeysFile_AtTheirRealPaths_AsTheCodersUnitDoes()
     {
         var job = Job() with { KeysFolder = "/var/lib/coai/keys", KeysFile = "/srv/coai.keys" };
 

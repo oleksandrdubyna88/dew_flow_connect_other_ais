@@ -12,7 +12,7 @@ namespace CoaiMcp.Core.Work;
 /// <remarks>
 /// <para><b>Everything else is a named refusal, never a guess:</b> an anchor, alias, tag, flow collection other than <c>[]</c>, block scalar,
 /// directive or second document is <c>yaml-forbidden</c>; a duplicate key in one map is <c>yaml-duplicate-key</c>; a file above
-/// <see cref="MaxBytes"/> is <c>yaml-too-large</c>; a tab in indentation, a line that is no <c>key: value</c> and a quote that does not close are <c>yaml-syntax</c>.
+/// <see cref="MaxBytes"/> is <c>yaml-too-large</c>; a tab in indentation, a line that is no <c>key: value</c> and a quote that does not close are <c>yaml-syntax</c>. <b>No refusal repeats text of the file</b> — a line number and a fixed sentence only (the security verify, M6): a file read here may be repository content, and a bare token on a line must not be echoed into a job's reason.
 /// A file of this subset is also valid YAML, so any tool reads what this reader accepts.</para>
 /// <para><b>Pure</b>: text in, a value out. The parser holds its state in a private class, one per read, so the reader itself can be shared.</para>
 /// </remarks>
@@ -182,7 +182,7 @@ internal sealed class YamlParser(string text)
 
             if (!seen.Add(split.Key))
             {
-                return FailNull(WorkErrorCodes.YamlDuplicateKey, $"the key '{split.Key}' appears twice in one map", line.Number);
+                return FailNull(WorkErrorCodes.YamlDuplicateKey, "a key appears twice in one map", line.Number);
             }
 
             _at++;
@@ -272,7 +272,7 @@ internal sealed class YamlParser(string text)
         var colon = KeyColon(text);
         if (colon < 0)
         {
-            Fail(WorkErrorCodes.YamlSyntax, $"expected 'key: value', found '{Shorten(text)}'", line.Number);
+            Fail(WorkErrorCodes.YamlSyntax, "expected 'key: value'", line.Number);
 
             return null;
         }
@@ -373,7 +373,7 @@ internal sealed class YamlParser(string text)
         var plain = StripComment(rest);
         if (plain.EndsWith(':') || plain.Contains(": ", StringComparison.Ordinal))
         {
-            return FailNull(WorkErrorCodes.YamlSyntax, $"a ':' inside a plain value; quote it ('{Shorten(plain)}')", number);
+            return FailNull(WorkErrorCodes.YamlSyntax, "a ':' inside a plain value; quote it", number);
         }
 
         return new YamlScalar(number, plain, KindOf(plain));
@@ -493,7 +493,7 @@ internal sealed class YamlParser(string text)
     private YamlNode? QuotedScalar(string after, StringBuilder value, int number) =>
         after.Length == 0 || after[0] == '#'
             ? new YamlScalar(number, value.ToString(), YamlScalarKind.String)
-            : FailNull(WorkErrorCodes.YamlSyntax, $"text after a closing quote: '{Shorten(after)}'", number);
+            : FailNull(WorkErrorCodes.YamlSyntax, "text after a closing quote", number);
 
     private bool Escape(string rest, ref int i, StringBuilder value, int number)
     {
@@ -528,7 +528,7 @@ internal sealed class YamlParser(string text)
                 i += 4;
                 return true;
             default:
-                return Fail(WorkErrorCodes.YamlSyntax, $"the escape \\{code} is not one of \\\" \\\\ \\/ \\b \\f \\n \\r \\t \\uXXXX", number);
+                return Fail(WorkErrorCodes.YamlSyntax, "the escape is not one of \\\" \\\\ \\/ \\b \\f \\n \\r \\t \\uXXXX", number);
         }
     }
 
@@ -556,7 +556,6 @@ internal sealed class YamlParser(string text)
         return _refusal!;
     }
 
-    private static string Shorten(string value) => value.Length <= 40 ? value : value[..40] + "...";
 }
 
 /// <summary>One content line: its number, its indent in spaces and its text without the indent (comments of a whole line are already gone).</summary>

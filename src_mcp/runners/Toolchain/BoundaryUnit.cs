@@ -62,7 +62,7 @@ internal static class BoundaryUnit
     internal static IReadOnlyList<string> Mounts(BoundaryJob job) => [.. job.Mounts.Select(mount => $"BindReadOnlyPaths={mount.Source}:{mount.Target}")];
 
     /// <summary>
-    /// What hides the claude key pool's folder and the keys file from a unit, wherever they lie (<c>InaccessiblePaths=-&lt;path&gt;</c>: the dash — a path that is not there is no error). A path under a hidden folder (<c>/home</c>) is out of sight already; this makes it true where the data
+    /// What hides the claude key pool's folder and the keys file from a unit, by their REAL paths (resolved once where the job is made, <see cref="BoundaryJob.RealOrSpelled"/>) (<c>InaccessiblePaths=-&lt;path&gt;</c>: the dash — a path that is not there is no error). A path under a hidden folder (<c>/home</c>) is out of sight already; this makes it true where the data
     /// folder is somewhere else (<c>/var/lib/coai</c>). One list for a check unit and a coder's unit (<see cref="CoderUnit.KeysHidden"/> only adds the device switch): the key material is in no unit of this family, and each has a preflight row that reads it from inside.
     /// </summary>
     internal static IReadOnlyList<string> KeysHidden(BoundaryJob job) =>
@@ -70,8 +70,8 @@ internal static class BoundaryUnit
 
     /// <summary>The person's own sign-in file at its real path, hidden from a check unit where the home is not under a hidden folder: a check never needs it (a coder's unit gets it bound at a path of its own home, never at this one).</summary>
     internal static IReadOnlyList<string> SignInHidden(BoundaryHost host) =>
-        host.RealHome.Length > 0 && System.IO.Path.IsPathFullyQualified(host.RealHome) && !host.RealHome.Any(c => char.IsWhiteSpace(c) || char.IsControl(c) || c is ':' or '\\')
-            ? [$"InaccessiblePaths=-{System.IO.Path.Combine(host.RealHome, ".claude", ".credentials.json")}"]
+        host.ResolvedHome is { Length: > 0 } home && System.IO.Path.IsPathFullyQualified(home) && !home.Any(c => char.IsWhiteSpace(c) || char.IsControl(c) || c is ':' or '\\')
+            ? [$"InaccessiblePaths=-{BoundaryJob.RealOrSpelled(System.IO.Path.Combine(home, ".claude", ".credentials.json"))}"]
             : [];
 
     /// <summary>

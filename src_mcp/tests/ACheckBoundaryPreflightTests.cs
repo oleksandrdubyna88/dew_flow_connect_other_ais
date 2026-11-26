@@ -145,7 +145,7 @@ public sealed class ACheckBoundaryPreflightTests
     }
 
     [Fact]
-    public async Task TheKeysFile_IsHiddenFromACheckUnit_WhereverItLies()
+    public async Task TheKeysFile_IsHiddenFromACheckUnit_AtItsRealPath()
     {
         NeedAUserManager();
         await using var bed = await BoundaryBed.CreateAsync();
@@ -158,6 +158,23 @@ public sealed class ACheckBoundaryPreflightTests
 
         var broken = await bed.Boundary(arguments => Drop(arguments, hide)).AdmitAsync(job, [CheckNetwork.Private]);
         broken.Should().BeOfType<BoundaryAdmission.Refused>(broken.ToString()).Which.Sentence.Should().Contain("keys-folder-hidden");
+    }
+
+    [Fact]
+    public async Task AKeyPathWithAGlobCharacter_IsReadAsItIs_ByTheRow()
+    {
+        NeedAUserManager();
+        await using var bed = await BoundaryBed.CreateAsync();
+        var starred = Path.Combine(bed.Main, "keys*");
+        Directory.CreateDirectory(Path.Combine(starred, "claude"));
+        File.WriteAllText(Path.Combine(starred, "claude", "k-000000000000.key"), "made-up\n");
+        var neighbour = Path.Combine(bed.Main, "keysx");
+        Directory.CreateDirectory(neighbour);
+        File.WriteAllText(Path.Combine(neighbour, "readable.txt"), "an ordinary folder the pattern would match\n");
+
+        var admission = await bed.Boundary().AdmitAsync(bed.Job with { KeysFolder = starred }, [CheckNetwork.Private]);
+
+        admission.Should().BeOfType<BoundaryAdmission.Admitted>(admission.ToString(), "the name is a path, not a pattern: a readable neighbour that the pattern would match is not a key folder");
     }
 
     [Fact]

@@ -49,6 +49,22 @@ public sealed class ACoderChecksTests
         logs[0].Should().Contain("built");
         logs[1].Should().Contain("tested");
         envelope.GetProperty("fixTurns").GetInt32().Should().Be(0);
+
+        // The record of each check unit, beside its log, as the coder's own are kept.
+        var round = Path.Combine(rig.World.Store.FolderOf(job.JobId)!.Location, "checks", "round-0");
+        var records = new[] { "s1", "s2" }.Select(part => JsonDocument.Parse(File.ReadAllText(Path.Combine(round, $"unit-{part}.json"))).RootElement).ToArray();
+        records.Select(record => record.GetProperty("unit").GetString()).Should().Equal($"coai-check-{job.JobId}-s1", $"coai-check-{job.JobId}-s2");
+        records.Select(record => record.GetProperty("step").GetString()!.Split(' ')[^1]).Should().Equal("build", "test");
+        records.Should().OnlyContain(record => record.GetProperty("started").GetBoolean() && record.GetProperty("boundary").GetString() == "systemd-run-user-unit");
+        foreach (var record in records)
+        {
+            var properties = record.GetProperty("properties").EnumerateArray().Select(property => property.GetProperty("name").GetString() + "=" + property.GetProperty("value").GetString()).ToList();
+            properties.Should().Contain(property => property.StartsWith("TemporaryFileSystem=", StringComparison.Ordinal), "the cover over the job folders is in the record");
+            properties.Should().Contain(property => property.StartsWith("InaccessiblePaths=-", StringComparison.Ordinal) && property.Contains("keys", StringComparison.Ordinal), "the key folder is hidden from the check unit");
+            record.GetProperty("preflight").EnumerateArray().Where(row => row.GetProperty("item").GetString() is "coder-folder-hidden" or "keys-folder-hidden" or "sign-in-not-in-unit").Select(row => row.GetProperty("held").GetBoolean()).Should().Equal(true, true, true);
+        }
+
+        records[1].GetProperty("network").GetString().Should().Be("none", "the test step has a private network");
     }
 
     [Fact]
@@ -122,6 +138,9 @@ public sealed class ACoderChecksTests
         envelope.GetProperty("checksState").GetString().Should().Be("boundary_refused");
         envelope.GetProperty("green").GetBoolean().Should().BeFalse();
         Checks(envelope).GetArrayLength().Should().Be(0, "nothing was run outside a boundary");
+        var refusedRecord = JsonDocument.Parse(File.ReadAllText(Path.Combine(rig.World.Store.FolderOf(job.JobId)!.Location, "checks", "round-0", "unit-preflight.json"))).RootElement;
+        refusedRecord.GetProperty("started").GetBoolean().Should().BeFalse();
+        refusedRecord.GetProperty("preflight").EnumerateArray().Should().Contain(row => !row.GetProperty("held").GetBoolean(), "the row that refused the checks is in the record");
         rig.Launches(job).Should().ContainSingle("the coder was launched; a boundary that did not hold for the checks is not a fault the coder can fix");
     }
 

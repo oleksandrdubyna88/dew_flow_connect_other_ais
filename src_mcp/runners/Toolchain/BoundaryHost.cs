@@ -92,6 +92,9 @@ public sealed record BoundaryHost(
     public bool BindSignIn { get; init; } = true;
 
     /// <summary>Where node is installed under the real home (<c>~/.nvm</c>).</summary>
+    /// <summary>The person's home as the disk spells it (<see cref="BoundaryJob.RealOrSpelled"/>): what a path hidden from a unit, and a row that reads it from inside, must name.</summary>
+    public string ResolvedHome => BoundaryJob.RealOrSpelled(RealHome);
+
     private string NvmRoot => System.IO.Path.Combine(RealHome, ".nvm");
 
     /// <summary>The PATH entries of coai's own PATH that lie under <c>~/.nvm</c> and exist — the one place under the home a check may find a tool.</summary>

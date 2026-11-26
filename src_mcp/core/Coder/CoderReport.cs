@@ -48,14 +48,22 @@ public static class CoderReportReader
 
         var problems = new List<string>();
         var status = Text(root, "status", string.Empty, problems);
-        if (status == "refused")
-        {
-            UnknownKeys(root, RefusedKeys, string.Empty, problems);
-            var reason = Text(root, "reason", string.Empty, problems);
 
-            return problems.Count > 0 ? new CoderRead.Wrong(problems) : new CoderRead.Refused(reason);
-        }
+        return status == "refused" ? ReadRefused(root, problems) : ReadReport(root, taskDodIds, status, problems);
+    }
 
+    /// <summary>The <c>refused</c> arm: its two keys and nothing else.</summary>
+    private static CoderRead ReadRefused(JsonElement root, List<string> problems)
+    {
+        UnknownKeys(root, RefusedKeys, string.Empty, problems);
+        var reason = Text(root, "reason", string.Empty, problems);
+
+        return problems.Count > 0 ? new CoderRead.Wrong(problems) : new CoderRead.Refused(reason);
+    }
+
+    /// <summary>The <c>ok</c> arm, and the answer whose status is neither: every fault of it is listed.</summary>
+    private static CoderRead ReadReport(JsonElement root, IReadOnlyList<string> taskDodIds, string status, List<string> problems)
+    {
         UnknownKeys(root, OkKeys.Concat(RefusedKeys).Distinct().ToList(), string.Empty, problems, status == "ok" ? OkKeys : null);
         if (status != "ok")
         {
