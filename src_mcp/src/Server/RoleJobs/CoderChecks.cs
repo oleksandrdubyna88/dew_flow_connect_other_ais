@@ -78,6 +78,7 @@ internal sealed class CoderChecks(IRoleRun run, GitHistory git, CoderOsLayer lay
         var result = await new ChecksAtBase(git, new CheckRunner(layer.Launcher, layer.ChecksBoundary()))
             .RunCoderJobAsync(new DiskWorkFolder(tree.Root), baseSha, layer.Job, logs, Jobs, ct);
         ct.ThrowIfCancellationRequested();
+        RecordUnits(result, logs);
         var after = await StateAsync(ct);
         if (Moved(before, after) is { Length: > 0 } moved)
         {
@@ -85,6 +86,27 @@ internal sealed class CoderChecks(IRoleRun run, GitHistory git, CoderOsLayer lay
         }
 
         return new CoderChecksRound(turn, head, result.State.Wire(), Steps(result), result.Note, result.State == CheckState.Failed ? DigestOf(result) : []);
+    }
+
+    /// <summary>
+    /// The record of each check unit, beside its log, the way the coder's own launches are recorded (<see cref="CoderUnitRecord"/>): <c>unit-s&lt;n&gt;.json</c> for step n of the round — the unit's properties, its network and the rows of its preflight — and
+    /// <c>unit-preflight.json</c> when the preflight refused the checks and no unit of a step ran. A record that cannot be written is not a fault of the checks.
+    /// </summary>
+    private void RecordUnits(CheckResult result, string logs)
+    {
+        foreach (var step in result.Steps.Where(step => step.Boundary.Boundary == BoundaryRecord.UnitBoundary))
+        {
+            var number = int.TryParse(Path.GetFileName(step.LogPath).Split('-')[0], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var n) ? n : 0;
+            if (number > 0)
+            {
+                CoderUnitRecord.Write(logs, $"s{number}", CoderUnitRecord.CheckUnitName(layer.Job, $"s{number}"), step.Boundary, layer.Mounts, step.Started, $"{step.Project} {(step.Step == CheckStep.Build ? "build" : "test")}");
+            }
+        }
+
+        if (result.State == CheckState.BoundaryRefused && result.Boundary.Boundary == BoundaryRecord.UnitBoundary)
+        {
+            CoderUnitRecord.Write(logs, "preflight", CoderUnitRecord.CheckUnitName(layer.Job, "pre"), result.Boundary, layer.Mounts, started: false, "the preflight of the checks");
+        }
     }
 
     private CoderChecksRound Unverified(int turn, string head, string sentence, IReadOnlyList<CoderCheckStep>? steps = null) =>
