@@ -59,12 +59,28 @@ Narrowed: yes — the release pin, the agy program store and the refusal of a he
 |---|---|---|---|
 | the plan of epoch 3 E3 after its re-review round (coai session 1089eaa8, proceed) and the owner's answers, plan commit 60f3b5a0 | feat/v2-ep3-e3-roles, pushed | fits | kept |
 | the plan of epoch 3 E4 after its re-review round (coai session c0112e7a, proceed), plan commit 2a4ef2ee | feat/v2-ep3-e4-plan, pushed | fits | kept |
+| the code of ledger epoch 1: 184 of its 185 commits, in 16 groups; 8 of the 184 fit only because a later commit replaced the code; the list is in epoch-3/RESULTS_epoch1_done_code_sorting.md | feat/v2-ep3-e3-roles and feat/v2-ep3-e4-plan, pushed | fits | kept |
+| eabcbea1, in part: the rule that a vendor is launchable by its verdict alone (CoderVendorRow.Ships), with the parts of e8101102 and fdf8a12f that rely on it; its version half fits | feat/v2-ep3-e3-roles, pushed | cut | fixed forward in E3 s7 t1 d3 by a new commit of that branch; no revert of a pushed commit and no history rewrite |
   (The owner approved the revised plan on 2026-11-26, about 15:00 UTC, with the words «план принят», after a summary of the
   whole of epoch 3 in Russian that covered every entry of epoch 1, from the first to 1.17, both rejected findings — F2 of the
   E3 round and F3 of the E4 round — and what remains to be built in E3 and E4. The planner has this from the lead.)
   (The table holds the two plan commits the owner read from. The code that was written under epoch 1 on the branches
   feat/v2-ep3-e3-roles, feat/v2-ep3-e4-plan and feat/v2-ep3-e3-measure was not sorted by a judge for this record: no row
   says of a code commit that it fits or that it is cut. That sorting is step 5 of the rule of plan changes, and it is open.)
+  (Completed later on 2026-11-26. An Opus judge, read only, sorted the code of epoch 1 at the tips 9157dc94 of E3 and
+  2a4ef2ee of E4. Its file is [RESULTS_epoch1_done_code_sorting.md](epoch-3/RESULTS_epoch1_done_code_sorting.md), copied
+  unchanged; the two last rows of the table are its result. Of 185 commits 184 fit, 8 of them only because a later commit
+  replaced the code, and one is cut in part: eabcbea1. Its rule "the table ships by verdict" contradicts entry 1.16, which
+  asks for a launchable mark. No codex or agy coder can be launched today, so the cut did no harm yet.)
+  (Carried, not cut. First: the E4 branch has no eabcbea1 and still refuses a claude below 2.1.330; E4 takes the removal of
+  the version floor by merging E3. Second: the E4 tip holds stale texts about refusals that its code no longer makes; the
+  next E4 commit fixes them. Third, not built yet: the argv half of entry 1.9, which is E3 s7 t3 d7, and entry 1.10, which
+  is E3 s3 t4 d6; on E4 the judge also names the entries 1.12 and 1.14 as open, and 1.13 as met by afb4c834.)
+  (Step 2 of the rule, the halt: deviation, recorded. Four code commits were written after the stop commit 66bc4eea of
+  12:52: on E3 the commits 2ca58a8c, e2fe7a75 and eabcbea1, all at 14:03, and on E4 the commit afb4c834 at 12:57, on a
+  branch that does not hold the stop commit. Each implements an owner decision of the same day: the entries 1.6, 1.5, 1.8
+  and 1.7, in that order. By the lead's account the owner ordered each of them in the lead's conversation, and the owner
+  accepted the whole plan afterwards. The judge sorted their content with the rest.)
 
 > Epoch 2 · approved 2026-11-26 · by owner · state: open
 
