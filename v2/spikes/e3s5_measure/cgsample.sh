@@ -12,5 +12,5 @@ for i in $(seq 1 $n); do
       echo "$p $pp $c $m $pn $un :: $a"
     done | sort -u >> $out
   fi
-  sleep 0.4
+  sleep 0.15
 done
