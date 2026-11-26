@@ -1,5 +1,7 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { test } from 'node:test';
 import { HOSTS_SAID, notKeptSaid } from '../remoteHostsSaid';
 import type { Committed, HostStanding } from '../remoteHosts';
@@ -66,6 +68,17 @@ test('E2S1-T9 (the scan): one reader of the grant and of the withdrawal files, o
   for (const file of ['remoteAccountsRound.ts', 'remoteKeeper.ts', 'remoteKeeperDoor.ts']) {
     assert.ok(!/\braise\b|askPermission|permissionAsker/u.test(sourceOf(file)), `${file} can reach the question`);
   }
+});
+
+test('E2S1-T14 (the host): the one question is the modal of W14 with its two buttons, and the retired per-host question is in no source file and no census', () => {
+  const question = host.slice(host.indexOf('const raisePermission'), host.indexOf('interface Choice'));
+  assert.ok(question.includes("code: 'read-accounts-permission'") && question.includes('modal: true') && question.includes("class: 'confirmation'"), 'the question is not a modal confirmation with its code');
+  assert.ok(question.includes('title: HOSTS_SAID.permissionTitle') && question.includes('detail: HOSTS_SAID.permissionDetail(sideLabel())'), 'the question does not say W14');
+  assert.ok(question.includes('actions: [ALLOW_READING, NOT_NOW]'), 'the question has other buttons than the two');
+  assert.equal(countIn(host, /const ALLOW_READING = 'Allow reading'/gu) + countIn(host, /const NOT_NOW = 'Not now'/gu), 2);
+  assert.deepEqual(filesWith(/read-remote-session/u), [], 'the retired code is still a source');
+  const census = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'notification-sites.json'), 'utf8')) as { codes: readonly string[] };
+  assert.ok(!census.codes.includes('read-remote-session') && census.codes.includes('read-accounts-permission') && census.codes.includes('accounts-permission-not-kept'));
 });
 
 test('E2S1-T17 (the scan): the setting is gone — the key\'s text is in the one bridge line, W10\'s constant and the five help files, and nobody reads it', () => {
