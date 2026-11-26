@@ -19,6 +19,7 @@ import { until, activated } from './hostHelpers';
  * `libnss3`; CI's real-editor job runs it and nothing here fakes its result.</p>
  */
 
+const TAB_LABEL = 'AI accounts and usage';
 const HOST_A = 'hA';
 const HOST_B = 'hB';
 
@@ -44,6 +45,14 @@ async function putBack(accounts: Doors['accounts'], sessions: Doors['sessions'],
   accounts.replaceWsl(undefined);
   await sessions.restore(before);
   await seesTheStore(accounts);
+  await closeTheTab();
+}
+
+/** A tab this scenario opened does not stay open for the scenarios after it (a live webview slows every later one down). */
+async function closeTheTab(): Promise<void> {
+  for (const tab of vscode.window.tabGroups.all.flatMap((group) => group.tabs).filter((one) => one.label === TAB_LABEL)) {
+    await vscode.window.tabGroups.close(tab);
+  }
 }
 
 /**
@@ -126,7 +135,7 @@ export async function theIconOpensOneTabAndItsModelHoldsBothHosts(): Promise<voi
 
     assert.deepEqual(accounts.lastModel()?.blocks.map((block) => block.host), [HOST_A, HOST_B], 'the blocks of the model are not the two hosts, in code-unit order');
     assert.deepEqual([...calls].sort(byCodeUnit), [`${HOST_A} no-claude-usage`, `${HOST_B} no-claude-usage`], 'each host was not called exactly once');
-    assert.equal(vscode.window.tabGroups.all.flatMap((group) => group.tabs).filter((tab) => tab.label === 'AI accounts and usage').length, 1, 'a second press opened a second tab');
+    assert.equal(vscode.window.tabGroups.all.flatMap((group) => group.tabs).filter((tab) => tab.label === TAB_LABEL).length, 1, 'a second press opened a second tab');
   } finally {
     for (const one of terminals) {
       one.dispose();
