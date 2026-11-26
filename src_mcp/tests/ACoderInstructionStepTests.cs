@@ -322,18 +322,48 @@ public sealed class ACoderInstructionStepRunTests
     }
 
     [Fact]
-    public async Task D3_AStepThatPrintsWhatLooksLikeACredential_EndsTheJob_NamingTheClassNeverTheText_AndKeepsNothingOfIt()
+    public async Task D3_AStepThatPrintsWhatLooksLikeACredential_StopsNothing_TheOutputGoesOnAsItIs_AndTheFindingIsRecordedWithItsClassAndLine_NeverItsValue()
     {
-        var (rig, job, ended) = await FailsAsync(With("printf 'remote: ghp_%s\\n' abcdefghijklmnopqrstuvwxyz0123456789"));
-        await using var _ = rig;
-
-        RefusedWithNoModel(rig, job, ended, "looks like a credential");
+        // Owner decision 2026-11-26 (Q5): a secret found in the step's output stops nothing. The job goes on, the output reaches the prompt as it is, and coai RECORDS the finding: a notice of its own and the same in the record, with the class and the line and never the value.
         const string Token = "ghp_abcdefghijklmnopqrstuvwxyz0123456789";
-        ended.Reason.Should().NotContain(Token);
-        rig.World.Store.FolderOf(job.JobId)!.ReadResult().Should().NotContain(Token);
-        rig.World.LogText.Should().NotContain(Token);
-        Directory.EnumerateFiles(rig.World.Store.FolderOf(job.JobId)!.Location, "*", SearchOption.AllDirectories).Should().OnlyContain(file => !File.ReadAllText(file).Contains(Token, StringComparison.Ordinal), "nothing of the output is kept: not in the job folder, not in a file");
-        Directory.Exists(Path.Combine(rig.World.Store.FolderOf(job.JobId)!.Location, "instructions")).Should().BeFalse();
+        await using var rig = await CoderRig.CreateAsync(toolchain: With("printf 'a plain first line\\nremote: ghp_%s%s\\nlast\\n' abcdefghijklmnopqrst uvwxyz0123456789"));
+        rig.Says("sonnet", Green());
+        var job = rig.NewJob();
+
+        var (_, ended) = await rig.RunAsync(job);
+
+        ended.State.Should().Be(RoleJobStates.Succeeded, ended.Reason);
+        var launches = rig.Launches(job);
+        launches.Should().ContainSingle("the job went on and a model was launched");
+        launches[0][^1].Should().Contain($"remote: {Token}", "the output reaches the prompt as it is");
+        var kind = Redaction.FirstSecretClass($"remote: {Token}");
+        kind.Should().NotBeEmpty();
+        var notices = rig.Rig.NoticesOf(ServerNoticeCodes.InstructionsSecret);
+        var notice = notices.Should().ContainSingle("one notice for the finding").Subject;
+        notice.Subject.Should().Be(job.JobId);
+        (notice.Title + " " + notice.Detail).Should().Contain(kind).And.Contain("line 2");
+        var finding = Step(rig.Envelope(job)).GetProperty("secrets").EnumerateArray().Should().ContainSingle().Subject;
+        (finding.GetProperty("class").GetString(), finding.GetProperty("line").GetInt32()).Should().Be((kind, 2));
+        foreach (var text in new[] { notice.Title, notice.Detail, notice.Cure, rig.World.Store.FolderOf(job.JobId)!.ReadResult(), rig.World.LogText })
+        {
+            text.Should().NotContain(Token).And.NotContain("abcdefghijklmnopqrstuvwxyz0123456789", "no part of the value is in the notice, the record or the log");
+        }
+
+        rig.World.LogText.Should().Contain("instruction step").And.Contain($"{kind} at line 2", "the log says the class and the line");
+    }
+
+    [Fact]
+    public async Task D3_AStepWhoseOutputHoldsNoSecret_RecordsNoFinding_AndWritesNoNotice()
+    {
+        await using var rig = await CoderRig.CreateAsync(toolchain: With("echo an ordinary line"));
+        rig.Says("sonnet", Green());
+        var job = rig.NewJob();
+
+        var (_, ended) = await rig.RunAsync(job);
+
+        ended.State.Should().Be(RoleJobStates.Succeeded, ended.Reason);
+        rig.Rig.NoticesOf(ServerNoticeCodes.InstructionsSecret).Should().BeEmpty();
+        Step(rig.Envelope(job)).TryGetProperty("secrets", out _).Should().BeFalse("the member is written only when there is a finding");
     }
 
     [Fact]

@@ -42,6 +42,23 @@ internal static class RoleJobNotices
         Provider = to.Vendor,
     };
 
+    /// <summary>
+    /// The instruction step of a coder job printed text that looks like a credential: the job went on, and this says what was found — the CLASS and the LINE of each finding, never a part of the value. The subject is the job id, so one job's findings coalesce.
+    /// </summary>
+    public static ServerNotice InstructionsSecret(RoleJobRecord job, IReadOnlyList<InstructionSecret> findings, DateTime nowUtc) => new()
+    {
+        Utc = ServerNotice.Iso(nowUtc),
+        Class = "failure",
+        Source = Source,
+        Code = ServerNoticeCodes.InstructionsSecret,
+        Subject = job.JobId,
+        Title = $"Role job {job.JobId} ({job.Role}): the instruction step printed text the redactor flags ({findings.Count} finding{(findings.Count == 1 ? string.Empty : "s")})",
+        Detail = $"Found: {string.Join("; ", findings.Select(finding => finding.Line > 0 ? $"{finding.Class} at line {finding.Line}" : $"{finding.Class} in the output as a whole"))}. The job went on and the output reached the prompt of every model as it was; only the class and the line are written down, never the value.",
+        Cure = "Change the step so that it prints nothing of the kind, and rotate what it printed if that was real. The output is kept in the job folder (instructions/stdout.txt).",
+        Role = job.Role,
+        Repo = job.Repo,
+    };
+
     /// <summary>A job that ended <c>failed</c>: its stop and its reason, the way <c>role_status</c> shows them.</summary>
     public static ServerNotice Failed(RoleJobRecord job, DateTime nowUtc) => new()
     {

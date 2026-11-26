@@ -18,6 +18,11 @@ namespace CoaiMcp.Server.RoleJobs;
 /// <param name="StderrTail">The last lines of standard error, only for a step that failed — the envelope of a failed job names them (C9 item 5). Empty otherwise.</param>
 internal sealed record CoderInstructionsRecord(bool Declared, IReadOnlyList<string> Argv, int ExitCode, long Bytes, string Sha256, long Ms, IReadOnlyList<string> StderrTail)
 {
+    /// <summary>
+    /// What the search for a credential found in the step's output (owner decision of 2026-11-26): the class and the line of each finding, never the text. A finding stops nothing; the output reached the prompt as it was, and this is the record of it. Empty for a clean output.
+    /// </summary>
+    public IReadOnlyList<InstructionSecret> Secrets { get; init; } = [];
+
     /// <summary>The record of a job whose base commit declares no step.</summary>
     public static CoderInstructionsRecord NotDeclared { get; } = new(false, [], 0, 0, string.Empty, 0, []);
 
@@ -48,9 +53,26 @@ internal sealed record CoderInstructionsRecord(bool Declared, IReadOnlyList<stri
             json.WriteEndArray();
         }
 
+        if (Secrets.Count > 0)
+        {
+            json.WriteStartArray("secrets");
+            foreach (var secret in Secrets)
+            {
+                json.WriteStartObject();
+                json.WriteString("class", secret.Class);
+                json.WriteNumber("line", secret.Line);
+                json.WriteEndObject();
+            }
+
+            json.WriteEndArray();
+        }
+
         json.WriteEndObject();
     }
 }
+
+/// <summary>One finding of the search for a credential in a step's output: the class (<c>Redaction.FirstSecretClass</c>) and the 1-based line it was on (0 when the text as a whole matched and no single line did). Never the value.</summary>
+internal sealed record InstructionSecret(string Class, int Line);
 
 /// <summary>What the instruction step made of the job, before any model is launched.</summary>
 internal abstract record CoderInstructionsOutcome
@@ -168,11 +190,49 @@ internal sealed class CoderInstructions(IRoleRun run, GitHistory git, CoderOsLay
             return Fail(argv, why, exit, bytes, hash, ms, tail);
         }
 
-        var record = new CoderInstructionsRecord(true, argv, 0, bytes, hash, ms, []);
+        // A secret in the output stops NOTHING (owner decision 2026-11-26, Q5): the output goes on to the prompt as it is, and the finding is recorded — in the record, in one notice, in one log line — with its class and its line, never its value.
+        var record = new CoderInstructionsRecord(true, argv, 0, bytes, hash, ms, []) { Secrets = SecretsIn(text) };
         Keep(text, record);
+        Report(record.Secrets);
         run.Log.Information("role job {JobId}: the instruction step ran: exit 0, {Bytes} bytes, sha256 {Sha256}, {Ms} ms", run.Request.JobId, bytes, hash, ms);
 
         return new CoderInstructionsOutcome.Ran(record, text, baseSha);
+    }
+
+    /// <summary>The most findings one output records: a step that prints a thousand lines of secrets says the first twenty.</summary>
+    private const int MostFindings = 20;
+
+    /// <summary>The classes and the lines of the credential-looking text in <paramref name="text"/>: each line is asked on its own; when none matches alone and the text as a whole does, one finding with line 0. Never the value.</summary>
+    internal static IReadOnlyList<InstructionSecret> SecretsIn(string text)
+    {
+        var found = new List<InstructionSecret>();
+        var lines = text.Split('\n');
+        for (var index = 0; index < lines.Length && found.Count < MostFindings; index++)
+        {
+            if (Redaction.FirstSecretClass(lines[index]) is { Length: > 0 } kind)
+            {
+                found.Add(new InstructionSecret(kind, index + 1));
+            }
+        }
+
+        if (found.Count == 0 && Redaction.FirstSecretClass(text) is { Length: > 0 } whole)
+        {
+            found.Add(new InstructionSecret(whole, 0));
+        }
+
+        return found;
+    }
+
+    private void Report(IReadOnlyList<InstructionSecret> found)
+    {
+        if (found.Count == 0)
+        {
+            return;
+        }
+
+        // The log line names the class and the line of each finding and nothing of the text; the words of the scan of the launch road (a log call that takes a key) are not in it on purpose.
+        run.Log.Warning("role job {JobId}: the instruction step printed text the redactor flags ({Found}); the job goes on and the output reaches the prompt as it is", run.Request.JobId, string.Join(", ", found.Select(finding => $"{finding.Class} at line {finding.Line}")));
+        run.Notice(RoleJobNotices.InstructionsSecret(run.Job, found, run.Clock.GetUtcNow().UtcDateTime));
     }
 
     /// <summary>The sentence that says why the step did not run to a clean end, or empty. In the order a person would look: the unit, the clock, the exit, the size, the bytes, the tree.</summary>
@@ -186,8 +246,6 @@ internal sealed class CoderInstructions(IRoleRun run, GitHistory git, CoderOsLay
         _ when bytes > MostBytes => $"the step printed {bytes} bytes, more than {MostBytes}, and nothing is cut",
         _ when text.Contains('�', StringComparison.Ordinal) => "the step printed bytes that are not UTF-8",
         _ when text.Any(IsControlButNotSpacing) => "the step printed a control character, so its output is not text",
-        // The text goes to the vendor of every model and into a file: the search the product makes of every text that goes to a hosted model (security verify M1). The class is named, never the text; prose that looks like a credential refuses the job.
-        _ when Redaction.FirstSecretClass(text) is { Length: > 0 } kind => $"the step printed text that looks like a credential ({kind}); nothing of it is kept or sent",
         _ => moved,
     };
 
