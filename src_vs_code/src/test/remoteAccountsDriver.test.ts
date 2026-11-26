@@ -136,6 +136,18 @@ test('E2S4-T2: after Allow a round starts at once; one first call for each host 
   assert.deepEqual([...r.calls].sort(), ['a', 'b', 'd'], 'a terminal of a new host was not read in the next round with no question');
 });
 
+test('E2S4-T2b: an Allow that a terminal opening read first (rearm) still starts the round, and the keeper\'s signal after it starts no second one', async () => {
+  const r = rig({ hosts: ['a', 'b'], permitted: false });
+  await r.driver.changed();
+
+  r.control.permitted = true;
+  await r.driver.rearm();
+  await r.driver.changed();
+  await waitIdle(r);
+
+  assert.deepEqual([...r.calls].sort(), ['a', 'b'], 'the Allow seen by a terminal that opened did not start the round, or started it twice');
+});
+
 test('E2S4-T3: a withdrawal during a round abandons it, publishes nothing, empties the memory and clears the timer; the next tick calls nothing', async () => {
   const r = rig({ hosts: ['a', 'b'], permitted: true });
   await r.driver.changed();

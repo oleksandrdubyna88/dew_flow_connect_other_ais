@@ -239,8 +239,24 @@ export class AccountsDriver {
     this.armed = true;
   }
 
+  /**
+   * An *Allow* starts a round at once, whichever read of the permission saw it first: a terminal that opens (`rearm`) can read the grant before the
+   * keeper's change signal does, and then the signal sees no edge. Whoever sees the edge starts the round (a round that runs is never started twice).
+   */
+  private async startedAfterAllow(edge: ReturnType<typeof permissionEdge>): Promise<boolean> {
+    if (edge !== 'allowed' || !startsAfterAllow({ running: this.running, stopped: await this.stoppedNow(), eligible: await this.eligibleNow() })) {
+      return false;
+    }
+    void this.runNow('refresh');
+
+    return true;
+  }
+
   rearm = async (): Promise<void> => {
-    const { permitted } = await this.sync();
+    const { permitted, edge } = await this.sync();
+    if (await this.startedAfterAllow(edge)) {
+      return;
+    }
     this.apply(timerFor(await this.decision(this.armed), this.world.test));
     await this.observe(permitted);
   };
@@ -338,9 +354,7 @@ export class AccountsDriver {
     this.memoryNow = withRefusals(this.memoryNow, this.refused);
     this.world.landed(undefined);
     const { permitted, edge } = await this.sync();
-    if (edge === 'allowed' && startsAfterAllow({ running: this.running, stopped: await this.stoppedNow(), eligible: await this.eligibleNow() })) {
-      void this.runNow('refresh');
-
+    if (await this.startedAfterAllow(edge)) {
       return;
     }
     this.apply(timerFor(await this.decision(this.armed), this.world.test));

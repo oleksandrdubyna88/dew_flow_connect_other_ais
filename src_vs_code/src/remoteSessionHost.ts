@@ -349,10 +349,13 @@ function allowNotKept(keeper: HostKeeper, raised: { notice: boolean }, result: A
 /** The change event of a road that has no keeper to listen to: nobody is ever told. */
 const noChange: vscode.Event<void> = () => ({ dispose: () => undefined });
 
+/** The modal of the permission's question, until the test door replaces it (a modal has nobody to answer it in a real editor under test). */
+let boundQuestion: (() => Promise<boolean>) | undefined;
+
 /** The permission's one decision (`permissionAsker`) over this window's keeper and state row. Nothing but a person's press reaches it. */
 function askerOf(keeper: HostKeeper, state: vscode.Memento, raised: { notice: boolean }): ReturnType<typeof permissionAsker> {
   return permissionAsker({
-    raise: raisePermission,
+    raise: () => (boundQuestion ?? raisePermission)(),
     permission: () => keeper.permission(),
     allow: () => keeper.allow(),
     askedBefore: () => permissionRowOf(state.get(STATE_KEY)).askedUtc !== undefined,
@@ -505,6 +508,8 @@ export function bindRemoteSessions(context: vscode.ExtensionContext, folder: str
 export interface RemoteSessionsTestDoor {
   /** Replace the bound road's ssh call; `undefined` puts `runRemote` back. */
   readonly replaceRun: (run: RoadSeams['run'] | undefined) => void;
+  /** TEST ONLY. Replace the modal of the permission's question by an answer (`true`: *Allow reading*; `false`: *Not now*), no dialog is shown; `undefined` puts the modal back. */
+  readonly replaceQuestion: (raise: (() => Promise<boolean>) | undefined) => void;
   readonly read: RemoteSessions['read'];
   readonly pickedOf: RemoteSessions['pickedOf'];
   /** What the context key `coai.terminalReadsSession` was last set to, or nothing before the first set. */
@@ -575,6 +580,7 @@ async function restoreFiles(folder: string, before: StoredBefore): Promise<void>
 
 export const testDoorOf = (sessions: RemoteSessions, state: vscode.Memento, folder: string): RemoteSessionsTestDoor => ({
   replaceRun: (run) => { boundRun = run ?? runRemote; },
+  replaceQuestion: (raise) => { boundQuestion = raise; },
   read: sessions.read,
   pickedOf: sessions.pickedOf,
   readsKey: () => lastKey,

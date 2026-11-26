@@ -275,7 +275,9 @@ test('E2S3-T8: the CSP and the nonce — no source but the nonce, no http, no un
   assert.ok(!policy.includes('http') && !policy.includes('unsafe-'));
   assert.equal(HTML.split(`nonce="${NONCE}"`).length - 1, 2, 'one script and one style carry the nonce');
   assert.ok(!/<script(?![^>]*nonce=)/u.test(HTML), 'a script with no nonce');
-  assert.ok(!/ on[a-z]+=/u.test(HTML.replace(/<script[\s\S]*<\/script>/u, '')), 'an inline handler in the markup');
+  // The parsed tree, not the text: no element of the page, as drawn over a model, carries an `on…` attribute (any case).
+  const handlers = page().document.root.descendants().flatMap((one) => [...one.attributes.keys()].filter((name) => name.toLowerCase().startsWith('on')).map((name) => `${one.tag}[${name}]`));
+  assert.deepEqual(handlers, [], 'an inline handler in the markup');
   assert.ok(!pageScriptOf(HTML).includes('innerHTML'), 'the page script assigns no markup');
 });
 

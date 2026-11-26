@@ -51,6 +51,8 @@ export async function theConsentOfAHostIsKeptInTheRealGlobalState(): Promise<voi
 
     return answer(operands);
   });
+  let questions = 0;
+  door.replaceQuestion(async () => { questions += 1; return false; });
   const before = await door.stored();
   const terminal = vscode.window.createTerminal({ name: `Creds: ${HOST} / ${SESSION}` });
   try {
@@ -67,7 +69,8 @@ export async function theConsentOfAHostIsKeptInTheRealGlobalState(): Promise<voi
     assert.ok(!(await door.standings()).some((row) => row.host === HOST && row.answer === 'no'), 'Read this host again did not lift the "no" in the list read back from globalState');
     const none = await door.read(terminal, 'question');
     assert.equal(calls.length, 0, 'ssh was spawned with no permission');
-    assert.ok(none.kind === 'refused', 'a press with no permission did not refuse');
+    assert.ok(none.kind === 'refused' && none.refusal.includes('no permission'), `a press with no permission did not refuse with W15's sentence: ${JSON.stringify(none)}`);
+    assert.equal(questions, 1, 'the press with no permission did not ask the one question exactly once');
     assert.equal((await door.allow()).kind, 'given', 'the permission was not given through the keeper');
 
     const on = await door.read(terminal, 'question');
@@ -86,6 +89,7 @@ export async function theConsentOfAHostIsKeptInTheRealGlobalState(): Promise<voi
     await until(() => door.pickedOf(terminal) === undefined, 'the picked id of a closed terminal is still kept');
   } finally {
     door.replaceRun(undefined);
+    door.replaceQuestion(undefined);
     await door.restore(before);
     terminal.dispose();
   }
@@ -138,6 +142,7 @@ export async function thePermissionIsGivenAndWithdrawnThroughTheRealStores(): Pr
   const before = await door.stored();
   const terminal = vscode.window.createTerminal({ name: `Creds: ${HOST} / ${SESSION}` });
   door.replaceRun(async () => { assert.fail('a host was read without the permission'); });
+  door.replaceQuestion(async () => false);
   try {
     terminal.show();
     await door.restore({ list: undefined, row: undefined, file: undefined, withdrawn: [] });
@@ -163,6 +168,7 @@ export async function thePermissionIsGivenAndWithdrawnThroughTheRealStores(): Pr
     assert.equal(await door.may('session', HOST), 'yes');
   } finally {
     door.replaceRun(undefined);
+    door.replaceQuestion(undefined);
     await door.restore(before);
     terminal.dispose();
   }
