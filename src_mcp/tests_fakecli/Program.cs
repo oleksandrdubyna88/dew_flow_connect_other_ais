@@ -57,6 +57,7 @@ AppDomain.CurrentDomain.UnhandledException += (_, e) =>
 //   FAKECLI_STDERR / FAKECLI_EXIT — failure steering
 //   FAKECLI_SLEEP_MS     — answer only after this long (the probe's timeout arm)
 //   FAKECLI_SIDE_EFFECT  — write a file at this path: a vendor breaking its own read-only promise
+//   FAKECLI_STATE_DIR    — a folder: the record folder (relative) and the model map's launch counter are below it, not in the working folder
 //   FAKECLI_RECORD_DIR   — write each launch's full argv into <pid>-<guid>.argv there, whole or not at all
 //   FAKECLI_RECORD_GATE  — hold that record open until this file exists, saying so in <gate>.held (a test of the recorder)
 //   FAKECLI_HELP_STDOUT / FAKECLI_HELP_EXIT / FAKECLI_HELP_SLEEP_MS
@@ -189,6 +190,13 @@ if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor" || minimal is
         // NUL-joined, because a recorded field may be multiline (the prompt on stdin) — lines
         // cannot reconstruct an argv, a character no argv contains can. The stdin text is
         // recorded as the LAST field, since that is where the prompt lives now.
+        // FAKECLI_STATE_DIR: a relative record folder is below that folder (the unit's own temp folder), where the clean before every round of checks does not reach.
+        if (read("FAKECLI_STATE_DIR") is { Length: > 0 } stateDir)
+        {
+            record = Path.Combine(stateDir, record);
+            Directory.CreateDirectory(record);
+        }
+
         LaunchRecord.Write(record, string.Join('\0', args.Append(prompt.StdIn)), read("FAKECLI_RECORD_GATE"));
     }
 

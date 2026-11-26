@@ -52,7 +52,7 @@ public sealed class TheCoderEpicAcceptanceTests
             Jobs = TempDir.For("coai-coder-epic-jobs-");
             Directory.CreateDirectory(Path.Combine(Home.Path, ".claude"));
             File.WriteAllText(Path.Combine(Home.Path, ".claude", ".credentials.json"), CoderBed.SignInLine + "\n");
-            _steering = FakeCliSteering.Write(new Dictionary<string, string> { ["FAKECLI_MODEL_MAP"] = ".fake/model-map.json", ["FAKECLI_RECORD_DIR"] = ".fake/launches" });
+            _steering = FakeCliSteering.Write(new Dictionary<string, string> { ["FAKECLI_MODEL_MAP"] = ".fake/model-map.json", ["FAKECLI_STATE_DIR"] = CoaiMcp.Runners.Toolchain.BoundaryUnit.UnitTemp, ["FAKECLI_RECORD_DIR"] = "launches" });
         }
 
         internal TempGitRepo Repo { get; }
@@ -249,7 +249,7 @@ public sealed class TheCoderEpicAcceptanceTests
             status.GetProperty("attempts").EnumerateArray().Select(attempt => attempt.GetProperty("vendor").GetString()).Should().OnlyContain(vendor => vendor == "claude");
             var envelope = status.GetProperty("result");
             envelope.GetProperty("green").GetBoolean().Should().BeTrue();
-            var launches = RoleFailoverRig.LaunchesIn(Path.Combine(world.WorktreeOf(jobId), ".fake", "launches"));
+            var launches = RoleFailoverRig.LaunchesIn(Path.Combine(world.Jobs.Path, jobId, "coder", "tmp", "launches"));
             launches.Should().HaveCount(2, "turn 0 and one fix turn");
             launches.Count(argv => argv.Contains("--resume")).Should().Be(1, "the fix turn resumes the session; turn 0 does not");
             launches.Select(Resumed).Should().Equal(string.Empty, SessionOfTurnZero);

@@ -81,6 +81,12 @@ internal sealed class CoderChecks(IRoleRun run, GitHistory git, CoderOsLayer lay
     public async Task<CoderChecksRound> RunAsync(int turn, string head, CancellationToken ct)
     {
         run.Phase("checks", turn);
+        var clean = await ProveEqualToTheCommitAsync(ct);
+        if (clean.Length > 0)
+        {
+            return Unverified(turn, head, clean);
+        }
+
         var before = await StateAsync(ct);
         if (before.Sentence.Length > 0 || before.Head != head)
         {
@@ -114,7 +120,7 @@ internal sealed class CoderChecks(IRoleRun run, GitHistory git, CoderOsLayer lay
         }
 
         var part = $"s{step.Number}";
-        Record(logs, part, CoderUnitRecord.CheckUnitName(layer.Job, part), step.Boundary, step.Started, $"{step.Project} {(step.Step == CheckStep.Build ? "build" : "test")}");
+        Record(logs, part, CoderUnitRecord.CheckUnitName(layer.Job, part), step.Boundary, step.Started, $"{step.Project} {step.Step.Wire()}");
     }
 
     /// <summary><c>unit-preflight.json</c> when the preflight refused the checks and no unit of a step ran.</summary>
@@ -165,6 +171,29 @@ internal sealed class CoderChecks(IRoleRun run, GitHistory git, CoderOsLayer lay
         {
             return string.Empty;
         }
+    }
+
+    /// <summary>
+    /// M6 of the security verify: the checks read the COMMIT (detection, the definitions, the gate) and run in the WORKTREE, and a file git ignores is in neither the commit nor the status — so before every round the worktree is proven equal to the commit, ignored files included: <c>git clean -ffdx</c>
+    /// through the hardened door, then <c>status --porcelain --ignored</c> must be empty. Anything else refuses the round with a fixed sentence (no path of the tree is named). Empty when the tree is clean.
+    /// </summary>
+    private async Task<string> ProveEqualToTheCommitAsync(CancellationToken ct)
+    {
+        var cleaned = await git.InCoderTreeAsync(tree, ["clean", "-ffdxq"], ct);
+        if (!cleaned.Ran || !cleaned.Ok)
+        {
+            return cleaned.Refusal.Length > 0 ? cleaned.Refusal : "git could not clean the worktree before the checks, so the checks are not trusted and nothing was run";
+        }
+
+        var status = await git.InCoderTreeAsync(tree, ["--no-optional-locks", "status", "--porcelain=v1", "-z", "--untracked-files=all", "--ignored"], ct);
+        if (!status.Ran || !status.Ok)
+        {
+            return status.Refusal.Length > 0 ? status.Refusal : "git could not read the worktree's status before the checks, so the checks are not trusted and nothing was run";
+        }
+
+        return status.Out.Length == 0
+            ? string.Empty
+            : "the worktree is not equal to the commit the checks were to run on (after git clean -ffdx, git status --ignored still shows changes), so the checks are not trusted and nothing was run";
     }
 
     /// <summary>The worktree as git sees it: HEAD and the porcelain status (tracked changes and untracked files that are not ignored), or the sentence that says git could not answer.</summary>

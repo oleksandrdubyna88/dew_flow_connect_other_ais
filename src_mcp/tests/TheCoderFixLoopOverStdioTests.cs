@@ -52,7 +52,7 @@ public sealed class TheCoderFixLoopOverStdioTests
             Jobs = TempDir.For("coai-coder-stdio-jobs-");
             Directory.CreateDirectory(Path.Combine(Home.Path, ".claude"));
             File.WriteAllText(Path.Combine(Home.Path, ".claude", ".credentials.json"), CoderBed.SignInLine + "\n");
-            _steering = FakeCliSteering.Write(new Dictionary<string, string> { ["FAKECLI_MODEL_MAP"] = ".fake/model-map.json", ["FAKECLI_RECORD_DIR"] = ".fake/launches" });
+            _steering = FakeCliSteering.Write(new Dictionary<string, string> { ["FAKECLI_MODEL_MAP"] = ".fake/model-map.json", ["FAKECLI_STATE_DIR"] = CoaiMcp.Runners.Toolchain.BoundaryUnit.UnitTemp, ["FAKECLI_RECORD_DIR"] = "launches" });
         }
 
         internal TempGitRepo Repo { get; }
@@ -129,8 +129,8 @@ public sealed class TheCoderFixLoopOverStdioTests
 
         internal string WorktreeOf(string jobId) => Path.Combine(Root.Path, $"coai-coder-{jobId}");
 
-        /// <summary>The argv of every launch of the fake, in order — recorded below <c>.fake/launches</c> of the job's worktree.</summary>
-        internal IReadOnlyList<string[]> Launches(string jobId) => RoleFailoverRig.LaunchesIn(Path.Combine(WorktreeOf(jobId), ".fake", "launches"));
+        /// <summary>The argv of every launch of the fake, in order — recorded below <c>launches</c> of the coder unit's own /tmp (the job's temp folder): a file of the worktree is cleaned away before every round of checks.</summary>
+        internal IReadOnlyList<string[]> Launches(string jobId) => RoleFailoverRig.LaunchesIn(Path.Combine(Jobs.Path, jobId, "coder", "tmp", "launches"));
 
         internal async Task<string> GitAsync(string folder, params string[] args)
         {

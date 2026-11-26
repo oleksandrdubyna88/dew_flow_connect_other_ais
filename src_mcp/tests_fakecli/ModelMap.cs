@@ -27,7 +27,7 @@ internal static class ModelMap
             : default;
         if (entry.ValueKind == JsonValueKind.Array && entry.GetArrayLength() > 0)
         {
-            entry = entry[Math.Min(Launched(path, model), entry.GetArrayLength() - 1)];
+            entry = entry[Math.Min(Launched(path, model, read), entry.GetArrayLength() - 1)];
         }
 
         entry = PoolKey.Choose(entry);
@@ -50,9 +50,11 @@ internal static class ModelMap
     }
 
     /// <summary>How many times this model was launched before now — a line is added for this launch. Launches of one test are sequential, so a plain append is enough.</summary>
-    private static int Launched(string path, string model)
+    private static int Launched(string path, string model, Func<string, string?> read)
     {
-        var counter = path + "." + string.Concat(model.Select(c => char.IsLetterOrDigit(c) ? c : '_')) + ".count";
+        var name = string.Concat(model.Select(c => char.IsLetterOrDigit(c) ? c : '_')) + ".count";
+        // FAKECLI_STATE_DIR: the counter lives in that folder (the unit's own temp folder), not beside the map in the worktree, where the clean before every round of checks would remove it.
+        var counter = read("FAKECLI_STATE_DIR") is { Length: > 0 } stateDir ? Path.Combine(stateDir, Path.GetFileName(path) + "." + name) : path + "." + name;
         var before = File.Exists(counter) ? File.ReadAllLines(counter).Length : 0;
         File.AppendAllText(counter, "L\n");
 
