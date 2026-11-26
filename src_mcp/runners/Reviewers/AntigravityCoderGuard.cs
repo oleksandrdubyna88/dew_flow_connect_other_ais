@@ -190,7 +190,7 @@ public static class AntigravityCoderGuard
             {
                 if (kind == EntryKind.Directory)
                 {
-                    Directory.Delete(entry, recursive: true);
+                    GitScratch.DeleteEvenIfReadOnly(entry);
                 }
                 else
                 {
