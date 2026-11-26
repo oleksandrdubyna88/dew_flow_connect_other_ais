@@ -116,3 +116,97 @@ Fix: `TryRerunAsync` returns the survivor to `RunPlanAsync`, which ends as it do
 7. **The merge.** `GitHistory.RunAsync` keeps `--no-replace-objects`, the hardened environment and E3's standard input; the three E4 readers pass `maxChars` by name. `CoderChecks` keeps the clean, the empty `status --ignored` and the `.git` walk, with E3's static `StateAsync`. The schema and `ToolchainTables` hold E4's four keys and E3's `instructions`. The instruction step of E3 is read from the file at the BASE commit and runs once before the coder; the head's file does not reach it.
 
 Not verified: anything inside a real unit; `CoderFormat` and `CoderFixLoop` at run time; the jest, vitest and node:test readers against M1 to M3 (only the platform runner's output was scripted); the repository's tests were not run.
+
+---
+
+# Pass 2 (2026-11-26, commit 23e25947): the fixes of M1–M4 and S1, S3, S4, S5, S8
+
+Read-only, `git show 23e25947`. The worktree at `/home/jinx/git/coai-v2-ep3e4` was not changed, built or tested (`git status` empty, `HEAD` `23e25947`). Line numbers are of `23e25947`.
+
+How it was checked: `src_mcp/core` and `src_mcp/runners` of `23e25947` were exported and built in the scratchpad, and the pass 1 scenarios were run again on the real `CheckRunner`, with new ones. "Is a file of the head" is answered by the scratch tree in that probe; the real read (`git cat-file -e`) was measured apart. `CoderFormat`, `CoderFixLoop` and everything inside a unit are by reading, as in pass 1. The repository's tests were not run. Scratch: `/tmp/claude-1000/-home-jinx-git-dew-flow-conventions/4c91ec34-3816-4f0d-83a8-d95afa710fba/scratchpad/s5y/` — `probe/Program.cs`, `run/`, `git/`, `node/`, `old/`.
+
+## Verdict
+
+**must-change: one item (M5), a change of four values in `shared/toolchains.json`.** M1, M3 and M4 are fixed. M2 is fixed for the note and for the platform runner; for the other four tools the new code is 1, and 1 is not "tests failed" only.
+
+| Pass 1 | State | How known |
+|---|---|---|
+| M1 names of the output in the argv | fixed | measured: `run/r1`, `r1d`, `r1e` give a whole re-run, `argv=[sh | t/full.sh]` |
+| M2 the note | fixed | measured: `1 step(s) passed; the test step of . failed and was excused by a re-run (see flaky)` |
+| M2 a narrowed re-run after another exit code | fixed for mtp (`run/r2`: exit 3, whole re-run, red); **not for vstest, jest, vitest, node-test (M5)** | measured |
+| M3 the digest's step | fixed | measured: `run/r3` `FailedStep: step 1, scope=full`; `run/r3g` green with `1 selected run(s) selected no test` |
+| M4 a unit that cannot be stopped | fixed in both places | by reading: `CheckRunner.cs:141`, `CoderFormat.cs:66`, `CoderFixLoop.FormatEnded` |
+| S1 added commands, `testFiles`, `skip`, `timeouts`, added projects | fixed | by reading (`ToolchainResolve.FileChanges`) |
+| S3 the excused name | fixed | measured: a name of 249 characters is kept as about 200; a name the redactor changes is never excused (`run/r5`: no re-run, because the digest's name and the summary's name then differ — closed) |
+| S4 the named proof asks `Complete` | fixed | the test's body run on the old export: 1 excused; new code: `named == 1 && summary.Complete` |
+| S5 the formatter turn's units | fixed | by reading: `StepFinished` writes `unit-s<n>.json` in `format-<turn>`, the rows are put before the round's in `checks` |
+| S8 the schema's `title` | fixed | read |
+
+## Must-change
+
+### M5 — `testsFailed: [1]` for vstest, jest, vitest and node-test does not tell a failed test from another failure
+
+Site: `/home/jinx/git/coai-v2-ep3e4/shared/toolchains.json:57` and `:111-113`; read at `CheckRunner.cs:230` (`TestsFailedCodes`) and `FlakyRule.Decide` (`input.TestsFailedCodes.Contains(input.FirstExit)`).
+
+The platform runner has a code of its own for failed tests (2; measured in the s3 passes). The other four tools end with 1 for a failed test and for other things too.
+
+Measured, node:test (node 26.12.1, `node/`):
+
+| Run | Exit |
+|---|---|
+| one test fails | 1 |
+| every test passes, `--experimental-test-coverage --test-coverage-lines=100` not met (`42.86% line coverage does not meet threshold of 100%`) | **1** |
+| the test passes, the file throws afterwards | **1** |
+
+Measured, the real runner with jest-shaped output (`run/r2j`: `adapter: node`; the first run names one failed test in `tests/flaky.js`, prints a coverage-threshold line and exits 1; the narrowed re-run passes that test):
+
+```
+state: Green   note: 1 step(s) passed; the test step of . failed and was excused by a re-run (see flaky)
+  step 1: scope=full  exit=1 excused=True  argv=[sh | t/full.sh]
+  step 2: scope=rerun exit=0               argv=[sh | t/sel.sh | ./tests/flaky.js]
+flaky: sometimes file=tests/flaky.js rerun=narrowed proof=named firstExit=1
+```
+
+That is pass 1's `r2` again, for a node tool. The row now has `firstExit`, but 1 tells a reader nothing. jest, vitest and VSTest were not run here (no package in the local cache); that each ends with 1 for a coverage threshold or a crash as well is from their documentation, not measured.
+
+Fix: `"testsFailed": []` for `vstest`, `jest`, `vitest` and `node-test`, so that only a whole re-run excuses there; keep `[2]` for `mtp`. A row gets a code only with a RESULTS line that measured it as the tool's code for failed tests and for nothing else. Test: `run/r2j` ends with a whole re-run, and red.
+
+## Should
+
+- **S9 — the head-listing read says yes for a folder and for a link.** `ChecksAtBase.cs:111`: `InHead` is `HasPathAsync`, which is `git --no-replace-objects cat-file -e <head>:<path>`. Measured (`git/`): exit 0 for `tests/File.cs`, for the folder `tests/Sub` and for the link `tests/Link`; 128 for a path that is not there. A name of the output that is a folder under a `testFiles` prefix with a plain name (`tests/Sub`) therefore reaches the argv as `./tests/Sub`. It is a path of the head and no option, so no harm follows; the rule's own word is "a file". Use `EntryAtAsync` (the `ls-tree -l -z` read that is there) and take only a blob with mode 100644 or 100755.
+- **S10 — the note of the format state when the PREFLIGHT refused.** `CoderFormat.cs:66-69` answers every `BoundaryRefused` with "a unit of the formatter turn could not be stopped". A refused admission is `BoundaryRefused` too. The job's reason (`ran.Note`) is right; the `format.note` beside it is not. By reading.
+- **S11 — the test of S3 proves little.** `S3_ThePassedNameOfAnExcusedTest_IsRedactedAndBounded` calls `FlakyRule.SafeName` on a long text and a plain one. It does not show a credential-shaped name, and not that the envelope and `flaky-excused.txt` get the safe name. A change that stops calling `SafeName` in `TryRerunAsync` passes it.
+- **S12 — what S1 still does not name**: a changed `adapter` or `memoryMb` of a project. Small.
+- **Note — `*.test.js` and `*.spec.ts` never get a selected or a narrowed run**: the stem must be letters, digits and underscores, and the stem of `flaky.test.js` is `flaky.test`. It is closed (the whole step runs). Say so where `testFor` is described for node, or s5 t6's twin for a node repository will read as broken.
+- **Open by the coder's own list**: S2 (the format commit; the M6 proof before the formatter turn), S7 (a fact that cannot be written; the dropped note). S6 is gone: a re-run's record now follows its own first run.
+
+## The new tests: would each fail on 1e4e3cbe?
+
+13 cases in `AS5VerifyFixesTests.cs` and one changed line in `AFormatStepTests.cs`. Two bodies were run against the scratch export of the old code; the others were read against the old code and against what pass 1 measured on it. None was run in the rig.
+
+| Test | On 1e4e3cbe | How known |
+|---|---|---|
+| `M1_TheNarrowedArgv_NeverHoldsAnUnsafeName…` | fails: `[t | --ignore-exit-code | Ok | x | 2 x | ./tests/--ignore-exit-code.cs | …]` where it wants `[t | Ok | ./tests/Ok.cs]` (its `IsSafe` lines do not compile there: the method was private) | body run on the old export |
+| `M1_AFileNameOfTheOutput…` (2 cases) | fails: the old code narrows on any name under the prefix, so the re-run's argv differs and `rerun` is `narrowed` | read; pass 1 `r1` |
+| `M2_AGreenRoundWithAnExcusedStep_SaysSo…` | fails: the old note is "every one exited 0"; no `firstExit` member | read; pass 1 `r1` |
+| `M2_ANarrowedReRun_DoesNotTurnAStepGreen…` | fails: the old code excuses, the job succeeds | read; pass 1 `r2` |
+| `M3_ASelectedRunThatSelectedNothing…` | fails: the digest is the selected run's tail, "Zero tests ran" | read; pass 1 `r3` |
+| `M3_FailedStep_SkipsANothingSelectedRecord` | does not compile (`NothingSelected`); the old `FailedStep` would answer the selected record | read |
+| `S3_ThePassedNameOfAnExcusedTest…` | does not compile (`SafeName`); see S11 | read |
+| `S4_TheNamedProof_AlsoAsksForACompleteSummary` | fails: 1 excused where it wants 0 (without the two new init members, which do not compile there) | body run on the old export |
+| `M4_AReRunWhoseUnitCannotBeStopped…` | fails: the round is `failed`, a fix turn starts | read |
+| `M4_AFormatterUnitThatCannotBeStopped…` | fails: the state is `failed`, the checks go on and pass; no unit record in `format-0` | read |
+| `S1_ACommandAndTestFilesTheHeadAdds…` | fails: no line "added the testFor command" | read |
+| `S5_TheFormatterTurnsUnits…` | fails: no `format` row in `checks`, no unit record | read |
+| `AFormatStepTests` (the `checks` list) | fails: the old list is `restore, build, test` | read |
+
+So 12 of the 13 cases are red on the old code for the behaviour they name, and one (S3) only because a name is missing. Not verified: that the two M4 tests reach the state they describe in the rig (a unit made unstoppable by taking `TimeoutStopSec` out); I read them and did not run them.
+
+## Confirmed safe
+
+1. **M1, the one road.** `TestSelection.Argv` drops every name that fails `IsSafe` whoever calls it; `IsSafe` now also refuses a segment that is empty, `.` or `..` (`TestSelection.cs`). The re-run narrows only when EVERY named file is under a `testFiles` prefix, safe, and in the head (`CheckRunner.cs`, `NarrowableAsync`); else the whole step, or none over 300 seconds. With no `InHead` (a run that is not a coder job) nothing narrows.
+2. **The head-listing read is hardened.** `ChecksAtBase` holds `history.ForChecks()`, so the call runs on the main checkout with `--no-replace-objects`, `GIT_NO_LAZY_FETCH=1` and without the names that move git. The head id is forty hex and comes first in `<sha>:<path>`, so the item cannot be an option; the path has passed `IsSafe` (a closed set of characters, no `:` `{` `^` `~`) and `IsRepoRelative` before git is started; an unsafe name never reaches git, because the three checks run in that order. `cat-file -e` ran no configured program in the canary measurement of the s2 verify. At most 5 reads for a step.
+3. **M2 for the platform runner.** A first exit code that is not 2 gives a whole re-run, which must itself exit 0 (`run/r2`: red). The `flaky` row carries `firstExit`.
+4. **M3.** A selected run that selected nothing is marked and is not the failed step; a green round says how many selected runs selected no test.
+5. **M4.** A re-run whose unit survived returns the same `BoundaryRefused` result as any step; the formatter turn hands it to the loop, which adds a round `boundary_refused` with the turn's records and ends `coder-boundary`, without touching the worktree.
+6. **The table's reader** takes `testsFailed` as a list of whole numbers and refuses anything else; the tool names of the five readers (`mtp`, `vstest`, `jest`, `vitest`, `node-test`) are the keys of the rows; a tool with no row, or a row of another adapter, gives no code and so only a whole re-run.
