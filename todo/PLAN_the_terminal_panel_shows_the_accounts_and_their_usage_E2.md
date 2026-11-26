@@ -944,3 +944,9 @@ replaced. **The sentence this epic adds, to be placed under the release's headin
 
 The `POST_DEPLOY.md` question of the E1 stories (§ 12) stands; its proposed item gains *"and nothing is read before the
 one permission"*. It is not edited in E2.
+
+**Fitted to the code as built (E2.S5, 2026-11-26).** The sentence above holds as written. Two facts of the build belong beside it
+when the release's notes are written: **WSL on this PC is not read in this build** (the tab says so; E3 adds it), and **the usage of
+Claude Code is still not read** (the tab says so). The tab is *AI accounts and usage* (*Group by*, *Sort by*, a click on a column
+header); *Withdraw the permission* is on the tab and in *CoAI: hosts read over ssh*. The chat bundle's budget was raised from 598,016
+to 630,784 bytes for the tab (the build is 626,030).
