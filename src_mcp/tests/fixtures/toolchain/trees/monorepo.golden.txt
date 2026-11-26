@@ -10,9 +10,9 @@ project Api/Api.slnx [dotnet] origin detected definedByHead False folder Api tes
   fact mtpOptIn = false
   fact editorconfig = false
   fact tests = 1
-  step restore network Host cwd . subject Api/Api.slnx: dotnet restore Api/Api.slnx
-  step build network None cwd . subject Api/Api.slnx: dotnet build Api/Api.slnx -c Debug --no-restore -m:{jobs}
-  step test network None cwd . subject Api/tests/Api.Tests.csproj: dotnet test Api/tests/Api.Tests.csproj --no-build -c Debug
+  step restore network Host cwd . subject Api/Api.slnx: dotnet restore ./Api/Api.slnx
+  step build network None cwd . subject Api/Api.slnx: dotnet build ./Api/Api.slnx -c Debug --no-restore -m:{jobs}
+  step test network None cwd . subject Api/tests/Api.Tests.csproj: dotnet test ./Api/tests/Api.Tests.csproj --no-build -c Debug
 project admin/package.json [node] origin detected definedByHead False folder admin testsNone False
   fact packageManager = npm
   fact lock = package-lock.json
@@ -51,9 +51,9 @@ project Api/Api.slnx [dotnet] origin detected definedByHead False folder Api tes
   fact mtpOptIn = false
   fact editorconfig = false
   fact tests = 1
-  step restore network Host cwd . subject Api/Api.slnx: dotnet restore Api/Api.slnx
-  step build network None cwd . subject Api/Api.slnx: dotnet build Api/Api.slnx -c Debug --no-restore -m:{jobs}
-  step test network None cwd . subject Api/tests/Api.Tests.csproj: dotnet test Api/tests/Api.Tests.csproj --no-build -c Debug
+  step restore network Host cwd . subject Api/Api.slnx: dotnet restore ./Api/Api.slnx
+  step build network None cwd . subject Api/Api.slnx: dotnet build ./Api/Api.slnx -c Debug --no-restore -m:{jobs}
+  step test network None cwd . subject Api/tests/Api.Tests.csproj: dotnet test ./Api/tests/Api.Tests.csproj --no-build -c Debug
 project admin/package.json [node] origin detected definedByHead False folder admin testsNone False
   fact packageManager = npm
   fact lock = package-lock.json
@@ -89,8 +89,8 @@ project worker/Worker.csproj [dotnet] origin detected definedByHead True folder 
   fact mtpOptIn = false
   fact editorconfig = false
   fact tests = none
-  step restore network Host cwd . subject worker/Worker.csproj: dotnet restore worker/Worker.csproj
-  step build network None cwd . subject worker/Worker.csproj: dotnet build worker/Worker.csproj -c Debug --no-restore -m:{jobs}
+  step restore network Host cwd . subject worker/Worker.csproj: dotnet restore ./worker/Worker.csproj
+  step build network None cwd . subject worker/Worker.csproj: dotnet build ./worker/Worker.csproj -c Debug --no-restore -m:{jobs}
 
 == head: removes-the-test-script
 toolchain_refused: the worktree removed test of admin/package.json; a step the base commit had is never lost at the head, so nothing was run. Land the change in a commit of its own, or name the commands in .coai/toolchain.yaml

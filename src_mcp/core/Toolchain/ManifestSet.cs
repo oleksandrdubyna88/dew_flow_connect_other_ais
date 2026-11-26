@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using CoaiMcp.Core.Collecting;
 
 namespace CoaiMcp.Core.Toolchain;
@@ -20,6 +21,9 @@ public static class ManifestLimits
 
     /// <summary>The listing of the tree, in bytes (32 MiB).</summary>
     public const long MaxListingBytes = 32L * 1024 * 1024;
+
+    /// <summary>The projects a repository may have, all stacks together (SPEC §A3: 20 projects). Over it is a refusal.</summary>
+    public const int MaxProjects = 20;
 
     /// <summary>The files recorded by their name only (a lock file, a <c>tsconfig.json</c>): their own bound, because their texts are never read.</summary>
     public const int MaxPresenceFiles = 5000;
@@ -90,11 +94,12 @@ public static class ManifestSearch
     {
         if (listing.Malformed.Length > 0)
         {
-            return new ManifestSelection.Refused($"the listing of the tree has a record coai cannot read ('{listing.Malformed}'), so no manifest was looked for");
+            return new ManifestSelection.Refused($"the listing of the tree has a record coai cannot read (after {listing.Entries.Count.ToString(CultureInfo.InvariantCulture)} readable records), so no manifest was looked for");
         }
 
         var candidates = new List<ManifestCandidate>();
         var submodules = new List<string>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (var entry in listing.Entries)
         {
             if (entry.Type == "commit")
@@ -109,14 +114,19 @@ public static class ManifestSearch
                 continue;
             }
 
-            if (PathProblem(entry.Path) is { Length: > 0 } problem)
+            if (PathProblem(entry.Path, entry.Oid) is { Length: > 0 } problem)
             {
                 return new ManifestSelection.Refused(problem);
             }
 
+            if (!seen.Add(entry.Path))
+            {
+                return new ManifestSelection.Refused($"the path {PathSpelling.Spell(entry.Path, entry.Oid)} is listed twice, so what it names cannot be told; name the commands in {ToolchainTables.FilePath}");
+            }
+
             if (entry.Mode == "120000")
             {
-                return new ManifestSelection.Refused($"'{entry.Path}' is a link: a link is never read, because it can point out of the repository; name the commands in {ToolchainTables.FilePath}");
+                return new ManifestSelection.Refused($"{PathSpelling.Spell(entry.Path, entry.Oid)} is a link: a link is never read, because it can point out of the repository; name the commands in {ToolchainTables.FilePath}");
             }
 
             if (entry.Type != "blob")
@@ -126,7 +136,7 @@ public static class ManifestSearch
 
             if (kind.Kind != ManifestKind.Present && entry.Size > ManifestLimits.MaxManifestBytes)
             {
-                return new ManifestSelection.Refused($"'{entry.Path}' is {entry.Size.ToString(CultureInfo.InvariantCulture)} bytes, over the limit of {ManifestLimits.MaxManifestBytes.ToString(CultureInfo.InvariantCulture)} for one manifest; name the commands in {ToolchainTables.FilePath}");
+                return new ManifestSelection.Refused($"{PathSpelling.Spell(entry.Path, entry.Oid)} is {entry.Size.ToString(CultureInfo.InvariantCulture)} bytes, over the limit of {ManifestLimits.MaxManifestBytes.ToString(CultureInfo.InvariantCulture)} for one manifest; name the commands in {ToolchainTables.FilePath}");
             }
 
             candidates.Add(new ManifestCandidate(entry.Path, kind.Stack, kind.Kind, entry.Oid, entry.Size));
@@ -153,11 +163,34 @@ public static class ManifestSearch
         return new ManifestSelection.Selected([.. candidates.OrderBy(candidate => candidate.Path, StringComparer.Ordinal)], Notes(submodules));
     }
 
-    /// <summary>The refusal of a path that is not a plain relative one — a control character, an absolute or drive form, a <c>..</c> — or empty.</summary>
-    public static string PathProblem(string path) =>
-        path.Any(char.IsControl) ? $"the path '{Printable(path)}' holds a control character, so it was not read"
-        : !RepoPaths.IsRelative(path) ? $"the path '{Printable(path)}' is not a path inside the repository (absolute, a drive or a '..'), so it was not read"
+    /// <summary>
+    /// The refusal of a path that is not a plain relative one — a control, format, separator or replacement character, an absolute or drive form, a <c>..</c>, a folder name that starts with <c>-</c> (a command would read it as an option) or a path that starts with <c>@</c> (MSBuild reads it as a
+    /// response file) — or empty. The path is spelled by <see cref="PathSpelling"/>, never raw.
+    /// </summary>
+    public static string PathProblem(string path, string oid = "") =>
+        HasUnsafeCharacter(path) ? $"the path {PathSpelling.Spell(path, oid)} holds a control, format, separator or replacement character, so it was not read"
+        : !RepoPaths.IsRelative(path) ? $"the path {PathSpelling.Spell(path, oid)} is not a path inside the repository (absolute, a drive or a '..'), so it was not read"
+        : path.Split('/').Any(segment => segment.StartsWith('-')) || path.StartsWith('@') ? $"the path {PathSpelling.Spell(path, oid)} has a name that starts with '-' or '@', which a command reads as an option or a response file, so it was not read; rename it, or name the commands in {ToolchainTables.FilePath}"
         : string.Empty;
+
+    /// <summary>True when a path holds a character that is not an ordinary one: control, format (U+200B, U+202E, U+FEFF…), line or paragraph separator, a space but the plain one, a private-use, unassigned or lone surrogate character, or U+FFFD (a byte that was not UTF-8).</summary>
+    public static bool HasUnsafeCharacter(string path)
+    {
+        foreach (var rune in path.EnumerateRunes())
+        {
+            if (rune.Value == 0xFFFD || (Rune.IsWhiteSpace(rune) && rune.Value != ' '))
+            {
+                return true;
+            }
+
+            if (Rune.GetUnicodeCategory(rune) is UnicodeCategory.Control or UnicodeCategory.Format or UnicodeCategory.LineSeparator or UnicodeCategory.ParagraphSeparator or UnicodeCategory.PrivateUse or UnicodeCategory.OtherNotAssigned or UnicodeCategory.Surrogate)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     /// <summary>What a path is for, by its name and its place — or null when the search does not look at it.</summary>
     public static (string Stack, ManifestKind Kind)? Classify(string path, ToolchainDefaults table)
@@ -204,7 +237,7 @@ public static class ManifestSearch
 
     private static List<string> Notes(List<string> submodules)
     {
-        var notes = submodules.OrderBy(path => path, StringComparer.Ordinal).Take(ManifestLimits.MaxSubmoduleNotes).Select(path => $"submodule '{Printable(path)}' was not entered").ToList();
+        var notes = submodules.OrderBy(path => path, StringComparer.Ordinal).Take(ManifestLimits.MaxSubmoduleNotes).Select(path => $"submodule {PathSpelling.Spell(path)} was not entered").ToList();
         if (submodules.Count > ManifestLimits.MaxSubmoduleNotes)
         {
             notes.Add($"{(submodules.Count - ManifestLimits.MaxSubmoduleNotes).ToString(CultureInfo.InvariantCulture)} more submodules were not entered");
@@ -212,6 +245,4 @@ public static class ManifestSearch
 
         return notes;
     }
-
-    private static string Printable(string path) => new([.. path.Select(c => char.IsControl(c) ? '?' : c)]);
 }

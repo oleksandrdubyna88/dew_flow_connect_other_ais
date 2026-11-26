@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 
 namespace CoaiMcp.Core.Toolchain;
@@ -14,6 +15,11 @@ namespace CoaiMcp.Core.Toolchain;
 /// </remarks>
 public static class NodeDetector
 {
+    /// <summary>The most workspace patterns one manifest may declare, and the longest one.</summary>
+    internal const int MaxPatterns = 64;
+
+    internal const int MaxPatternLength = 256;
+
     private const string Cure = "name the commands in " + ToolchainTables.FilePath;
 
     private static readonly string[] NpmLocks = ["package-lock.json", "npm-shrinkwrap.json"];
@@ -37,14 +43,22 @@ public static class NodeDetector
                     {
                         document.Dispose();
 
-                        return new Detection.Refused($"'{package.Path}' is JSON but not an object, so it is not a package manifest; {Cure}");
+                        return new Detection.Refused($"{PathSpelling.Spell(package.Path)} is JSON but not an object, so it is not a package manifest; {Cure}");
                     }
 
                     parsed.Add((package, document.RootElement, document));
                 }
                 catch (JsonException e)
                 {
-                    return new Detection.Refused($"'{package.Path}' is not JSON that coai can read ({Short(e.Message)}); {Cure}");
+                    return new Detection.Refused($"{PathSpelling.Spell(package.Path)} is not JSON that coai can read (line {((e.LineNumber ?? 0) + 1).ToString(CultureInfo.InvariantCulture)}, position {((e.BytePositionInLine ?? 0) + 1).ToString(CultureInfo.InvariantCulture)}); {Cure}");
+                }
+            }
+
+            foreach (var (workspaceFile, workspaceRoot, _) in parsed)
+            {
+                if (WorkspacePatterns(workspaceRoot) is { } declared && PatternProblem(declared) is { Length: > 0 } problem)
+                {
+                    return new Detection.Refused($"{PathSpelling.Spell(workspaceFile.Path)} {problem}; {Cure}");
                 }
             }
 
@@ -65,6 +79,11 @@ public static class NodeDetector
                 }
 
                 projects.Add(answer.Project!);
+            }
+
+            if (projects.Count > ManifestLimits.MaxProjects)
+            {
+                return new Detection.Refused($"{projects.Count.ToString(CultureInfo.InvariantCulture)} Node projects were found, over the limit of {ManifestLimits.MaxProjects.ToString(CultureInfo.InvariantCulture)}; {Cure}");
             }
 
             return new Detection.Detected(projects);
@@ -115,7 +134,7 @@ public static class NodeDetector
                 pattern = pattern[2..];
             }
 
-            if (GlobMatches(pattern.TrimEnd('/').Split('/', StringSplitOptions.RemoveEmptyEntries), 0, segments, 0))
+            if (GlobMatches(Fold(pattern.TrimEnd('/').Split('/', StringSplitOptions.RemoveEmptyEntries)), segments))
             {
                 included = !negated;
             }
@@ -124,19 +143,81 @@ public static class NodeDetector
         return included;
     }
 
-    private static bool GlobMatches(string[] pattern, int p, string[] path, int s)
+    /// <summary>Folds every run of <c>**</c> segments into one, so that the matcher below sees the shortest pattern that means the same.</summary>
+    private static string[] Fold(string[] pattern)
     {
-        if (p == pattern.Length)
+        var folded = new List<string>();
+        foreach (var segment in pattern)
         {
-            return s == path.Length;
+            if (segment == "**" && folded.Count > 0 && folded[^1] == "**")
+            {
+                continue;
+            }
+
+            folded.Add(segment);
         }
 
-        if (pattern[p] == "**")
+        return [.. folded];
+    }
+
+    /// <summary>The sentence that says a list of workspace patterns is over a bound — a count, a length, or more segments than a package can be deep — or empty. Over a bound is a refusal, never a cut list.</summary>
+    internal static string PatternProblem(IReadOnlyList<string> patterns)
+    {
+        if (patterns.Count > MaxPatterns)
         {
-            return Enumerable.Range(s, path.Length - s + 1).Any(next => GlobMatches(pattern, p + 1, path, next));
+            return $"declares {patterns.Count.ToString(CultureInfo.InvariantCulture)} workspace patterns, over the limit of {MaxPatterns.ToString(CultureInfo.InvariantCulture)}";
         }
 
-        return s < path.Length && ManifestSearch.Matches(pattern[p], path[s]) && GlobMatches(pattern, p + 1, path, s + 1);
+        for (var index = 0; index < patterns.Count; index++)
+        {
+            if (patterns[index].Length > MaxPatternLength)
+            {
+                return $"has workspace pattern {(index + 1).ToString(CultureInfo.InvariantCulture)} of {patterns[index].Length.ToString(CultureInfo.InvariantCulture)} characters, over the limit of {MaxPatternLength.ToString(CultureInfo.InvariantCulture)}";
+            }
+
+            var segments = Fold(patterns[index].Split('/', StringSplitOptions.RemoveEmptyEntries)).Length;
+            if (segments > ManifestLimits.MaxFolderDepth + 2)
+            {
+                return $"has workspace pattern {(index + 1).ToString(CultureInfo.InvariantCulture)} of {segments.ToString(CultureInfo.InvariantCulture)} segments, over the limit of {(ManifestLimits.MaxFolderDepth + 2).ToString(CultureInfo.InvariantCulture)} (a package is at most {ManifestLimits.MaxFolderDepth.ToString(CultureInfo.InvariantCulture)} folders deep)";
+            }
+        }
+
+        return string.Empty;
+    }
+
+    /// <summary>Segment-wise glob match with <c>**</c> for any number of folders (zero too): one pass with the last <c>**</c> remembered, no recursion, O(pattern x path). A pattern that is over its bounds has already been refused.</summary>
+    private static bool GlobMatches(string[] pattern, string[] path)
+    {
+        int p = 0, s = 0, starP = -1, starS = 0;
+        while (s < path.Length)
+        {
+            if (p < pattern.Length && pattern[p] == "**")
+            {
+                starP = p++;
+                starS = s;
+            }
+            else if (p < pattern.Length && ManifestSearch.Matches(pattern[p], path[s]))
+            {
+                p++;
+                s++;
+            }
+            else if (starP >= 0)
+            {
+                p = starP + 1;
+                s = ++starS;
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+        while (p < pattern.Length && pattern[p] == "**")
+        {
+            p++;
+        }
+
+        return p == pattern.Length;
     }
 
     private sealed record Planned(DetectedProject? Project, string Refusal);
@@ -150,17 +231,17 @@ public static class NodeDetector
         {
             var manager = others[0].Manager;
 
-            return new Planned(null, $"'{file.Path}' is a {manager} project (it has {others[0].File}); coai runs npm only. Name the commands in {ToolchainTables.FilePath}, or use npm");
+            return new Planned(null, $"{PathSpelling.Spell(file.Path)} is a {manager} project (it has {others[0].File}); coai runs npm only. Name the commands in {ToolchainTables.FilePath}, or use npm");
         }
 
         if (locks.Count > 1)
         {
-            return new Planned(null, $"'{file.Path}' has two lock files ({string.Join(" and ", locks)}), so coai cannot tell what `npm ci` would install; keep one, or {Cure}");
+            return new Planned(null, $"{PathSpelling.Spell(file.Path)} has two lock files ({string.Join(" and ", locks)}), so coai cannot tell what `npm ci` would install; keep one, or {Cure}");
         }
 
         if (locks.Count == 0)
         {
-            return new Planned(null, $"'{file.Path}' has no lock file beside it, and `npm ci` needs one; commit package-lock.json, or {Cure}");
+            return new Planned(null, $"{PathSpelling.Spell(file.Path)} has no lock file beside it, and `npm ci` needs one; commit package-lock.json, or {Cure}");
         }
 
         var scripts = StringMap(root, "scripts");
@@ -268,5 +349,4 @@ public static class NodeDetector
     private static IEnumerable<string> Names(JsonElement root, string name) =>
         root.TryGetProperty(name, out var element) && element.ValueKind == JsonValueKind.Object ? element.EnumerateObject().Select(property => property.Name) : [];
 
-    private static string Short(string message) => message.Length > 120 ? message[..120] : message.Replace('\n', ' ');
 }

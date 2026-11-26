@@ -40,7 +40,6 @@ public static class ProjectGraph
     {
         DtdProcessing = DtdProcessing.Prohibit,
         XmlResolver = null,
-        MaxCharactersFromEntities = 0,
         MaxCharactersInDocument = ManifestLimits.MaxManifestBytes,
         IgnoreComments = true,
         IgnoreProcessingInstructions = true,
@@ -57,11 +56,11 @@ public static class ProjectGraph
         }
         catch (XmlException e)
         {
-            return (null, new ProjectFault(path, $"is not read as a project: {Short(e.Message)} (DTDs and external entities are never processed)"));
+            return (null, new ProjectFault(path, $"is not well-formed XML, or holds a DOCTYPE, which is never processed (line {e.LineNumber.ToString(CultureInfo.InvariantCulture)}, position {e.LinePosition.ToString(CultureInfo.InvariantCulture)})"));
         }
 
         var root = document.Root;
-        if (root is null || root.Name.LocalName != "Project")
+        if (root is null || !string.Equals(root.Name.LocalName, "Project", StringComparison.OrdinalIgnoreCase))
         {
             return (null, new ProjectFault(path, "is not an MSBuild project (its root element is not <Project>)"));
         }
@@ -74,9 +73,10 @@ public static class ProjectGraph
         var packages = new SortedSet<string>(StringComparer.Ordinal);
         foreach (var element in root.Descendants())
         {
-            switch (element.Name.LocalName)
+            // MSBuild names an item or a property without case (measured in the s2 security verify): so does this reader.
+            switch (element.Name.LocalName.ToLowerInvariant())
             {
-                case "ProjectReference":
+                case "projectreference":
                     if (Conditioned(element))
                     {
                         conditioned++;
@@ -93,7 +93,7 @@ public static class ProjectGraph
                     }
 
                     break;
-                case "PackageReference":
+                case "packagereference":
                     if (Conditioned(element))
                     {
                         conditioned++;
@@ -114,12 +114,18 @@ public static class ProjectGraph
         var properties = new Dictionary<string, bool>(StringComparer.Ordinal);
         foreach (var source in new[] { propsText, text })
         {
-            if (source is null)
+            if (string.IsNullOrEmpty(source))
             {
                 continue;
             }
 
-            var (found, skipped) = PropertiesOf(source == text ? document : Parse(source));
+            var parsed = source == text ? document : Parse(source);
+            if (parsed is null)
+            {
+                return (null, new ProjectFault(path, "has a Directory.Build.props that is not well-formed XML, or holds a DOCTYPE, which is never processed (fail closed: MSBuild would import it)"));
+            }
+
+            var (found, skipped) = PropertiesOf(parsed);
             conditioned += skipped;
             foreach (var (key, value) in found)
             {
@@ -129,6 +135,9 @@ public static class ProjectGraph
 
         return (new ProjectFacts(path, [.. references.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)], [.. outside.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)], [.. unresolved.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)], [.. packages], properties, conditioned), null);
     }
+
+    /// <summary>Whether a text is well-formed XML under the reader's rules (no DTD, no resolver): a definition file that is not is refused, never skipped.</summary>
+    public static bool IsWellFormed(string text) => Parse(text) is not null;
 
     private static XDocument? Parse(string text)
     {
@@ -148,9 +157,9 @@ public static class ProjectGraph
     {
         var found = new Dictionary<string, bool>(StringComparer.Ordinal);
         var skipped = 0;
-        foreach (var group in document?.Root?.Elements().Where(element => element.Name.LocalName == "PropertyGroup") ?? [])
+        foreach (var group in document?.Root?.Elements().Where(element => string.Equals(element.Name.LocalName, "PropertyGroup", StringComparison.OrdinalIgnoreCase)) ?? [])
         {
-            foreach (var element in group.Elements().Where(element => TestProperties.Contains(element.Name.LocalName)))
+            foreach (var element in group.Elements().Where(element => TestProperties.Contains(element.Name.LocalName, StringComparer.OrdinalIgnoreCase)))
             {
                 if (Conditioned(group) || Conditioned(element))
                 {
@@ -159,14 +168,14 @@ public static class ProjectGraph
                     continue;
                 }
 
-                found[element.Name.LocalName] = string.Equals(element.Value.Trim(), "true", StringComparison.OrdinalIgnoreCase);
+                found[TestProperties.First(name => string.Equals(name, element.Name.LocalName, StringComparison.OrdinalIgnoreCase))] = string.Equals(element.Value.Trim(), "true", StringComparison.OrdinalIgnoreCase);
             }
         }
 
         return (found, skipped);
     }
 
-    private static bool Conditioned(XElement element) => element.Attribute("Condition") is not null || (element.Parent is { } parent && parent.Name.LocalName is "ItemGroup" or "PropertyGroup" && parent.Attribute("Condition") is not null);
+    private static bool Conditioned(XElement element) => element.Attribute("Condition") is not null || (element.Parent is { } parent && parent.Name.LocalName.ToLowerInvariant() is "itemgroup" or "propertygroup" && parent.Attribute("Condition") is not null);
 
     private enum Resolution
     {
@@ -222,8 +231,6 @@ public static class ProjectGraph
 
         return slash < 0 ? string.Empty : path[..slash];
     }
-
-    private static string Short(string message) => message.Length > 160 ? message[..160] : message.Replace('\n', ' ');
 
     /// <summary>The count of references that reach <paramref name="path"/> from other projects of <paramref name="all"/>.</summary>
     public static int ReferencedBy(string path, IEnumerable<ProjectFacts> all) =>

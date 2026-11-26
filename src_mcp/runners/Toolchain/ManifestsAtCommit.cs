@@ -23,7 +23,7 @@ public sealed class ManifestsAtCommit(GitHistory git)
     {
         if (!GitHistory.IsCommitish(sha))
         {
-            return new ManifestRead.Refused($"'{ShortOf(sha)}' is not a commit id (forty hex characters), so no manifest was looked for");
+            return new ManifestRead.Refused($"{PathSpelling.Spell(ShortOf(sha))} is not a commit id (forty hex characters), so no manifest was looked for");
         }
 
         var has = await git.HasCommitAsync(repoPath, sha, ct);
@@ -73,12 +73,12 @@ public sealed class ManifestsAtCommit(GitHistory git)
             var blob = await git.BlobAsync(repoPath, candidate.Oid, ct);
             if (!blob.Ran || !blob.Ok)
             {
-                return new ManifestRead.Refused($"git could not read '{candidate.Path}' of commit {sha}, so no manifest was decided");
+                return new ManifestRead.Refused($"git could not read {PathSpelling.Spell(candidate.Path, candidate.Oid)} of commit {sha}, so no manifest was decided");
             }
 
             if (blob.Truncated)
             {
-                return new ManifestRead.Refused($"'{candidate.Path}' is larger than the reader's ceiling, so no manifest was decided; name the commands in {ToolchainTables.FilePath}");
+                return new ManifestRead.Refused($"{PathSpelling.Spell(candidate.Path, candidate.Oid)} is larger than the reader's ceiling, so no manifest was decided; name the commands in {ToolchainTables.FilePath}");
             }
 
             files.Add(new ManifestFile(candidate.Path, candidate.Stack, candidate.Kind, candidate.Oid, candidate.Size, blob.Out));

@@ -17,7 +17,7 @@ namespace CoaiMcp.Core.Toolchain;
 public static class DotnetDetector
 {
     /// <summary>The most units a repository may have.</summary>
-    public const int MaxUnits = 20;
+    public const int MaxUnits = ManifestLimits.MaxProjects;
 
     private const string Cure = "name the commands in " + ToolchainTables.FilePath;
 
@@ -41,13 +41,21 @@ public static class DotnetDetector
         }
 
         var props = set.Files.Where(file => file.Stack == "dotnet" && file.Kind == ManifestKind.Definition && file.Path.Split('/')[^1] == "Directory.Build.props").ToDictionary(file => ProjectGraph.Folder(file.Path), file => file.Text, StringComparer.Ordinal);
+        foreach (var definition in set.Files.Where(file => file.Stack == "dotnet" && file.Kind == ManifestKind.Definition && (file.Path.EndsWith(".props", StringComparison.OrdinalIgnoreCase) || file.Path.EndsWith(".targets", StringComparison.OrdinalIgnoreCase))))
+        {
+            if (!ProjectGraph.IsWellFormed(definition.Text))
+            {
+                return new Detection.Refused($"{PathSpelling.Spell(definition.Path)} is not well-formed XML, or holds a DOCTYPE, which is never processed; MSBuild would import it, so the facts of the projects cannot be told (fail closed); {Cure}");
+            }
+        }
+
         var facts = new List<ProjectFacts>();
         foreach (var project in projectFiles)
         {
             var (read, fault) = ProjectGraph.Read(project.Path, project.Text, NearestProps(props, ProjectGraph.Folder(project.Path)));
             if (fault is not null)
             {
-                return new Detection.Refused($"'{fault.Path}' {fault.Why}; {Cure}");
+                return new Detection.Refused($"{PathSpelling.Spell(fault.Path)} {fault.Why}; {Cure}");
             }
 
             facts.Add(read!);
@@ -92,7 +100,7 @@ public static class DotnetDetector
             var files = group.Select(file => file.Path).Order(StringComparer.Ordinal).ToList();
             if (files.Count > 1)
             {
-                return $"two solution files in one folder, '{files[0]}' and '{files[1]}': coai cannot tell which is the repository's; {Cure}";
+                return $"two solution files in one folder, {PathSpelling.Spell(files[0])} and {PathSpelling.Spell(files[1])}: coai cannot tell which is the repository's; {Cure}";
             }
         }
 
@@ -102,7 +110,7 @@ public static class DotnetDetector
             {
                 if (ProjectGraph.Folder(inner.Path) != ProjectGraph.Folder(outer.Path) && ProjectGraph.Under(ProjectGraph.Folder(outer.Path), ProjectGraph.Folder(inner.Path)))
                 {
-                    return $"the solution '{inner.Path}' lies inside the folder of the solution '{outer.Path}': coai cannot tell which units are the repository's; {Cure}";
+                    return $"the solution {PathSpelling.Spell(inner.Path)} lies inside the folder of the solution {PathSpelling.Spell(outer.Path)}: coai cannot tell which units are the repository's; {Cure}";
                 }
             }
         }
@@ -175,18 +183,26 @@ public static class DotnetDetector
         var notes = new List<string>();
         foreach (var project in owned.OrderBy(project => project.Path, StringComparer.Ordinal))
         {
-            notes.AddRange(project.Outside.Select(include => $"{project.Path}: a ProjectReference that leaves the repository ('{include}') was not read"));
-            notes.AddRange(project.Unresolved.Select(include => $"{project.Path}: a ProjectReference that holds a property or a wildcard ('{include}') cannot be resolved"));
+            if (project.Outside.Count > 0)
+            {
+                notes.Add($"{PathSpelling.Spell(project.Path)}: {ProjectGraph.Number(project.Outside.Count)} ProjectReference(s) that leave the repository were not read");
+            }
+
+            if (project.Unresolved.Count > 0)
+            {
+                notes.Add($"{PathSpelling.Spell(project.Path)}: {ProjectGraph.Number(project.Unresolved.Count)} ProjectReference(s) that hold a property or a wildcard cannot be resolved");
+            }
+
             if (project.Conditioned > 0)
             {
-                notes.Add($"{project.Path}: {ProjectGraph.Number(project.Conditioned)} element(s) with a condition were not evaluated and were left out");
+                notes.Add($"{PathSpelling.Spell(project.Path)}: {ProjectGraph.Number(project.Conditioned)} element(s) with a condition were not evaluated and were left out");
             }
 
             if (RunnerOf(project) is { } runner)
             {
                 if (runner.Length == 0)
                 {
-                    return new Planned(null, $"'{project.Path}' is a test project (IsTestProject) whose runner coai cannot tell: it neither references {ProjectGraph.VsTestPackage} nor sets an MTP property; {Cure}");
+                    return new Planned(null, $"{PathSpelling.Spell(project.Path)} is a test project (IsTestProject) whose runner coai cannot tell: it neither references {ProjectGraph.VsTestPackage} nor sets an MTP property; {Cure}");
                 }
 
                 tests.Add((project, runner));
@@ -196,24 +212,24 @@ public static class DotnetDetector
         var runners = tests.Select(test => test.Runner).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
         if (runners.Count > 1)
         {
-            return new Planned(null, $"the test projects of '{unit.Path}' have two runners (VSTest: {string.Join(", ", tests.Where(t => t.Runner == "vstest").Select(t => t.Project.Path))}; MTP: {string.Join(", ", tests.Where(t => t.Runner == "mtp").Select(t => t.Project.Path))}); {Cure}");
+            return new Planned(null, $"the test projects of {PathSpelling.Spell(unit.Path)} have two runners (VSTest: {PathSpelling.SpellMany(tests.Where(t => t.Runner == "vstest").Select(t => t.Project.Path))}; MTP: {PathSpelling.SpellMany(tests.Where(t => t.Runner == "mtp").Select(t => t.Project.Path))}); {Cure}");
         }
 
         if (runners.Count == 1 && runners[0] == "mtp" && !mtpOptIn)
         {
-            return new Planned(null, $"'{tests.First().Project.Path}' is an MTP test project, and 'dotnet test' refuses it unless global.json at the repository root sets \"test\": {{ \"runner\": \"{MtpRunner}\" }}; set it, or {Cure}");
+            return new Planned(null, $"{PathSpelling.Spell(tests.First().Project.Path)} is an MTP test project, and 'dotnet test' refuses it unless global.json at the repository root sets \"test\": {{ \"runner\": \"{MtpRunner}\" }}; set it, or {Cure}");
         }
 
         if (runners.Count == 1 && runners[0] == "vstest" && mtpOptIn)
         {
-            return new Planned(null, $"global.json at the repository root opts in to {MtpRunner}, and 'dotnet test' then refuses the VSTest project '{tests.First().Project.Path}'; {Cure}");
+            return new Planned(null, $"global.json at the repository root opts in to {MtpRunner}, and 'dotnet test' then refuses the VSTest project {PathSpelling.Spell(tests.First().Project.Path)}; {Cure}");
         }
 
         var steps = new List<DetectedStep>();
         void Add(string name, IReadOnlyList<string> argv, string subject)
         {
             var step = stack.Steps[name]!;
-            steps.Add(new DetectedStep(name, [.. argv.Select(item => item.Replace("{unit}", subject, StringComparison.Ordinal))], step.Network, ".", subject, name == "format" ? step.Extensions : []));
+            steps.Add(new DetectedStep(name, [.. argv.Select(item => item.Replace("{unit}", "./" + subject, StringComparison.Ordinal))], step.Network, ".", subject, name == "format" ? step.Extensions : []));
         }
 
         Add("restore", stack.Steps["restore"]!.Argv, unit.Path);
@@ -247,7 +263,7 @@ public static class DotnetDetector
     private static string? RunnerOf(ProjectFacts project)
     {
         var mtp = (project.Properties.TryGetValue("UseMicrosoftTestingPlatformRunner", out var a) && a) || (project.Properties.TryGetValue("TestingPlatformDotnetTestSupport", out var b) && b);
-        var vstest = project.Packages.Contains(ProjectGraph.VsTestPackage, StringComparer.Ordinal);
+        var vstest = project.Packages.Contains(ProjectGraph.VsTestPackage, StringComparer.OrdinalIgnoreCase);
         var isTest = project.Properties.TryGetValue("IsTestProject", out var flag) ? flag : mtp || vstest;
         if (!isTest)
         {

@@ -217,7 +217,7 @@ public sealed class AManifestsAtACommitTests : IAsyncLifetime
     {
         var selection = ManifestSearch.Select(new TreeListing([], "100644 blob zzz"), ToolchainDefaults.Current);
 
-        selection.Should().BeOfType<ManifestSelection.Refused>().Which.Sentence.Should().Contain("100644 blob zzz");
+        selection.Should().BeOfType<ManifestSelection.Refused>().Which.Sentence.Should().Contain("cannot read").And.NotContain("zzz");
     }
 
     [Fact]
@@ -299,7 +299,7 @@ public sealed class AManifestsAtACommitTests : IAsyncLifetime
 
         var read = await ReadAtHeadAsync();
 
-        read.Should().BeOfType<ManifestRead.Refused>().Which.Sentence.Should().Contain("odd?name/package.json").And.Contain("control character");
+        read.Should().BeOfType<ManifestRead.Refused>().Which.Sentence.Should().Contain("a path with unusual characters").And.Contain("blob ").And.NotContain("odd");
     }
 
     [Theory]

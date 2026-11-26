@@ -72,13 +72,13 @@ public static class ToolchainResolve
         var baseRead = atBase();
         if (baseRead is ManifestRead.Refused baseRefused)
         {
-            return new ToolchainResolution.Refused($"the project '{bare[0].Path}' of {ToolchainTables.FilePath} names no command, so its defaults were looked for, and: {baseRefused.Sentence}");
+            return new ToolchainResolution.Refused($"the project {PathSpelling.Spell(bare[0].Path)} of {ToolchainTables.FilePath} names no command, so its defaults were looked for, and: {baseRefused.Sentence}");
         }
 
         var headRead = atHead();
         if (headRead is ManifestRead.Refused headRefused)
         {
-            return new ToolchainResolution.Refused($"the project '{bare[0].Path}' of {ToolchainTables.FilePath} names no command, so its defaults were looked for at the head too, and: {headRefused.Sentence}");
+            return new ToolchainResolution.Refused($"the project {PathSpelling.Spell(bare[0].Path)} of {ToolchainTables.FilePath} names no command, so its defaults were looked for at the head too, and: {headRefused.Sentence}");
         }
 
         var baseSet = ((ManifestRead.Found)baseRead).Set;
@@ -97,32 +97,37 @@ public static class ToolchainResolve
 
             if (!table.Stacks.TryGetValue(project.Adapter, out var stack) || !stack.Built)
             {
-                return new ToolchainResolution.Refused($"the project '{project.Path}' of {ToolchainTables.FilePath} names no command and its adapter '{project.Adapter}' has no defaults yet; name its build and test commands");
+                return new ToolchainResolution.Refused($"the project {PathSpelling.Spell(project.Path)} of {ToolchainTables.FilePath} names no command and its adapter '{project.Adapter}' has no defaults yet; name its build and test commands");
             }
 
             var folder = project.Path == "." ? string.Empty : project.Path;
             var baseDetected = DetectIn(project.Adapter, Scope(baseSet, folder), table);
             if (baseDetected is Detection.Refused baseFault)
             {
-                return new ToolchainResolution.Refused($"the project '{project.Path}' of {ToolchainTables.FilePath} names no command, and its defaults were refused: {baseFault.Sentence}");
+                return new ToolchainResolution.Refused($"the project {PathSpelling.Spell(project.Path)} of {ToolchainTables.FilePath} names no command, and its defaults were refused: {baseFault.Sentence}");
             }
 
             var headDetected = DetectIn(project.Adapter, Scope(headSet, folder), table);
             if (headDetected is Detection.Refused headFault)
             {
-                return new ToolchainResolution.Refused($"the worktree of the project '{project.Path}' of {ToolchainTables.FilePath} is refused at the head: {headFault.Sentence}");
+                return new ToolchainResolution.Refused($"the worktree of the project {PathSpelling.Spell(project.Path)} of {ToolchainTables.FilePath} is refused at the head: {headFault.Sentence}");
             }
 
             var baseProjects = ((Detection.Detected)baseDetected).Projects;
             if (baseProjects.Count == 0)
             {
-                return new ToolchainResolution.Refused($"the project '{project.Path}' of {ToolchainTables.FilePath} names no command, and no {project.Adapter} manifest was found in '{project.Path}' at the base commit; name its build and test commands");
+                return new ToolchainResolution.Refused($"the project {PathSpelling.Spell(project.Path)} of {ToolchainTables.FilePath} names no command, and no {project.Adapter} manifest was found in {PathSpelling.Spell(project.Path)} at the base commit; name its build and test commands");
             }
 
             var merged = Merge(baseProjects, ((Detection.Detected)headDetected).Projects, differences);
             if (merged.Refusal.Length > 0)
             {
                 return new ToolchainResolution.Refused(merged.Refusal);
+            }
+
+            if (projects.Count + merged.Projects.Count > ManifestLimits.MaxProjects)
+            {
+                return new ToolchainResolution.Refused($"the projects of {ToolchainTables.FilePath} and their defaults are more than the limit of {ManifestLimits.MaxProjects.ToString(CultureInfo.InvariantCulture)}");
             }
 
             projects.AddRange(merged.Projects.Select(item => new ResolvedProject(item.Detected.Id, "defaults", item.DefinedByHead, null, item.Detected)));
@@ -165,7 +170,7 @@ public static class ToolchainResolve
         {
             if (Unbuilt(set, table) is { } unbuilt)
             {
-                return new ToolchainResolution.Refused($"'{unbuilt.Path}' is a {unbuilt.Stack} manifest at the {where} commit; {unbuilt.Stack} is a known stack with no adapter yet, so a repository that holds one is not checked by guessing; {Cure}");
+                return new ToolchainResolution.Refused($"{PathSpelling.Spell(unbuilt.Path)} is a {unbuilt.Stack} manifest at the {where} commit; {unbuilt.Stack} is a known stack with no adapter yet, so a repository that holds one is not checked by guessing; {Cure}");
             }
         }
 
@@ -195,9 +200,14 @@ public static class ToolchainResolve
             return new ToolchainResolution.Refused(merged.Refusal);
         }
 
+        if (merged.Projects.Count > ManifestLimits.MaxProjects)
+        {
+            return new ToolchainResolution.Refused($"{merged.Projects.Count.ToString(CultureInfo.InvariantCulture)} projects were found in all (the head added some), over the limit of {ManifestLimits.MaxProjects.ToString(CultureInfo.InvariantCulture)}; {Cure}");
+        }
+
         if (merged.Projects.All(item => item.Detected.Steps.Count == 0))
         {
-            return new ToolchainResolution.NotConfigured($"every project found is unchecked (no build, typecheck or test step: {string.Join(", ", merged.Projects.Select(item => item.Detected.Id))}), so nothing was run; checks that did not run are never green");
+            return new ToolchainResolution.NotConfigured($"every project found is unchecked (no build, typecheck or test step: {PathSpelling.SpellMany(merged.Projects.Select(item => item.Detected.Id))}), so nothing was run; checks that did not run are never green");
         }
 
         notes.AddRange(baseProjects.SelectMany(item => item.Notes));
@@ -222,7 +232,11 @@ public static class ToolchainResolve
             return node;
         }
 
-        return new Detection.Detected([.. ((Detection.Detected)dotnet).Projects.Concat(((Detection.Detected)node).Projects).OrderBy(project => project.Id, StringComparer.Ordinal)]);
+        var all = ((Detection.Detected)dotnet).Projects.Concat(((Detection.Detected)node).Projects).OrderBy(project => project.Id, StringComparer.Ordinal).ToList();
+
+        return all.Count > ManifestLimits.MaxProjects
+            ? new Detection.Refused($"{all.Count.ToString(CultureInfo.InvariantCulture)} projects were found in all, over the limit of {ManifestLimits.MaxProjects.ToString(CultureInfo.InvariantCulture)}; {Cure}")
+            : new Detection.Detected(all);
     }
 
     // ---- both trees ----
@@ -244,9 +258,9 @@ public static class ToolchainResolve
             {
                 if (head is null || !head.Steps.Any(candidate => candidate.Name == step.Name && candidate.Subject == step.Subject))
                 {
-                    var label = step.Name == "test" && step.Subject != project.Id ? $"test ({step.Subject})" : step.Name;
+                    var label = step.Name == "test" && step.Subject != project.Id ? $"test ({PathSpelling.Bare(step.Subject)})" : step.Name;
 
-                    return new Merged([], $"the worktree removed {label} of {project.Id}; a step the base commit had is never lost at the head, so nothing was run. Land the change in a commit of its own, or {Cure}");
+                    return new Merged([], $"the worktree removed {label} of {PathSpelling.Bare(project.Id)}; a step the base commit had is never lost at the head, so nothing was run. Land the change in a commit of its own, or {Cure}");
                 }
             }
 
@@ -263,6 +277,9 @@ public static class ToolchainResolve
         return new Merged([.. merged.OrderBy(item => item.Detected.Id, StringComparer.Ordinal)], string.Empty);
     }
 
+    /// <summary>A fact value for a sentence: the value of a short word fact as it is, a list of paths spelled and capped.</summary>
+    private static string Shown(string name, string value) => name is "projects" or "testProjects" ? PathSpelling.SpellFact(value) : $"'{(value.Length > 40 ? value[..40] + "..." : value)}'";
+
     private static IEnumerable<string> Differences(DetectedProject baseProject, DetectedProject head)
     {
         foreach (var (name, value) in baseProject.Facts)
@@ -270,7 +287,7 @@ public static class ToolchainResolve
             var headValue = head.Fact(name);
             if (!string.Equals(value, headValue, StringComparison.Ordinal))
             {
-                yield return string.Create(CultureInfo.InvariantCulture, $"{baseProject.Id}: {name} was '{value}' at the base and is '{headValue}' at the head");
+                yield return string.Create(CultureInfo.InvariantCulture, $"{PathSpelling.Bare(baseProject.Id)}: {name} was {Shown(name, value)} at the base and is {Shown(name, headValue)} at the head");
             }
         }
     }

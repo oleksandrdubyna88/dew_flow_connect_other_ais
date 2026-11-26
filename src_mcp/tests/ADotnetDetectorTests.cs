@@ -115,7 +115,7 @@ public sealed class ADotnetDetectorTests
         var sentence = Refused(Detect(("src/Evil.csproj", hostile)));
         await Task.Delay(300);
 
-        sentence.Should().Contain("src/Evil.csproj").And.Contain("DTD").And.Contain(".coai/toolchain.yaml");
+        sentence.Should().Contain("src/Evil.csproj").And.Contain("DOCTYPE").And.Contain(".coai/toolchain.yaml");
         listener.Pending().Should().BeFalse("no connection may be made for an external entity of a manifest");
     }
 
@@ -140,8 +140,8 @@ public sealed class ADotnetDetectorTests
         var projects = Detected(Detect(("src/App.csproj", Project(references: Ref("..\\..\\..\\elsewhere\\X.csproj") + Ref("$(Root)\\Y.csproj")))));
 
         var unit = projects.Should().ContainSingle().Subject;
-        unit.Notes.Should().Contain(note => note.Contains("leaves the repository") && note.Contains("elsewhere"));
-        unit.Notes.Should().Contain(note => note.Contains("cannot be resolved") && note.Contains("$(Root)"));
+        unit.Notes.Should().Contain(note => note.Contains("1 ProjectReference(s) that leave the repository") && !note.Contains("elsewhere"));
+        unit.Notes.Should().Contain(note => note.Contains("1 ProjectReference(s) that hold a property") && !note.Contains("$(Root)"));
     }
 
     [Fact]
@@ -160,11 +160,11 @@ public sealed class ADotnetDetectorTests
         var unit = Detected(Detect(("App.slnx", "x"), ("src/App.csproj", Lib), ("tests/T.csproj", VsTest))).Single();
 
         unit.Steps.Select(step => step.Name).Should().Equal("restore", "build", "test");
-        unit.Steps[0].Argv.Should().Equal("dotnet", "restore", "App.slnx");
+        unit.Steps[0].Argv.Should().Equal("dotnet", "restore", "./App.slnx");
         unit.Steps[0].Network.Should().Be(DefaultNetwork.Host);
-        unit.Steps[1].Argv.Should().Equal("dotnet", "build", "App.slnx", "-c", "Debug", "--no-restore", "-m:{jobs}");
+        unit.Steps[1].Argv.Should().Equal("dotnet", "build", "./App.slnx", "-c", "Debug", "--no-restore", "-m:{jobs}");
         unit.Steps[1].Network.Should().Be(DefaultNetwork.None);
-        unit.Steps[2].Argv.Should().Equal("dotnet", "test", "tests/T.csproj", "--no-build", "-c", "Debug");
+        unit.Steps[2].Argv.Should().Equal("dotnet", "test", "./tests/T.csproj", "--no-build", "-c", "Debug");
         unit.Steps[2].Subject.Should().Be("tests/T.csproj");
         unit.Steps.Should().OnlyContain(step => step.WorkingFolder == ".");
         unit.Fact("runner").Should().Be("vstest");
@@ -176,7 +176,7 @@ public sealed class ADotnetDetectorTests
     {
         var unit = Detected(Detect(("App.slnx", "x"), ("tests/T.csproj", Mtp), ("global.json", SdkMtp))).Single();
 
-        unit.Steps.Single(step => step.Name == "test").Argv.Should().Equal("dotnet", "test", "--project", "tests/T.csproj", "--no-build", "-c", "Debug");
+        unit.Steps.Single(step => step.Name == "test").Argv.Should().Equal("dotnet", "test", "--project", "./tests/T.csproj", "--no-build", "-c", "Debug");
         unit.Fact("runner").Should().Be("mtp");
         unit.Fact("mtpOptIn").Should().Be("true");
     }
