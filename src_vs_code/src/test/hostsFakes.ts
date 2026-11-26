@@ -161,7 +161,7 @@ export interface Window {
 }
 
 /** One window: a keeper over a view and a disk. A "reload" is a new window over the same backing and the same disk. */
-export function windowOver(backing: Backing, disk: FakeDisk, options: { mode?: 'one-key' | 'whole-state'; on?: boolean } = {}): Window {
+export function windowOver(backing: Backing, disk: FakeDisk, options: { mode?: 'one-key' | 'whole-state'; on?: boolean; automatic?: 'off' | 'on' } = {}): Window {
   const v = view(backing, options.mode ?? 'one-key');
   const unkept: Window['unkept'][number][] = [];
   const setting = { on: options.on ?? true };
@@ -172,6 +172,8 @@ export function windowOver(backing: Backing, disk: FakeDisk, options: { mode?: '
     refusals: refusalsStore(disk, () => disk.now, instant),
     now: () => new Date(disk.now).toISOString(),
     allowNew: () => setting.on,
+    // The modules E2 builds on are tested with the automatic allow on; the build's own constant is `remoteHostsCut.test.ts`'s.
+    automatic: options.automatic ?? 'on',
     changed: () => { changed.count += 1; },
     unkept: (host, why, marked) => { unkept.push({ host, why, marked }); },
   };

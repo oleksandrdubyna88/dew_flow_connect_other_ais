@@ -2,8 +2,8 @@ import type { CopyDecision } from './copyText';
 import { agoWords } from './gaugeWords';
 import { ACCOUNTS_SECONDS, ACCOUNTS_UNREADABLE_SAID, plainValue } from './remoteAccountsReply';
 import type { ManagerWord } from './remoteAccountsReply';
-import { claudeAccountKey } from './remoteAccountsRound';
-import type { AccountsState, HostMemory, Memory, StateChange } from './remoteAccountsRound';
+import { ACCOUNTS_READING, READING_OFF_SAID, claudeAccountKey } from './remoteAccountsRound';
+import type { AccountsReading, AccountsState, HostMemory, Memory, StateChange } from './remoteAccountsRound';
 import { dayOf } from './remoteHosts';
 import type { Committed, HostStanding } from './remoteHosts';
 import { HOSTS_SAID } from './remoteHostsSaid';
@@ -405,7 +405,7 @@ const floorRows = (view: AccountsView): readonly Row[] => (view.floor === true ?
  * The rows, in order: the ignored-layer row; then, when stopped, ONLY the start row; when no `Creds:` terminal is open, ONLY the one
  * sentence; else the groups, the `── Hosts ──` separator and one row for each host.
  */
-export function accountsRows(view: AccountsView, nowMs: number): readonly Row[] {
+function readingRows(view: AccountsView, nowMs: number): readonly Row[] {
   const head = ignoredRows(view.ignored);
   if (view.stopped) {
     return [...head, startRow(view)];
@@ -416,6 +416,14 @@ export function accountsRows(view: AccountsView, nowMs: number): readonly Row[] 
 
   return [...head, ...floorRows(view), ...groupRows(view, nowMs), separator(HOSTS_LABEL), ...view.hosts.map((host) => hostRow(view, host, nowMs))];
 }
+
+/** The cut: while the reading is off the list is this one row, whatever the window holds. */
+const offRows = (): readonly Row[] => [{ kind: 'info', label: READING_OFF_SAID }];
+
+const ROWS_OF: Readonly<Record<AccountsReading, (view: AccountsView, nowMs: number) => readonly Row[]>> = { off: offRows, on: readingRows };
+
+/** The list's rows: one row that says the reading is off, or the groups and the hosts. `reading` is the build's constant unless a test hands one in. */
+export const accountsRows = (view: AccountsView, nowMs: number, reading: AccountsReading = ACCOUNTS_READING): readonly Row[] => ROWS_OF[reading](view, nowMs);
 
 // ───────────────── the notices ─────────────────
 

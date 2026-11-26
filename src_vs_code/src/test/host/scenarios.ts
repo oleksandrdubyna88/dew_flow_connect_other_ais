@@ -22,7 +22,7 @@ import { aStillMissingPathIsSaidOnceAcrossSettingsChanges } from './missingPathS
 import { activationStampsThisSideInARealEditor } from './sideSeenScenario';
 import { aTerminalPressTakesTheCopiedTextAndLeavesTheClipboard, theSkipListDefaultHoldsTheTerminalDoor } from './terminalCaptureScenario';
 import { aPressOnACredsTerminalReachesTheBoundRoadOnce, theTerminalItemsFollowTheActiveTerminalAndTheAnswer } from './terminalDoorsScenario';
-import { theAccountsListShowsTheGroupsAndTheHosts, theAccountsRoundCallsEachHostOnceAndStopsWithItsTerminals } from './terminalAccountsScenario';
+import { theAccountsListSaysTheReadingIsOff, theAccountsRoundReadsNoHostWhileTheReadingIsOff } from './terminalAccountsScenario';
 import { theConsentOfAHostIsKeptInTheRealGlobalState, theHostsStoreWritesTheListAndTheRefusalsFile, theSettingReachesTheDoorThroughTheRealConfiguration } from './terminalHostsScenario';
 import { theSkipListAddAppendsToTheUserSettingOnce } from './skipShellScenario';
 import { twoCliPathFieldsKeepThisSidesValueInARealEditor } from './twoPathFieldsScenario';
@@ -986,25 +986,26 @@ const SCENARIOS: readonly Scenario[] = [
     run: theConsentOfAHostIsKeptInTheRealGlobalState,
   },
   {
-    // A1-H1 of the accounts plan (E1.S1): the hosts store in a real editor — the automatic yes, a person's no in the list and in the real refusals file, the Stop, and a profile put back as found.
-    name: 'the hosts store writes the automatic yes, the refusal in the list and in the refusals file, and the Stop, and leaves the profile as it was found',
+    // A1-H1 of the accounts plan (E1.S1, as the cut leaves it): the hosts store in a real editor — a host with no answer stays not-asked and no automatic row is written, a person's no in the list and in the real refusals file, the Stop, and a profile put back as found.
+    name: 'the hosts store writes no automatic yes, keeps the refusal in the list and in the refusals file, and the Stop, and leaves the profile as it was found',
     run: theHostsStoreWritesTheListAndTheRefusalsFile,
   },
   {
-    // A1-H2 (E1.S1): the setting through the real configuration; the scenario fails, it does not skip, when the editor refuses the user-level key.
-    name: 'the setting terminalAccountsAllowNewHosts reaches the round door through the real configuration',
+    // A1-H2 (E1.S1, as the cut leaves it): the setting is read through the real configuration and has no effect on the round door; the scenario fails, it does not skip, when the editor refuses the user-level key.
+    name: 'the setting terminalAccountsAllowNewHosts is read from the real configuration and has no effect on the round door',
     run: theSettingReachesTheDoorThroughTheRealConfiguration,
   },
   {
-    // A3-H1 (E1.S3): the accounts round in a real editor — the call replaced through the test door, one call for each host with no usage, the automatic yes in the store, and nothing armed once the terminals are gone. CI only: it cannot start here.
-    name: 'the accounts round calls each host once without usage, in order, and arms nothing when its terminals are gone',
-    run: theAccountsRoundCallsEachHostOnceAndStopsWithItsTerminals,
+    // A3-H1 (E1.S3, as the cut leaves it): the accounts round in a real editor with the reading off — three terminals open, a timer tick and two presses run no round, the replaced call is never made,
+    // the store holds no automatic yes, the memory holds no host and no timer would be armed. CI only: it cannot start here.
+    name: 'the accounts round reads no host while the reading is off: no call, no yes row, no timer',
+    run: theAccountsRoundReadsNoHostWhileTheReadingIsOff,
   },
   {
-    // A4-H1 (E1.S4): the list in a real editor — the command exists, and after one round over a reply whose email holds a "$(" the items handed to the list are a group separator
-    // with it written "$ (", the Hosts separator and one row for each host. What it cannot see: what VS Code DRAWS for a "$(" (U10). CI only: it cannot start here.
-    name: 'the accounts command is registered and its list holds the group, the Hosts separator and a row for each host',
-    run: theAccountsListShowsTheGroupsAndTheHosts,
+    // A4-H1 (E1.S4, as the cut leaves it): the list in a real editor with the reading off — the command exists, the items handed to the list are the one row that says the reading is off in this build,
+    // and opening the list calls no host. CI only: it cannot start here.
+    name: 'the accounts command is registered and its list is the one row that says the reading is off',
+    run: theAccountsListSaysTheReadingIsOff,
   },
   {
     // S3-H1 of the E3 stories document (the chat opens from a terminal): through the test door of the BOUND skip-shell check, with the offer replaced by a
