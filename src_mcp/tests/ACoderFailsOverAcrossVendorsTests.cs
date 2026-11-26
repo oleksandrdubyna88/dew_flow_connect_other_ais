@@ -279,7 +279,7 @@ public sealed class ACoderFailsOverAcrossVendorsTests
             var vendor = attemptVendor[attempt];
             var binds = properties.Where(property => property.StartsWith("BindReadOnlyPaths=", StringComparison.Ordinal) && property.EndsWith(".claude/.credentials.json", StringComparison.Ordinal)).ToList();
             binds.Should().HaveCount(vendor == "claude" ? 1 : 0, $"the unit of attempt {attempt} ({vendor}) holds {(vendor == "claude" ? "claude's" : "no claude")} sign-in");
-            properties.Where(property => property.Contains("/.codex", StringComparison.Ordinal) || property.Contains("/.agy", StringComparison.Ordinal)).Should().BeEmpty("no property of a unit names another vendor's sign-in");
+            properties.Where(property => property.StartsWith("Bind", StringComparison.Ordinal) && (property.Contains("/.codex", StringComparison.Ordinal) || property.Contains("/.agy", StringComparison.Ordinal))).Should().BeEmpty("no unit BINDS another vendor's sign-in (the real files are hidden: InaccessiblePaths)");
             if (vendor != "claude")
             {
                 properties.Should().Contain(property => property.StartsWith("InaccessiblePaths=", StringComparison.Ordinal) && property.Contains("/keys", StringComparison.Ordinal), "the key pool of claude is hidden from the unit of another vendor");
@@ -676,7 +676,7 @@ public sealed class ACoderFailsOverAcrossVendorsTests
         ended.Reason.Should().Contain("sign-in-codex-1").And.NotContain(Token);
         var stored = string.Concat(Directory.EnumerateFiles(rig.World.Store.FolderOf(job.JobId)!.Location, "*", SearchOption.AllDirectories).Select(File.ReadAllText));
         stored.Should().NotContain(Token, "the token is in no file of the job's record: not a turn file, not the envelope, not the result");
-        stored.Should().Contain("[claude key sign-in-codex-1]", "the mark names the copy, so the record says whose token was printed");
+        stored.Should().Contain("[sign-in copy sign-in-codex-1]", "the mark names the copy, so the record says whose token was printed").And.NotContain("[claude key", "the mark of a vendor that is not claude does not say claude");
     }
 
     /// <summary>

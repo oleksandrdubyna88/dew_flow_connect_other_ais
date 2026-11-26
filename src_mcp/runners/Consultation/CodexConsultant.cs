@@ -54,10 +54,10 @@ public sealed class CodexConsultant(CodexRuntime inner, string vendor = "codex")
     /// </remarks>
     public async Task<ConsultantPreparation> PrepareAsync(ConsultantLaunch launch, IProcessLauncher launcher, CancellationToken ct)
     {
-        // The coder is claude only in this epoch (t3, d5): asked before the tier, which a refused launch has no use for.
-        if (launch.Confinement is LaunchConfinement.Coder)
+        // A coder launch is codex's own road (epoch 3 E3 s5 t2): asked before the tier, which a write launch has no use for.
+        if (launch.Confinement is LaunchConfinement.Coder coder)
         {
-            return CoderLaunches.NoCoder;
+            return await PrepareCoderAsync(launch, coder, launcher, ct);
         }
 
         if (!inner.TierDependsOnRelease(launch.Settings.Fast))
@@ -71,9 +71,54 @@ public sealed class CodexConsultant(CodexRuntime inner, string vendor = "codex")
             launch with { Settings = launch.Settings with { CodexTier = tier } }, string.Empty, $"service tier: {tier.Reason}");
     }
 
+    /// <summary>
+    /// A coder's write launch, prepared: the job, the worktree and the handle checked first, then the installed codex asked what it declares (<see cref="CodexWriteCapability"/>) and refused with the flag it lacks. The release is a record on the result, never a condition.
+    /// </summary>
+    private static async Task<ConsultantPreparation> PrepareCoderAsync(ConsultantLaunch launch, LaunchConfinement.Coder coder, IProcessLauncher launcher, CancellationToken ct)
+    {
+        if (CoderLaunches.WhyNot(coder) is { Length: > 0 } why)
+        {
+            return new ConsultantPreparation.Refused(new ConsultFailure.LaunchRefused(why));
+        }
+
+        return await CodexCoderVendor.Instance.ProbeAsync(launcher, Executable(launch.Settings), launch.RepoPath, ct) switch
+        {
+            CoderCapability.Ready ready => new ConsultantPreparation.Ready(launch, string.Empty, $"coder write launch: codex {ready.Version} declares every flag of the argv") { CliVersion = ready.Version },
+            CoderCapability.Refused { CouldNotStart: true } refused => new ConsultantPreparation.Refused(new ConsultFailure.CliNotFound(refused.Said, ConsultFailures.InstallCureFor("codex"))),
+            CoderCapability.Refused refused => new ConsultantPreparation.Refused(new ConsultFailure.VendorRefused(refused.Said, refused.Cure)),
+            _ => throw new InvalidOperationException("a write capability is ready or refused"),
+        };
+    }
+
+    /// <summary>The coder: the measured argv (<see cref="CodexCoderVendor.FreshArgv(string, string, CoderLaunchFiles)"/>), the prompt on stdin, the answer in an output file; resumed with the thread of turn 0 and every flag of the fresh argv.</summary>
+    private ReviewerInvocation Coder(ConsultantLaunch launch, LaunchConfinement.Coder coder)
+    {
+        var outputFile = Path.Combine(launch.OutputDir, ConsultantArtefacts.Name(vendor, ".txt", CoderLaunches.Role));
+        var files = new CoderLaunchFiles(outputFile);
+        var argv = (string[])[.. coder.Resume.IsNone
+            ? CodexCoderVendor.Instance.FreshArgv(launch.Settings.Model, coder.Worktree, files)
+            : CodexCoderVendor.Instance.ResumedArgv(launch.Settings.Model, coder.Worktree, coder.Resume.SessionId, files)];
+        ConsultantLaunches.MustCarryNoLineBreak(argv);
+        var request = new ProcessRequest(Executable(launch.Settings), argv, coder.Worktree)
+        {
+            StdIn = launch.Prompt,
+            Timeout = launch.Settings.Timeout,
+        };
+
+        return new ReviewerInvocation(vendor, CoderLaunches.Role, CoderLaunches.ForCoder(request), outputFile, inner, Model: launch.Settings.Model);
+    }
+
+    /// <summary>The handle of the coder turn that ran for <paramref name="coder"/>: the thread id its stream reported, bound to the job and the worktree — or none.</summary>
+    public CoderHandle BindHandle(LaunchConfinement.Coder coder, ProcessResult result) => CoderHandle.Bind(coder, ReadHandle(result));
+
     public ReviewerInvocation Build(ConsultantLaunch launch)
     {
-        ConsultantLaunches.MustBeLaunchable(launch);
+        ConsultantLaunches.MustBeLaunchable(launch, takesACoder: true);
+        if (launch.Confinement is LaunchConfinement.Coder coder)
+        {
+            return Coder(launch, coder);
+        }
+
         var role = ConsultantLaunches.RoleOf(launch);
         // Named through the one place that also decides what the sweep may delete.
         var outputFile = Path.Combine(launch.OutputDir, ConsultantArtefacts.Name(vendor, ".txt", role));

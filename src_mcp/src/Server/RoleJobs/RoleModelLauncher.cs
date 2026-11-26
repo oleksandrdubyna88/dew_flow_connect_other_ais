@@ -253,7 +253,7 @@ internal sealed partial class RoleModelLauncher(Func<string, string?> settings, 
         {
             foreach (var token in tokens)
             {
-                var cleaned = token.Scrub(text);
+                var cleaned = token.ScrubAsSignInToken(text);
                 if (!string.Equals(cleaned, text, StringComparison.Ordinal) && !hits.Contains(token.Id, StringComparer.Ordinal))
                 {
                     hits.Add(token.Id);

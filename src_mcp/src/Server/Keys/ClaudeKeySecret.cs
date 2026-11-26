@@ -39,6 +39,9 @@ internal sealed class ClaudeKeySecret
     /// <summary>The same output with every occurrence of this key's exact text replaced by <see cref="Marker"/>.</summary>
     public string Scrub(string output) => output.Replace(_text, Marker, StringComparison.Ordinal);
 
+    /// <summary>The same output with every occurrence of this text replaced by a mark that names it as a SIGN-IN token of a vendor's copy — for a secret that is not a claude pool key, whose mark must not say "claude key".</summary>
+    public string ScrubAsSignInToken(string output) => output.Replace(_text, $"[sign-in copy {Id}]", StringComparison.Ordinal);
+
     /// <summary>Whether the exact text of this key is inside <paramref name="bytes"/>.</summary>
     public bool IsIn(ReadOnlySpan<byte> bytes) => bytes.IndexOf(_bytes) >= 0;
 

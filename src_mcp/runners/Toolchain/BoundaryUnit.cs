@@ -69,10 +69,24 @@ internal static class BoundaryUnit
         [.. new[] { job.KeysFolder, job.KeysFile }.Where(path => path.Length > 0).Select(path => $"InaccessiblePaths=-{path}")];
 
     /// <summary>The person's own sign-in file at its real path, hidden from a check unit where the home is not under a hidden folder: a check never needs it (a coder's unit gets it bound at a path of its own home, never at this one).</summary>
-    internal static IReadOnlyList<string> SignInHidden(BoundaryHost host) =>
+    internal static IReadOnlyList<string> SignInHidden(BoundaryHost host) => Hidden(host, RealSignInFiles);
+
+    /// <summary>The real sign-in files of the vendors whose coder gets a COPY, hidden at their real paths: the list of a unit that must keep its own bind source (claude's coder unit binds claude's real file at a path of its own home).</summary>
+    internal static IReadOnlyList<string> CopyVendorSignInHidden(BoundaryHost host) => Hidden(host, CopyVendorSignInFiles);
+
+    private static IReadOnlyList<string> Hidden(BoundaryHost host, IReadOnlyList<string> files) =>
         host.ResolvedHome is { Length: > 0 } home && System.IO.Path.IsPathFullyQualified(home) && !home.Any(c => char.IsWhiteSpace(c) || char.IsControl(c) || c is ':' or '\\')
-            ? [$"InaccessiblePaths=-{BoundaryJob.RealOrSpelled(System.IO.Path.Combine(home, ".claude", ".credentials.json"))}"]
+            ? [.. files.Select(relative => $"InaccessiblePaths=-{BoundaryJob.RealOrSpelled(System.IO.Path.Combine(home, relative))}")]
             : [];
+
+    /// <summary>
+    /// The real sign-in files of the vendors, under the person's real home, that no unit of any job may read at their real paths (the fourth security verify of s7 t6, C3 item 2): claude's, which a coder's unit gets as a bind at a path of its own home, and codex's, of which a coder's unit gets a COPY. agy's is
+    /// added by its own story (s6).
+    /// </summary>
+    /// <summary>The real sign-in files of the vendors that sign in with a file whose coder gets a copy (codex; agy by s6).</summary>
+    internal static readonly IReadOnlyList<string> CopyVendorSignInFiles = [System.IO.Path.Combine(".codex", "auth.json")];
+
+    internal static readonly IReadOnlyList<string> RealSignInFiles = [System.IO.Path.Combine(".claude", ".credentials.json"), .. CopyVendorSignInFiles];
 
     /// <summary>
     /// What a check unit sees of the job's own folder (epoch 3 E2, the E3 judgement of the write boundary): an empty READ-ONLY tmpfs over the job folder, and on top of it only the folders the checks use (<see cref="BoundaryJob.CheckFolders"/>), each bound writable. The job

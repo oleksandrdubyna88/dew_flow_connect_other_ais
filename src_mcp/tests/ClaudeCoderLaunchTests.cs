@@ -224,7 +224,8 @@ public sealed class ClaudeCoderLaunchTests
 
     private static readonly string[] Others = ["codex", "antigravity", "local", "api", "vibe", "kimi"];
 
-    public static TheoryData<string> OtherVendors() => [.. Others];
+    // codex has a coder of its own since epoch 3 E3 s5 t2 (ACodexCoderLaunchTests); every other runtime is still refused a write launch.
+    public static TheoryData<string> OtherVendors() => [.. Others.Where(vendor => vendor != "codex")];
 
     private static IConsultantRuntime Adapter(string vendor) => vendor switch
     {

@@ -1,5 +1,9 @@
+using System.Text;
+using System.Text.Json.Nodes;
+using CoaiMcp.Runners.Consultation;
 using CoaiMcp.Runners.Processes;
 using CoaiMcp.Runners.Reviewers;
+using CoaiMcp.Runners.Toolchain;
 using FluentAssertions;
 using Xunit;
 
@@ -215,5 +219,74 @@ public sealed class ACodexWriteCapabilityTests
             var text = refused.Said + " " + refused.Cure;
             text.Should().NotContainEquivalentOf("new measure").And.NotContainEquivalentOf("judgement").And.NotContainEquivalentOf("measured on").And.NotContain("0.171.0");
         }
+    }
+
+    // ---------- d3: the margin CX-R1, with an injected clock ----------
+
+    private static string Jwt(DateTime expires) =>
+        $"{B64("{\"alg\":\"none\"}")}.{B64($"{{\"exp\":{new DateTimeOffset(expires).ToUnixTimeSeconds()}}}")}.{B64("signature-made-up")}";
+
+    private static string B64(string text) => Convert.ToBase64String(Encoding.UTF8.GetBytes(text)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+
+    [Fact]
+    public void CXR1_ACopyOneSecondUnderTheMargin_IsRefused_AndOneAtTheMarginIsStarted_AndNoTokenIsInTheSentence()
+    {
+        var recipe = (CoderSignInRecipe.CopyForJob)CodexCoderVendor.Instance.SignIn;
+        var now = new DateTime(2026, 11, 26, 12, 0, 0, DateTimeKind.Utc);
+        var runtimeMax = TimeSpan.FromMinutes(30);
+        var need = runtimeMax + TimeSpan.FromMinutes(60);
+        string Gate(DateTime expires)
+        {
+            var root = new JsonObject { ["tokens"] = new JsonObject { ["access_token"] = Jwt(expires) } };
+
+            return SignInCopy.Gate(recipe, SignInCopy.ExpiryOf(recipe, root), now, runtimeMax, "codex");
+        }
+
+        Gate(now + need).Should().BeEmpty("exp = now + the unit's life + 60 minutes is enough");
+        var refused = Gate(now + need - TimeSpan.FromSeconds(1));
+        refused.Should().Contain("codex").And.Contain("start codex once yourself");
+        refused.Should().NotContain("signature-made-up").And.NotContain("eyJ");
+        recipe.Margin.Should().Be(TimeSpan.FromMinutes(60));
+        recipe.RefreshArgv.Should().BeEmpty("codex is never refreshed by coai: its refresh token is in no job");
+        recipe.Placeholders.Should().ContainKey("tokens/refresh_token").WhoseValue.Should().Be(SignInCopy.Placeholder);
+    }
+
+    [Fact]
+    public void CXR1_AnExpiryThatCannotBeRead_IsARefusal_NotAGuess()
+    {
+        var recipe = (CoderSignInRecipe.CopyForJob)CodexCoderVendor.Instance.SignIn;
+        var root = new JsonObject { ["tokens"] = new JsonObject { ["access_token"] = "not-a-jwt-made-up" } };
+
+        SignInCopy.Gate(recipe, SignInCopy.ExpiryOf(recipe, root), DateTime.UtcNow, TimeSpan.FromMinutes(30), "codex").Should().Contain("could not be read").And.NotContain("not-a-jwt-made-up");
+    }
+
+    [Fact]
+    public async Task TheCodexConsultant_PreparesACoderLaunch_ThroughTheProbe_AndRecordsTheRelease_OrRefusesWithTheFlag()
+    {
+        var consultant = new CodexConsultant(new CodexRuntime());
+        var worktree = Path.Combine(Path.GetFullPath("coder-root"), CoaiMcp.Runners.Worktrees.CoderWorktree.FolderOf("job-a"));
+        var launch = new ConsultantLaunch(Path.GetFullPath("main-checkout"), "q", string.Empty, Path.GetFullPath("answers"), new ReviewerSettings("codex") { Model = "terra" })
+        {
+            Confinement = new LaunchConfinement.Coder("job-a", worktree) { Vendor = "codex" },
+        };
+        ProcessResult Answer(string help) => new(0, help, string.Empty, false);
+        var fine = new WatchedLauncher(new ProcessLauncher(), request => request.Arguments switch
+        {
+            ["--version"] => Answer("codex-cli 0.164.0\n"),
+            ["exec", "--help"] => Answer(ExecHelp()),
+            _ => Answer(ResumeHelp()),
+        });
+        var lacking = new WatchedLauncher(new ProcessLauncher(), request => request.Arguments switch
+        {
+            ["--version"] => Answer("codex-cli 0.164.0\n"),
+            ["exec", "--help"] => Answer(WithoutOption(ExecHelp(), "--output-schema")),
+            _ => Answer(ResumeHelp()),
+        });
+
+        var ready = await consultant.PrepareAsync(launch, fine, TestContext.Current.CancellationToken);
+        var refused = await consultant.PrepareAsync(launch, lacking, TestContext.Current.CancellationToken);
+
+        ready.Should().BeOfType<ConsultantPreparation.Ready>().Which.CliVersion.Should().Be("0.164.0");
+        refused.Should().BeOfType<ConsultantPreparation.Refused>().Which.Failure.Should().BeOfType<ConsultFailure.VendorRefused>().Which.Said.Should().Contain("--output-schema");
     }
 }
