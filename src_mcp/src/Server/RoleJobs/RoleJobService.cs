@@ -39,6 +39,9 @@ internal sealed class RoleJobService(string dataDir, Func<string, string?> setti
 
     internal bool OnWsl { get; init; } = RoleJobSettings.OnWsl;
 
+    /// <summary>The vendors a coder start may route to (epoch 3 E3 s8 t1): the product's set, or one a test injects with its own table.</summary>
+    internal CoaiMcp.Runners.Consultation.CoderVendorSet CoderSet { get; init; } = CoaiMcp.Runners.Consultation.CoderVendors.Shipped;
+
     /// <summary>The process environment the runner's <c>env.json</c> is taken from.</summary>
     internal IDictionary EnvironmentSource { get; init; } = Environment.GetEnvironmentVariables();
 
@@ -74,7 +77,7 @@ internal sealed class RoleJobService(string dataDir, Func<string, string?> setti
         }
 
         // The router first, before anything is made: a role whose list is empty, or a model the task may not take, is refused here with the setting that fixes it — no folder, no runner.
-        var (plan, routeRefusal) = RoleRouting.Plan(RoleDescriptors.Find(Descriptors, role)!, request, settings);
+        var (plan, routeRefusal) = RoleRouting.Plan(RoleDescriptors.Find(Descriptors, role)!, request, settings, CoderSet);
         if (plan is null)
         {
             return RoleJobAnswers.Refused(routeRefusal);

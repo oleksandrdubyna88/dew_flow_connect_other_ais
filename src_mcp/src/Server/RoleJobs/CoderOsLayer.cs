@@ -73,6 +73,18 @@ internal sealed class CoderOsLayer(BoundaryJob job, CoderTurns turns, IProcessLa
         return outcome;
     }
 
+    /// <summary>
+    /// The job leaves <paramref name="vendor"/> for another (epoch 3 E3 s8 t1): what its sign-in left in the job's home is deleted before the unit of the next vendor starts (<see cref="CoderSignInCopy"/>) — its COPY, or, for a bind of a real file (claude's), the empty place the bind left. Answers
+    /// empty, or the sentence of a file that could not be deleted — the next vendor must then not start.
+    /// </summary>
+    public string LeaveVendor(ICoderVendor vendor)
+    {
+        // A copy is deleted. A BIND of the real file (claude's) leaves the empty place it was bound onto in the home when its unit ends, and the next vendor's preflight asks whether that sign-in is visible: the empty place goes too.
+        var said = CoderSignInCopy.Remove(job.CoderHomeFolder, vendor.Home(job).SignInFile, mountPointOnly: vendor.SignIn is CoderSignInRecipe.BindRealFile);
+
+        return said.Length == 0 ? string.Empty : $"the sign-in copy of {vendor.Id} could not be removed before the next vendor started: {said}";
+    }
+
     /// <summary>What the layer says of the launch when it ends the job, or null when the launch is for the failover loop to read as it reads any other.</summary>
     public static CoderOsStop? StopOf(CoderTurnOutcome outcome) => outcome switch
     {
@@ -159,4 +171,68 @@ internal sealed class CoderTurnLauncher(CoderOsLayer layer, string recordTo = ""
     /// <summary>A failed turn keeps the process's own result — its exit, its deadline, its cancel — except where the process said exit 0 and the layer did not trust it (a unit that would not stop): that is a failed launch, never an answer.</summary>
     private static ProcessResult Failure(CoderTurnOutcome.Failed failed) =>
         failed.Run.Result is { ExitCode: 0, TimedOut: false, Cancelled: false } ? new ProcessResult(1, string.Empty, failed.Sentence, TimedOut: false) : failed.Run.Result;
+}
+
+/// <summary>
+/// The deletion of the sign-in COPY of a vendor the job has left (epoch 3 E3 s8 t1; SPEC E7 and F, judgement S3): a copy lies in the job's coder home, which every unit of the job binds, so the unit of the NEXT vendor would see it. It is deleted before that unit starts.
+/// </summary>
+/// <remarks>
+/// <b>It never follows a link out of the home.</b> The coder writes into its home, and a link it made where the copy's folder is (<c>.codex</c> to a person's real folder) would make a delete through it delete the person's own sign-in. The folder is resolved first; a copy whose
+/// resolved folder is not inside the home's resolved path is not deleted and is said. The vendor's unit has ended and been stopped before this runs (<see cref="RoleFailover"/> calls it between two attempts), so nothing races the resolution.
+/// </remarks>
+internal static class CoderSignInCopy
+{
+    /// <summary>
+    /// Deletes <paramref name="copy"/> when it lies in <paramref name="home"/>; answers empty when there is no copy now (it was deleted or never made), else the sentence that says why it could not be. <paramref name="mountPointOnly"/>: the file is the empty place a BIND of a real
+    /// sign-in file left behind in the home when its unit ended (systemd makes the target of a file bind), not a copy: it is deleted only when it is a regular file with nothing in it.
+    /// </summary>
+    public static string Remove(string home, string copy, bool mountPointOnly = false)
+    {
+        var folder = Path.GetDirectoryName(copy);
+        if (string.IsNullOrEmpty(folder))
+        {
+            return $"the sign-in copy at '{copy}' is not in a folder";
+        }
+
+        var realHome = Runners.Files.RealPath.Resolve(home);
+        var realFolder = Runners.Files.RealPath.Resolve(folder);
+        if (!realHome.Ok)
+        {
+            return $"the job's home '{home}' could not be resolved, so a sign-in copy in it was not deleted";
+        }
+
+        if (!realFolder.Ok)
+        {
+            // The folder is not there (nothing was made) or is a link that leads nowhere: there is no file to leave behind through it.
+            return Runners.Files.RealPath.Lstat(folder) == Runners.Files.Entry.Missing ? string.Empty : $"the folder of the sign-in copy at '{copy}' could not be resolved, so the copy was not deleted";
+        }
+
+        var inside = realFolder.Path == realHome.Path || realFolder.Path.StartsWith(realHome.Path.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, StringComparison.Ordinal);
+        if (!inside)
+        {
+            return $"the folder of the sign-in copy at '{copy}' leads out of the job's home ({realFolder.Path}), so the copy was not deleted through it";
+        }
+
+        var target = Path.Combine(realFolder.Path, Path.GetFileName(copy));
+        try
+        {
+            if (Directory.Exists(target) && Runners.Files.RealPath.Lstat(target) == Runners.Files.Entry.Directory)
+            {
+                return $"a folder stands where the sign-in copy at '{copy}' belongs, so it was not deleted as a file";
+            }
+
+            if (mountPointOnly && Runners.Files.RealPath.Lstat(target) is { Kind: not Runners.Files.EntryKind.Missing } entry && (entry.Kind != Runners.Files.EntryKind.File || new FileInfo(target).Length > 0))
+            {
+                return $"the file at '{copy}' is not the empty place of a bind, so it was not deleted";
+            }
+
+            File.Delete(target);
+
+            return File.Exists(target) || Runners.Files.RealPath.Lstat(target) != Runners.Files.Entry.Missing ? $"the sign-in copy at '{copy}' is still there after its deletion" : string.Empty;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return $"the sign-in copy at '{copy}' could not be deleted: {e.Message}";
+        }
+    }
 }

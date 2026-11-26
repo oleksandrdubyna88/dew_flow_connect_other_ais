@@ -135,6 +135,12 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
     public Func<CancellationToken, Task<string>>? Restore { get; init; }
 
     /// <summary>
+    /// Set for the coder (epoch 3 E3 s8 t1): called with the id of the vendor the job is LEAVING, when the next attempt is on another vendor and before anything of that attempt is made — deletes what the left vendor kept in the job's home (its sign-in copy, SPEC E7), so the unit of the next vendor
+    /// cannot see it. Returns empty when nothing is left; any other text ends the job as <c>coder-boundary</c>: no vendor is started beside a copy of another's sign-in. Null for the read-only roles.
+    /// </summary>
+    public Func<string, string>? VendorLeft { get; init; }
+
+    /// <summary>
     /// The session the answer came from, once an attempt ended with one: the model and the handle of its FIRST turn. A coder's fix turns (<see cref="CoderFixLoop"/>) resume exactly this session — never a new one, and never the handle a later turn
     /// reported. Null until an attempt answered.
     /// </summary>
@@ -167,6 +173,7 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
     private string _poolSentence = string.Empty;
     private bool _poolExhausted;
     private bool _warnedNoSnapshot;
+    private string _lastVendor = string.Empty;
 
     /// <summary>The road to the claude key pool of this job's data folder; made once, on the first claude launch.</summary>
     private RoleKeyRoad Keys => _keys ??= RoleKeyRoad.For(run);
@@ -351,12 +358,19 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
 
         _lastKeyId = key.KeyId;
 
+        // Another vendor is next: what the vendor left kept in the job's home goes first. A copy that stays ends the job (a boundary stop: the next vendor would meet the same copy).
+        if (_attempts > 0 && _lastVendor.Length > 0 && _lastVendor != model.Vendor && VendorLeft?.Invoke(_lastVendor) is { Length: > 0 } notLeft)
+        {
+            return new Ended.Final(new RoleWorkOutcome.Failed(RoleStopWords.CoderBoundary, notLeft));
+        }
+
         if (_attempts > 0 && Restore is not null && await Restore(ct) is { Length: > 0 } notRestored)
         {
             return ct.IsCancellationRequested ? new Ended.Stopped() : new Ended.Final(new RoleWorkOutcome.Failed("coder-worktree", notRestored));
         }
 
         var n = ++_attempts;
+        _lastVendor = model.Vendor;
         run.Phase("attempt", n);
         if (!run.Trying(RoleRoute.Format(model)))
         {

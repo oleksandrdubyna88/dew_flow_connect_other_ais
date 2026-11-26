@@ -62,7 +62,13 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
     /// <summary>
     /// The host as ONE launch sees it: a launch that carries a pool key (epoch 3 E2 s7) binds no sign-in file of the person's — the key is its credential — so its unit, its preflight and its record are made over a host with <see cref="BoundaryHost.BindSignIn"/> false.
     /// </summary>
-    private BoundaryHost HostFor(bool withKey) => withKey ? host with { BindSignIn = false } : host;
+    private BoundaryHost HostFor(bool withKey) => KeyedLaunch(withKey) ? host with { BindSignIn = false } : host;
+
+    /// <summary>
+    /// Whether the unit of this launch binds NONE of the person's claude sign-in (epoch 3 E3 s8 t1; SPEC E7, a unit holds only its own vendor's sign-in): a launch with a pool key, and EVERY launch of a vendor other than claude — the sign-in file the host names is claude's, and no unit of another vendor gets it whatever that vendor's own
+    /// property list says. Such a unit hides the claude key pool, and its preflight proves both from inside (<see cref="BoundaryPreflight.SignInAbsent"/>, <see cref="BoundaryPreflight.KeysHidden"/>).
+    /// </summary>
+    private bool KeyedLaunch(bool withKey) => withKey || Vendor.Id != CoderBoundaryTable.Claude;
 
     /// <summary>Whether <paramref name="request"/> carries a pool key: the variable the claude CLI reads it from is in its explicit environment with a value. The one reading, for the admission and for the launch, so the two cannot disagree.</summary>
     public static bool CarriesKey(ProcessRequest request) =>
@@ -78,7 +84,7 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
     public async Task<BoundaryAdmission> AdmitAsync(BoundaryJob job, string executable, CancellationToken ct = default, bool withKey = false)
     {
         var launchHost = HostFor(withKey);
-        var early = host.PlatformRefusal() is { Length: > 0 } platform ? platform : withKey && job.KeysFolderProblem() is { Length: > 0 } hidden ? hidden : job.CoderProblem() is { Length: > 0 } problem ? problem : job.MountsOnDiskProblem();
+        var early = host.PlatformRefusal() is { Length: > 0 } platform ? platform : KeyedLaunch(withKey) && job.KeysFolderProblem() is { Length: > 0 } hidden ? hidden : job.CoderProblem() is { Length: > 0 } problem ? problem : job.MountsOnDiskProblem();
         if (early.Length > 0)
         {
             return Refuse(early, []);

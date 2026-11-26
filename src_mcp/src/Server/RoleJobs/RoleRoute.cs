@@ -94,7 +94,7 @@ internal static class RoleRouting
     /// <summary>
     /// The route of a job for <paramref name="descriptor"/>, from the layered <paramref name="settings"/>. A role with no <c>RouteAs</c> asks no model and gets an empty route.
     /// </summary>
-    public static (RoleJobPlan? Plan, string Refusal) Plan(RoleDescriptor descriptor, RoleJobRequest request, Func<string, string?> settings)
+    public static (RoleJobPlan? Plan, string Refusal) Plan(RoleDescriptor descriptor, RoleJobRequest request, Func<string, string?> settings, CoaiMcp.Runners.Consultation.CoderVendorSet? vendors = null)
     {
         if (descriptor.RouteAs.Length == 0)
         {
@@ -107,7 +107,7 @@ internal static class RoleRouting
         var decided = RoleRouter.Route(new RouteRequest(descriptor.RouteAs, request.Model, kind, complexity, security), new RouteTable(roles.Roles, roles.ComplexityBands));
 
         // The coder's launch is claude only: its route keeps the claude entries, and a route with none is refused here, before any folder. The judge's named model must be on the important list.
-        return Narrowed(descriptor, decided, request, roles.Roles) switch
+        return Narrowed(descriptor, decided, request, roles.Roles, vendors) switch
         {
             RouteResult.Routed routed => (new RoleJobPlan(RoleRoute.Format(routed.Models), complexity, security), string.Empty),
             RouteResult.Refused refused => (null, refused.Reason),
@@ -116,9 +116,9 @@ internal static class RoleRouting
     }
 
     /// <summary>The router's answer after the rule of the role: the coder keeps claude entries only (<see cref="CoderRoute"/>), the judge refuses a named model outside the important list (<see cref="JudgeRoute"/>).</summary>
-    private static RouteResult Narrowed(RoleDescriptor descriptor, RouteResult decided, RoleJobRequest request, IReadOnlyList<(string Role, IReadOnlyList<ModelRef> Models)> lists) => descriptor.RouteAs switch
+    private static RouteResult Narrowed(RoleDescriptor descriptor, RouteResult decided, RoleJobRequest request, IReadOnlyList<(string Role, IReadOnlyList<ModelRef> Models)> lists, CoaiMcp.Runners.Consultation.CoderVendorSet? vendors) => descriptor.RouteAs switch
     {
-        RoleRouter.CoderRole => CoderRoute.Narrow(decided, request.Model),
+        RoleRouter.CoderRole => CoderRoute.Narrow(decided, request.Model, vendors),
         RoleRouter.ImportantRole => JudgeRoute.Narrow(decided, request.Model, lists.FirstOrDefault(list => list.Role == RoleRouter.ImportantRole).Models ?? []),
         _ => decided,
     };

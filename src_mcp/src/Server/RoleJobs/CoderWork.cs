@@ -123,6 +123,8 @@ internal sealed class CoderWork : IRoleWork
             OsLayer = layer,
             Follow = (answered, token) => FollowAsync(run, git, prepared, site, loop, judge.Accepted, new CoderFixSession(answered.Model, answered.Handle, confinement, answered.KeyId, answered.Secret), ++answers, layer, cap, note, instructions, sent.GetValueOrDefault(RoleRoute.Format(answered.Model)) ?? CoderPromptRecord.None, token),
             Restore = token => CoderRestore.RestoreAsync(git, prepared.Tree, loop.LastCommit, token),
+            // A job that leaves a vendor for another deletes what that vendor kept in the job's home before the next unit starts (epoch 3 E3 s8 t1).
+            VendorLeft = left => Vendors.Resolve(left) is CoderVendorResolution.Launchable found ? layer.LeaveVendor(found.Vendor) : string.Empty,
         };
 
         try
