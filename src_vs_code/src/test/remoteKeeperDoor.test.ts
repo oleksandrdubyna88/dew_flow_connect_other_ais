@@ -87,6 +87,8 @@ test('E2S1-T5: the stale lock holder — a former holder renames its stale refus
   const before = disk.files.get('refused.json') as string;
   await a.keeper.allow();
   disk.files.set('refused.json', before);
+  // the window that remembers the newer file, with its grant, is written forward by a regain — which gives no grant
+  assert.deepEqual(await doors(a, 'x'), ['no-permission', 'no-permission'], 'a regain wrote the remembered grant back');
   const reloaded = windowOver(backing, disk);
   assert.deepEqual(await doors(reloaded, 'x'), ['no-permission', 'no-permission'], 'a file that went back gave a permission no press gave');
   assert.equal((await reloaded.keeper.allow()).kind, 'given');
@@ -399,6 +401,7 @@ test('E2S1-T20 (B1): an Allow that died after its write does not outlive a later
 
 test('E2S1-T20 (R33): an Allow whose claim was taken by a person\'s press after its write starts again and does not end as kept over a later withdrawal', async () => {
   const disk = new FakeDisk();
+  disk.files.set(wname(2), withdrawalText(2, U0));
   const w = windowOver(new Backing(), disk);
   let taken = false;
   const replacing = disk.replace;
@@ -406,13 +409,15 @@ test('E2S1-T20 (R33): an Allow whose claim was taken by a person\'s press after 
     await replacing(text);
     if (!taken) {
       taken = true;
+      // a person's press takes the claim after the write; a withdrawal of a window that had not seen the copy lands BELOW the grant (stamp 1 < 3) while the Allow starts again
       disk.lock = { token: 'a person took it' };
-      // a withdrawal of another window lands below the grant while the Allow runs again
+      disk.ownerAlive = false;
       disk.files.set(wname(1), withdrawalText(1, U0));
     }
   };
   const result = await w.keeper.allow();
   assert.notEqual(result.kind, 'kept', 'an Allow that had written answered kept when it started again');
+  assert.deepEqual(await doors(windowOver(new Backing(), disk)), ['no-permission', 'no-permission'], 'a withdrawal that landed below the grant did not stand');
 });
 
 test('E2S1-T21: a copy that is not a stamp withdraws on every side, no read replaces it, an Allow does; the top starts again', async () => {
