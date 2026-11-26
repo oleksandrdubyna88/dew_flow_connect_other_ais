@@ -463,9 +463,17 @@ the vault opens (`ai1-dev2`, `ai1-dev3`, `ai2-root`) has live sessions. The owne
   11:10:26 is inside the read window, but no read around it changed `~/.claude.json` (reads 4–8 reported no change),
   so who wrote it is not proven.
 
-**Decided by it.** Weeks of live sessions leave exactly five backups, so Claude Code keeps a fixed number — this is
-inferred from the count; a deletion was not seen happen. The row of § 5 that holds: **"Claude Code keeps a fixed
-number → every round"**. To confirm: the count is five again on a later day.
+**Decided by it.** Weeks of live sessions leave exactly five backups, so Claude Code keeps a fixed number. At
+11:11 UTC this was inferred from the count; a deletion had not been seen happen, and the note here was "to
+confirm: the count is five again on a later day". The row of § 5 that holds: **"Claude Code keeps a fixed number
+→ every round"**.
+
+**The retirement was then seen, 40 minutes later.** At 11:51:35 UTC the same day, the same user's
+`~/.claude/backups/` (`ls -A`) held 5 files again, stamped 11:26:15, 11:28:08, 11:42:47, 11:46:24 and 11:48:52
+UTC. All five files of the listing above (09:13:53, 09:50:18, 10:35:58, 11:06:59, 11:10:26) were gone. So
+Claude Code keeps five backups and deletes the older ones: observed, no longer inferred. With live sessions the
+backups are frequent — five in 25 minutes — and every one of these five is later than the last read of ours
+(11:11:25). Not measured in this second listing: the sizes of the five files, and which process wrote each.
 
 ### W8 — `agy --version`: a record
 

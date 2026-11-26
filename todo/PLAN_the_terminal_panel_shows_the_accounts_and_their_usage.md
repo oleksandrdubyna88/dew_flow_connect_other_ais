@@ -6,7 +6,8 @@
 > stopped the plan on 2026-11-25. This text is the revision which that stop ordered (step 4 of *The full stop*,
 > `plan-change-control.md`). **The owner approved it as epoch 3 on 2026-11-26**, with three answers that belong to
 > the approved baseline and are no ledger entry: root of a WSL distro is read too, as itself (*Owner decisions*,
-> 24); Q4 is "yes"; and the go for the measurements W6, W7 and W9. Epoch 3 has no change yet. The cut that step 6
+> 24); Q4 is "yes"; and the go for the measurements W6, W7 and W9, which were run that day: **W9 left one item open for the
+> owner, on the login session that WSL starts (§ 5)**. Epoch 3 has no change yet. The cut that step 6
 > of the stop ordered is merged (#1051, `b1ec467c`): no build from main reads a host by itself. **E2 may start**;
 > no code of E2 to E6 is written yet. Scope: `src_vs_code` only — the icon in the terminal panel's title bar; ONE permission to read, asked once; a tab with a table, by host, of the Claude Code, Codex and
 > Antigravity accounts and their limits; a round every 10 minutes over the hosts of the open
@@ -160,13 +161,8 @@ The terminal panel holds many terminals named `Creds: <host> / <session>`, for e
 this PC's own WSL. Nothing in VS Code says which account each of them is signed in to, or how much of its limit is
 left. To learn it the owner opens each session and asks there.
 
-**What the owner said at the real window, 2026-11-25**, about the build of E1:
-
-- *"wsl must read every WSL on my PC, all accounts."* (entry 2.2)
-- *"I may have 20 hosts in the terminal, and it asks for each. No. Once: may I read? I say yes, and it reads all."*
-  (entry 2.3)
-- *"Something was read, but who knows what. It must be readable: which host, which AIs, which accounts, the limits,
-  when they reset. Redo it."*
+**What the owner said at the real window, 2026-11-25**, about the build of E1: three sentences — entries 2.2
+and 2.3 of the ledger hold two, and the appendix, § K.13, all three.
 
 So the goal of epoch 3 is one sentence: **after ONE "yes", the owner opens a tab and reads, for each host and each
 Linux user of this PC's WSL, which AI programs are there, which account each is signed in to, how much of each
@@ -213,7 +209,7 @@ The four questions as they were asked, with the line the text took for each, are
 extension release holds this code: the newest tag is `extension-v2.0.0`, cut before #1047. The short list of what
 the design below stands on, with its files and lines, is in the appendix, § K.1.
 
-- **Not measured: anything about WSL.** W6 and W7 are still owed for the Claude usage.
+- **Measured since, 2026-11-26:** W6, W7 and W8 on a VM, and W9, WSL on this PC (§ 5).
 
 ## The design
 
@@ -231,35 +227,9 @@ scope host; a reading, its time and its failure are of the place.
   Ctrl+F. `retainContextWhenHidden` keeps the scroll place; the page keeps no other state. The QuickPick of E1, its
   rows and its item buttons are removed.
 - **The page is grouped by HOST.** A toolbar, then one block for each scope host of the live `Creds:` terminals, in
-  name order:
-
-  ```
-  [Refresh now] [Stop the round]            last round 3 min ago (14:03) · 14 of 16 read
-
-  host-a      read 3 min ago (14:03)                                              [Not this host]
-    Tool          Account                           5-hour window       Weekly window
-    Claude Code   user@example.com · Example Org    44% left            23% left
-    2.1.326       plan team · shared across 2 hosts resets in 2h 10m    resets in 2d 14h
-                                                                        Fable 51% left
-    Codex         account name not shown by Codex   —                   86% left
-                  plan prolite                                          resets in 4d 23h
-                  from a Codex session 2 d ago
-    Antigravity   its account is not read           agy states no usage
-    1.5.12
-  host-b      the last read failed 3 min ago (14:03): “host-b” did not answer over ssh within 30 s.
-    (the table of the read at 13:40, marked as older)
-  host-c      not allowed: your answer for this host is “Not this host”           [Read this host again]
-  host-d      jq is missing on this host, so nothing can be read there.
-              Run there: sudo apt-get install -y jq                               [Copy install command]
-  wsl — this PC    2 distros · read 3 min ago (14:03)                             [Not this host]
-    Ubuntu · user-a    read 3 min ago (14:03)
-      (its table)
-    Ubuntu · user-b    no Claude Code, Codex or Antigravity found
-    Ubuntu · root      read 3 min ago (14:03)
-      (its table)
-    Debian             not running, so not read
-  ```
-
+  name order. The block of `wsl` is headed *wsl — this PC* with the count of its distros; under it one line or
+  table for each distro and user (*Ubuntu · user-a*), and a distro that is not running has the line *not
+  running, so not read*. **The picture of the page: the appendix, § K.8.**
 - **A host's heading** holds the host's name and its latest read result, one of: *read <age> (<clock time>)*;
   *never read*; *not allowed*, with the reason; the failure IN FULL — the runner's own sentence — with its age; or
   the missing-`jq` explanation. *Not this host* is on the heading of every host that is not refused; *Read this
@@ -312,10 +282,7 @@ scope host; a reading, its time and its failure are of the place.
 
 ### 2. The round — places, the permission, and WSL on this PC
 
-What E1 built stays unless a line here changes it (the appendix, § I, *2. The round*): one call at a time, each
-awaited; the order rotated by one each round; 10 minutes counted from the END of a round; the checks before every
-call and before every result; results in memory only; a failed place logged once when its sentence changes; no
-timer while no place may be read; a round for each window.
+What E1 built stays unless a line here changes it (the appendix, § I, *2. The round*; its short list: § K.12).
 
 - **No call without the permission.** While this side holds no permission (§ 3), the timer is not armed and no
   press of the tab starts a call. The first round starts at once when the permission is given; after that, 30 s
@@ -327,14 +294,17 @@ timer while no place may be read; a round for each window.
   not in a remote), the round enumerates, in every round:
   1. the distros: `wsl.exe --list --quiet`, and the running ones: `wsl.exe --list --running --quiet`. A name counts
      only when it fits `[A-Za-z0-9][A-Za-z0-9._-]{0,63}`; another line is counted and never passed on. **A distro
-     that is not running is listed and not started** (Q2).
+     that is not running is listed and not started** (Q2). A list call starts nothing, but any `-d` call
+     starts a stopped distro, and an idle one stops about 15 s after its last call (W9f). **So the running
+     list is read again right before every call to a distro, and a distro that is not in it gets no call.**
   2. the Linux users of each running distro: the pinned users script (§ 4), run **as root**. It names the users
      with a UID from 1000 to 59 999 whose home folder exists and whose shell is not `nologin` or `false`, **and
      root itself — UID 0 under the name `root` — on the same two conditions** (decision 24). A UID from 1 to 999
      is a system account and is never named; neither is a second name with UID 0.
   3. for each such user, the pinned accounts script **as that user**:
      `wsl.exe -d <distro> -u <user> --cd / --exec /bin/sh -s -- <mode>`, the script on stdin. `--exec` starts no
-     shell of the user, so no profile is read. **Root is a place of its own, (distro, `root`), read as itself**:
+     shell of the user, and the process it starts reads no profile (W9b). **What WSL itself starts on a
+     distro with systemd — a login session that ran the user's profile — is open: § 5.** **Root is a place of its own, (distro, `root`), read as itself**:
      the same argv with `-u root`, the same script and limits, and root's own `HOME`, the one of its passwd
      entry. That starts root's `claude` and `agy` as root, which the owner chose (*Security*). **Never root
      with another user's `HOME`**: that would run that user's own `~/.local/bin/claude` as root (`cons`
@@ -346,8 +316,8 @@ timer while no place may be read; a round for each window.
 - **`wsl.exe` is called as `ssh` is**: one absolute path, `<SystemRoot>\System32\wsl.exe`, never the `PATH`; an
   argument array, `shell` off; the script on stdin; 30 s and 64 KiB, the tree killed. The distro and the user in
   an argv come from the enumeration and pass their class first; neither can start with `-`. **Its
-  environment holds no `WSLENV`**, so no variable of the Windows side, a `HOME` among them, crosses into a
-  distro; the `HOME` a call is given is measured (W9b).
+  environment holds no `WSLENV`**, so no variable of the Windows side crosses into a distro. `HOME` crosses in
+  no case: `wsl.exe` sets it from the passwd entry of the `-u` user, whatever the caller sends (W9b).
 - **A reading belongs to a place.** The memory is keyed by place — `ssh:<host>`, `wsl:<distro>/<user>` — so two
   users of one distro never overwrite each other, and root's reading is never a user's. The enumeration's own result (the distros, which run, a failure)
   belongs to the scope host `wsl`.
@@ -380,12 +350,8 @@ timer while no place may be read; a round for each window.
 
 ### 3. The consent — ONE permission, a "no" for one host, and the Stop
 
-**What E1 built and this plan keeps** (the appendix, § I, *3. The consent*, and the S1 spec): a person's "no" for a
-host and the Stop are kept in `terminal-hosts/refused.json` of each SIDE of the machine, written by one function
-under a lock that is never taken over by its age, read from the disk before every call, removed only by a person's
-press; a change the file did not take is held by its window, copied to `globalState` at once and marked for every
-window of the side; a damaged file contacts nobody; the "no" rows of `coai.terminalHosts` are copied in at every
-read.
+**What E1 built and this plan keeps** — the refusals file of each side, its lock, its markers and the copy-in:
+the appendix, § I, *3. The consent*, the S1 spec, and the short list in § K.12.
 
 **What changes: nothing is read before one explicit "yes", and that "yes" is one for all hosts** (decision 22;
 `cons` `78e6d44b`).
@@ -471,20 +437,18 @@ read.
 ### 4. The scripts — revision 2, and the users script
 
 E1's script, its reply and its parser stay as built and as specified (the appendix, § I, *4. The remote script and
-its reply*, and the S2 spec): fixed text sent whole; one function read to its end and then called; `jq` names every
-field that leaves; three anchored line patterns for the usage; the person's activity dropped on the VM; the Codex
-record from a bounded tail; of a version command only the version; a closed manager word for a host without `jq`
-and a fixed command for each; a strict frame and a closed vocabulary on this side; a missing number is `null`,
-never 0. **Revision 2 changes four things, in ONE new pinned text with one new sha256** (E3.S2, the cornerstone):
+its reply*, and the S2 spec; the short list of what stays: § K.12). **Revision 2 changes four things, in ONE new
+pinned text with one new sha256** (E3.S2, the cornerstone):
 
 1. **The script sets its own `PATH`; it does not add to the one it was given.** `$HOME/.local/bin`, then a fixed
-   list of system folders that the spec names. On WSL the inherited `PATH` holds the Windows folders, and a
+   list of system folders that the spec names. On WSL the inherited `PATH` holds the Windows folders (W9b), and a
    `claude` of the Windows side found there would be started through interop and read as the Linux user's. Over
    ssh the list is what a shell that is not a login shell has today. A test holds that a `claude` which is
    reachable only through the inherited `PATH` is not started. **The list holds no folder that a user who is not
    root can write**: a place may be root (§ 2), and what root's read finds by its `PATH` runs as root. Every
    entry is absolute and of the spec's closed list — no `/tmp`, nothing under `/home` or `/mnt`, no empty or
-   relative entry — and a test holds it.
+   relative entry — and a test holds it. **The list is not trusted alone: as UID 0 the script checks, before
+   it starts a program, the owner and the mode of its file and of every folder above it** (*Security*).
 2. **The mode `claude-usage` reads Claude only**: the account, the version and the usage. It reads no Codex file
    and does not start `agy`: the first call of that place did both seconds before. So a place that reads an
    account's usage starts `agy` once in a round, not twice. The reply of that mode holds the Claude part only, the
@@ -528,19 +492,42 @@ from a distro is ever an operand as it is; a distro's and a user's name are argu
 
 Each needs the owner's go for its exact commands. **W9, W6 and W7 have the owner's go (2026-11-26); W8 has none
 yet.** **W-numbers here are measurements** (the S1 spec uses W-numbers for its sentences). **Run 2026-11-26:** W7
-passed, W6 → every round, W8 recorded: [RESULTS § 13](../research/RESULTS_accounts_and_usage_on_a_vm.md).
+passed, W6 → every round (retirement seen), W8 recorded:
+[RESULTS § 13](../research/RESULTS_accounts_and_usage_on_a_vm.md); **W9:**
+[RESULTS_wsl_on_this_pc.md](../research/RESULTS_wsl_on_this_pc.md), and what it showed is under the table.
 
 | # | What is measured, and where | What the result does |
 |---|---|---|
 | W6 | **Backups, on a VM** (unchanged; the appendix, § I, § 5). As a Linux user with no live Claude Code session: `~/.claude.json` and `~/.claude/backups/` before and after each of 12 usage reads from `/` | **Gate for growth.** It selects the usage policy of E4: a read makes no backup, or Claude Code keeps a fixed number → every round; a backup each time that nothing retires → at most once an hour for each account under a budget the owner approves, or only on *Refresh now* |
 | W7 | **A trace of every program start, on a VM** (unchanged): one usage read under `strace -f -e trace=execve`, stdin `/dev/null`, from `/` | **Gate.** A program that is not Claude Code's own — a hook's command, an MCP server — and the Claude usage read stays off until the owner decides. Until W7 has run this plan does not claim "starts nothing of the person's" |
 | W8 | A start of `agy --version` on a VM: its time, what it writes, what it starts | **A record** (decision 16) |
-| W9 | **WSL on this PC, in a disposable distro with two users**, made for the check and removed after it. (a) What `wsl.exe --list --quiet` and `--list --running --quiet` print: the encoding (UTF-16LE, or UTF-8 with `WSL_UTF8=1`), the line ends, the text and exit code with no distro and with none running, and whether a list call starts anything. (b) As each user **and as root**, through the argv of § 2: the effective UID, `HOME`, the working folder, the `PATH` as given, and whether a profile ran (a marker in each one's profile files). (c) **Before and after**: a listing — path, size, time — of both homes and of root's around the users script, around the accounts script as user A, **around it as root**, and around a read with a real Claude Code where one is installed. (d) Whether the users script answers the same as the distro's default user. (e) After `wsl.exe` is killed at the ceiling: which Linux processes are left. (f) A stopped distro: what a call does to it and how long it then stays up. (g) The time of 10 calls | **Gate for E3.** The WSL road is specified on what W9 shows. **"Read-only" is promised for WSL only as far as (c) shows**: that a read as A changes nothing in B's home or root's, and in A's only what Claude Code itself writes (decision 13); and that a read as root changes nothing in A's or B's, and in root's only what the tools themselves write. **(b) is the fact behind "root's own `HOME`"**: if a call with `-u root` can be given another, root is not read until the spec of E3.S1 closes that road. (d) decides who runs the users script, root or the default user; root's own place is read as root either way. (f) is the fact behind Q2 |
+| W9 | **WSL on this PC, in a disposable distro with two users**, made for the check and removed after it. **Run 2026-11-26.** Its parts (a) to (g) as they were set: the appendix, § K.7 | **Gate for E3.** The WSL road is specified on what W9 shows. **"Read-only" is promised for WSL only as far as (c) shows**: that a read as A changes nothing in B's home or root's, and in A's only what Claude Code itself writes (decision 13); and that a read as root changes nothing in A's or B's, and in root's only what the tools themselves write. **(b) is the fact behind "root's own `HOME`"**: if a call with `-u root` can be given another, root is not read until the spec of E3.S1 closes that road. (d) decides who runs the users script, root or the default user; root's own place is read as root either way. (f) is the fact behind Q2 |
+
+**What W9 showed**, part by part, is in that file (one Ubuntu 24.04 distro with systemd; called from inside
+another distro, from a Windows process only for the `HOME` check). **(b):** no `HOME` or `WSLENV` of the caller
+changes the `HOME` of a call, for root too — WSL closes that road, so root is read as far as (b) goes. **(c):**
+no script changed a file in any of the three homes; no vendor tool was installed. **(d):** the same answer as
+root and as the default user. **(e):** a killed call leaves no process of its own. **(f):** § 2 and residual
+12. Also seen: 2 calls that failed at 30 s with WSL's own `WSAETIMEDOUT`, and none of 52 later ones. *Not
+measured:* the lists with no distro and with none running; a read with a real vendor tool; a Windows process
+as the caller of every call.
+
+**Open after W9 — the owner's to choose, then the spec of E3.S1; no ledger entry.** On a distro with systemd
+the first `-u <user>` call after the distro starts makes WSL open a login session for that user, root included
+(`/bin/login -f`, `systemd --user`, a login `bash`). It ran the user's `~/.bash_profile`; a first login made
+two empty files in that home (`.motd_shown`, `.cache/motd.legal-displayed`); it stays until the distro stops;
+and the check before a start as UID 0 does not reach it. With `systemd=false` none of this happens. **So these
+do not hold there as written:** "nothing as root but the users script and the read of root's own place" (*What
+this plan does NOT do*, the Definition of Done); the permission's text, which names only `claude` and `agy` as
+started; and "in A's only what Claude Code itself writes" (W9, above). § 2 and *Security* said "no profile is
+read"; both now say what was measured. To accept the session, or to read fewer users, is a change of this
+plan. **Until the owner has chosen, the spec of E3.S1 is not final and no code reads a WSL place.**
 
 Within the plan as written: the field names; the limits under the ceilings; the policy that W6 selects; the exact
-argv words of `wsl.exe` that W9 confirms; root or the default user for the users script; how the rule "nothing
-that another user can write is started as root" is held — by the `PATH` list alone, or also by a check of the
-owner and the mode in the script before a start as UID 0 (the spec of E3.S1). Outside it, and so a change:
+argv words of `wsl.exe` that W9 confirms; root or the default user for the users script; the exact form of the
+check that holds the rule "nothing that another user can write is started as root" — the owner and the mode of
+a program's file and of every folder above it, in the script, before a start as UID 0 (the spec of E3.S1).
+Outside it, and so a change:
 anything installed on a VM or in a distro before E6; a third kind of script; a write by a script of ours; a
 start, on purpose, of a distro that is not running; a call as root that reads another user or runs with another
 user's `HOME`; a read of a system account; road (b).
@@ -594,17 +581,16 @@ reply goes back to whoever opened the terminal. The question says "and the ones 
 because that sentence is the whole of this residual.
 
 **The permission is in front of EVERY door, and a withdrawal wins like a "no"** (the plan round's findings 0 and
-1). No per-host "yes" of an older build reads a host, for the round or for a chat door, before the permission or
-after a withdrawal. The grant is in the locked file of the side; the withdrawal is a file of its own with a
-higher stamp, which no writer of `refused.json` renames over, so a stale lock holder cannot bring a permission
-back. Both are read from the disk before every call. What is left is residual 9.
+1). Its rules are those of § 3; the judgement on them: the appendix, § K.15, word for word. What is left is
+residual 9.
 
 **No secret passes through our scripts** (road (a), as built; the table of what is opened and what is not: the
 appendix, § I, *Security*). It holds for a WSL user as for a VM: the script opens no credential file, holds no
 token and gives none to a program.
 
 **WSL — who runs as whom.** The accounts script runs as the Linux user it reads, with that user's `HOME`, through
-`--exec`, so no shell profile runs. Root runs two things and no other: the users script — fixed text that opens
+`--exec`, so the process we start reads no shell profile (the login session that WSL adds on a distro with
+systemd is open: § 5). Of ours, root runs two things and no other: the users script — fixed text that opens
 `/etc/passwd` — and the accounts script **for root's own place**, with root's own `HOME` (decision 24). **Root
 never reads for another user**: the `-u` word of an accounts call is the user of its place, nothing of ours
 names a `HOME`, and `WSLENV` is dropped. **A test fails on any argv that has `-u root` with a mode word for a
@@ -615,10 +601,12 @@ or an operand. Four things are named, not prevented:
 - **Root's own `claude` and `agy` are started as root, by our timer**: with full rights in that distro, every
   round, with nobody at the keyboard. The owner chose it (decision 24), and the permission's text says it. What
   these programs do on a start, they do as root (W7, W8). An ssh host whose login user is root is read the same
-  way; step 0 was measured on one. **What root's `~/.local/bin` holds decides what runs as root.** Only root
-  can write there, so no user raises their rights through it. **The rule: nothing that another user can write
-  is started as root** — the script's own `PATH` holds no such folder (§ 4), and the spec of E3.S1 fixes how
-  that is held. What is left is residual 13. The person at this PC gains nothing: `wsl.exe -u root` asks the
+  way; step 0 was measured on one. **The rule: as UID 0 the script starts nothing that another user can write, and
+  it checks that before every start.** The program's file — as found, and as each link on the way resolves —
+  and every folder above it up to `/` must be owned by UID 0 and not writable by group or others (as ssh's
+  `StrictModes` and sudo's `secure_path` ask). When one is not, that tool is not started in root's place, and
+  its row says *not read: <path> is writable by another user*. The spec of E3.S1 specifies the check, and a
+  test holds it. What is left is residual 13. The person at this PC gains nothing: `wsl.exe -u root` asks the
   Windows user for no password.
 - **A program that a Linux user owns is started by our timer.** The script starts `claude` and `agy` as found in
   that user's `~/.local/bin`. Whoever can write there decides what runs — as that user, and never as another
@@ -627,32 +615,25 @@ or an operand. Four things are named, not prevented:
   is new is that our timer starts the program with nobody at that user's keyboard. The permission's text says
   that `claude` and `agy` as found there are started.
 - **The inherited `PATH`** is not used (§ 4), so a Windows program is not started by its name.
-- **What a kill leaves.** Whether the Linux processes end when `wsl.exe` is killed is measured (W9e); the script's
-  own limits end each vendor command in any case.
+- **What a kill leaves.** No process of the call: after `wsl.exe` was killed none was left in the distro, with a
+  background child and with a script on stdin too (W9e). The script's own limits end each vendor command in any
+  case.
 
-**The tab.** Text from a VM, a distro or a terminal's name can only become text: it is made plain at one road and
-set as `textContent`; the page assembles no HTML from data; the CSP allows no source but the page's own script and
-style by nonce. A message from the page carries names that the host checks against its own model; a hostile page
-could at most press the tab's own buttons. The two buttons that widen what is read — *Allow reading…* and *Read
-this host again* — each raise a modal question in the extension host, so no message of a page can give the
-permission or lift a refusal by itself; the others only narrow. The clipboard gets a fixed string from a closed
-table.
+**The tab.** Its rules are those of § 1: text only, a strict CSP, messages that name, a modal question in the
+extension host for the two buttons that widen what is read, a fixed string for the clipboard. The judgement
+on it: the appendix, § K.10, word for word.
 
 **What an attacker gains** (the list of the stopped plan holds: the appendix, § I, *Security*), with these
 changes:
 
 - **A program that opens a terminal named `Creds: evil / x`.** Before the permission: nothing. After it: as F1,
   above. It still cannot push out or undo a "no".
-- **Someone who is that Linux user, in a distro or on a VM.** They can make the tab show wrong accounts or numbers
-  for their own place. They cannot reach the extension through the reply: bounded (30 s, 64 KiB, 64 lines), parsed
-  by a closed vocabulary, never run, never a path, drawn as text. In WSL they could already reach the Windows side
-  through interop; the timer adds no right, only a start.
-- **Root in a distro** can make the users script name users that do not exist; a name must fit its class and a
-  UID its range, at most 16 are taken, and a call for a user that is not there fails as a call. Its own
-  place is read as root, which gives it nothing. It cannot make the round read ANOTHER user as root, or a system
-  account: this side too takes UID 0 only under the name `root`, and a UID from 1 to 999 never.
-- **Another Linux user of a distro whose root is read** gains root only if root's read starts a program that
-  user can write: the rule above, and residual 13.
+- **Someone who is that Linux user**, and **root in a distro**: neither reaches the extension through a reply,
+  and root cannot make the round read another user as root, or a system account. Both word for word: the
+  appendix, § K.16.
+- **Another Linux user of a distro whose root is read** gains nothing by a file or a folder they can write: as
+  UID 0 the script checks the owner and the mode before every start, and a tool that fails the check is not
+  started (the rule above). What is left is residual 13.
 - **A second window, or a reload, racing a refusal, the Stop or a withdrawal**: the file, as built.
 - **Logs**: a failed read logs the place, how it ended and the runner's own last line; a script's stderr goes to
   `/dev/null`; stdout is never logged.
@@ -670,20 +651,19 @@ person's "yes" that a stale write puts back allows nothing any more. New:
     given its own.
 11. **20 hosts are 20 logins every 10 minutes**, and 40 with the usage on and no shared account; two windows
     double it (candidate C6).
-12. **A stopped distro is never shown with numbers** (Q2); a distro that stops between the two list calls and the
-    read is started by that read. W9f records what that costs.
-13. **Root's read trusts the distro's own folders** (decision 24). In a distro where root's `~/.local/bin`, a
-    system folder of the `PATH`, or a file in one was made writable for another user, that user decides what
-    runs as root in the next round. Such a distro already runs that program at root's next own command; new is
-    that our timer does it within 10 minutes, with nobody there. And root's tools run with full rights every
-    round: a fault of one is a fault as root.
+12. **A stopped distro is never shown with numbers** (Q2). Any call to a stopped distro starts it (W9f), so the
+    running list is read right before every call; a distro that stops between that list call and the call is
+    started by it, in 3 to 5 s, and stops again about 15 s after its last call.
+13. **What the check before a start as UID 0 leaves** (decision 24). A program that root itself put in root's
+    `~/.local/bin` or in a system folder runs as root: root's own choice, and nobody's raised right. A distro
+    where a file or a folder on a tool's path is another user's, or open to group or others, is refused for
+    that tool, not read. The check itself stands on `/bin/sh`, which WSL or sshd starts before any line of
+    ours, and on the tool it reads owners and modes with (the spec of E3.S1 names it). And root's tools run
+    with full rights every round: a fault of one is a fault as root.
 
-**Judgements.** Those of 2026-11-25 — on road (a), the consent, WSL for each user, the tab and the installer —
-stand and are in the appendix, § K.5, word for word; the judge's condition on the consent is the detail of the
-question in § 3. *Root as a place, 2026-11-26:* the judgement of 2026-11-25 was not to read root, because a read
-starts root's tools as root. The owner accepted exactly that (decision 24), and it is the owner's to accept: the
-tools are root's own, on the owner's PC. Root-for-all stays wrong. The judge's three conditions are rules above:
-root reads only as itself, with its own `HOME`; nothing that another user can write is started as root; the
+**Judgements.** Those of 2026-11-25 are in the appendix, § K.5, and the one on root as a place, of 2026-11-26,
+in § K.9, both word for word. The judge's conditions are rules above: the detail of the question (§ 3); root
+reads only as itself, with its own `HOME`; nothing that another user can write is started as root; the
 permission's text says it.
 
 `SECURITY.md`: the section on the extension's ssh calls is rewritten by E2 — its sentence *"A host is contacted
@@ -711,15 +691,16 @@ own place with what is started as root, and the interop residual; by E4 what W6 
   the page, gone with the tab.
 - **Children**: one `ssh` or `wsl.exe` alive at a time for each window, killed at 30 s, stdout capped at 64 KiB.
   For `wsl` in a round: 2 list calls, one users call for each running distro, one or two calls for each user,
-  root among them.
-  **Interrupted:** a reload leaves nothing on this side; what a killed `wsl.exe` leaves in the distro is W9e.
+  root among them, and one list call more before each of these.
+  **Interrupted:** a reload leaves nothing on this side, and a killed `wsl.exe` no process of its call in the
+  distro (W9e). **In a distro with systemd, by WSL:** one login session for each user that a call named, 16 at
+  most, until the distro stops (open: § 5).
 - **The timer**: one for each window, cleared when nothing may be read, disposed with the extension.
 - **Log lines**: one when a place starts to fail and one when it reads again.
 - **On a VM or in a distro, by our scripts**: nothing.
-- **There, by Claude Code on a usage read**: four cache files, rewritten in place; and `~/.claude/backups/`, the one
-  surface that may grow without bound — 144 files and about 24 MB a day at one read in 10 minutes on the measured
-  VM, if every read makes a backup and nothing retires them. W6 measures it, and the policy follows (§ 5). This
-  plan deletes no file of Claude Code.
+- **There, by Claude Code on a usage read**: four cache files, rewritten in place; and `~/.claude/backups/`, where
+  **Claude Code keeps five files, about 0.9 MB, and deletes the older ones — seen on 2026-11-26 (W6)**, so it
+  does not grow, and the policy is "every round" (§ 5). This plan deletes no file of Claude Code.
 - **There, by `agy` on a start**: not measured (W8). Once a round for each place, since revision 2.
 - **Calls to the vendor**: at most 6 an hour for each Claude account and window, by Claude Code; none while the
   policy is `off`. None by our code.
@@ -748,7 +729,7 @@ The three todo files say on their side that this revision takes them up and that
 3. **E2 — the permission and the table.** Its stories by Opus; the security spec of E2.S1 by Fable before its
    code; the code gate; a VSIX from the pull request's head; the owner's rows; merged.
 4. **Alongside E2 and E3, by hand, each with the owner's go:** W9 on this PC — before the spec of E3.S1 is final —
-   and W6, W7 and W8 on a VM. W9, W6 and W7 have it (2026-11-26).
+   and W6, W7 and W8 on a VM. **All four were run on 2026-11-26** (§ 5).
 5. **E3 — WSL on this PC, and revision 2 of the script.** E3.S2 — the script, its parser and the round's join of
    the two replies, together — may merge as its own pull request first, so that E4 waits for nothing else of E3.
 6. **E4 — the Claude usage on.** Only when revision 2 is merged, W7 passed and W6 selected the policy. When W7
@@ -765,11 +746,8 @@ The three todo files say on their side that this revision takes them up and that
 
 ## Test plan
 
-**E1's tests stay** for what stays (the appendix, § I, *Test plan*): the script run for real with false programs
-and the real `jq`; no secret and no activity leaves, each seen RED once; the hash; the parser; the usage lines; the
-Codex record; the words; the round's order and the account-first rule; the refusals file with its lock, its
-markers, the copy-in and the two checks of the cadence consultation; the runner's argv. **Deleted with what they
-hold:** the tests of the automatic "yes", of the cap's eviction, of the setting at both values
+**E1's tests stay** for what stays (the appendix, § I, *Test plan*; the short list: § K.12). **Deleted with what
+they hold:** the tests of the automatic "yes", of the cap's eviction, of the setting at both values
 (`terminalAccountsSetting.test.ts`), of the two notices, of the QuickPick's rows and its host scenario. New:
 
 - **The permission — the acceptance of entry 2.3** (pure, over the fake disk and stale views of E1's tests). A
@@ -801,7 +779,8 @@ hold:** the tests of the automatic "yes", of the cap's eviction, of the setting 
   word for word: the absolute path, `-d`, `-u`, `--cd /`, `--exec /bin/sh -s --` and the mode. A distro or user
   name that fails its class never reaches an argv: a leading `-`, a space, a name of 100 characters, a line of a
   message in another language. The list output as UTF-16LE and as UTF-8, with CR LF, with no distro, with none
-  running. A distro that is not running gets no call. The caps of 16, 16 and 32, root counted as a user. The
+  running. A distro that is not running gets no call, and neither does one that left the running list after
+  the round began. The caps of 16, 16 and 32, root counted as a user. The
   users script: the users from 1000 to 59 999, and root as UID 0 under the name `root`, and no other — **a UID
   from 1 to 999, UID 0 under another name and `root` with another UID are not printed, and a reply that holds
   one gives no place for it**; `nologin`, `false` and a home that is missing are
@@ -810,7 +789,10 @@ hold:** the tests of the automatic "yes", of the cap's eviction, of the setting 
   not the user of its place — so on a user's read as root; if an argv or the environment of a call names a
   `HOME` or holds `WSLENV`; and, with the real script run under a `HOME` that stands for root's, if a `claude`
   or an `agy` in another user's `~/.local/bin` or outside the script's own `PATH` is started. The `PATH` is held
-  to its closed list. A root place with no tool has no line; a root read that failed has one. Not on Windows: `wsl` gets no call of either runner.
+  to its closed list. **The check before a start as UID 0** (the real script; the spec fixes how a run that is
+  not root stands for UID 0): a `claude` or an `agy` whose file, whose link's target or a folder above either is
+  another user's, or writable by group or others, records NO start, and the reply names that path; with all of
+  them root's and closed, it starts. A root place with no tool has no line; a root read that failed has one. Not on Windows: `wsl` gets no call of either runner.
 - **Revision 2 of the script.** A `claude` reachable only through the inherited `PATH` is not started. In
   `claude-usage` the false `agy` records no start and no Codex file is opened; the reply holds the Claude part
   only. **The join:** after the second call the place still holds the Codex and agy parts of the first reply; the
@@ -882,7 +864,7 @@ hold:** the tests of the automatic "yes", of the cap's eviction, of the setting 
 - [ ] Nothing of a reading is persisted. Road (b) is not in the code.
 - [ ] The real-window rows of E2, E3 and E4 each have the owner's recorded result before that epic merged; the
       rows of E5 have one before the tag, and R7, R12 and R18 passed on the build that is tagged. W6, W7, W8 and
-      W9 are in the RESULTS file.
+      W9 are in the two RESULTS files.
 - [ ] Docs with each epic: the help in five languages; `research/module_extension.md`, `research/module_tests.md`,
       `research/architecture.md`; `SECURITY.md`; the `POST_DEPLOY.md` question asked.
 - [ ] **E6**, the installer of decision 17, is built by its own stories and spec and passed its own checks:
@@ -921,15 +903,12 @@ meaning is kept (the appendix, § I, *E2*); R11, the row of the retired setting,
 
 Stories documents are written by Opus when an epic starts:
 `todo/PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E<n>.md`. Cornerstone quota: Q = ⌈2·E/5⌉ =
-⌈2·6/5⌉ = 3. The cornerstone areas Fable names: **(a)** what a script touches there and what it prints — the only
-place a secret or the person's activity can leak, and a leak gives no error; **(b)** the reply's frame and the
-parser — the only place wrong or hostile data can arrive and look right; **(c)** who is contacted and when —
-nothing before the permission, a refused host never, and no stale window undoes either; **(d)** absent, signed
-out, no usage source, skipped, failed and unreadable are different results, and a missing number is never a zero;
-**(e)** who runs as whom on this PC — the script as the user it reads, root for the users script and for its
-own place;
-**(f)** a change of a machine (E6). Areas (c) and (e) are authorisation: their specs are Fable's by the security
-row, outside the quota. Planned marks, made by the stories documents: E3.S2 for (a) and (b), and E6's spec for (f).
+⌈2·6/5⌉ = 3. The cornerstone areas Fable names, each with its reason in the appendix, § K.14: **(a)** what a
+script touches there and what it prints; **(b)** the reply's frame and the parser; **(c)** who is contacted and
+when; **(d)** the different results of a read, and a missing number that is never a zero; **(e)** who runs as
+whom on this PC; **(f)** a change of a machine (E6). Areas (c) and (e) are authorisation: their specs are
+Fable's by the security row, outside the quota. Planned marks, made by the stories documents: E3.S2 for (a)
+and (b), and E6's spec for (f).
 
 Cornerstones: 1 of 3 — E1.S2
 
@@ -980,10 +959,12 @@ What is kept, reworked and retired of it: *Re-review for epoch 3*, above.
   constant; `src/remoteAccountsScript.ts`, `src/remoteAccountsReply.ts` and the S2 spec (revision 2);
   `src/remoteAccountsRound.ts` (places; the usage reply joined to the first); the table's model and the page (the
   `wsl` block); the tests; the documents and `SECURITY.md`.
-- **Depends on.** E2 merged. **W9 has a recorded result before the spec of E3.S1 is final.**
+- **Depends on.** E2 merged. **W9 has a recorded result before the spec of E3.S1 is final**: it has one, and
+  its open item (§ 5) is the owner's to choose first.
 - **Stories.** **E3.S1 — the WSL road (SECURITY SPEC by Fable, outside the quota):** the exact argv, the
   enumeration and its decoding, the users script and its hash, who runs as whom, **root's own place — its
-  `HOME`, and how nothing that another user can write is started as root —**, the caps, and what W9 showed.
+  `HOME`, and the check of owner and mode before a start as UID 0, by which nothing that another user can
+  write is started as root —**, the caps, and what W9 showed.
   **E3.S2 — the scripts, revision 2 (CORNERSTONE, `model: fable`):** the `PATH`, the usage mode that reads Claude
   only, the time table with its KILL seconds, the new hash, the parser by mode, **and the round's join of the
   usage reply with the first reply, with its check that the account is unchanged** (`remoteAccountsRound.ts`,
@@ -1052,21 +1033,6 @@ What is kept, reworked and retired of it: *Re-review for epoch 3*, above.
 
 ### Candidates
 
-One line each. Taking one up is a change of this plan (kind `epics`), recorded in the ledger.
-
-- **C2 — a webview instead of the QuickPick.** Taken by this revision: it is E2.
-- **C3 — places with no AI tool are read once an hour.** Justified by R10 or R13 showing such places, a distro
-  with no tool and a root with no tool among them, and their reads being a nuisance.
-- **C4a — the rest of the store in the file.** Gone: a per-host "yes" allows nothing any more. **C4b — a lift that is recorded, and the Stop carried to the file of every side.** The owner
-  uses a second side for the chat only, so it is not justified today.
-- **C5 — the Claude usage only on a press, or road (b), or the account only.** Justified by W7 failing; the
-  planner recommends the account only.
-- **C6 — one lock between VS Code windows for the round.** Justified by R2 showing that two windows doubling the
-  logins of 20 hosts matters.
-- **C7 — a stopped distro is started for a read**, on *Refresh now* or always. The owner answered Q2 "not
-  started", so it is justified only by a later request of the owner.
-- **C8 — the session read of a `Creds: wsl / …` terminal.** The terminal-door plan's; justified by the owner
-  using the chat doors there.
-- **C9 — root's own accounts in a WSL distro.** **Taken by the owner at the approval of epoch 3 (2026-11-26): it
-  is in E3** (decision 24), with its security judgement in *Security*. It was taken with the approval, so it is
-  baseline and no ledger entry.
+C2 to C9, one line each with what would justify it: the appendix, § K.11, word for word. Taking one up is a
+change of this plan (kind `epics`), recorded in the ledger. C2 is taken (it is E2) and so is C9 (decision 24,
+with the approval of epoch 3); C4a is gone. Open: C3, C4b, C5, C6, C7 and C8.

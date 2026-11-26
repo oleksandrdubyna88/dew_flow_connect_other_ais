@@ -13,7 +13,8 @@
 > approved and that epic E1 built (#1047, `d0241e45`) — is § I, word for word. **§ J (2026-11-25)** is one section
 > of the revised plan, moved word for word to keep the plan under 100 KB: what the code does on `d0241e45`.
 > **§ K (2026-11-26)** is six more passages, moved word for word when the approval of epoch 3 added the read of
-> root; § J also holds, marked as added, the owner's answers of that day.
+> root, and ten more (K.7 to K.16), moved later that day when W9 was run; § J also holds, marked as added, the
+> owner's answers of that day.
 
 | § | What it holds | Why it is not in the plan |
 |---|---|---|
@@ -27,7 +28,7 @@
 | H | Three passages of § 1 and § 4 in full: why a QuickPick, why the working folder `/`, why `TZ=UTC` | The plan keeps the rule and the measured fact of each |
 | I | **Part 2.** The plan as it stood at the stop (`07370c49`, 2026-11-25): its status block and every section after the ledger — the goal, the owner's decisions, what the code did, § 1 to § 5 of the design, what the plan does not do, Security with the eight residuals of the refusals file, Growth, the boundaries, the build order, the test plan, the Definition of Done and the epics with R1–R12 | The revision for epoch 3 rewrote the plan whole. The plan of today cites § I for what epic E1 built and what stays in force: the refusals file, its lock and its markers, the script and its reply, the tests of E1 |
 | J | From the plan as revised for epoch 3 (`3a42eebc`): *What the code does today — verified on `d0241e45`*, with its file and line references, *What was measured, and what the real window showed*, the questions Q1–Q4 as they were asked (the owner answered Q1–Q3 on 2026-11-25; the plan holds the answers), and the owner's decisions 1–20, each with how it stands after the stop | The plan was 98 KB and the plan round's five findings needed room; the plan keeps a short list and cites § J. **What § J says of a per-host "yes" and of Q1's other way was overtaken by the plan round's finding 0: every door needs the permission** |
-| K | From the plan as approved for epoch 3 (`2df01bb4`), moved on 2026-11-26: the short list of what the design stands on in the code, why the build order is as it is, why the epics are split as they are, what the time table of revision 2 did not take, the security judgements of 2026-11-25, and the cut of *Build order* step 1 as it was planned | The owner's answer "root too" at the approval added the read of root to the plan; these six passages are reasons and records, and the plan keeps every rule |
+| K | From the plan as approved for epoch 3 (`2df01bb4`), moved on 2026-11-26: the short list of what the design stands on in the code, why the build order is as it is, why the epics are split as they are, what the time table of revision 2 did not take, the security judgements of 2026-11-25, and the cut of *Build order* step 1 as it was planned | The owner's answer "root too" at the approval added the read of root to the plan; these six passages are reasons and records, and the plan keeps every rule. **K.7 to K.16** were moved later the same day, from `38be6b9b`, when W9 was run: what the row of W9 measures, the picture of the page, the judgements with the one on root as a place, the judgement on the tab, the candidates, four short lists of what E1 built, the owner's three sentences at the real window, the reasons of the cornerstone areas, the judgement on the permission, and two items of *What an attacker gains* |
 
 ## § A — The owner's decisions in full, and the questions with their answers
 
@@ -2266,7 +2267,8 @@ promised as read-only before W9. *The tab:* a webview is a larger surface than a
 construction — text only, no remote source, names in, fixed strings out. *The installer:* outside the permission
 to read; it has a "yes" of its own, once for all hosts (Q3, answered), kept and withdrawn like the first.
 
-The judgement on root as a place, of 2026-11-26, is in the plan, *Security*.
+The judgement on root as a place, of 2026-11-26, was in the plan, *Security*, when this was written; later the
+same day it moved to K.9, below.
 
 ### K.6 — *Build order*, step 1: the cut as it was planned
 
@@ -2283,3 +2285,176 @@ The cut is merged: #1051, `b1ec467c`.
    registered and says *no effect in this build*; E2 retires the key. **No extension release is cut from main
    before the cut is merged**: main holds a build that logs in to hosts with no "yes". A revert of #1047 is not
    taken: E2 to E4 build on its modules.
+
+### K.7 to K.16 — ten more passages, moved later on 2026-11-26
+
+These ten were moved from the plan as it stood at `38be6b9b`, word for word, on the day W9 was run. The plan
+needed room for what W9 showed, for the check before a start as UID 0 (a review finding on the root rule) and
+for what the security spec of E2.S1 amends, and it stays under 100 KB. As above, none is a rule of its own:
+each is the text of a measurement that has been run, a picture, a judgement, a list of candidates, the owner's
+words, a reason, or a short list of what E1 built — rules that the plan keeps by naming where they are (§ I
+and the specs of E1). Where the plan of today says something else, the plan of today holds.
+
+### K.7 — § 5, the row of W9: what is measured, and where
+
+The first cell of the row. W9 was run on 2026-11-26; its record is
+[../research/RESULTS_wsl_on_this_pc.md](../research/RESULTS_wsl_on_this_pc.md), with the same letters (a) to (g).
+
+**WSL on this PC, in a disposable distro with two users**, made for the check and removed after it. (a) What `wsl.exe --list --quiet` and `--list --running --quiet` print: the encoding (UTF-16LE, or UTF-8 with `WSL_UTF8=1`), the line ends, the text and exit code with no distro and with none running, and whether a list call starts anything. (b) As each user **and as root**, through the argv of § 2: the effective UID, `HOME`, the working folder, the `PATH` as given, and whether a profile ran (a marker in each one's profile files). (c) **Before and after**: a listing — path, size, time — of both homes and of root's around the users script, around the accounts script as user A, **around it as root**, and around a read with a real Claude Code where one is installed. (d) Whether the users script answers the same as the distro's default user. (e) After `wsl.exe` is killed at the ceiling: which Linux processes are left. (f) A stopped distro: what a call does to it and how long it then stays up. (g) The time of 10 calls
+
+### K.8 — § 1: the picture of the page
+
+It stood under *The page is grouped by HOST*, after "in name order:".
+
+  ```
+  [Refresh now] [Stop the round]            last round 3 min ago (14:03) · 14 of 16 read
+
+  host-a      read 3 min ago (14:03)                                              [Not this host]
+    Tool          Account                           5-hour window       Weekly window
+    Claude Code   user@example.com · Example Org    44% left            23% left
+    2.1.326       plan team · shared across 2 hosts resets in 2h 10m    resets in 2d 14h
+                                                                        Fable 51% left
+    Codex         account name not shown by Codex   —                   86% left
+                  plan prolite                                          resets in 4d 23h
+                  from a Codex session 2 d ago
+    Antigravity   its account is not read           agy states no usage
+    1.5.12
+  host-b      the last read failed 3 min ago (14:03): “host-b” did not answer over ssh within 30 s.
+    (the table of the read at 13:40, marked as older)
+  host-c      not allowed: your answer for this host is “Not this host”           [Read this host again]
+  host-d      jq is missing on this host, so nothing can be read there.
+              Run there: sudo apt-get install -y jq                               [Copy install command]
+  wsl — this PC    2 distros · read 3 min ago (14:03)                             [Not this host]
+    Ubuntu · user-a    read 3 min ago (14:03)
+      (its table)
+    Ubuntu · user-b    no Claude Code, Codex or Antigravity found
+    Ubuntu · root      read 3 min ago (14:03)
+      (its table)
+    Debian             not running, so not read
+  ```
+
+### K.9 — *Security*: the judgements, with the one on root as a place of 2026-11-26
+
+**Judgements.** Those of 2026-11-25 — on road (a), the consent, WSL for each user, the tab and the installer —
+stand and are in the appendix, § K.5, word for word; the judge's condition on the consent is the detail of the
+question in § 3. *Root as a place, 2026-11-26:* the judgement of 2026-11-25 was not to read root, because a read
+starts root's tools as root. The owner accepted exactly that (decision 24), and it is the owner's to accept: the
+tools are root's own, on the owner's PC. Root-for-all stays wrong. The judge's three conditions are rules above:
+root reads only as itself, with its own `HOME`; nothing that another user can write is started as root; the
+permission's text says it.
+
+### K.10 — *Security*: the tab
+
+**The tab.** Text from a VM, a distro or a terminal's name can only become text: it is made plain at one road and
+set as `textContent`; the page assembles no HTML from data; the CSP allows no source but the page's own script and
+style by nonce. A message from the page carries names that the host checks against its own model; a hostile page
+could at most press the tab's own buttons. The two buttons that widen what is read — *Allow reading…* and *Read
+this host again* — each raise a modal question in the extension host, so no message of a page can give the
+permission or lift a refusal by itself; the others only narrow. The clipboard gets a fixed string from a closed
+table.
+
+### K.11 — *Epics*: the candidates
+
+They stood under the heading *Candidates*, the last of *Epics*.
+
+One line each. Taking one up is a change of this plan (kind `epics`), recorded in the ledger.
+
+- **C2 — a webview instead of the QuickPick.** Taken by this revision: it is E2.
+- **C3 — places with no AI tool are read once an hour.** Justified by R10 or R13 showing such places, a distro
+  with no tool and a root with no tool among them, and their reads being a nuisance.
+- **C4a — the rest of the store in the file.** Gone: a per-host "yes" allows nothing any more. **C4b — a lift that is recorded, and the Stop carried to the file of every side.** The owner
+  uses a second side for the chat only, so it is not justified today.
+- **C5 — the Claude usage only on a press, or road (b), or the account only.** Justified by W7 failing; the
+  planner recommends the account only.
+- **C6 — one lock between VS Code windows for the round.** Justified by R2 showing that two windows doubling the
+  logins of 20 hosts matters.
+- **C7 — a stopped distro is started for a read**, on *Refresh now* or always. The owner answered Q2 "not
+  started", so it is justified only by a later request of the owner.
+- **C8 — the session read of a `Creds: wsl / …` terminal.** The terminal-door plan's; justified by the owner
+  using the chat doors there.
+- **C9 — root's own accounts in a WSL distro.** **Taken by the owner at the approval of epoch 3 (2026-11-26): it
+  is in E3** (decision 24), with its security judgement in *Security*. It was taken with the approval, so it is
+  baseline and no ledger entry.
+
+### K.12 — Four short lists of what E1 built and the plan keeps: § 2, § 3, § 4 and the test plan
+
+Each opened its section. The full text of what E1 built is § I and the two specs of E1; the plan names both.
+
+The first paragraph of § 2, *The round*:
+
+What E1 built stays unless a line here changes it (the appendix, § I, *2. The round*): one call at a time, each
+awaited; the order rotated by one each round; 10 minutes counted from the END of a round; the checks before every
+call and before every result; results in memory only; a failed place logged once when its sentence changes; no
+timer while no place may be read; a round for each window.
+
+The first paragraph of § 3, *The consent*:
+
+**What E1 built and this plan keeps** (the appendix, § I, *3. The consent*, and the S1 spec): a person's "no" for a
+host and the Stop are kept in `terminal-hosts/refused.json` of each SIDE of the machine, written by one function
+under a lock that is never taken over by its age, read from the disk before every call, removed only by a person's
+press; a change the file did not take is held by its window, copied to `globalState` at once and marked for every
+window of the side; a damaged file contacts nobody; the "no" rows of `coai.terminalHosts` are copied in at every
+read.
+
+The first paragraph of § 4, *The scripts*:
+
+E1's script, its reply and its parser stay as built and as specified (the appendix, § I, *4. The remote script and
+its reply*, and the S2 spec): fixed text sent whole; one function read to its end and then called; `jq` names every
+field that leaves; three anchored line patterns for the usage; the person's activity dropped on the VM; the Codex
+record from a bounded tail; of a version command only the version; a closed manager word for a host without `jq`
+and a fixed command for each; a strict frame and a closed vocabulary on this side; a missing number is `null`,
+never 0. **Revision 2 changes four things, in ONE new pinned text with one new sha256** (E3.S2, the cornerstone):
+
+The first paragraph of the *Test plan*:
+
+**E1's tests stay** for what stays (the appendix, § I, *Test plan*): the script run for real with false programs
+and the real `jq`; no secret and no activity leaves, each seen RED once; the hash; the parser; the usage lines; the
+Codex record; the words; the round's order and the account-first rule; the refusals file with its lock, its
+markers, the copy-in and the two checks of the cadence consultation; the runner's argv. **Deleted with what they
+hold:** the tests of the automatic "yes", of the cap's eviction, of the setting at both values
+(`terminalAccountsSetting.test.ts`), of the two notices, of the QuickPick's rows and its host scenario. New:
+
+### K.13 — *The goal*: what the owner said at the real window, 2026-11-25
+
+**What the owner said at the real window, 2026-11-25**, about the build of E1:
+
+- *"wsl must read every WSL on my PC, all accounts."* (entry 2.2)
+- *"I may have 20 hosts in the terminal, and it asks for each. No. Once: may I read? I say yes, and it reads all."*
+  (entry 2.3)
+- *"Something was read, but who knows what. It must be readable: which host, which AIs, which accounts, the limits,
+  when they reset. Redo it."*
+
+### K.14 — *Epics*: the cornerstone areas, each with its reason
+
+Stories documents are written by Opus when an epic starts:
+`todo/PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E<n>.md`. Cornerstone quota: Q = ⌈2·E/5⌉ =
+⌈2·6/5⌉ = 3. The cornerstone areas Fable names: **(a)** what a script touches there and what it prints — the only
+place a secret or the person's activity can leak, and a leak gives no error; **(b)** the reply's frame and the
+parser — the only place wrong or hostile data can arrive and look right; **(c)** who is contacted and when —
+nothing before the permission, a refused host never, and no stale window undoes either; **(d)** absent, signed
+out, no usage source, skipped, failed and unreadable are different results, and a missing number is never a zero;
+**(e)** who runs as whom on this PC — the script as the user it reads, root for the users script and for its
+own place;
+**(f)** a change of a machine (E6). Areas (c) and (e) are authorisation: their specs are Fable's by the security
+row, outside the quota. Planned marks, made by the stories documents: E3.S2 for (a) and (b), and E6's spec for (f).
+
+### K.15 — *Security*: the permission in front of every door
+
+**The permission is in front of EVERY door, and a withdrawal wins like a "no"** (the plan round's findings 0 and
+1). No per-host "yes" of an older build reads a host, for the round or for a chat door, before the permission or
+after a withdrawal. The grant is in the locked file of the side; the withdrawal is a file of its own with a
+higher stamp, which no writer of `refused.json` renames over, so a stale lock holder cannot bring a permission
+back. Both are read from the disk before every call. What is left is residual 9.
+
+### K.16 — *Security*, *What an attacker gains*: the Linux user of a place, and root in a distro
+
+The second and third items of the list.
+
+- **Someone who is that Linux user, in a distro or on a VM.** They can make the tab show wrong accounts or numbers
+  for their own place. They cannot reach the extension through the reply: bounded (30 s, 64 KiB, 64 lines), parsed
+  by a closed vocabulary, never run, never a path, drawn as text. In WSL they could already reach the Windows side
+  through interop; the timer adds no right, only a start.
+- **Root in a distro** can make the users script name users that do not exist; a name must fit its class and a
+  UID its range, at most 16 are taken, and a call for a user that is not there fails as a call. Its own
+  place is read as root, which gives it nothing. It cannot make the round read ANOTHER user as root, or a system
+  account: this side too takes UID 0 only under the name `root`, and a UID from 1 to 999 never.
