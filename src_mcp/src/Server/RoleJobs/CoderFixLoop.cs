@@ -68,6 +68,9 @@ internal sealed class CoderFixLoop(IRoleRun run, GitHistory git, CoderOsLayer la
     /// <summary>A hook at the commit points (<c>before-commit</c>), for the tests; null in the product.</summary>
     public Action<string>? Boundary { get; init; }
 
+    /// <summary>The vendors a coder can be launched on (epoch 3 E3 s7 t2): a fix turn runs on its session's vendor, with that vendor's prompt words, and its stream is checked by that vendor's seam before the turn is committed.</summary>
+    internal CoderVendorSet Vendors { get; init; } = CoderVendors.Shipped;
+
     /// <summary>
     /// The last commit coai made in the worktree — the base commit until it makes one. Where the worktree goes back to when a model stops (<see cref="CoderRestore"/>); moves with every commit of a turn 0 or a fix turn.
     /// </summary>
@@ -147,16 +150,16 @@ internal sealed class CoderFixLoop(IRoleRun run, GitHistory git, CoderOsLayer la
     {
         run.Phase("fix", turn);
         var folder = Path.Combine(run.Folder, "fix", $"turn-{turn.ToString(CultureInfo.InvariantCulture)}");
-        var prompt = CoderPrompt.Fix(turn, Cap, round.Digest, round.Note);
+        var prompt = CoderPrompt.Fix(turn, Cap, round.Digest, round.Note, VendorOf(session.Model));
         var left = Left();
         var begun = run.Clock.GetUtcNow().UtcDateTime;
-        var launched = await new RoleModelLauncher(run.Settings, run.Children) { Coder = session.Confinement, Layer = layer }
+        var launched = await new RoleModelLauncher(run.Settings, run.Children) { Coder = session.Confinement, Layer = layer, Vendors = Vendors }
             .LaunchAsync(session.Model, prompt, run.Request.RepoPath, folder, left < AttemptTimeout ? left : AttemptTimeout, ct, session.Handle, RoleKeyRoad.For(run).Resume(session.Model, session.KeyId));
         var ended = run.Clock.GetUtcNow().UtcDateTime;
         Keep(folder, "prompt.txt", prompt, turn);
         var stop = ct.IsCancellationRequested
             ? new RoleStop("stopped", "the job was stopped while this model ran", "stopped", false, false)
-            : RoleFailover.StopOfLaunch(session.Model, launched);
+            : RoleFailover.StopOfLaunch(session.Model, launched) ?? CoderTurnCheck.Stop(Vendors, session.Model, launched, session.Handle);
         RoleFailover.RecordLedger(run, session.Model, launched, stop, ended - begun, launched.Launch?.Usage ?? Usage.None);
         ct.ThrowIfCancellationRequested();
         if (stop is not null)
@@ -184,6 +187,9 @@ internal sealed class CoderFixLoop(IRoleRun run, GitHistory git, CoderOsLayer la
 
         return new FixTurn(judge.Accepted ?? report, null);
     }
+
+    /// <summary>The seam of the model's vendor; a vendor that cannot be launched never has a fix turn, so claude's words are the fallback only for a model this loop was never given.</summary>
+    private ICoderVendor VendorOf(ModelRef model) => Vendors.Resolve(model.Vendor) is CoderVendorResolution.Launchable found ? found.Vendor : CoderVendors.Claude;
 
     private void Keep(string folder, string name, string text, int turn) =>
         EvidenceFile.Keep(folder, name, Redaction.SafeSource(text), e => run.Log.Warning(e, "role job {JobId}: {Name} of fix turn {Turn} could not be kept", run.Request.JobId, name, turn));

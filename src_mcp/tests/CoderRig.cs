@@ -62,6 +62,9 @@ internal sealed class CoderRig : IAsyncDisposable
     /// <summary>The machine as the OS layer sees it: this host, the stand-in as the person's home, no PATH to look programs up in.</summary>
     internal BoundaryHost Host => OnHost(BoundaryHost.Current() with { RealHome = _home.Path, NuGetPackages = string.Empty, Path = string.Empty });
 
+    /// <summary>The vendors a coder of the job may be launched on: the product's set, or a test's own table with its own test vendor (epoch 3 E3 s7 t2). Read when the job's work is made.</summary>
+    internal CoderVendorSet Vendors { get; set; } = CoderVendors.Shipped;
+
     /// <summary>A test-only change of the machine (no user manager, another operating system) — read when the job's work is made.</summary>
     internal Func<BoundaryHost, BoundaryHost> OnHost { get; set; } = host => host;
 
@@ -210,7 +213,7 @@ internal sealed class CoderRig : IAsyncDisposable
     internal static IReadOnlyDictionary<string, string> Edits(params string[] names) => names.ToDictionary(name => name, name => $"the coder wrote {name}\n");
 
     internal RoleDescriptor Descriptor(Action<string>? boundary = null) =>
-        new(RoleDescriptors.Coder, "the coder", () => new CoderWork { Boundary = boundary, Turns = TurnsOf(Host, Degrade), AttemptTimeout = TimeSpan.FromSeconds(30), Ladder = [TimeSpan.FromMinutes(5)] }, RouteAs: "coder", Check: CoderTask.Refusal);
+        new(RoleDescriptors.Coder, "the coder", () => new CoderWork { Boundary = boundary, Vendors = Vendors, Turns = TurnsOf(Host, Degrade), AttemptTimeout = TimeSpan.FromSeconds(30), Ladder = [TimeSpan.FromMinutes(5)] }, RouteAs: "coder", Check: CoderTask.Refusal);
 
     /// <summary>The job's turns over the stand-in machine: the real boundary code, the host and the degrade this rig holds at the moment the descriptor is made.</summary>
     private static Func<IProcessLauncher, CoderTurns> TurnsOf(BoundaryHost host, Func<IReadOnlyList<string>, IReadOnlyList<string>>? degrade) =>

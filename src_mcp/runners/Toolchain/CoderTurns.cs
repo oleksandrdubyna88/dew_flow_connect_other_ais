@@ -34,21 +34,25 @@ public sealed class CoderTurns(CoderBoundary boundary, FilesystemInvariant invar
     /// <param name="request">The launch as <c>ClaudeConsultant.Build</c> made it for a <c>LaunchConfinement.Coder</c>.</param>
     /// <param name="part">The unit's part name — <c>c1</c>, <c>c2</c> — unique within the job.</param>
     /// <param name="ct">The caller's cancel.</param>
-    public async Task<CoderTurnOutcome> RunAsync(BoundaryJob job, ProcessRequest request, string part, CancellationToken ct = default)
+    public Task<CoderTurnOutcome> RunAsync(BoundaryJob job, ProcessRequest request, string part, CancellationToken ct = default) => RunAsync(job, request, part, null, ct);
+
+    /// <summary>Launches the coder of <paramref name="vendor"/> (the boundary's own vendor when null — claude unless a test says otherwise): its unit properties, working directory and environment are the seam's.</summary>
+    internal async Task<CoderTurnOutcome> RunAsync(BoundaryJob job, ProcessRequest request, string part, ICoderVendor? vendor, CancellationToken ct = default)
     {
-        if (WrongWorktree(boundary.Vendor.WorkingDirectory(job), job, request) is { Length: > 0 } wrong)
+        var bound = vendor is null ? boundary : boundary.For(vendor);
+        if (WrongWorktree(bound.Vendor.WorkingDirectory(job), job, request) is { Length: > 0 } wrong)
         {
             return new CoderTurnOutcome.Refused(wrong, new BoundaryRecord(BoundaryRecord.UnitBoundary, [], "host", CoderBoundary.NetworkReason, []));
         }
 
-        var admission = await boundary.AdmitAsync(job, request.Executable, ct, CoderBoundary.CarriesKey(request));
+        var admission = await bound.AdmitAsync(job, request.Executable, ct, CoderBoundary.CarriesKey(request));
         if (admission is BoundaryAdmission.Refused refused)
         {
             return new CoderTurnOutcome.Refused(refused.Sentence, refused.Record);
         }
 
         var before = await SnapshotAsync(job.Tree.MainCheckout, ct);
-        var run = await boundary.RunAsync((BoundaryAdmission.Admitted)admission, job, request, part, ct);
+        var run = await bound.RunAsync((BoundaryAdmission.Admitted)admission, job, request, part, ct);
         var after = await SnapshotAsync(job.Tree.MainCheckout, ct);
         var evidence = CoderMainEvidence.Of(before.Snapshot, after.Snapshot, before.Why.Length > 0 ? before.Why : after.Why);
 

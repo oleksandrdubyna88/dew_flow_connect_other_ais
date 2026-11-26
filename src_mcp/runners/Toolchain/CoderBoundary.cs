@@ -32,6 +32,9 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
     /// <summary>For a test only: rewrites the finished <c>systemd-run</c> argument list of every unit this boundary starts, so a RED can drop one property and see the preflight refuse. Production never sets it.</summary>
     internal Func<IReadOnlyList<string>, IReadOnlyList<string>>? Degrade { get; init; }
 
+    /// <summary>This boundary over the same machine for another vendor's coder (epoch 3 E3 s7 t2): one job may fail over from one vendor to another, and each launch is bounded by its own vendor's unit.</summary>
+    internal CoderBoundary For(ICoderVendor vendor) => new(launcher, host) { Vendor = vendor, Degrade = Degrade };
+
     /// <summary>
     /// The boundary of the job's CHECKS on this machine: the same launcher, the same host, and — for a test — the same degrade, so a coder job's turns and its checks are bounded by one machine's facts and cannot disagree about it.
     /// </summary>

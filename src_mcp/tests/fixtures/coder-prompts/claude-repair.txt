@@ -1,0 +1,4 @@
+Your report was checked and has errors. Do not change any file for this. Fix every one of them and answer again with the WHOLE JSON report — the same shape, the same rules, nothing before it and nothing after it.
+
+- the report has no dod item d2
+- notes must be text

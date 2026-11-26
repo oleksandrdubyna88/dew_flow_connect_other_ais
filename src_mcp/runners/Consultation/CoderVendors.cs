@@ -19,6 +19,23 @@ internal abstract record CoderCapability
     public sealed record Refused(string Said, string Cure, bool CouldNotStart = false) : CoderCapability;
 }
 
+/// <summary>What a vendor's check of a finished turn's OWN stream concluded (epoch 3 E3 s7 t2, judgement S7): nothing wrong, a wrong answer, or a session that is not the one the job holds.</summary>
+internal abstract record CoderTurnVerdict
+{
+    private CoderTurnVerdict()
+    {
+    }
+
+    /// <summary>The turn's stream says nothing wrong. All claude ever says.</summary>
+    public sealed record Fine : CoderTurnVerdict;
+
+    /// <summary>The stream shows a property of the boundary did not hold (a tool outside the measured list, a wrong mode). The job ends <c>coder-boundary</c> and is never green; nothing of the turn is committed.</summary>
+    public sealed record Boundary(string Sentence) : CoderTurnVerdict;
+
+    /// <summary>The session of the turn is not the handle's, or is lost. The attempt ends as a crash: the next model starts from the last coai commit.</summary>
+    public sealed record Crash(string Sentence) : CoderTurnVerdict;
+}
+
 /// <summary>Where a vendor's CLI keeps its files inside the coder's unit: its home, the file its sign-in is read from, and the folders coai makes before the preflight.</summary>
 /// <param name="Home">The <c>HOME</c> of the coder's process.</param>
 /// <param name="SignInFile">The path inside <paramref name="Home"/> where the CLI looks for its sign-in.</param>
@@ -61,8 +78,25 @@ internal interface ICoderVendor
     /// <summary>The id of the vendor's coder prompt in <c>RolePrompts</c> (<c>coder</c> is claude's). EMPTY means the vendor has none, and then it cannot be launched as a coder: no vendor is given claude's tool names by default (SPEC C7).</summary>
     string PromptId { get; }
 
+    /// <summary>The name of the embedded resource that holds the vendor's shipped coder prompt (the server embeds it; this only names it). A person's override of <see cref="PromptId"/> wins over it.</summary>
+    string PromptResource { get; }
+
     /// <summary>How the sign-in reaches the coder's unit.</summary>
     CoderSignInRecipe SignIn { get; }
+
+    /// <summary>The consultant adapter that prepares, builds and reads this vendor's coder launches (<c>PrepareAsync</c>, <c>Build</c>, <c>ReadHandle</c>, <c>ReadAdvice</c>): the road the launcher takes for a coder turn of this vendor.</summary>
+    IConsultantRuntime Runtime { get; }
+
+    /// <summary>What a fix prompt says about the commands the checks ran, in this vendor's words — claude's has no shell, and says so. The claude text is what it was.</summary>
+    string FixClause { get; }
+
+    /// <summary>Whether this vendor's prompt points at the block coai writes after it (<c>Run by coai before your turn</c>, SPEC C9): then a job with no step is still sent the block, saying that nothing was run. claude's prompt does not, and is sent no block.</summary>
+    bool PointsAtInstructionBlock { get; }
+
+    /// <summary>
+    /// The check of a finished turn's OWN stream, asked after EVERY turn, turn 0 too, before anything of that turn is committed (judgement S7, ids of class <c>turn</c>). <paramref name="expectedSession"/> is the session of the job's handle, or empty on turn 0.
+    /// </summary>
+    CoderTurnVerdict CheckTurn(ProcessResult process, string expectedSession);
 
     /// <summary>Asks the installed CLI whether it can be given the write launch (<c>--version</c>, <c>--help</c>) — never launches the coder itself.</summary>
     Task<CoderCapability> ProbeAsync(IProcessLauncher launcher, string executable, string workingDirectory, CancellationToken ct);
@@ -108,7 +142,18 @@ internal sealed class ClaudeCoderVendor : ICoderVendor
 
     public string PromptId => "coder";
 
+    public string PromptResource => "CoaiMcp.coder-prompt.md";
+
     public CoderSignInRecipe SignIn { get; } = new CoderSignInRecipe.BindRealFile(".claude/.credentials.json");
+
+    public IConsultantRuntime Runtime => new ClaudeConsultant(new ClaudeRuntime(), CoderBoundaryTable.Claude);
+
+    public string FixClause => "you have no shell, and you do not run them";
+
+    public bool PointsAtInstructionBlock => false;
+
+    /// <summary>claude's turn check says nothing: its tools are the five of the measured list by the CLI's own flags, and a session that is not the handle's is not something its stream is asked about.</summary>
+    public CoderTurnVerdict CheckTurn(ProcessResult process, string expectedSession) => new CoderTurnVerdict.Fine();
 
     public async Task<CoderCapability> ProbeAsync(IProcessLauncher launcher, string executable, string workingDirectory, CancellationToken ct) =>
         await ClaudeWriteCapability.ProbeAsync(launcher, executable, workingDirectory, ct) switch

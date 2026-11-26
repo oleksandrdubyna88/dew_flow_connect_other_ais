@@ -30,11 +30,11 @@ internal static class CoderLaunches
     private static readonly StringComparer SamePlace = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
 
     /// <summary>
-    /// Why a coder launch must not start — empty when its vendor ships and its job, worktree and handle agree. The vendor comes first (epoch 3 E3 s7 t1): a vendor the table does not ship is refused with a sentence that names the shipped ones, before anything
-    /// else is asked of the launch. <paramref name="vendors"/> is the product's set unless a test injects another.
+    /// Why a coder launch must not start — empty when its job, worktree and handle agree (and, when <paramref name="vendors"/> is given, its vendor ships). The vendor comes first (epoch 3 E3 s7 t1): a vendor the table does not ship is refused with a sentence that names the shipped ones, before anything
+    /// else is asked of the launch. The launcher (<c>RoleModelLauncher</c>) asks with its own set, so the adapter that builds the argv asks only about the job, the worktree and the handle.
     /// </summary>
     internal static string WhyNot(LaunchConfinement.Coder coder, CoderVendorSet? vendors = null) =>
-        (vendors ?? CoderVendors.Shipped).Resolve(coder.Vendor) is CoderVendorResolution.Refused refused ? refused.Sentence
+        vendors?.Resolve(coder.Vendor) is CoderVendorResolution.Refused refused ? refused.Sentence
         : WhyNotHere(coder) is { Length: > 0 } here ? here : WhyNotTheHandle(coder);
 
     /// <summary>Why the job and the worktree of a coder launch are not usable together, whatever its handle — empty when they are.</summary>

@@ -263,8 +263,8 @@ public sealed class ACoderVendorSeamTests
         parse.Should().Throw<InvalidOperationException>().Which.Message.Should().Contain(saying);
     }
 
-    /// <summary>What reads the table, as source: its file name, a load of it, a row type or the list of shipped vendors.</summary>
-    private static readonly Regex ReadsTheTable = new(@"coder-boundary-releases|CoderBoundaryTable\.(Shipped|Parse)|CoderVendorRow|\.ShippedVendors\b", RegexOptions.CultureInvariant);
+    /// <summary>What reads the table, as source: a read of its file, a load of it, a row type or the list of shipped vendors.</summary>
+    private static readonly Regex ReadsTheTable = new(@"(ReadAllText|ReadAllLines|OpenRead|GetManifestResourceStream)\([^\n]*coder-boundary-releases|CoderBoundaryTable\.(Shipped|Parse)|CoderVendorRow|\.ShippedVendors\b", RegexOptions.CultureInvariant);
 
     /// <summary>What states a verdict, as source: a verdict word as a string literal.</summary>
     private static readonly Regex StatesAVerdict = new("\"(ship|refuse)\"", RegexOptions.CultureInvariant);
@@ -300,7 +300,7 @@ public sealed class ACoderVendorSeamTests
             Decides(NoComments(File.ReadAllText(Path.Combine(Repo(), "src_mcp", "runners", "Consultation", one)))).Should().BeTrue($"the scan finds {one}");
         }
 
-        foreach (var second in new[] { "var row = CoderBoundaryTable.Shipped;", "Load(\"coder-boundary-releases.json\");", "var x = CoderBoundaryTable.Parse(text);", "CoderVendorRow row;", "var n = table.ShippedVendors;", "if (vendor == \"codex\" && verdict == \"ship\") { }" })
+        foreach (var second in new[] { "var row = CoderBoundaryTable.Shipped;", "var text = File.ReadAllText(\"shared/coder-boundary-releases.json\");", "var x = CoderBoundaryTable.Parse(text);", "CoderVendorRow row;", "var n = table.ShippedVendors;", "if (vendor == \"codex\" && verdict == \"ship\") { }" })
         {
             Decides(second).Should().BeTrue(second);
         }
@@ -515,7 +515,17 @@ public sealed class ACoderVendorSeamTests
 
         public string PromptId => Prompt;
 
+        public string PromptResource => "CoaiMcp.coder-prompt.md";
+
         public CoderSignInRecipe SignIn { get; } = new CoderSignInRecipe.CopyForJob(".probe/auth.json", ["access"], new Dictionary<string, string> { ["refresh"] = "PLACEHOLDER" }, string.Empty, "PR-1");
+
+        public IConsultantRuntime Runtime => new ClaudeConsultant(new ClaudeRuntime(), "probe");
+
+        public string FixClause => "you have a probe";
+
+        public bool PointsAtInstructionBlock => true;
+
+        public CoderTurnVerdict CheckTurn(ProcessResult process, string expectedSession) => new CoderTurnVerdict.Fine();
 
         public Task<CoderCapability> ProbeAsync(IProcessLauncher launcher, string executable, string workingDirectory, CancellationToken ct) => Task.FromResult<CoderCapability>(new CoderCapability.Ready("1.0.0"));
 

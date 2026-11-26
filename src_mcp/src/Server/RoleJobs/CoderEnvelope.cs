@@ -5,6 +5,21 @@ using CoaiMcp.Runners.Toolchain;
 
 namespace CoaiMcp.Server.RoleJobs;
 
+/// <summary>Which coder prompt a job's model was sent on turn 0, and its hash: the id of the vendor's prompt (<c>coder</c> is claude's) and the sha256 of the text as rendered — the person's override, the task and the instruction block included. Never the text.</summary>
+internal sealed record CoderPromptRecord(string Id, string Sha256)
+{
+    /// <summary>No turn 0 was sent (a job that ended before any model was launched).</summary>
+    public static CoderPromptRecord None { get; } = new(string.Empty, string.Empty);
+
+    public void Write(Utf8JsonWriter json)
+    {
+        json.WriteStartObject("prompt");
+        json.WriteString("id", Id);
+        json.WriteString("sha256", Sha256);
+        json.WriteEndObject();
+    }
+}
+
 /// <summary>One path of the coder's change, as <c>git diff --name-status</c> says it: <c>A</c> added, <c>M</c> modified, <c>D</c> deleted, <c>T</c> type changed.</summary>
 internal sealed record CoderFileChange(string Status, string Path);
 
@@ -27,6 +42,9 @@ internal sealed record CoderEnvelope(string JobId, string BaseSha, string HeadSh
 {
     /// <summary>What the instruction step of the job came to (SPEC C9 item 8); <see cref="CoderInstructionsRecord.NotDeclared"/> when the base declares none. Written as <c>instructions</c>: its size and hash, never its text.</summary>
     public CoderInstructionsRecord Instructions { get; init; } = CoderInstructionsRecord.NotDeclared;
+
+    /// <summary>The prompt id and the sha256 of the rendered turn-0 prompt of the model that answered (SPEC C7 item 7): never its text.</summary>
+    public CoderPromptRecord Prompt { get; init; } = CoderPromptRecord.None;
 
     public string ToJson()
     {
@@ -54,6 +72,7 @@ internal sealed record CoderEnvelope(string JobId, string BaseSha, string HeadSh
             WriteMainCheckout(json);
             Checks?.Write(json);
             Instructions.Write(json);
+            Prompt.Write(json);
             json.WriteEndObject();
         }
 

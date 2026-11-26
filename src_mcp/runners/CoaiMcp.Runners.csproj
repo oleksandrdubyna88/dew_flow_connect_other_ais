@@ -45,6 +45,8 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="CoaiMcp.Tests" />
+    <!-- The server reads the coder vendor seam (ICoderVendor, CoderVendorSet), which is the coder road's own and not an API (epoch 3 E3 s7 t2). -->
+    <InternalsVisibleTo Include="coai-mcp" />
     <!-- The fake CLI plays the shim (E4.2 S2.43) and sets the lock seams in its own process. -->
     <InternalsVisibleTo Include="FakeCli" />
   </ItemGroup>

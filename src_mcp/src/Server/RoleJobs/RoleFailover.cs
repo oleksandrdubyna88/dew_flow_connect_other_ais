@@ -140,6 +140,9 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
     /// </summary>
     public RoleSession? Session { get; private set; }
 
+    /// <summary>The vendors a coder can be launched on, and the check of each one's own stream (epoch 3 E3 s7 t2). The product's set unless a test injects another; read only when <see cref="Coder"/> is set.</summary>
+    internal CoderVendorSet Vendors { get; init; } = CoderVendors.Shipped;
+
     /// <summary>The repair turns the LAST attempt used — what the role reports of how it got its answer.</summary>
     public int RepairTurnsUsed { get; private set; }
 
@@ -168,7 +171,12 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
     /// <summary>The road to the claude key pool of this job's data folder; made once, on the first claude launch.</summary>
     private RoleKeyRoad Keys => _keys ??= RoleKeyRoad.For(run);
 
-    public async Task<RoleWorkOutcome> RunAsync(string prompt, CancellationToken ct)
+    public Task<RoleWorkOutcome> RunAsync(string prompt, CancellationToken ct) => RunAsync(_ => prompt, ct);
+
+    /// <summary>
+    /// The attempt loop with a prompt for EACH model (epoch 3 E3 s7 t2): a coder's turn-0 prompt is the vendor's own (SPEC C7), so a failover to another vendor sends that vendor's, and a new session after a failover carries the instruction block again (C9).
+    /// </summary>
+    public async Task<RoleWorkOutcome> RunAsync(Func<ModelRef, string> promptFor, CancellationToken ct)
     {
         var route = RouteOf(run.Job.Route);
         if (route.Count == 0 || route.Count != run.Job.Route.Count || route.Any(model => !RoleModelLauncher.Knows(model.Vendor)))
@@ -192,7 +200,7 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
                 continue;
             }
 
-            var step = await ModelAsync(route, index, prompt, started, ct);
+            var step = await ModelAsync(route, index, promptFor, started, ct);
             if (step is Step.Finished finished)
             {
                 return finished.Outcome;
@@ -209,12 +217,12 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
     }
 
     /// <summary>One model, with the last model's ladder: finished (success, a stop that ends the job, the exhausted list) or move on to the next model.</summary>
-    private async Task<Step> ModelAsync(IReadOnlyList<ModelRef> route, int index, string prompt, long started, CancellationToken ct)
+    private async Task<Step> ModelAsync(IReadOnlyList<ModelRef> route, int index, Func<ModelRef, string> promptFor, long started, CancellationToken ct)
     {
         var model = route[index];
         for (var wait = 0; ; wait++)
         {
-            var end = await AttemptAsync(model, prompt, started, ct);
+            var end = await AttemptAsync(model, promptFor(model), started, ct);
             if (end is Ended.Stopped)
             {
                 return new Step.Finished(new RoleWorkOutcome.Stopped());
@@ -377,7 +385,7 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
                 return Interrupted(model, attempt, launched);
             }
 
-            var read = await ReadAsync(model, launched, attempt.Before, ct);
+            var read = await ReadAsync(model, launched, attempt.Before, turn == 0 ? string.Empty : attempt.Handle, ct);
             KeepTurn(attempt, turn, launched);
             var blocked = read.Repair is { } wanted ? CannotRepair(wanted, turn, launched.Handle) : null;
             if (read.Repair is null || blocked is not null)
@@ -405,7 +413,7 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
     private async Task<RoleLaunched> LaunchTurnAsync(ModelRef model, string prompt, AttemptRun attempt, RoleKey key, TimeSpan left, CancellationToken ct)
     {
         attempt.TurnBegun = run.Clock.GetUtcNow().UtcDateTime;
-        var launched = await new RoleModelLauncher(run.Settings, run.Children) { Coder = Coder, Layer = OsLayer }
+        var launched = await new RoleModelLauncher(run.Settings, run.Children) { Coder = Coder, Layer = OsLayer, Vendors = Vendors }
             .LaunchAsync(model, prompt, run.Request.RepoPath, attempt.Folder, left < AttemptTimeout ? left : AttemptTimeout, ct, attempt.Handle, key);
         attempt.TurnEnded = run.Clock.GetUtcNow().UtcDateTime;
         attempt.Add(launched);
@@ -505,7 +513,7 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
     private sealed record Read(RoleStop? Stop, string Result, RoleAnswerVerdict.Repair? Repair = null);
 
     /// <summary>The stop of a finished launch, or null with the role's result: the tree first (a changed tree ends the job whatever the model said), then the launch, then the answer.</summary>
-    private async Task<Read> ReadAsync(ModelRef model, RoleLaunched launched, FilesystemSnapshot? before, CancellationToken ct)
+    private async Task<Read> ReadAsync(ModelRef model, RoleLaunched launched, FilesystemSnapshot? before, string expectedSession, CancellationToken ct)
     {
         if (await ChangedAsync(before, ct) is { Length: > 0 } sentence)
         {
@@ -515,6 +523,12 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
         if (StopOfLaunch(model, launched) is { } stopped)
         {
             return new Read(stopped, string.Empty);
+        }
+
+        // The check of the turn's own stream, before the role reads the answer and so before anything of the turn is committed (a coder only; the vendor's seam says what is wrong).
+        if (Coder is not null && CoderTurnCheck.Stop(Vendors, model, launched, expectedSession) is { } wrong)
+        {
+            return new Read(wrong, string.Empty);
         }
 
         var launch = launched.Launch!;
