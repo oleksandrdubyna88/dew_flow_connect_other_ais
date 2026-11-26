@@ -2147,8 +2147,8 @@ holds this code: the newest tag is `extension-v2.0.0`, cut before #1047.
   could not be read as "which host, which AI, which account, which limit".
 - **Found by the review of #1047, as todos:** T46 — the `claude-usage` path is 31 s at worst against the 30 s
   ceiling ([PLAN_the_usage_mode_stays_under_the_30_s_ceiling.md](PLAN_the_usage_mode_stays_under_the_30_s_ceiling.md));
-  T9 ([PLAN_a_press_rereads_the_consent_before_each_spawn.md](PLAN_a_press_rereads_the_consent_before_each_spawn.md));
-  T8 ([PLAN_a_waiting_marker_has_its_own_door_sentence.md](PLAN_a_waiting_marker_has_its_own_door_sentence.md)).
+  T9 (`PLAN_a_press_rereads_the_consent_before_each_spawn.md` (deleted by E2.S1));
+  T8 (`PLAN_a_waiting_marker_has_its_own_door_sentence.md` (deleted by E2.S1)).
   This revision takes the three up: T46 in § 4, T8 and T9 in § 3.
 - **Not measured: anything about WSL.** W9 (§ 5) comes before the WSL road is specified.
 

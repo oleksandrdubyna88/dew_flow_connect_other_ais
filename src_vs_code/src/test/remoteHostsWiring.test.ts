@@ -1,9 +1,11 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { test } from 'node:test';
 import { HOSTS_SAID, notKeptSaid } from '../remoteHostsSaid';
-import type { Committed } from '../remoteHosts';
-import { dayOf } from '../remoteHosts';
+import type { Committed, HostStanding } from '../remoteHosts';
+import { buttonsOf, changeOfButton, dayOf } from '../remoteHosts';
 import { bodyOf, sourceFiles, sourceOf } from './sourceReading';
 
 /**
@@ -33,23 +35,159 @@ test('A1-T5: no list is exported to write, and the file has no content writer', 
 });
 
 test('A1-T14: the words are the spec\'s, and the codes are literals of the host file', () => {
-  assert.equal(HOSTS_SAID.title('h'), 'Read the Claude session and the AI accounts on “h” over ssh?');
-  assert.ok(!HOSTS_SAID.emptyOn.includes('asks once') && !HOSTS_SAID.emptyOff.includes('asks once'));
+  assert.equal(HOSTS_SAID.title('h'), 'Read the host “h” over ssh, or not?');
   assert.equal(HOSTS_SAID.notSaved('h'), 'Your answer for “h” could not be saved, so the host is still not read and nothing was read. Answer again in a moment.');
   assert.equal(HOSTS_SAID.unkeptHost('h', 'busy', 'WSL: Ubuntu'), 'Your “Not this host” for “h” is not saved yet (another window is writing). No window of this side (WSL: Ubuntu) reads a host over ssh until it is. Each window tries again by itself.');
   assert.equal(HOSTS_SAID.unkeptStop('elsewhere', 'Linux'), 'The stop of the accounts round is not saved yet (another window of this side could not save it). No window of this side (Linux) reads a host over ssh until it is. Each window tries again by itself.');
-  assert.ok(HOSTS_SAID.changeDetail({ host: 'h', answer: 'yes', how: 'auto', askedUtc: '2026-11-24T10:00:00.000Z' }, true, 'Linux').includes('nobody was asked'));
-  assert.ok(HOSTS_SAID.changeDetail(undefined, false, 'Linux').includes('Linux') && !HOSTS_SAID.changeDetail(undefined, false, 'Linux').includes('writes a refusal again'));
-  assert.equal(HOSTS_SAID.rowDescription({ host: 'h', answer: 'no', how: 'person', askedUtc: 'x' }, true), 'not read');
   assert.equal(dayOf(new Date(2026, 10, 24, 12).toISOString()), '2026-11-24');
   assert.ok(host.indexOf('Read the Claude session on') < 0, 'the question still says “Read the Claude session on …”');
-  for (const code of ['read-remote-session', 'change-remote-host-answer', 'no-remote-host-asked', 'remote-host-refusal-not-kept']) {
+  for (const code of ['read-accounts-permission', 'accounts-permission-not-kept', 'change-remote-host-answer', 'no-remote-host-asked', 'remote-host-refusal-not-kept']) {
     assert.equal(countIn(host, new RegExp(`code: '${code}'`, 'gu')), 1, `the code ${code} is not a literal of the host file exactly once`);
   }
   assert.deepEqual(filesWith(/mend-remote-hosts|remote-hosts-damaged|remote-host-refusal-restored/u), [], 'a code that does not exist is named');
-  for (const text of [HOSTS_SAID.cureMarked, HOSTS_SAID.cureUnmarked, HOSTS_SAID.cureTorn, HOSTS_SAID.unkeptHost('h', 'disk', 'Linux')]) {
+  for (const text of [HOSTS_SAID.cureMarked, HOSTS_SAID.cureUnmarked, HOSTS_SAID.cureTorn, HOSTS_SAID.unkeptHost('h', 'disk', 'Linux'), HOSTS_SAID.unkeptWithdrawal('disk'), HOSTS_SAID.cureWithdrawal, HOSTS_SAID.cureWithdrawalBusy]) {
     assert.ok(!/[\\/]/u.test(text.replace(/CoAI: hosts read over ssh|“Not this host”|“Save now”/gu, '')), `a path separator is in a notice text: ${text}`);
   }
+});
+
+test('E2S1-T9 (the scan): one reader of the grant and of the withdrawal files, one door, no caller of a retired door', () => {
+  const callers = filesWith(/import[^;]*\binForce\b[^;]*from '\.\/remotePermission'/u);
+  assert.ok(callers.length > 0, 'companion: the scan found no call of inForce, so it proves nothing');
+  assert.ok(callers.every((file) => file.startsWith('remoteKeeper') || file.startsWith('remoteRefusals')), `inForce( is called outside the keeper and the refusals: ${callers.join(', ')}`);
+  assert.deepEqual(filesWith(/\bfile\.grant\b|\['grant'\]/u), ['remotePermission.ts'], 'the key grant is read outside remotePermission.ts');
+  assert.deepEqual(filesWith(/\{ grant: \{/u), ['remoteRefusals.ts'], 'the grant is written outside the refusals merger');
+  assert.deepEqual(filesWith(/'withdrawn-'/u), ['remoteSessionHost.ts'], 'the prefix of a withdrawal file is spelled outside the host half, or not there');
+  assert.equal(countIn(host, /WITHDRAWN_PREFIX = 'withdrawn-'/gu), 1);
+  const retired = filesWith(/\b(?:keeper|sessions)\.(?:admit|consent)\(|\badmitHost\b|\baskHost\b|\baskQuestion\b|read-remote-session/u);
+  assert.deepEqual(retired, [], `a retired door is still named: ${retired.join(', ')}`);
+  const allowing = filesWith(/\b(?:keeper|sessions\.keeper)\.allow\(/u).filter((file) => file !== 'remoteKeeper.ts');
+  assert.deepEqual(allowing, ['remoteSessionHost.ts'], 'keeper.allow( is called outside the binding of the asker and the test door');
+  assert.equal(countIn(host, /keeper\.allow\(/gu), 2, 'companion: the binding of permissionAsker and testDoorOf are the two callers');
+  assert.deepEqual(filesWith(/\bnotifyAndAsk\([^)]*read-accounts-permission|code: 'read-accounts-permission'/u), ['remoteSessionHost.ts']);
+  // a tick and the keeper never ask: no seam of either holds a way to raise the question
+  for (const file of ['remoteAccountsRound.ts', 'remoteAccountsDriver.ts', 'remoteAccountsHost.ts', 'remoteKeeper.ts', 'remoteKeeperDoor.ts']) {
+    assert.ok(!/\braise\b|askPermission|permissionAsker/u.test(sourceOf(file)), `${file} can reach the question`);
+  }
+});
+
+test('E2S1-T14 (the host): the one question is the modal of W14 with its two buttons, and the retired per-host question is in no source file and no census', () => {
+  const question = host.slice(host.indexOf('const raisePermission'), host.indexOf('interface Choice'));
+  assert.ok(question.includes("code: 'read-accounts-permission'") && question.includes('modal: true') && question.includes("class: 'confirmation'"), 'the question is not a modal confirmation with its code');
+  assert.ok(question.includes('title: HOSTS_SAID.permissionTitle') && question.includes('detail: HOSTS_SAID.permissionDetail(sideLabel())'), 'the question does not say W14');
+  assert.ok(question.includes('actions: [ALLOW_READING, NOT_NOW]'), 'the question has other buttons than the two');
+  assert.equal(countIn(host, /const ALLOW_READING = 'Allow reading'/gu) + countIn(host, /const NOT_NOW = 'Not now'/gu), 2);
+  assert.deepEqual(filesWith(/read-remote-session/u), [], 'the retired code is still a source');
+  const census = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'notification-sites.json'), 'utf8')) as { codes: readonly string[] };
+  assert.ok(!census.codes.includes('read-remote-session') && census.codes.includes('read-accounts-permission') && census.codes.includes('accounts-permission-not-kept'));
+});
+
+test('E2S1-T17 (the scan): the setting is gone — the key\'s text is in W10\'s constant and the five help files, and nobody reads it', () => {
+  const where = [...filesWith(/terminalAccountsAllowNewHosts/u)].sort();
+  assert.deepEqual(where, ['helpContent.ts', 'helpDe.ts', 'helpEs.ts', 'helpRu.ts', 'helpUk.ts', 'remoteHostsSaid.ts'], 'the key is named in a file the spec does not allow, or one it allows is missing');
+  const said = sourceOf('remoteHostsSaid.ts');
+  assert.equal(countIn(said, /terminalAccountsAllowNewHosts/gu), 1, 'the constant KEY is more than one line');
+  assert.equal(countIn(said, /\$\{KEY\}/gu), 2, 'companion: W10\'s two sentences are the only users of KEY');
+  assert.equal(countIn(said, /const KEY = 'coai\.terminalAccountsAllowNewHosts'/gu), 1, 'the constant KEY is not the one line');
+  assert.deepEqual(filesWith(/getConfiguration\([^)]*\)[^;]*terminalAccounts|ALLOW_NEW_HOSTS_KEY|allowNewHostsFrom|allowsNewHosts|ignoredLayerFor/u), [], 'a source still reads the setting');
+});
+
+test('E2S1-T18 (the scan): retired code stays gone', () => {
+  assert.deepEqual(filesWith(/\bAUTOMATIC_ALLOW\b|\bautoCounts\b|\bAutomaticAllow\b/u), [], 'the automatic allow is still named');
+  assert.deepEqual([...filesWith(/\ballowNew\b/u)].sort(), ['remoteAccountsHost.ts', 'remoteAccountsRows.ts'], 'allowNew is outside the bridge lines that S3 and S2 delete');
+  assert.ok(/how: 'auto'|how === 'auto'|how !== 'auto'/u.test(sourceOf('remoteHosts.ts')), 'the parser no longer reads how: auto, so a list that holds one would be damaged');
+});
+
+const U = '2026-11-24T10:00:00.000Z';
+const SIDE = (side: string): string => `A “Not this host” is kept on the side of this machine where you gave it — ${side}. “Read this host again” in any window of that side lifts it. If the host is still not read a moment later, another window had not caught up yet: choose it once more. On another side (Windows, a WSL distro, a remote machine) choose it there.`;
+const NOT = '“Not this host” stops every ssh call of CoAI to this host, from the accounts round and from the chat doors.';
+const AGAIN = '“Read this host again” removes your “Not this host”: the host is then read under the permission like any other.';
+const FORGET = '“Forget” removes the stored older answer. It changes nothing about what is read.';
+const stands = (answer: 'yes' | 'no', how: 'person' | 'auto', permitted: boolean) => ({ standing: { host: 'h', answer, how, askedUtc: U } as HostStanding, permitted });
+
+test('E2S1-T14/T15: every word W1 to W18 equals the text of the spec', () => {
+  assert.equal(HOSTS_SAID.title('h'), 'Read the host “h” over ssh, or not?');
+  // W3: the standing, an older yes row, one sentence for each button offered, the side
+  assert.equal(HOSTS_SAID.changeDetail(stands('no', 'person', true), ['read-again'], 'Windows'), `Your answer now: Not this host, given ${U}. ${AGAIN} ${SIDE('Windows')}`);
+  assert.equal(HOSTS_SAID.changeDetail({ standing: undefined, permitted: true }, ['not-this-host'], 'Linux'), `This host is read under your permission. ${NOT} ${SIDE('Linux')}`);
+  assert.equal(HOSTS_SAID.changeDetail({ standing: undefined, permitted: false }, ['not-this-host'], 'Linux'), `This host is not read: there is no permission to read hosts. ${NOT} ${SIDE('Linux')}`);
+  assert.equal(HOSTS_SAID.changeDetail(stands('yes', 'person', true), ['not-this-host', 'forget'], 'WSL: Ubuntu'), `This host is read under your permission. An answer “Read” of an earlier version is stored (given ${U}); it is not used any more. ${NOT} ${FORGET} ${SIDE('WSL: Ubuntu')}`);
+  assert.equal(HOSTS_SAID.rowDescription(true, true), 'not read: “Not this host”');
+  assert.equal(HOSTS_SAID.rowDescription(false, true), 'read under the permission');
+  assert.equal(HOSTS_SAID.rowDescription(false, false), 'not read: no permission');
+  assert.equal(HOSTS_SAID.rowDetail(stands('no', 'person', true).standing), `given ${U}`);
+  assert.equal(HOSTS_SAID.rowDetail(stands('yes', 'person', true).standing), 'an older “Read” answer is stored and not used');
+  assert.equal(HOSTS_SAID.rowDetail(stands('yes', 'auto', true).standing), 'an automatic entry of a test build is stored and not used');
+  assert.equal(HOSTS_SAID.noAnswerReadable, 'no answer can be read for this host');
+  assert.equal(HOSTS_SAID.cannotRead, 'The list of hosts read over ssh cannot be read, so nothing was read. Run CoAI: hosts read over ssh and choose “Not this host” or “Read this host again” for a host there: your answer repairs the list.');
+  assert.equal(HOSTS_SAID.fullOfRefusals('h'), 'The list of hosts read over ssh holds 100 hosts you refused, which is all it keeps, so your answer for “h” was not kept and nothing was read. Forget one of them in CoAI: hosts read over ssh, then answer again.');
+  assert.equal(HOSTS_SAID.damagedList(3, 1, 2), 'The list of hosts read over ssh is damaged, so no host is read by itself until it is repaired. 3 answers can still be read, 1 of them “Not this host”. 2 entries cannot be read, and one of them may have been a “Not this host”. Your answer here repairs the list: the answers that can be read are kept, and the entries that cannot are dropped. A host of a dropped entry has no answer afterwards and is read under the permission like any other host. Look through the list afterwards.');
+  assert.equal(HOSTS_SAID.damagedFile('Linux', 4), 'The file of hosts you refused on this side (Linux) cannot be read, so no host is read from this side until it is repaired. 4 “Not this host” can still be read and are kept. A “Not this host” that was kept only in the file may be lost, and so may a stop of the accounts round. Your answer here writes the file again, with the accounts round STOPPED and with no permission to read: look through CoAI: hosts read over ssh, choose “Allow reading…” there, then start the round in AI accounts and usage.');
+  const whys = { busy: 'another window is writing', disk: 'the disk refused the write', lost: 'the write did not stay', elsewhere: 'another window of this side could not save it' } as const;
+  for (const [why, phrase] of Object.entries(whys)) {
+    const key = why as keyof typeof whys;
+    assert.equal(HOSTS_SAID.unkeptHost('h', key, 'Linux'), `Your “Not this host” for “h” is not saved yet (${phrase}). No window of this side (Linux) reads a host over ssh until it is. Each window tries again by itself.`);
+    assert.equal(HOSTS_SAID.unkeptStop(key, 'Linux'), `The stop of the accounts round is not saved yet (${phrase}). No window of this side (Linux) reads a host over ssh until it is. Each window tries again by itself.`);
+    assert.equal(HOSTS_SAID.unkeptWithdrawal(key), `Your withdrawal of the permission is not saved yet (${phrase}). This window reads no host until it is; the other windows stop when the shared state reaches them.`);
+  }
+  assert.equal(HOSTS_SAID.unkeptHost('h', 'disk', 'Linux', false), 'Your “Not this host” for “h” is not saved yet (the disk refused the write). This window reads no host over ssh until it is. Each window tries again by itself.');
+  assert.equal(HOSTS_SAID.cureWithdrawal, '“Save now” writes it at once. Until then only this window and the shared state hold it: keep this window open, and check that the extension’s storage folder can be written.');
+  assert.equal(HOSTS_SAID.cureWithdrawalBusy, '“Save now” takes the hosts file over from a window that hangs and checks your withdrawal. Keep this window open until then.');
+  assert.equal(HOSTS_SAID.cureMarked, '“Save now” writes it at once, also when another window holds the file and does not finish. If it still cannot be saved, check that the extension’s storage folder can be written.');
+  assert.equal(HOSTS_SAID.cureUnmarked, 'Only THIS window knows your answer: the disk refused the note that tells the other windows. Keep this window open, and check that the extension’s storage folder can be written. Other windows of this side may still read hosts.');
+  assert.equal(HOSTS_SAID.cureTorn, 'A note that could not be read was removed. It may have held a “Not this host” or a stop, so the accounts round is now stopped: look through CoAI: hosts read over ssh, then start the round.');
+  assert.equal(HOSTS_SAID.rowDamagedList, 'the list of hosts cannot be read, so this host is not read. Choose “Not this host” or “Read this host again” for it: that repairs the list.');
+  assert.equal(HOSTS_SAID.rowDamagedFile, 'the file of refused hosts cannot be read, so this host is not read. Choose “Not this host” or “Read this host again” for it: that repairs the file, leaves the round stopped and leaves no permission.');
+  const waiting = 'A “Not this host”, a stop or a withdrawal is not saved yet on this side, so nothing was read. Choose “Save now” — the first row of CoAI: hosts read over ssh.';
+  assert.equal(HOSTS_SAID.waiting, waiting);
+  assert.equal(HOSTS_SAID.rowWaiting, waiting);
+  assert.equal(HOSTS_SAID.startDamaged, 'The accounts round cannot be started: the file of refused hosts cannot be read. Answer for a host in CoAI: hosts read over ssh first.');
+  assert.equal(HOSTS_SAID.startUnwritten, 'The start could not be saved, so the accounts round is still stopped. Choose this row again in a moment.');
+  assert.equal(HOSTS_SAID.stoppedElsewhere, 'The accounts round is stopped. Choose this row to start it.');
+  // W14
+  assert.equal(HOSTS_SAID.permissionTitle, 'Allow CoAI to read the hosts of your Creds terminals?');
+  assert.equal(HOSTS_SAID.permissionDetail('Windows'), '“Allow reading” lets CoAI read every host of an open “Creds: <host> / <session>” terminal with no further question — the ones open now and the ones you open later. It logs in over ssh with your own keys every 10 minutes while one is open. In a Windows window with a “Creds: wsl / …” terminal it also reads every Linux user of each running WSL distro, root too; on a distro with systemd this opens a login session that runs the user’s profile. It reads which of Claude Code, Codex and Antigravity are there, their accounts and usage; claude and agy, as found there, are started (root’s as root), and Claude Code rewrites its cache files. Take or add the question reads that terminal’s Claude session. CoAI itself installs and writes nothing there. To stop: “Not this host”, “Stop the round”, or “Withdraw the permission” for all reads. The permission is for Windows only; another side asks its own.');
+  // W15, W16, W17, W18
+  assert.equal(HOSTS_SAID.notNow, 'Nothing was read: CoAI has no permission to read hosts. Press again and choose “Allow reading”.');
+  assert.equal(HOSTS_SAID.permissionGiven, 'The permission is given. Press again to read.');
+  assert.equal(HOSTS_SAID.withdrawnMeanwhile, 'The permission to read hosts was withdrawn meanwhile, so the rest was not read.');
+  assert.equal(HOSTS_SAID.allowNotKept({ kind: 'unwritten', why: 'busy' }), 'The permission could not be saved (another window is writing), so nothing changed and nothing is read. Choose “Allow reading” again in a moment. If another window hangs, “Save now” takes the file over; then choose “Allow reading” again.');
+  for (const why of ['disk', 'lost'] as const) {
+    assert.equal(HOSTS_SAID.allowNotKept({ kind: 'unwritten', why }), `The permission could not be saved (${whys[why]}), so nothing changed and nothing is read. Choose “Allow reading” again in a moment. Check that the extension’s storage folder can be written; “Save now” tries what waits.`);
+  }
+  assert.equal(HOSTS_SAID.allowNotKept({ kind: 'withdrawn' }), 'The permission was withdrawn while it was being saved, so nothing is read. Choose “Allow reading” again if you want it.');
+  assert.equal(HOSTS_SAID.allowNotKept({ kind: 'damaged' }), HOSTS_SAID.cannotRead);
+  assert.equal(HOSTS_SAID.withdrew, 'The permission is withdrawn: CoAI reads no host. Every side of this machine stops at its next read; “Allow reading” on a side allows that side again.');
+  assert.deepEqual(HOSTS_SAID.permissionRow('none'), { label: 'Allow reading…', description: 'no permission yet: nothing is read' });
+  assert.deepEqual(HOSTS_SAID.permissionRow({ given: U }), { label: 'Withdraw the permission', description: `given ${U}: every host of your Creds terminals is read, but the ones you refused` });
+  assert.deepEqual(HOSTS_SAID.permissionRow('waiting'), { label: 'Save now', description: 'a “Not this host”, a stop or a withdrawal is not saved yet on this side, so nothing is read' });
+  assert.deepEqual(HOSTS_SAID.permissionRow('damaged'), { label: 'The list or the file of hosts cannot be read', description: 'nothing is read. Choose a host below and answer for it: that repairs it. If no host is listed, open a “Creds: <host> / <session>” terminal and run this again.' });
+  // W10 stays until its row is deleted (X7)
+  assert.ok(HOSTS_SAID.ignoredWorkspace.includes('only your own user settings count') && HOSTS_SAID.ignoredFolder.includes('A folder of this workspace'));
+});
+
+test('E2S1-T15: the buttons of the change question, by state — each only where it does something, no "Read", and the change each sends', () => {
+  const refused = stands('no', 'person', true).standing;
+  const storedYes = stands('yes', 'person', true).standing;
+  assert.deepEqual(buttonsOf(refused, true, false), ['read-again']);
+  assert.deepEqual(buttonsOf(storedYes, false, false), ['not-this-host', 'forget']);
+  assert.deepEqual(buttonsOf(undefined, false, false), ['not-this-host']);
+  assert.deepEqual(buttonsOf(undefined, false, true), ['not-this-host', 'read-again']);
+  assert.deepEqual(buttonsOf(refused, true, true), ['not-this-host', 'read-again'], 'over damage the two answers a host whose standing cannot be read can have');
+  assert.deepEqual(changeOfButton('read-again', 'h', false), { kind: 'forget', host: 'h' });
+  assert.deepEqual(changeOfButton('forget', 'h', false), { kind: 'forget', host: 'h' });
+  assert.deepEqual(changeOfButton('not-this-host', 'h', false), { kind: 'person', host: 'h', answer: 'no' });
+  assert.deepEqual(changeOfButton('not-this-host', 'h', true), { kind: 'mend', host: 'h', answer: 'no' });
+  assert.deepEqual(changeOfButton('read-again', 'h', true), { kind: 'mend', host: 'h', answer: 'forget' });
+  for (const standing of [undefined, refused, storedYes]) {
+    for (const damaged of [false, true]) {
+      for (const button of buttonsOf(standing, standing?.answer === 'no', damaged)) {
+        const change = changeOfButton(button, 'h', damaged) as { answer?: string };
+        assert.notEqual(change.answer, 'yes', 'a button sends a "yes"');
+      }
+    }
+  }
+  const host2 = sourceOf('remoteSessionHost.ts');
+  assert.ok(!/'Read'|READ = /u.test(host2), 'a button Read is still named by the host');
 });
 
 test('A1-T18: the host half is wired as written', () => {
@@ -61,88 +199,32 @@ test('A1-T18: the host half is wired as written', () => {
   for (const file of ['remoteAccountsRound.ts']) {
     assert.ok(!/saveWaiting\(/u.test(sourceOf(file)), `the round calls saveWaiting: ${file}`);
   }
-  assert.equal(countIn(host, /kind: 'mend'/gu), 1, 'kind: mend is written in more than one place of the host file');
+  assert.equal(countIn(host, /kind: 'mend'/gu), 0, 'the host file builds a mend itself: the change a button sends is changeOfButton\'s');
+  assert.equal(countIn(sourceOf('remoteHosts.ts'), /return \{ kind: 'mend', host, answer:/gu), 1, 'changeOfButton is not the one place a mend is built');
   // The hosts folder is named in ONE place, the chat registration (v2 E4); the old activation names it no more.
   assert.equal(countIn(sourceOf('../shell/modules/chat/register.ts'), /'terminal-hosts'/gu), 1);
   assert.equal(countIn(sourceOf('extension.ts'), /'terminal-hosts'/gu), 0, 'the old activation names the hosts folder again, beside the chat module');
   assert.equal(countIn(host, /MARKER_PREFIX = 'unsure-'/gu), 1);
   assert.deepEqual(filesWith(/claimFile\([^)]*'refused'|LOCK_ID = 'refused'/u), ['remoteRefusalsDisk.ts']);
-  assert.deepEqual(filesWith(/take: 'person'|takenByPerson/u).filter((file) => file !== 'chatStoreLock.ts'), ['remoteKeeper.ts', 'remoteRefusals.ts', 'remoteRefusalsDisk.ts'].filter((file) => filesWith(/take: 'person'|takenByPerson/u).includes(file)));
+  assert.deepEqual(filesWith(/take: 'person'|takenByPerson/u).filter((file) => file !== 'chatStoreLock.ts'), ['remoteKeeper.ts', 'remoteRefusals.ts', 'remoteRefusalsDisk.ts', 'remoteRefusalsPermit.ts', 'remoteRefusalsStore.ts']);
   assert.equal(countIn(host, /actions?: /gu) >= 1, true);
-  const config = sourceOf('sideConfig.ts');
-  const allows = config.slice(config.indexOf('export const allowsNewHosts'), config.indexOf('export const ignoredLayerFor'));
-  assert.ok(allows.includes('userLayer(') && !allows.includes('readerFor('), 'allowsNewHosts reads through an overlay or not through the user layer');
-  assert.ok(/allowNew: \(\) => allowsNewHosts\(vscode\.workspace\.getConfiguration\('coai'\)\)/u.test(host), 'the keeper\'s allowNew seam does not read a fresh configuration');
-});
-
-const U = '2026-11-24T10:00:00.000Z';
-const W2 = '“Read” allows, with no further question for this host: reading the Claude session of its Creds terminals when you press take or add the question; and, every 10 minutes while such a terminal is open, reading which Claude Code, Codex and Antigravity accounts are signed in there, and their usage. For the usage, Claude Code is started on the host and asks Anthropic with the host’s own login; agy is started for its version. “Not this host” stops every ssh call of CoAI to this host.';
-const FORGET_ON = '“Forget” removes the answer: the host then has none, and the next accounts round allows it again by itself.';
-const FORGET_OFF = '“Forget” removes the answer: the host is then not read until you answer the question about it.';
-const SIDE = (side: string): string => `A “Not this host” is kept on the side of this machine where you gave it — ${side}. “Read” or “Forget” in any window of that side lifts it. If the host is still not read a moment later, another window had not caught up yet: choose it once more. On another side (Windows, a WSL distro, a remote machine) choose it there.`;
-const KEYSAID = 'coai.terminalAccountsAllowNewHosts';
-
-test('A1-T14: every word W1 to W13 equals the text of the spec', () => {
-  const day = dayOf(U);
-  const standing = (answer: 'yes' | 'no', how: 'person' | 'auto') => ({ host: 'h', answer, how, askedUtc: U }) as const;
-  assert.equal(HOSTS_SAID.title('h'), 'Read the Claude session and the AI accounts on “h” over ssh?');
-  assert.equal(HOSTS_SAID.askedDetail, W2);
-  assert.equal(HOSTS_SAID.changeDetail(standing('yes', 'person'), true, 'WSL: Ubuntu'), `Your answer now: Read, given ${U}. ${W2} ${FORGET_ON} ${SIDE('WSL: Ubuntu')}`);
-  assert.equal(HOSTS_SAID.changeDetail(standing('yes', 'auto'), true, 'Linux'), `This host was allowed automatically on ${day}; nobody was asked. ${W2} ${FORGET_ON} ${SIDE('Linux')}`);
-  assert.equal(HOSTS_SAID.changeDetail(standing('no', 'person'), false, 'Windows'), `Your answer now: Not this host, given ${U}. ${W2} ${FORGET_OFF} ${SIDE('Windows')}`);
-  assert.equal(HOSTS_SAID.rowDescription(standing('yes', 'person'), true), 'the Claude session and the AI accounts are read');
-  assert.equal(HOSTS_SAID.rowDescription(standing('yes', 'auto'), true), `allowed automatically on ${day}: the Claude session and the AI accounts are read`);
-  assert.equal(HOSTS_SAID.rowDescription(standing('yes', 'auto'), false), `allowed automatically on ${day}; not read while ${KEYSAID} is off`);
-  assert.equal(HOSTS_SAID.rowDescription(standing('no', 'person'), true), 'not read');
-  assert.equal(HOSTS_SAID.rowDetail(standing('yes', 'person')), `asked ${U}`);
-  assert.equal(HOSTS_SAID.rowDetail(standing('yes', 'auto')), `nobody was asked; written ${U}`);
-  assert.equal(HOSTS_SAID.noAnswerReadable, 'no answer can be read for this host');
-  assert.equal(HOSTS_SAID.emptyOn, 'No host is in the list yet. The host of a “Creds: <host> / <session>” terminal is allowed by itself at the first accounts round and is listed here then; choose it here to forbid it.');
-  assert.equal(HOSTS_SAID.emptyOff, 'No host is in the list yet. The host of a “Creds: <host> / <session>” terminal is listed here once you answer the question about it.');
-  assert.equal(HOSTS_SAID.emptyDamaged, 'The list of hosts read over ssh cannot be read, and no answer in it can be read. No host is read over ssh while that is so. Open a “Creds: <host> / <session>” terminal and run this again: your answer for its host repairs the list.');
-  assert.equal(HOSTS_SAID.cannotRead, 'The list of hosts read over ssh cannot be read, so nothing was read. Run CoAI: hosts read over ssh and answer for a host there: your answer repairs the list.');
-  assert.equal(HOSTS_SAID.fullOfRefusals('h'), 'The list of hosts read over ssh holds 100 hosts you refused, which is all it keeps, so your answer for “h” was not kept and nothing was read. Forget one of them in CoAI: hosts read over ssh, then answer again.');
-  assert.equal(HOSTS_SAID.notSaved('h'), 'Your answer for “h” could not be saved, so the host is still not read and nothing was read. Answer again in a moment.');
-  assert.equal(HOSTS_SAID.damagedList(3, 1, 2), `The list of hosts read over ssh is damaged, so no host is read by itself until it is repaired. 3 answers can still be read, 1 of them “Not this host”. 2 entries cannot be read, and one of them may have been a “Not this host”. Your answer here repairs the list: the answers that can be read are kept, and the entries that cannot are dropped. A host of a dropped entry has no answer afterwards, and with ${KEYSAID} on it is allowed again by itself. Look through the list afterwards.`);
-  assert.equal(HOSTS_SAID.damagedFile('Linux', 4), 'The file of hosts you refused on this side (Linux) cannot be read, so no host is read from this side until it is repaired. 4 “Not this host” can still be read and are kept. A “Not this host” that was kept only in the file may be lost, and so may a stop of the accounts round. Your answer here writes the file again, with the accounts round STOPPED: look through CoAI: hosts read over ssh, then start the round from the list of AI accounts.');
-  const whys = { busy: 'another window is writing', disk: 'the disk refused the write', lost: 'the write did not stay', elsewhere: 'another window of this side could not save it' } as const;
-  for (const [why, phrase] of Object.entries(whys)) {
-    const key = why as keyof typeof whys;
-    assert.equal(HOSTS_SAID.unkeptHost('h', key, 'Linux'), `Your “Not this host” for “h” is not saved yet (${phrase}). No window of this side (Linux) reads a host over ssh until it is. Each window tries again by itself.`);
-    assert.equal(HOSTS_SAID.unkeptStop(key, 'Linux'), `The stop of the accounts round is not saved yet (${phrase}). No window of this side (Linux) reads a host over ssh until it is. Each window tries again by itself.`);
-  }
-  // T1: with no marker the notice must not say that every window of the side is stopped
-  assert.equal(HOSTS_SAID.unkeptHost('h', 'disk', 'Linux', false), 'Your “Not this host” for “h” is not saved yet (the disk refused the write). This window reads no host over ssh until it is. Each window tries again by itself.');
-  assert.equal(HOSTS_SAID.unkeptStop('disk', 'Linux', false), 'The stop of the accounts round is not saved yet (the disk refused the write). This window reads no host over ssh until it is. Each window tries again by itself.');
-  assert.ok(!HOSTS_SAID.unkeptHost('h', 'disk', 'Linux', false).includes('No window of this side'));
-  assert.equal(HOSTS_SAID.cureMarked, '“Save now” writes it at once, also when another window holds the file and does not finish. If it still cannot be saved, check that the extension’s storage folder can be written.');
-  assert.equal(HOSTS_SAID.cureUnmarked, 'Only THIS window knows your answer: the disk refused the note that tells the other windows. Keep this window open, and check that the extension’s storage folder can be written. Other windows of this side may still read hosts.');
-  assert.equal(HOSTS_SAID.cureTorn, 'A note that could not be read was removed. It may have held a “Not this host” or a stop, so the accounts round is now stopped: look through CoAI: hosts read over ssh, then start the round.');
-  assert.equal(HOSTS_SAID.ignoredWorkspace, `This workspace sets \`${KEYSAID}\`. It is ignored: only your own user settings count.`);
-  assert.equal(HOSTS_SAID.ignoredFolder, `A folder of this workspace sets \`${KEYSAID}\`. It is ignored: only your own user settings count.`);
-  assert.equal(HOSTS_SAID.rowDamagedList, 'the list of hosts cannot be read, so this host is not read. Choose this row and answer for this host: that repairs the list.');
-  assert.equal(HOSTS_SAID.rowDamagedFile, 'the file of refused hosts cannot be read, so this host is not read. Choose this row and answer for this host: that repairs the file and leaves the round stopped.');
-  assert.equal(HOSTS_SAID.rowWaiting, 'a “Not this host” or a stop is not saved yet on this side, so no host is read from it. It is tried again before every read. Choose this row to save it now.');
-  assert.equal(HOSTS_SAID.startDamaged, 'The accounts round cannot be started: the file of refused hosts cannot be read. Answer for a host in CoAI: hosts read over ssh first.');
-  assert.equal(HOSTS_SAID.startUnwritten, 'The start could not be saved, so the accounts round is still stopped. Choose this row again in a moment.');
-  assert.equal(HOSTS_SAID.stoppedElsewhere, 'The accounts round is stopped. Choose this row to start it.');
+  assert.ok(!sourceOf('sideConfig.ts').includes('allowsNewHosts'), 'the setting\'s reader is still in sideConfig.ts');
 });
 
 test('A1-T14/B25/B27: the host raises the notice of an unsaved refusal, and the test door puts the file back', () => {
   assert.match(host, /unkept: \(host, why, marked\) => \{[\s\S]*?raiseUnkept\(live, host \?\? 'accounts-round'/u, 'the keeper\'s unkept seam does not raise the notice');
   const door = host.slice(host.indexOf('export const testDoorOf'));
-  assert.ok(door.includes('rm(join(folder, REFUSED_FILE)') && door.includes('writeFile(join(folder, REFUSED_FILE)'), 'restore does not put the refusals file back');
-  assert.match(door, /await state\.update\(TERMINAL_HOSTS_KEY, before\.list\);\n {4}if \(before\.file === undefined\) \{\n {6}await rm\(/u, 'restore does not put the file back in the step after the list');
-  assert.ok(door.includes('MARKER_PREFIX') && door.includes('forgetHeld()'), 'restore leaves markers or what the window holds');
+  const files = host.slice(host.indexOf('async function restoreFiles'));
+  assert.ok(files.includes('rm(join(folder, REFUSED_FILE)') && files.includes('writeFile(join(folder, REFUSED_FILE)'), 'restore does not put the refusals file back');
+  assert.match(door, /await state\.update\(TERMINAL_HOSTS_KEY, before\.list\);\n {4}await state\.update\(STATE_KEY, before\.row\);\n {4}await restoreFiles\(folder, before\);/u, 'restore does not put the list, the row and the files back in order');
+  assert.ok(files.includes('MARKER_PREFIX') && files.includes('WITHDRAWN_PREFIX') && door.includes('forgetHeld()'), 'restore leaves markers, withdrawal files or what the window holds');
 });
 
-test('R9: W6\'s third sentence is for a Read or a Forget, and the torn cure of W9 has a W9 title', () => {
+test('R9: W6\'s third sentence is for a Read this host again or a Forget, and the torn cure of W9 has a W9 title', () => {
   const none = (kind: 'unwritten'): Committed => ({ kind, why: 'busy' });
   assert.equal(notKeptSaid('h', 'no', none('unwritten')), undefined, 'an unsaved "no" said W6\'s third sentence');
-  for (const answer of ['yes', 'forget'] as const) {
-    assert.equal(notKeptSaid('h', answer, none('unwritten')), HOSTS_SAID.notSaved('h'));
-  }
-  for (const answer of ['yes', 'no', 'forget'] as const) {
+  assert.equal(notKeptSaid('h', 'forget', none('unwritten')), HOSTS_SAID.notSaved('h'));
+  for (const answer of ['no', 'forget'] as const) {
     assert.equal(notKeptSaid('h', answer, { kind: 'full' }), HOSTS_SAID.fullOfRefusals('h'));
     assert.equal(notKeptSaid('h', answer, { kind: 'damaged' }), HOSTS_SAID.cannotRead);
     assert.equal(notKeptSaid('h', answer, { kind: 'written', row: undefined, evicted: [] }), undefined);
@@ -162,7 +244,7 @@ test('R7: the host tells the person what "Save now" came to', () => {
 });
 
 test('A1-T15 (T15, host): the hosts list builds its choices through choicesOf, over the keeper\'s standings, and not over the profile list alone', () => {
-  const body = bodyOf(host, 'async function changeHostsOf(');
+  const body = bodyOf(host, 'async function hostRows(');
   assert.match(body, /choicesOf\(listedHosts\(keeper\.stored\(\), liveHostsOf\(\)\), standings\)/u, 'the choices are not the listed hosts joined with the standings');
   assert.equal(countIn('const rows = listedHosts(stored, live).map(hostChoice);', /choicesOf\(/gu), 0, 'companion: the scan tells a list built from the profile alone');
 });

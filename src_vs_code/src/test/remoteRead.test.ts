@@ -13,6 +13,7 @@ import {
 } from '../remoteRead';
 import type { HostAnswer, HostStanding } from '../remoteHosts';
 import { HOSTS_SAID } from '../remoteHostsSaid';
+import type { PermissionAsked, SessionAnswer } from '../remotePermission';
 import type { RefusalChange, RefusalsFile } from '../remoteRefusals';
 import { Backing, FakeDisk, KEY, windowOver } from './hostsFakes';
 import { RemoteCall, TAIL_MAX, operandsOf } from '../remoteScript';
@@ -99,11 +100,23 @@ type Script = (operands: readonly string[], calls: number) => RemoteRun;
 
 interface Options {
   readonly list?: unknown;
-  readonly answer?: 'yes' | 'no' | undefined;
+  /** What the ONE question answers when the first door asks it; the default is *Not now*. */
+  readonly asked?: PermissionAsked;
+  /** Whether the permission is given first, through the keeper's `allow()`: the default is yes. */
+  readonly permitted?: boolean;
   readonly script?: Script;
   readonly choose?: (rows: readonly PickRow[]) => string | undefined;
   readonly live?: (reads: number) => string | undefined;
-  readonly slowAsk?: boolean;
+  /** The first door waits until a test releases it: the door can take time. */
+  readonly holdDoor?: boolean;
+  /** Awaited inside the fake run, before its answer: a test saves a "no" or a withdrawal DURING a spawn. */
+  readonly during?: (call: number) => Promise<void>;
+  /** Awaited inside the pick list, before its answer: a pick can be open for minutes. */
+  readonly beforePick?: () => Promise<void>;
+  /** `askPermission` throws when it is called: no later door of a press may ask. */
+  readonly askThrows?: boolean;
+  /** Called with the host at every door, before it answers: a test saves a "no" or a withdrawal here. */
+  readonly atDoor?: (host: string, door: number) => Promise<void>;
 }
 
 const yesFor = (host: string): readonly HostAnswer[] => [{ host, answer: 'yes', askedUtc: '2026-11-01T00:00:00.000Z' }];
@@ -113,12 +126,14 @@ function world(options: Options = {}) {
   backing.values.set(KEY, 'list' in options ? options.list : yesFor(H));
   const disk = new FakeDisk();
   const win = windowOver(backing, disk);
+  /** The permission is given first, as a fixture does, through the keeper's own *Allow*; the door waits for it. */
+  const ready: Promise<unknown> | undefined = options.permitted === false ? undefined : win.keeper.allow();
   const w = {
     backing,
     disk,
     keeper: win.keeper,
     view: win.view,
-    setting: win.setting,
+    doors: 0,
     asks: [] as string[],
     runs: [] as (readonly string[])[],
     picks: [] as (readonly PickRow[])[],
@@ -129,23 +144,35 @@ function world(options: Options = {}) {
     releases: [] as (() => void)[],
   };
   const seams: RoadSeams = {
-    store: { consent: (host) => win.keeper.consent(host), answer: (host, answer) => win.keeper.commit({ kind: 'person', host, answer }) },
-    ask: async (host) => {
-      w.asks.push(host);
-      if (options.slowAsk === true) {
-        await new Promise<void>((resolve) => { w.releases.push(resolve); });
+    store: {
+      may: async (host) => {
+        await ready;
+        w.doors += 1;
+        if (options.holdDoor === true && w.doors === 1) {
+          await new Promise<void>((resolve) => { w.releases.push(resolve); });
+        }
+        await options.atDoor?.(host, w.doors);
+
+        return win.keeper.may('session', host) as Promise<SessionAnswer>;
+      },
+    },
+    askPermission: async () => {
+      w.asks.push('permission');
+      if (options.askThrows === true) {
+        throw new Error('a door that is not the first asked the person');
       }
 
-      return options.answer;
+      return options.asked ?? 'not-now';
     },
     liveName: () => { const one = options.live?.(w.reads); w.reads += 1; return options.live === undefined ? NAME : one; },
     run: async (_host, _session, operands) => {
       const calls = w.runs.length;
       w.runs.push(operands);
+      await options.during?.(calls);
 
       return (options.script ?? (() => answered(registryFrame())))(operands, calls);
     },
-    pick: async (rows, partial) => { w.picks.push(rows); w.partials.push(partial); return options.choose?.(rows); },
+    pick: async (rows, partial) => { w.picks.push(rows); w.partials.push(partial); await options.beforePick?.(); return options.choose?.(rows); },
     progress: async (_host, work) => { w.progress += 1; return work(); },
     keep: (picked) => { w.kept.push(picked); },
   };
@@ -160,22 +187,21 @@ const refusal = (answer: { readonly kind: string; readonly refusal?: string }): 
 const linesOf = (answer: RemoteAnswer): readonly string[] => (answer.kind === 'lines' ? answer.lines : []);
 const id = (call: RemoteCall): readonly string[] => operandsOf(call);
 
-test('S3-T1: an answer is kept per host, and a damaged list is not a "yes" (replaces the damaged half of the old S3-T1)', async () => {
+test('S3-T1: a "no" is kept per host, a "yes" row is no answer, and a damaged list is not a "yes"', async () => {
   const w = world({ list: [] });
-  assert.equal(await w.w.keeper.consent('h'), 'ask');
+  assert.equal(await w.w.keeper.may('session', 'h'), 'yes');
   await w.w.keeper.commit({ kind: 'person', host: 'h', answer: 'no' });
-  assert.equal(await w.w.keeper.consent('h'), 'no');
-  assert.equal(await w.w.keeper.consent('H'), 'ask', 'a host is compared exactly, not by case');
-  assert.equal(await w.w.keeper.consent('h2'), 'ask');
-  await w.w.keeper.commit({ kind: 'person', host: 'h', answer: 'yes' });
-  assert.equal(await w.w.keeper.consent('h'), 'yes', 'the host\'s old row was not replaced');
-  assert.equal((w.w.backing.values.get(KEY) as unknown[]).length, 1, 'a changed answer made a second row');
+  assert.equal(await w.w.keeper.may('session', 'h'), 'no');
+  assert.equal(await w.w.keeper.may('session', 'H'), 'yes', 'a host is compared exactly, not by case');
+  assert.equal(await w.w.keeper.may('session', 'h2'), 'yes');
+  await w.w.keeper.commit({ kind: 'forget', host: 'h' });
+  assert.equal(await w.w.keeper.may('session', 'h'), 'yes', 'Read this host again did not lift the "no"');
 
   for (const damaged of ['junk', null, 7, {}, [{ host: 'h' }], [{ host: 'h', answer: 'yes' }], [{ host: 'h', answer: 'maybe', askedUtc: NOW }],
     [{ host: '', answer: 'yes', askedUtc: NOW }], [{ host: 'h', answer: 'yes', askedUtc: 5 }], [null], ['h'],
     [{ host: 'h', answer: 'yes', askedUtc: NOW }, 'junk']]) {
     const bad = world({ list: damaged });
-    assert.equal(await bad.w.keeper.consent('h'), 'damaged', `a damaged list let ssh run: ${JSON.stringify(damaged)}`);
+    assert.equal(await bad.w.keeper.may('session', 'h'), 'damaged', `a damaged list let ssh run: ${JSON.stringify(damaged)}`);
     const road = await remoteRoad(bad.seams, NAME, 'question');
     assert.equal(refusal(road), HOSTS_SAID.cannotRead, 'the road did not say the list cannot be read');
     assert.equal(bad.w.asks.length + bad.w.runs.length, 0, 'a damaged list was asked about or read');
@@ -183,47 +209,114 @@ test('S3-T1: an answer is kept per host, and a damaged list is not a "yes" (repl
   }
 });
 
-test('S3-T2 and S3-T2b are replaced by A1-T7 and A1-T8 of remoteHosts.test.ts: the cap keeps every "no", and a damaged list is not an empty one', async () => {
-  const rows: HostAnswer[] = Array.from({ length: 99 }, (_, n) => ({ host: `h${n}`, answer: 'yes', askedUtc: `2026-10-${String(10 + (n % 20)).padStart(2, '0')}T00:00:00.000Z` }));
-  const w = world({ list: [...rows, { host: 'oldest', answer: 'no', askedUtc: '2026-01-01T00:00:00.000Z' }] });
-  await w.w.keeper.commit({ kind: 'person', host: 'new-host', answer: 'yes' });
-  assert.equal(await w.w.keeper.consent('oldest'), 'no', 'the cap dropped a "Not this host"');
-  assert.equal(await w.w.keeper.consent('new-host'), 'yes');
-  assert.equal((w.w.backing.values.get(KEY) as unknown[]).length, 100);
+
+
+test('E2S1-T10: a per-host "yes" allows nothing — no ssh before the ONE permission, and the press that asked reads nothing', async () => {
+  // Carries CUT-H1 (remoteHosts.test.ts, A1-T2), CUT-H2 and CUT-D1 (both purposes; the automatic row, a person's "yes" and a "no" row), CUT-D2..D5 (remoteKeeperDoor.test.ts and here).
+  const list = [{ host: H, answer: 'yes', askedUtc: NOW }, { host: 'g', answer: 'yes', askedUtc: NOW, how: 'auto' }];
+  for (const purpose of ['question', 'prompts'] as const) {
+    for (const name of [NAME, 'Creds: g / s1']) {
+      const notNow = world({ list, permitted: false, asked: 'not-now', live: () => name });
+      const got = await remoteRoad(notNow.seams, name, purpose);
+      assert.equal(refusal(got), HOSTS_SAID.notNow, 'Not now did not say W15\'s first sentence');
+      assert.deepEqual([notNow.w.asks.length, notNow.w.runs.length], [1, 0], 'a "yes" row read a host with no permission, or asked more than once');
+      assert.equal(notNow.w.view.updates.length, 0, 'Not now wrote something');
+
+      const allowed = world({ list, permitted: false, asked: 'given', live: () => name });
+      assert.equal(refusal(await remoteRoad(allowed.seams, name, purpose)), HOSTS_SAID.permissionGiven);
+      assert.equal(allowed.w.runs.length, 0, 'the press that asked the question also read');
+      await allowed.w.keeper.allow();
+      assert.equal((await remoteRoad(allowed.seams, name, purpose)).kind, 'lines', 'the next press did not read');
+      assert.equal(allowed.w.runs.length, 1);
+
+      const notKept = world({ list, permitted: false, asked: { kind: 'not-kept', said: 'W16 words' }, live: () => name });
+      assert.equal(refusal(await remoteRoad(notKept.seams, name, purpose)), 'W16 words');
+      assert.equal(notKept.w.runs.length, 0);
+    }
+    const no = world({ list: [{ host: H, answer: 'no', askedUtc: NOW }], permitted: false });
+    assert.deepEqual([refusal(await remoteRoad(no.seams, NAME, purpose)), no.w.runs.length, no.w.asks.length], [`Reading the Claude session on “${H}” is turned off. Only the text you copied can be sent; turn it on in CoAI: hosts read over ssh.`, 0, 0], 'a "no" read or asked');
+  }
+  // after a withdrawal a press runs nothing and asks again
+  const after = world({ list });
+  assert.equal((await remoteRoad(after.seams, NAME, 'question')).kind, 'lines');
+  assert.equal(await after.w.keeper.withdraw(), 'withdrawn');
+  const asksBefore = after.w.asks.length;
+  assert.equal(refusal(await remoteRoad(after.seams, NAME, 'question')), HOSTS_SAID.notNow);
+  assert.deepEqual([after.w.runs.length, after.w.asks.length], [1, asksBefore + 1], 'a press after a withdrawal read, or did not ask');
+  // the list is the same value after 100 presses, and never written again
+  const same = world({ list, permitted: false });
+  const bytes = JSON.stringify(same.w.backing.values.get(KEY));
+  for (let n = 0; n < 100; n += 1) {
+    await remoteRoad(same.seams, NAME, 'question');
+  }
+  assert.equal(JSON.stringify(same.w.backing.values.get(KEY)), bytes, 'the list changed after 100 presses');
+  assert.equal(same.w.view.updates.length, 0, 'the list was written again');
 });
 
-test('S3-T3: no ssh before a "yes"', async () => {
-  const notThis = world({ list: [], answer: 'no' });
-  const off = await remoteRoad(notThis.seams, NAME, 'question');
-  assert.equal(refusal(off), `Reading the Claude session on “${H}” is turned off. Only the text you copied can be sent; turn it on in CoAI: hosts read over ssh.`);
-  assert.equal(notThis.w.runs.length, 0, 'ssh was spawned for a host nobody agreed to');
-  assert.equal(await notThis.w.keeper.consent(H), 'no', 'the "no" was not written');
-  assert.deepEqual(notThis.w.asks, [H]);
+test('E2S1-T12 (T8): a held "no", a held withdrawal, a marker of another window and a torn marker say W12, never W6; a damaged list or file says W6', async () => {
+  const via = async (setup: (w: World['w']) => Promise<void> | void): Promise<{ readonly said: string; readonly runs: number }> => {
+    const one = world({ list: [] });
+    await one.w.keeper.may('session', H);
+    await setup(one.w);
 
-  const escaped = world({ list: [], answer: undefined });
-  const nothing = await remoteRoad(escaped.seams, NAME, 'question');
-  assert.equal(nothing.kind, 'refused');
-  assert.equal(escaped.w.runs.length, 0, 'ssh was spawned for a host nobody agreed to');
-  assert.equal(escaped.w.view.updates.length, 0, 'Escape wrote an answer');
-  assert.equal(await escaped.w.keeper.consent(H), 'ask');
+    return { said: refusal(await remoteRoad(one.seams, NAME, 'question')), runs: one.w.runs.length };
+  };
+  const held = await via(async (w) => { w.disk.lock = { token: 'hung' }; await w.keeper.commit({ kind: 'person', host: 'g', answer: 'no' }); });
+  assert.equal(held.said, HOSTS_SAID.waiting, 'a held "no" for another host said something else');
+  assert.equal(held.said, 'A “Not this host”, a stop or a withdrawal is not saved yet on this side, so nothing was read. Choose “Save now” — the first row of CoAI: hosts read over ssh.');
+  const withdrawal = await via(async (w) => { w.disk.failWithdrawn = true; await w.keeper.withdraw(); });
+  assert.equal(withdrawal.said, HOSTS_SAID.waiting, 'a held withdrawal said something else');
+  const marker = await via((w) => { w.disk.lock = { token: 'hung' }; w.disk.files.set('unsure-x.json', JSON.stringify({ v: 1, kind: 'refuse', host: 'g', utc: NOW })); });
+  assert.equal(marker.said, HOSTS_SAID.waiting, 'a marker of another window said something else');
+  const torn = await via((w) => { w.disk.files.set('unsure-torn.json', '{'); });
+  assert.equal(torn.said, HOSTS_SAID.waiting, 'a torn marker said something else');
+  for (const one of [held, withdrawal, marker, torn]) {
+    assert.equal(one.runs, 0, 'a press read while something waited');
+  }
+  const damagedList = world({ list: 'junk' });
+  assert.equal(refusal(await remoteRoad(damagedList.seams, NAME, 'question')), HOSTS_SAID.cannotRead);
+  const damagedFile = world({ list: [] });
+  damagedFile.w.disk.files.set('refused.json', 'junk');
+  assert.equal(refusal(await remoteRoad(damagedFile.seams, NAME, 'question')), HOSTS_SAID.cannotRead);
+  assert.notEqual(HOSTS_SAID.waiting, HOSTS_SAID.cannotRead);
+});
 
-  const remembered = world({ list: [{ host: H, answer: 'no', askedUtc: NOW }], answer: 'yes' });
-  const again = await remoteRoad(remembered.seams, NAME, 'question');
-  assert.equal(remembered.w.runs.length, 0, 'ssh was spawned for a host nobody agreed to');
-  assert.equal(remembered.w.asks.length, 0, 'a remembered "no" asked again');
-  assert.equal(refusal(again), refusal(off), 'a remembered "no" gave another sentence');
-
-  const yes = world({ list: [], answer: 'yes' });
-  const read = await remoteRoad(yes.seams, NAME, 'question');
-  assert.equal(read.kind, 'lines');
-  assert.equal(await yes.w.keeper.consent(H), 'yes', 'the "yes" was not written');
-  assert.equal(yes.w.view.updates.length, 1, 'the answer was written more than once');
-  assert.equal(yes.w.runs.length, 1);
-  assert.ok(yes.w.progress >= 1, 'the read was not under the progress line');
-
-  const known = world({ list: yesFor(H), answer: 'no' });
-  await remoteRoad(known.seams, NAME, 'question');
-  assert.equal(known.w.asks.length, 0, 'a "yes" host was asked again');
+test('E2S1-T13 (T9): the door is asked before EVERY spawn; a "no" or a withdrawal saved meanwhile stops the next one, which never asks a person', async () => {
+  const fallbacks = (): Script => sequence(
+    answered(fallbackFrame(KB, FALLBACK_FOLDERS)),
+    answered(titlesFrame([{ id: ID, folder: KB_FOLDER, title: S }])),
+    answered(idFrame(ID, KB_FOLDER)),
+  );
+  // a "no" saved during the first spawn: the titles fallback does not spawn
+  const saved: { w?: World['w'] } = {};
+  const noDuring = world({ script: fallbacks(), askThrows: true, during: async (call) => { if (call === 0) { await saved.w?.keeper.commit({ kind: 'person', host: H, answer: 'no' }); } } });
+  saved.w = noDuring.w;
+  const turnedOff = await remoteRoad(noDuring.seams, NAME, 'prompts');
+  assert.equal(noDuring.w.runs.length, 1, 'a "no" saved during the first spawn did not stop the second');
+  assert.equal(refusal(turnedOff), `Reading the Claude session on “${H}” is turned off. Only the text you copied can be sent; turn it on in CoAI: hosts read over ssh.`);
+  // a withdrawal saved then: one run, W15's third sentence, and no question
+  const withdrawing: { w?: World['w'] } = {};
+  const wDuring = world({ script: fallbacks(), askThrows: true, during: async (call) => { if (call === 0) { await withdrawing.w?.keeper.withdraw(); } } });
+  withdrawing.w = wDuring.w;
+  const withdrawn = await remoteRoad(wDuring.seams, NAME, 'prompts');
+  assert.equal(wDuring.w.runs.length, 1, 'a withdrawal saved during the first spawn did not stop the second');
+  assert.equal(refusal(withdrawn), HOSTS_SAID.withdrawnMeanwhile);
+  assert.equal(wDuring.w.asks.length, 0, 'a later door asked the person');
+  // the door still yes: the fallbacks run, and every spawn was asked
+  const same = world({ script: fallbacks(), askThrows: true });
+  assert.equal((await remoteRoad(same.seams, NAME, 'prompts')).kind, 'lines');
+  assert.equal(same.w.runs.length, 3);
+  assert.equal(same.w.doors, 3, 'the door was not asked once before each spawn');
+  // a pick that is open while a "no" is saved: no spawn after it
+  const pickHolder: { w?: World['w'] } = {};
+  const picking = world({
+    script: sequence(answered(fallbackFrame(KB, FALLBACK_FOLDERS)), answered(titlesFrame([{ id: ID, folder: KB_FOLDER, title: S }, { id: ID2, folder: KB_FOLDER, title: S }])), answered(idFrame(ID, KB_FOLDER))),
+    choose: (rows) => rows[0]?.sessionId,
+    beforePick: async () => { await pickHolder.w?.keeper.commit({ kind: 'person', host: H, answer: 'no' }); },
+  });
+  pickHolder.w = picking.w;
+  await remoteRoad(picking.seams, NAME, 'prompts');
+  assert.equal(picking.w.runs.length, 2, 'a "no" saved while the pick was open did not stop the spawn after it');
 });
 
 test('S3-T3b: a name that is not a creds name is refused before any consent or ssh', async () => {
@@ -588,34 +681,34 @@ test('S3-T11: the host road says five different things', async () => {
 
 test('S3-T12: a double press starts one child and one question', async () => {
   const latch = onePerTerminal<object>();
-  const one = world({ list: [], answer: 'yes', slowAsk: true });
+  const one = world({ list: [], holdDoor: true });
   const terminal = {};
   const road = (key: object): Promise<RemoteAnswer> => latch(key, () => remoteRoad(one.seams, NAME, 'question'));
 
   const first = road(terminal);
   const second = road(terminal);
-  // The consent is asked of the keeper's queue now, so the question arrives a few steps later than it did. The wait is bounded, and it stops
-  // when the first read settled without asking: a regression then fails here and does not hang the worker.
+  // The door is asked of the keeper's queue, so it is reached a few steps later. The wait is bounded, and it stops
+  // when the first read settled without reaching it: a regression then fails here and does not hang the worker.
   let settled = false;
   void first.then(() => { settled = true; }, () => { settled = true; });
   const deadline = Date.now() + 5000;
   while (one.w.releases.length === 0) {
-    assert.ok(!settled, 'the first read ended before the question was asked');
-    assert.ok(Date.now() < deadline, 'the question was not asked within 5 s');
+    assert.ok(!settled, 'the first read ended before the door was reached');
+    assert.ok(Date.now() < deadline, 'the door was not reached within 5 s');
     await new Promise<void>((resolve) => { setImmediate(resolve); });
   }
   one.w.releases.forEach((release) => { release(); });
   const [a, b] = await Promise.all([first, second]);
 
-  assert.equal(one.w.asks.length, 1, 'a double press asked twice and spawned two ssh');
-  assert.equal(one.w.runs.length, 1, 'a double press asked twice and spawned two ssh');
+  assert.equal(one.w.asks.length, 0, 'a double press asked');
+  assert.equal(one.w.runs.length, 1, 'a double press spawned two ssh');
   assert.equal(a.kind, 'lines');
   assert.equal(refusal(b), 'The Claude session of this terminal is still being read — the second press was ignored.');
 
   const again = await road(terminal);
   assert.equal(again.kind, 'lines', 'the latch stayed shut after the first read ended');
 
-  const both = world({ answer: 'yes' });
+  const both = world({});
   const mine = onePerTerminal<object>();
   const answers = await Promise.all([{}, {}].map((key) => mine(key, () => remoteRoad(both.seams, NAME, 'question'))));
   assert.deepEqual(answers.map((one2) => one2.kind), ['lines', 'lines']);
@@ -629,7 +722,7 @@ test('S3-T12: a double press starts one child and one question', async () => {
 
 test('S3-T13: the terminal is re-checked just before EACH spawn', async () => {
   for (const [what, live] of [['a renamed host', 'Creds: h2 / s'], ['a renamed session', `Creds: ${H} / s2`], ['a closed terminal', undefined], ['a name that is not a creds name', 'bash']] as const) {
-    const one = world({ list: [], answer: 'yes', live: () => live });
+    const one = world({ list: [], live: () => live });
     const answer = await remoteRoad(one.seams, NAME, 'question');
     assert.equal(one.w.runs.length, 0, `ssh was called for a terminal whose name changed (${what})`);
     assert.equal(refusal(answer), 'The terminal’s name changed, or it was closed, so nothing was read. Press again.', what);
@@ -767,61 +860,32 @@ test('S3-T19: one session of the name in a scan that did not read everything is 
   assert.equal(road.w.runs.length, 2, 'the one session of a cut scan was read before the person chose it');
 });
 
-const AUTO_ROW = [{ host: H, answer: 'yes', askedUtc: '2026-11-20T00:00:00.000Z', how: 'auto' }];
 
-test('A1-T12: the session doors — the setting, the automatic row, and what each answer writes', async () => {
-  // setting on, an automatic row: no question, one run
-  const on = world({ list: AUTO_ROW, answer: 'no' });
-  assert.equal((await remoteRoad(on.seams, NAME, 'question')).kind, 'lines');
-  assert.deepEqual([on.w.asks.length, on.w.runs.length], [0, 1], 'an automatically allowed host was asked about with the setting on');
-  // no row: one question
-  const none = world({ list: [], answer: 'yes' });
-  await remoteRoad(none.seams, NAME, 'question');
-  assert.equal(none.w.asks.length, 1);
-  // setting off, an automatic row: one question, and the person's Read makes a row with no `how`
-  const off = world({ list: AUTO_ROW, answer: 'yes' });
-  off.w.setting.on = false;
-  await remoteRoad(off.seams, NAME, 'question');
-  assert.deepEqual([off.w.asks.length, off.w.runs.length], [1, 1], 'an automatically allowed host was read without a question with the setting off');
-  const rows = off.w.backing.values.get(KEY) as { how?: string; answer: string }[];
-  assert.deepEqual([rows.length, rows[0]?.how, rows[0]?.answer], [1, undefined, 'yes']);
-  // Not this host
-  const no = world({ list: AUTO_ROW, answer: 'no' });
-  no.w.setting.on = false;
-  await remoteRoad(no.seams, NAME, 'question');
-  assert.equal(no.w.runs.length, 0);
-  assert.equal(await no.w.keeper.consent(H), 'no');
-  // Escape: the row is still the automatic one, nothing written, nothing run
-  const escape = world({ list: AUTO_ROW, answer: undefined });
-  escape.w.setting.on = false;
-  const refused = await remoteRoad(escape.seams, NAME, 'question');
-  assert.equal(refused.kind, 'refused');
-  assert.deepEqual([escape.w.view.updates.length, escape.w.runs.length], [0, 0]);
-  assert.deepEqual(escape.w.backing.values.get(KEY), AUTO_ROW);
-  // a person's yes with the setting off: no question
-  const person = world({ answer: 'no' });
-  person.w.setting.on = false;
-  await remoteRoad(person.seams, NAME, 'question');
-  assert.deepEqual([person.w.asks.length, person.w.runs.length], [0, 1]);
-});
+
 
 test('A1-T12: the road is given no list to write, and a refusals file is no change of the file', () => {
   // @ts-expect-error — a store that takes a list to write is not a RoadSeams store
-  const withWrite: RoadSeams['store'] = { consent: async () => 'yes', answer: async () => ({ kind: 'kept', row: undefined }), write: async () => undefined };
+  const withWrite: RoadSeams['store'] = { may: async () => 'yes', write: async () => undefined };
+  // @ts-expect-error — the road has no "ask" seam of a host, and no store door that answers consent
+  const withAsk: RoadSeams['store'] = { may: async () => 'yes', consent: async () => 'yes' };
   const file: RefusalsFile = { v: 1, gen: 1, by: 'x', refused: [] };
   // @ts-expect-error — the writer of the file takes a change, never a content
   const change: RefusalChange = file;
-  assert.ok(withWrite !== undefined && change !== undefined);
+  assert.ok(withWrite !== undefined && change !== undefined && withAsk !== undefined);
 });
 
-test('S3-R9: a "no" that the file did not take is a "no" for the door; W6\'s third sentence is for a Read or a Forget', async () => {
+test('S3-R9: a "no" that the file did not take is a "no" for the door, and a Read this host again that the file did not take says so', async () => {
   const turnedOff = `Reading the Claude session on “${H}” is turned off. Only the text you copied can be sent; turn it on in CoAI: hosts read over ssh.`;
-  const no = world({ list: [], answer: 'no' });
+  const no = world({ list: [] });
+  await no.w.keeper.may('session', H);
   no.w.disk.lock = { token: 'hung' };
-  const refused = await remoteRoad(no.seams, NAME, 'question');
-  assert.equal(refusal(refused), turnedOff, 'an unsaved "Not this host" said that the answer could not be saved');
+  await no.w.keeper.commit({ kind: 'person', host: 'g', answer: 'no' });
+  // a refusal the file did not take is held: the side waits, which has its own sentence (T8), and nothing is read
+  assert.equal(refusal(await remoteRoad(no.seams, NAME, 'question')), HOSTS_SAID.waiting);
   assert.equal(no.w.runs.length, 0);
-  const yes = world({ list: [], answer: 'yes' });
-  yes.w.disk.lock = { token: 'hung' };
-  assert.equal(refusal(await remoteRoad(yes.seams, NAME, 'question')), HOSTS_SAID.notSaved(H), 'a Read the file did not take did not say so');
+  assert.equal(await no.w.keeper.may('session', 'g'), 'no', 'an unsaved "Not this host" was not a "no" for its own host');
+  await no.w.keeper.commit({ kind: 'person', host: H, answer: 'no' });
+  assert.equal(refusal(await remoteRoad(no.seams, NAME, 'question')), turnedOff, 'an unsaved "Not this host" for this very host said something else');
+  assert.equal(HOSTS_SAID.notSaved(H).includes('could not be saved'), true);
 });
+

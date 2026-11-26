@@ -4,14 +4,14 @@ import test from 'node:test';
 import { textCopier } from '../copyText';
 import type { CopyPorts } from '../copyText';
 import type { AccountsRead } from '../remoteAccountsReply';
-import type { AccountsState, HostMemory, StateChange } from '../remoteAccountsRound';
-import { accountsRows, choose, copyDecisionFor, tellAfterRound } from '../remoteAccountsRows';
-import type { AccountsView, ChooseSeams, NoticeSeams, Row } from '../remoteAccountsRows';
+import type { HostMemory } from '../remoteAccountsRound';
+import { accountsRows, choose, copyDecisionFor } from '../remoteAccountsRows';
+import type { AccountsView, ChooseSeams, Row } from '../remoteAccountsRows';
 import type { Committed, HostStanding } from '../remoteHosts';
 import { bodyOf, sourceFiles, sourceOf } from './sourceReading';
 
 /**
- * What choosing a row does, the copy button, and the notices after a round (E1.S4, A4-T9's button, A4-T13's orchestration and A4-T20), over fake seams.
+ * What choosing a row does, the copy button, and the scans of the accounts modules (E1.S4, A4-T9's button and A4-T20), over fake seams.
  * The scans of the host module that has no other way in are at the bottom, each with its companion. Every host here is made up.
  */
 
@@ -52,7 +52,7 @@ function callsOver(saved: Committed = { kind: 'written', row: undefined, evicted
 
 // ───────────────── A4-T20: a row that shows W12 saves on a press ─────────────────
 
-const waiting = (): Row => hostRowOf(accountsRows(view({ hosts: ['hW'], memory: new Map<string, HostMemory>([['hW', { admission: 'unwritten' }]]) }), NOW, 'on'), 'hW');
+const waiting = (): Row => hostRowOf(accountsRows(view({ hosts: ['hW'], memory: new Map<string, HostMemory>([['hW', { admission: 'unwritten' }]]) }), NOW), 'hW');
 
 test('A4-T20: choosing a W12 row calls saveWaiting once, and neither the change question nor the shared question', async () => {
   const calls = callsOver();
@@ -72,12 +72,12 @@ test('A4-T20: only a saved answer asks for a round; any other answer leaves the 
 
 test('A4-T8 (press): a host row that is not asked yet opens the shared question, any other host row the change question', async () => {
   const asked = callsOver();
-  await choose(hostRowOf(accountsRows(view({ hosts: ['hA'], allowNew: false }), NOW, 'on'), 'hA'), asked.seams);
+  await choose(hostRowOf(accountsRows(view({ hosts: ['hA'], allowNew: false }), NOW), 'hA'), asked.seams);
   assert.deepEqual(asked.log, ['ask hA']);
 
   const changed = callsOver();
   const standings: readonly HostStanding[] = [{ host: 'hB', answer: 'yes', how: 'person', askedUtc: at(-9) }];
-  await choose(hostRowOf(accountsRows(view({ hosts: ['hB'], standings }), NOW, 'on'), 'hB'), changed.seams);
+  await choose(hostRowOf(accountsRows(view({ hosts: ['hB'], standings }), NOW), 'hB'), changed.seams);
   assert.deepEqual(changed.log, ['change hB']);
 });
 
@@ -110,7 +110,7 @@ function copierOver(): { readonly written: string[]; readonly said: string[]; re
 }
 
 test('A4-T9: the copy button hands the copier exactly the row\'s copy, and a row with none copies nothing', async () => {
-  const withJq = hostRowOf(accountsRows(view({ hosts: ['hJ'], memory: new Map<string, HostMemory>([['hJ', { reading: { read: reading({ jqMissing: 'dnf' }), atMs: NOW } }]]) }), NOW, 'on'), 'hJ');
+  const withJq = hostRowOf(accountsRows(view({ hosts: ['hJ'], memory: new Map<string, HostMemory>([['hJ', { reading: { read: reading({ jqMissing: 'dnf' }), atMs: NOW } }]]) }), NOW), 'hJ');
   const over = copierOver();
   const report = await textCopier(over.ports).copy(() => copyDecisionFor(withJq));
 
@@ -121,66 +121,6 @@ test('A4-T9: the copy button hands the copier exactly the row\'s copy, and a row
   const refused = await textCopier(none.ports).copy(() => copyDecisionFor({ kind: 'info', label: 'x' }));
   assert.equal(refused.copied, false);
   assert.deepEqual(none.written, [], 'a row with no copy wrote to the clipboard');
-});
-
-// ───────────────── A4-T13: the notices, after a round ─────────────────
-
-interface Told {
-  readonly seams: NoticeSeams;
-  readonly log: string[];
-}
-
-function noticesOver(state: AccountsState | undefined, standings: readonly HostStanding[], nowMs = NOW): Told {
-  const log: string[] = [];
-  const seams: NoticeSeams = {
-    state: () => state,
-    standings: () => Promise.resolve(standings),
-    nowMs: () => nowMs,
-    roundStartMs: () => nowMs - 600_000,
-    allowed: (hosts) => { log.push(`allowed ${hosts.join(',')}`); },
-    everyTen: (hosts) => { log.push(`every-ten ${hosts.join(',')}`); },
-    commit: (change: StateChange) => { log.push(`commit ${JSON.stringify(change)}`); return Promise.resolve(); },
-  };
-
-  return { seams, log };
-}
-
-const autoRow = (host: string, askedUtc: string): HostStanding => ({ host, answer: 'yes', how: 'auto', askedUtc });
-const personRow = (host: string): HostStanding => ({ host, answer: 'yes', how: 'person', askedUtc: at(-48) });
-
-test('A4-T13 (F3): the orchestration hands the round\'s own start to the notice, so a "yes" given during the round is not told as an old one', async () => {
-  const during: HostStanding = { host: 'hNew', answer: 'yes', how: 'person', askedUtc: new Date(NOW - 300_000).toISOString() };
-  const told = noticesOver({}, [personRow('hOld'), during]);
-  await tellAfterRound(told.seams, true);
-
-  assert.ok(told.log.includes('every-ten hOld') && !told.log.some((line) => line.includes('hNew')), told.log.join(' | '));
-});
-
-test('A4-T13: after the first round the daily notice and the first-round notice are each told once, and each commits its time', async () => {
-  const told = noticesOver({}, [autoRow('hA', at(-0.1)), personRow('hB')]);
-  await tellAfterRound(told.seams, true);
-
-  assert.deepEqual(told.log, ['allowed hA', `commit ${JSON.stringify({ autoNoticed: at(0) })}`, 'every-ten hB', `commit ${JSON.stringify({ told: at(0) })}`]);
-});
-
-test('A4-T13: a state that says both were told gives nothing, and a round that did not end gives no first-round notice', async () => {
-  const done = noticesOver({ toldUtc: at(-30), lastAutoNoticeUtc: at(-1) }, [autoRow('hA', at(-0.1)), personRow('hB')]);
-  await tellAfterRound(done.seams, true);
-  assert.deepEqual(done.log, [], 'the person was told twice');
-
-  const early = noticesOver({}, [personRow('hB')]);
-  await tellAfterRound(early.seams, false);
-  assert.deepEqual(early.log, [], 'told before the first round ended');
-});
-
-test('A4-T13: told is committed whether or not the list was empty, and a state that cannot be read tells nobody', async () => {
-  const empty = noticesOver({}, []);
-  await tellAfterRound(empty.seams, true);
-  assert.deepEqual(empty.log, [`commit ${JSON.stringify({ told: at(0) })}`]);
-
-  const damaged = noticesOver(undefined, [autoRow('hA', at(-0.1)), personRow('hB')]);
-  await tellAfterRound(damaged.seams, true);
-  assert.deepEqual(damaged.log, [], 'a damaged state row was written to or told from');
 });
 
 // ───────────────── scans of the host modules ─────────────────

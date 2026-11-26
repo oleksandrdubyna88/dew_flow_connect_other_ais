@@ -47,7 +47,7 @@ test('the scan recognises every shape of a direct read it is there to refuse', (
     'config.get<unknown>("consultants")',
     "config.inspect('chatModelPresets')",
     'config .get ( `securityLane` )',
-    "config.get('terminalAccountsAllowNewHosts')",
+    "config.get('kimiAllowNetworkSignIn')",
   ]) {
     assert.match(planted, DIRECT_READ, `the scan would miss ${planted}`);
   }

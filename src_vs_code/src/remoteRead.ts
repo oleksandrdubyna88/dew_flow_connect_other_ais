@@ -6,8 +6,9 @@ import { oneAtATime } from './oneAtATime';
 import { withoutControls } from './remoteAccountsReply';
 import { RemoteCandidate, RemoteRead, TitledSession, UNREADABLE_SAID, Unreadable, readRemote } from './remoteFrame';
 import { FOLDERS_MAX, REMOTE_SCRIPT, RemoteCall, isFolderName, operandsOf } from './remoteScript';
-import type { Committed, Consent, HostStanding } from './remoteHosts';
-import { HOSTS_SAID, notKeptSaid } from './remoteHostsSaid';
+import type { HostStanding } from './remoteHosts';
+import { HOSTS_SAID } from './remoteHostsSaid';
+import type { PermissionAsked, SessionAnswer } from './remotePermission';
 import type { RemoteRun } from './remoteSsh';
 import { LiveTerminal, NamedTerminal, oneLiveNamed } from './terminalSource';
 
@@ -18,9 +19,9 @@ import { LiveTerminal, NamedTerminal, oneLiveNamed } from './terminalSource';
  * live name — is a SEAM, so the whole road runs in a unit test. `remoteSessionHost.ts` only supplies the `vscode` seams. Nothing
  * else in the extension spawns ssh or reads the consent.</p>
  *
- * <p><b>The order</b> is fixed: the terminal's name (`credsSession`), then the consent for the host (`ask` writes nothing on
- * Escape), then — just before EACH spawn — a re-check that the terminal is still open and still has the name, then `runRemote`,
- * then `readRemote` over the same `RemoteCall` that made the operands, then `nextStep`. At most three calls in one press, and a
+ * <p><b>The order</b> is fixed: the terminal's name (`credsSession`), then — just before EACH spawn — the one door (`may`, E2.S1; only the FIRST
+ * door of a press may ask the one question, and that press reads nothing), a re-check that the terminal is still open and still has the name,
+ * then `runRemote`, then `readRemote` over the same `RemoteCall` that made the operands, then `nextStep`. At most three calls in one press, and a
  * list whenever more than one session is possible: nothing is chosen by itself. What a cut tail MEANS is decided once, in
  * `answerFrom`, by the purpose.</p>
  *
@@ -69,8 +70,6 @@ const SAID = {
   notCreds: 'This is not a creds terminal, so it has no Claude session to read.',
   turnedOff: (host: string): string =>
     `Reading the Claude session on “${host}” is turned off. Only the text you copied can be sent; turn it on in CoAI: hosts read over ssh.`,
-  noAnswer: (host: string): string =>
-    `The question about reading the Claude session on “${host}” was closed without an answer, so nothing was read.`,
   cancelled: 'No session was chosen, so nothing was read.',
   stillReading: 'The Claude session of this terminal is still being read — the second press was ignored.',
   renamed: 'The terminal’s name changed, or it was closed, so nothing was read. Press again.',
@@ -270,15 +269,12 @@ export function promptsSaid(answer: RemoteAnswer): { readonly asked: readonly st
 
 /** The effects of the road. The host supplies the real ones; a test supplies fakes. */
 export interface RoadSeams {
-  /** The answers kept per host. The road is given no list to write: it asks, and it commits the person's answer. */
   readonly store: {
-    /** Whether this host may be read now: `consentOf` over the refusals file, the list and the setting, all read afresh. */
-    readonly consent: (host: string) => PromiseLike<Consent>;
-    /** The person's answer to the question, committed. */
-    readonly answer: (host: string, answer: 'yes' | 'no') => PromiseLike<Committed>;
+    /** The one door, asked before EVERY spawn of a press (E2.S1, § P9). It reads the side afresh and never asks a person. */
+    readonly may: (host: string) => PromiseLike<SessionAnswer>;
   };
-  /** The question to the person; `undefined` is Escape. */
-  readonly ask: (host: string) => PromiseLike<'yes' | 'no' | undefined>;
+  /** The ONE question. Called only at the first door of a press, and only on `no-permission`; that press then spawns nothing. */
+  readonly askPermission: () => PromiseLike<PermissionAsked>;
   /** The terminal's LIVE name, or `undefined` when it is no longer open. Asked just before EACH spawn. */
   readonly liveName: () => string | undefined;
   /** `runRemote` — S2 owns it, and nothing else here spawns. */
@@ -304,37 +300,31 @@ interface Trip extends Where {
 /** The most spawns in one press: the registry path, the titles of the folders, the tail by id. */
 const CALLS_MAX = 3;
 
-/** What an answer that was not kept says: the list is full of refusals, cannot be read, or the file did not take it. */
-function notKept(host: string, answer: 'yes' | 'no', result: Committed): string {
-  return notKeptSaid(host, answer, result) ?? SAID.turnedOff(host);
-}
-
-/** The person's answer, asked once for a host that has none; the refusal when the host is not to be read, else nothing. */
-async function asked(seams: RoadSeams, host: string): Promise<string | undefined> {
-  const answer = await seams.ask(host);
-  if (answer === undefined) {
-    return SAID.noAnswer(host);
-  }
-
-  return sayKept(host, answer, await seams.store.answer(host, answer));
-}
-
-/** What an answer that was kept says: nothing for a "yes", the sentence of today for a "no", and why for one that was not kept. */
-function sayKept(host: string, answer: 'yes' | 'no', result: Committed): string | undefined {
-  const kept = result.kind === 'written' || result.kind === 'kept';
-
-  return kept ? (answer === 'yes' ? undefined : SAID.turnedOff(host)) : notKept(host, answer, result);
-}
-
-const DOORS: Readonly<Record<Consent, (seams: RoadSeams, host: string) => PromiseLike<string | undefined> | string | undefined>> = {
-  ask: asked,
-  no: (_seams, host) => SAID.turnedOff(host),
+/** What the door's answer says when it is not `yes`: the sentence of that answer, for a host and the press's place (`later`: not the first door). */
+const SENTENCES: Readonly<Record<Exclude<SessionAnswer, 'yes' | 'no-permission'>, (host: string) => string>> = {
+  no: (host) => SAID.turnedOff(host),
   damaged: () => HOSTS_SAID.cannotRead,
-  yes: () => undefined,
+  waiting: () => HOSTS_SAID.waiting,
 };
 
-async function consented(seams: RoadSeams, host: string): Promise<string | undefined> {
-  return DOORS[await seams.store.consent(host)](seams, host);
+/** The first door, `no-permission`: the ONE question, and a sentence whatever it is answered — this press reads nothing (W15). */
+async function questioned(seams: RoadSeams): Promise<string> {
+  const answer = await seams.askPermission();
+
+  return answer === 'given' ? HOSTS_SAID.permissionGiven : answer === 'not-now' ? HOSTS_SAID.notNow : answer.said;
+}
+
+/** The door asked before one spawn: `undefined` on `yes`, else the sentence that ends the press. Only the first door of a press may ask the question. */
+async function doorSaid(trip: Trip): Promise<string | undefined> {
+  const answer = await trip.seams.store.may(trip.host);
+  if (answer === 'yes') {
+    return undefined;
+  }
+  if (answer === 'no-permission') {
+    return trip.calls === 0 ? questioned(trip.seams) : HOSTS_SAID.withdrawnMeanwhile;
+  }
+
+  return SENTENCES[answer](trip.host);
 }
 
 /** Whether the terminal is still open and its live name still gives this host and session. */
@@ -344,8 +334,15 @@ function stillThere(seams: RoadSeams, where: Where): boolean {
   return live.kind === 'session' && live.host === where.host && live.session === where.session;
 }
 
-/** One spawn: the re-check first, then `runRemote` under the progress line, then the parser over the SAME call. */
+/**
+ * One spawn: the door FIRST (E2.S1: before every spawn, so a "no" or a withdrawal saved during an earlier one stops the next), then the re-check — the
+ * door can take time and the terminal may have been renamed meanwhile — then `runRemote` under the progress line, then the parser over the SAME call.
+ */
 async function readOnce(trip: Trip, call: RemoteCall): Promise<RemoteRead | string> {
+  const refusal = await doorSaid(trip);
+  if (refusal !== undefined) {
+    return refusal;
+  }
   if (!stillThere(trip.seams, trip)) {
     return SAID.renamed;
   }
@@ -427,10 +424,6 @@ export async function remoteRoad(seams: RoadSeams, terminalName: string, purpose
   const name = credsSession(terminalName);
   if (name.kind !== 'session') {
     return refuse(notSession(name));
-  }
-  const refusal = await consented(seams, name.host);
-  if (refusal !== undefined) {
-    return refuse(refusal);
   }
   const trip: Trip = { seams, host: name.host, session: name.session, purpose, picked: pickedFor(picked, name), calls: 0 };
 

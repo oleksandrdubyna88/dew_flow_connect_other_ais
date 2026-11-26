@@ -17,6 +17,12 @@
 > WSL read opens, by the owner's decision 25 of 2026-11-26 (§ 4, C3). The parent's text A1–A8 that the spec names is
 > taken as the owner decided (entries 3.1 and 3.2 of the parent, applied on another branch). It also takes up the two todo files T8 and T9, which say they are closed by this document: their findings
 > are scenarios of E2.S1 here, and the commit of E2.S1 that makes them green deletes both files and their rows.
+> **The parent's entry 4.1 (the owner, 2026-11-26) is taken in:** the table is grouped by *Server*, *Claude account*
+> or *User* by a switch, and every column header sorts — E2.S2 (the groupings and the order rule, one pure module that
+> runs in the page: J7), E2.S3 (the switch, the headers, the tab's own state, the pictures), §§ 7, 8, 10 and 11. **The
+> owner's answers after it, the same day** (recorded in the parent's ledger by the planner): ONE real-window check, at
+> the end, on a VSIX of the combined build E2+E3+E4, and E2 merges with E3 and E4 after it (§ 6, step 9); E6, the
+> `jq` installer, moves to the next release; residual 9 is accepted.
 >
 > Scope: `src_vs_code` only, plus `SECURITY.md`, `research/` and the help. Five stories, as the parent cuts them:
 > S1 the permission (security spec), S2 the table's model (pure), S3 the tab, S4 the round under the permission,
@@ -37,7 +43,8 @@ for each. No. Once: may I read?"* and *"Something was read, but who knows what. 
    0.87.0 is asked the one question once more.
 4. **The icon opens a tab with a table, by host**, that the owner reads without help: each host's latest read with its
    clock time, one row for each tool with the account and the two windows as "% left" with the reset, a reason for
-   every value that is not there; the ages stay true while the tab is open.
+   every value that is not there; the ages stay true while the tab is open. **The same readings can be grouped by
+   Claude account or by user, and every column sorts both ways, a dash last** (entry 4.1).
 5. In this epic `wsl` gets no call of any kind; its block says why (E3 reads WSL).
 
 The silent failures this epic must not ship (each is a test that was seen RED):
@@ -202,14 +209,18 @@ X13–X16, added when the spec took the gate's changes, are marked the same way)
   without `jq` carries its closed manager word, never a command. Its parts: the toolbar (permission, stop, the last
   round's end and `k of n`, or `reading <host>… i of n`), and one block for each scope host of the live `Creds:`
   terminals in code-unit order (heading kind and instant; rows `Tool | Account | 5-hour window | Weekly window`; an
-  older table with its instant after a failure).
+  older table with its instant after a failure). **Entry 4.1:** every row also carries its place (E2: the scope
+  host) and its tool (`claude-code`, `codex`, `agy`), and a Claude row its `accountKey` — vendor and whole account
+  text, or `null` when the account is not known. *Shared across N* and the *Claude account* grouping join by that
+  key and by nothing else. The groupings and the sort are NOT in the model: `viewOf` (S2) derives them in the page.
 - **C5 — the page and its messages (S3 owns).** Page → host, closed names only: `ready`, `refresh`, `stop`, `start`,
   `allow`, `withdraw`, `save-now`, `refuse <scope host>`, `read-again <scope host>`, `copy-install <place>`. Host → page:
   `model` (the whole), `block` (one scope host's part). The host checks every name and every argument against its own
   model and drops what it does not know. `allow` and `read-again` only raise S1's modal questions (`allow` →
   `sessions.askPermission()`; `read-again` → the change question of that host, whose *Read this host again* is the
   one button that lifts a refusal); `refuse`, `stop`, `withdraw` (→ `sessions.withdraw()`) narrow at once. The
-  clipboard is written by the host with `INSTALL_JQ[word]` of that place, nothing else.
+  clipboard is written by the host with `INSTALL_JQ[word]` of that place, nothing else. **The *Group by* switch, the
+  *Sort by* choice and the headers post nothing** (entry 4.1): no new message kind exists for them.
 - **C6 — the round (S4 owns).** No timer and no call while the permission is not in force; the first round at once
   when it is given; then E1's rhythm. The door is `sessions.may('round', host)` (X3), whose `no-permission` ends the
   round and whose `waiting` and `damaged` skip every host. `landed(scopeHost)` after each place, so the panel posts
@@ -299,8 +310,8 @@ then of the code). Depends on nothing in this epic; S3 and S4 depend on it. Serv
   of CoAI: hosts read over ssh.* (W12, with gate E2-G1's F7.) The road asks
   the door before EVERY spawn of a press (`readOnce`), and a later spawn never asks a person: any answer but `yes`
   stops it with that answer's sentence. The two todo files
-  ([PLAN_a_waiting_marker_has_its_own_door_sentence.md](PLAN_a_waiting_marker_has_its_own_door_sentence.md),
-  [PLAN_a_press_rereads_the_consent_before_each_spawn.md](PLAN_a_press_rereads_the_consent_before_each_spawn.md))
+  (`PLAN_a_waiting_marker_has_its_own_door_sentence.md` (deleted by E2.S1),
+  `PLAN_a_press_rereads_the_consent_before_each_spawn.md` (deleted by E2.S1))
   and their rows in `todo/README.md` are deleted in the commit that turns E2S1-T12 and T13 green.
 - **What the spec must settle** — **all twelve settled** by the spec's § P2 (gate E2-G1): 1 → `may` and the order of
   § P8; 2 → a malformed grant is no grant (J5); 3 → § P4; 4 → an *Allow* removes what it cannot read, after the floor
@@ -369,8 +380,11 @@ then of the code). Depends on nothing in this epic; S3 and S4 depend on it. Serv
 skipped, failed and unreadable are different, and a missing number is never a zero). Depends on nothing in this epic
 but C1's `permission()` shape; may start with S1's spec. S3 and S4 depend on it. Serves **R15** and **R5**.
 
-- **Goal.** One pure function makes, from what the window holds, everything the tab shows — so the page only draws.
-- **Files.** NEW `src/remoteAccountsTable.ts` (`tableModel`, `blockOf`, the types of C4). `src/remoteAccountsRows.ts`
+- **Goal.** One pure function makes, from what the window holds, everything the tab shows — so the page only draws;
+  and one pure module makes, from that model, each of the three groupings in the order chosen (entry 4.1).
+- **Files.** NEW `src/remoteAccountsTable.ts` (`tableModel`, `blockOf`, the types of C4). NEW
+  `src/remoteAccountsGroups.ts` (`viewOf`, `viewState`, the view's types; entry 4.1) and its tests
+  `remoteAccountsGroups.test.ts`. `src/remoteAccountsRows.ts`
   reduced to what the model keeps: `forList`, `INSTALL_JQ`, `NO_MANAGER_SAID`, `USAGE_OFF_SAID` and the sentences a
   cell uses. The tests `remoteAccountsTable.test.ts`.
 - **Removed.** From `remoteAccountsRows.ts`: `Row`, `HostPress`, `AccountsView`, `accountsRows` and the cut's
@@ -400,6 +414,41 @@ but C1's `permission()` shape; may start with S1's spec. S3 and S4 depend on it.
   cells with its reason; a failed host keeps its older table with that read's instant; `wsl` has no rows in E2 and
   says *WSL on this PC is not read by this build* in a Windows window, *WSL is read from a Windows window only* in
   another.
+- **Where the groupings run — in the page (J7).** `viewOf(model, state, compare)` returns the view of
+  `state.groupBy`, sorted by `state.sort`; `viewState(raw)` reads a stored state safely. Both are tested in node as
+  ordinary exports and embedded into the page BY ASSIGNMENT (`var viewOf = ${viewOf.toString()}`), as
+  `pageTables.ts` embeds `compareRows`; `compareRows` is passed to `viewOf` as an ARGUMENT, because a call by name dies
+  under the minifier (`roundsLog.ts:794-801`). So their bodies take no import but types, keep their helpers inside,
+  and hold no template literal and no backtick (`pageTables.ts:9-22`). **Why the page, not the host:** a sort posts no
+  message, so the order rule must run in the page in any case; a host that precomputed the three groupings would ship
+  three trees in every `model` and make each `block` post carry one place's parts of all three — a new shape of C5 —
+  while the page, which holds the by-host model, derives any grouping from it again after a `block`. One copy of the
+  rule, no new message kind, and the view holds only strings, numbers and `null`s taken from the model, drawn by
+  `textContent` as everything else.
+- **The three groupings** (the parent's § 1, entry 4.1), from ONE model; none hides a place, a tool, an account or a
+  failure:
+  - `server` — C4's blocks as they are.
+  - `account` — one block for each Claude `accountKey`, headed by the account text as read; a place whose Claude
+    account is not known is a block of its own. The block's usage — the two windows, or the sentence why they were
+    not read — stands ONCE, on the block. A row for each place where it is signed in, with that read's instant; a
+    place whose last read failed stays under the account of its older read, with the failure and that read's instant.
+    Then two sections, *Codex* and *Antigravity*, a row for each place that has the tool; they join nothing. Last,
+    *no Claude account*: every place in no Claude block (no Claude Code, never read, refused, failed with no older
+    table, `jq` missing, and `wsl` in E2) with its heading's sentence.
+  - `user` — ONE table, a row for each place, columns *Place | Read | Claude Code | Codex | Antigravity*; a tool cell
+    holds the account and the two windows, or the absent tool's dash. A place is named by its scope host (E3 adds
+    *distro · user*); no user name is invented.
+- **The order rule.** Keys, closed: `name`, `account`, `left5h`, `reset5h`, `leftWeek`, `resetWeek`, `age`; direction
+  `asc` or `desc`; in `user` also the tool whose cell the window and account keys read (`claude-code` by default:
+  J9). A row's value is its own (a tool's name in `server`, a place's elsewhere; `age` ascending = the newest read
+  first). Rows are sorted inside their block; blocks by their own value where they have one (a host's name and age;
+  an account's text, % left and reset), else by their first row; the sections *Codex*, *Antigravity* and *no Claude
+  account* keep their places. **A dash — `null` — sorts last in both directions and is never a zero; a real `0` is a
+  zero.** Equal keys fall back to the name, ascending, in both directions. The comparison is `compareRows`, not a
+  second comparator (`reuse-first.md`).
+- **The state** — `{ v: 1, groupBy, sort: { key, dir, tool } }`, nothing else. `viewState` reads anything that is not
+  exactly that — an unknown grouping, key, direction or tool, `null`, a string, an array — as `server`, `name`, `asc`,
+  `claude-code`.
 
 | # | What must be shown (RED first) |
 |---|---|
@@ -408,7 +457,7 @@ but C1's `permission()` shape; may start with S1's spec. S3 and S4 depend on it.
 | E2S2-T3 | A tool that is absent has no row; a place with no tool has one line; the version under the tool, or *not known* |
 | E2S2-T4 | **Absent is not zero.** A window with no value has `left: null`; a test fails if any path of the model makes `0` from `null`, `undefined` or a missing key (property test over generated readings) |
 | E2S2-T5 | A Codex window by its length, each of the three cases; the Codex row carries its session file's instant; the model sub-lines of Claude's weekly cell |
-| E2S2-T6 | *Shared across N*: two places of one known account → both say 2 and show the same figures; an unknown account is never shared; two accounts with equal numbers are not one |
+| E2S2-T6 | *Shared across N*: two places of one known account → both say 2 and show the same figures; an unknown account is never shared; two accounts with equal numbers are not one; every row carries its place and tool, a Claude row its `accountKey` (`null` when unknown) |
 | E2S2-T7 | Every "not read" and "unavailable" reason spans the two cells with its own sentence; **no tool row has two empty window cells without a reason** |
 | E2S2-T8 | A failed host keeps its older table with that read's instant, marked older; its failure sentence is whole |
 | E2S2-T9 | The toolbar: the last round's end instant and `k of n`; while a round runs, `reading <host>… i of n`; the permission (none, given with its instant, waiting) and the Stop |
@@ -417,7 +466,20 @@ but C1's `permission()` shape; may start with S1's spec. S3 and S4 depend on it.
 | E2S2-T12 | `wsl` in E2: no rows, the sentence for each platform |
 | E2S2-T13 | The model survives `JSON.parse(JSON.stringify(m))` unchanged; `blockOf(m, h)` equals the block in `m`; the same input gives the same model |
 
-- **Done when.** E2S2-T1…T13 green with their break-its; compile, suite and lint green at S2's own commit; **after S3
+**The three groupings and the order rule** (entry 4.1; all in `remoteAccountsGroups.test.ts`, no browser):
+
+| # | What must be shown (RED first) |
+|---|---|
+| E2S2-T14 | `server`: the view's blocks are C4's blocks, in their order, unchanged |
+| E2S2-T15 | `account`: two places of one known account → ONE block, its usage once (one usage part in the view), both places as rows; an unknown account → a block of its own; two accounts with equal numbers → two blocks. Break-it: join by the numbers |
+| E2S2-T16 | `account`: a failed place stays under its older account with the failure and the older instant; *Codex* and *Antigravity* join nothing (two places of one Codex plan → two rows); refused, never-read, `jq`-missing, no-Claude and `wsl` places are in *no Claude account* with their sentence |
+| E2S2-T17 | `user`: one table, one row for each place, the five columns; an absent tool's cell is its dash |
+| E2S2-T18 | **The count** (property test over generated models): every place and every tool reading of the model is in each of the three views — once, except an account's usage, once per account block — and the view holds no value the model does not |
+| E2S2-T19 | **The order.** Each key both ways; a dash last in both; a real `0%` sorts as zero, before `5%` ascending; equal keys in name order, ascending both ways; blocks by their own value, else by their first row; the three sections keep their places. Break-it: a comparator that reads `null` as `0` |
+| E2S2-T20 | `viewState`: an unknown grouping, key, direction or tool, `null`, a string, an array → `server`, `name`, `asc`, `claude-code`; a known state comes back equal; it never adds a field |
+| E2S2-T21 | Embeddable: `viewOf` and `viewState` run from their own source text with `compareRows` passed give the same view as the imports on T15–T19's inputs; neither body holds a backtick |
+
+- **Done when.** E2S2-T1…T21 green with their break-its; compile, suite and lint green at S2's own commit; **after S3
   and S4**, the reduced `remoteAccountsRows.ts` has no export the model does not use.
 
 ### E2.S3 — The tab
@@ -430,7 +492,8 @@ S2 (the model) and, for its wiring, S1 (C3). Its page half may start once S2's t
   VM text can become markup.
 - **Files.** NEW `src/remoteAccountsPage.ts` (pure: the HTML with its CSP and nonce; the page script that builds every
   node from the model by `textContent`; the word rules embedded by their source text, as `roundsLog.ts` embeds its own,
-  so there is one copy: `usageWords.ts` and `agoWords`); NEW `src/remoteAccountsMessages.ts` (pure: a page message
+  so there is one copy: `usageWords.ts` and `agoWords`; and, by assignment, S2's `viewOf` and `viewState` and
+  `pageTables.ts`'s `compareRows`); NEW `src/remoteAccountsMessages.ts` (pure: a page message
   checked against the model → a closed command, or nothing); NEW host `src/remoteAccountsPanel.ts` (the panel; its
   sonar row); `src/remoteAccountsHost.ts` (the command opens the panel; the test door); `src/gaugeWords.ts` only if
   `agoWords` must be made embeddable; the tests.
@@ -443,7 +506,64 @@ S2 (the model) and, for its wiring, S1 (C3). Its page half may start once S2's t
 - **The page.** The toolbar; the permission block (without it, one block: what would be read, and *Allow reading…*;
   with it, a last line with its time and *Withdraw the permission*); one block for each host. Ages and *resets in* are
   written by the page from its own clock every 15 s; the clock time of a read is on its heading; a hover shows the
-  exact local date and time. Under a width of 560 CSS pixels the four columns stack, each field with its label.
+  exact local date and time. Under a width of 560 CSS pixels the columns stack, each field with its label, **in every
+  grouping**; the *Group by* switch and *Sort by* stay in the toolbar.
+- **Group by and the sort** (entry 4.1). The toolbar holds *Group by* (a `<select>`: *Server*, *Claude account*,
+  *User*) and *Sort by* (a `<select>` of the keys, with the tool in *User*, and a direction button) — the way to sort
+  in a narrow tab, and by the keys with no header of their own (the resets; the age in *Server*). Every table is a
+  real `<table>` with a `<thead>` row of `<th scope="col">`; each header is a `<button>` for ONE key (*Server*: Tool
+  → `name`, Account → `account`, 5-hour → `left5h`, Weekly → `leftWeek`; *Claude account*: Place → `name`, Read →
+  `age`, and in the sections Account and the windows as in *Server*; *User*: Place → `name`, Read → `age`, each tool
+  → that tool's `left5h`, J9). One click sorts ascending, a second descending; the active `<th>` has `aria-sort`
+  `ascending` or `descending`, every other `none`. The page draws `viewOf(model, state, compareRows)`, so the
+  switch, *Sort by* and the headers post NO message. The state lives only in the webview's state:
+  `vscode.getState()` read once through `viewState`, `vscode.setState(state)` at each change — no model value, no host
+  name, no `globalState`, setting, file or log. After a `block` post the page derives the view again and redraws only
+  the blocks and rows that hold that place, before or after; the grouping and the sort stay.
+- **The two other groupings, drawn** (the parent's § 1 draws *Server* in the appendix, § K.8; the same readings):
+
+  *Claude account*
+
+  ```
+  Group by [Claude account]  Sort by [% left, 5-hour] [asc]  [Refresh now] [Stop the round]   last round 3 min ago (14:03) · 14 of 16 read
+
+  user@example.com · Example Org · plan team      5-hour 44% left, resets in 2h 10m · Weekly 23% left, resets in 2d 14h
+                                                  Fable 51% left
+    Place     Read
+    host-a    3 min ago (14:03)
+    host-e    4 min ago (14:02)
+    host-b    the last read failed 3 min ago (14:03): “host-b” did not answer over ssh within 30 s. Older read 13:40
+  other@example.com · Other Org · plan max        Usage not read: CoAI does not ask Claude Code for usage in this build
+    Place     Read
+    host-f    3 min ago (14:03)
+  Codex
+    Place     Account                                    5-hour window   Weekly window          Read
+    host-a    account name not shown by Codex · prolite  —               86% left, 4d 23h       3 min ago (14:03)
+  Antigravity
+    Place     Account                    Read
+    host-a    its account is not read    3 min ago (14:03)     agy states no usage
+  no Claude account
+    host-c    not allowed: your answer for this host is “Not this host”      [Read this host again]
+    host-d    jq is missing on this host, so nothing can be read there.      [Copy install command]
+    wsl       WSL on this PC is not read by this build
+  ```
+
+  *User*
+
+  ```
+  Group by [User]  Sort by [% left, 5-hour · Claude Code] [asc]  [Refresh now] [Stop the round]   last round 3 min ago (14:03) · 14 of 16 read
+
+    Place    Read               Claude Code                      Codex                       Antigravity
+    host-a   3 min ago (14:03)  user@example.com · Example Org   not shown by Codex · prolite  not read
+                                44% left · 23% left (Fable 51%)  — · 86% left                agy states no usage
+    host-b   failed 3 min ago (14:03): “host-b” did not answer over ssh within 30 s. Older read 13:40
+                                user@example.com · Example Org   —                           —
+    host-c   not allowed: your answer for this host is “Not this host”                       [Read this host again]
+    host-d   jq is missing on this host, so nothing can be read there.                       [Copy install command]
+    wsl      WSL on this PC is not read by this build
+  ```
+
+  Each cell's reset and hover are as in *Server*; a narrow tab stacks every cell under its label.
 - **The CSP.** `default-src 'none'; script-src 'nonce-…'; style-src 'nonce-…'`; no remote source; no inline handler.
 - **Removed.** The QuickPick: `AccountsList`, `openList`, `shownList`, `ListItem`, `BUTTON`, `ITEM_OF`, `itemOf`,
   `shownOf`, `chooseSeamsOf` (`remoteAccountsHost.ts:418-544`); `ShownItem`, `noteShown`, `view`, `ViewExtra` and the
@@ -460,17 +580,23 @@ S2 (the model) and, for its wiring, S1 (C3). Its page half may start once S2's t
 | E2S3-T3 | **The owner's observation as a test.** The shim's clock goes on 10 minutes with no message from the host: the heading reads *read 10 min ago*, its clock time is unchanged, a *resets in* went down by 10 minutes. Break-it: the interval removed |
 | E2S3-T4 | A `block` post changes that host's block only: the other blocks keep their node identity |
 | E2S3-T5 | A hover title on an age and on a reset holds the exact local date and time |
-| E2S3-T6 | The narrow width: the stylesheet (`cssRules.ts`) holds the media rule that stacks the columns and shows the labels |
-| E2S3-T7 | The bundled page defines every embedded word function (`bundledPage.test.ts`'s check, extended); the page's `resets in` and `% left` words equal `usageWords.ts`'s on its own cases |
+| E2S3-T6 | The narrow width: the stylesheet (`cssRules.ts`) holds the media rule that stacks the columns and shows the labels, for the tables of all three groupings; the run page has a label node in every cell of each grouping, and *Group by* and *Sort by* in the toolbar |
+| E2S3-T7 | The bundled page defines every embedded word function and `viewOf`, `viewState`, `compareRows` (`bundledPage.test.ts`'s check, extended); the page's `resets in` and `% left` words equal `usageWords.ts`'s on its own cases |
 | E2S3-T8 | The CSP and the nonce (a source assertion, legitimate here): no source but the nonce, no `http`, no `'unsafe-'` |
 | E2S3-T9 | The message check: each closed name with a known argument → its command; an unknown name, a host not in the model, a place with no manager word → nothing; `copy-install` hands the copier exactly `INSTALL_JQ[word]` |
 | E2S3-T10 | `allow` and `read-again` change nothing by themselves: with a fake question that answers Escape, no grant is written and no refusal lifted; `refuse`, `stop` and `withdraw` act at once |
 | E2S3-T11 | The panel's wiring: one panel; a second open reveals it; the census of `textControls.test.ts` holds nine hosts; `onDidDispose`; the find bar (`panelsAreSearchable.test.ts` finds it) |
 | E2S3-T12 | The icon's first press without a permission opens the tab AND asks the one question once (`askPermissionFirst`); the second press only reveals |
 | E2S3-T13 | The door census still allows `coai.terminalAccounts` by name (E1's K1 allow-list) |
+| E2S3-T14 | **Each grouping is drawn** (run page): *Claude account*, *User*, then *Server* again — the last tree equals the first (serialised DOM); each grouping has real `table`, `thead` and `th[scope=col]` elements and every place of the model |
+| E2S3-T15 | A header click sorts ascending, a second descending; `aria-sort` follows on that `th` and is `none` on the others; a dash is last both times; *Sort by* and the headers agree |
+| E2S3-T16 | **No message.** A switch through the three groupings, each header clicked twice and *Sort by* changed: the posted list is empty. Break-it: a post on the switch |
+| E2S3-T17 | **The state.** After a switch and a sort `setState` holds exactly `{ v, groupBy, sort }`, no model value; a page built again on that state draws that grouping and sort; a state with an unknown grouping or column draws *Server* by name |
+| E2S3-T18 | T1's hostile model in each grouping: every value is the text of a node; the element count by tag equals what that view ordered |
+| E2S3-T19 | A `block` post in *Claude account* and in *User*: the grouping and the sort stay; only the blocks and rows holding that place change, the others keep node identity |
 | E2S3-H1 | Host scenario: the icon opens the tab; a second press shows the same tab; with the call replaced through the test door and the permission given through the keeper, two terminals of two hosts are one call each, and `lastModel()` holds both blocks |
 
-- **Done when.** E2S3-T1…T13 green, T1 and T3 seen RED with their break-its; E2S3-H1 green in CI's real-editor job;
+- **Done when.** E2S3-T1…T19 green, T1, T3 and T16 seen RED with their break-its; E2S3-H1 green in CI's real-editor job;
   compile, suite and lint green.
 
 ### E2.S4 — The round under the permission
@@ -679,8 +805,12 @@ dead code while `ACCOUNTS_READING` is `off` (`remoteAccountsHost.ts:140`).
 8. **One pull request for the epic.** The code round gets the scope — this document's §§ 1, 4 and 11 and the S1
    spec's scope — as `planText`. CI green with its checks present; the real-editor job read by its own result, its
    sha in the pull request.
-9. **The owner's rows** (§ 7) on a VSIX built from the pull request's head (Q4), each with a recorded result; a row
-   that fails is fixed on the same pull request and run again. Then the merge.
+9. **The owner's rows** (§ 7) — **ONE real-window check, at the end, on a VSIX of the combined build E2+E3+E4** (the
+   owner, 2026-11-26, after entry 4.1; it replaces Q4's VSIX of each epic's own head). E2's pull request, its gate and
+   CI green, does not merge alone: it waits for E3 and E4. The owner runs E2's rows with those of E3 and E4 on that one
+   VSIX, each with a recorded result and the combined head's sha; a row that fails is fixed on the pull request of
+   the epic that owns it, the combined VSIX is built again, and the failed row runs again. **Then E2 merges, with E3
+   and E4.** E6 (the `jq` installer) is not in this release.
 
 ## 7. The owner's rows, and which story serves each
 
@@ -688,7 +818,7 @@ dead code while `ACCOUNTS_READING` is `off` (`remoteAccountsHost.ts:140`).
 |---|---|---|
 | R1 | The icon: ONE tab, the same tab on a second press, Ctrl+F finds a host, no `Creds:` terminal said | S3, S2 |
 | R14 | The permission: 0 logins in 20 minutes before it; the question once; after *Allow* the first login within 60 s and exactly 1 on each host not refused when the round has ended, 0 on the refused one; a chat door before it asks and logs in nowhere; a new host read with no question; *Withdraw* → 0 logins in 20 minutes by either door, also after a reload | S1, S4, S3 |
-| R15 | The table: each host's tools, accounts, two windows with "% left" and reset; the Codex figure equals the VM's record; a Claude account says why its usage is not read; 12 minutes untouched and the ages grow; the hover; the narrow tab | S2, S3 |
+| R15 | The table: each host's tools, accounts, two windows with "% left" and reset; the Codex figure equals the VM's record; a Claude account says why its usage is not read; 12 minutes untouched and the ages grow; the hover; the narrow tab. **Entry 4.1:** *Claude account*, *User*, back to *Server* — each shows every host and account, an account on 2 hosts has its usage once with both hosts under it; a sort by "% left" with a dash present puts the dash last both ways; each grouping readable in a narrow tab | S2, S3 |
 | R5 | A host that cannot be reached: its failure in full within 30 s; the others read in that round | S2, S4 |
 | R6 | Every `Creds:` terminal closed → 0 logins in 20 minutes; *Stop the round* → 0 in 20 minutes, also after a reload; started again → a round within 60 s | S4, S3 |
 | R8 | *Take the question* reads with the permission and asks no per-host question; *Not this host* on a heading → 0 logins there in 20 minutes, also after a reload, and the chat door there refuses; *Read this host again* → read in the next round | S1, S3 |
@@ -704,8 +834,8 @@ How the owner counts logins (the VMs' ssh logs) is the parent's; nothing in this
 | Withdrawal and its races (finding 1) | E2S1-T2…T8, T19…T22; E2S4-T3, T4 |
 | The upgrade | E2S1-T11, T23 |
 | The session door, T8, T9 | E2S1-T9, T12, T13 |
-| The table's model | E2S2-T1…T13 |
-| The page, by running it | E2S3-T1…T10 |
+| The table's model; the three groupings and the order rule (4.1) | E2S2-T1…T13; E2S2-T14…T21 |
+| The page, by running it; the switch and the headers (4.1) | E2S3-T1…T10; E2S3-T14…T19 |
 | Host scenario | E2S1-H1, E2S3-H1, E2S4-H1 |
 | The manifest and the help | E2S1-T17; E2S3-T11, T13; E2S5-T1…T3 |
 | *Places*, the WSL road, revision 2 | not E2 (E3) |
@@ -728,7 +858,8 @@ is read and written in the pull request, and a red scenario blocks the merge as 
 - **Security.** The judgement of the permission is Fable's (S1 spec). What this document decided inside the parent's
   text: the page assembles no HTML from data and its CSP allows no source but its nonce (E2S3-T1, T8); a page message
   names and never carries, and the two that widen only raise a modal (E2S3-T9, T10); the clipboard gets a fixed string
-  of a closed table (E2S2-T10, E2S3-T9); the timer never asks (E2S4-T5); the cut's two constants are deleted rather
+  of a closed table (E2S2-T10, E2S3-T9); the grouping and the sort post nothing and keep no model value in the
+webview state (E2S3-T16, T17), and the hostile values are text in every grouping (E2S3-T18); the timer never asks (E2S4-T5); the cut's two constants are deleted rather
   than switched, so no build has an off-switch beside the permission (E2S4-T9, E2S1-T18).
 
 ## 10. Judgements, conflicts with the parent, and open points
@@ -743,6 +874,13 @@ is read and written in the pull request, and a red scenario blocks the merge as 
 - **J5.** `wsl` gets no call in E2 in ANY window, not only on Windows; its sentence differs by platform. The chat
   doors of a `Creds: wsl / …` terminal are not changed (the parent's *What this plan does NOT do*).
 - **J6.** The notice's code is `accounts-can-be-shown` and its button *Open*.
+- **J7.** The groupings and the order rule run in the PAGE (`viewOf`, embedded by assignment, `compareRows` passed as
+  an argument), not in the host (S2, *Where the groupings run*): the sort must run in the page anyway, and the host
+  keeps posting the one by-host model and its `block` parts, so C5 gains no message.
+- **J8.** The keys are seven (`name`, `account`, `left5h`, `reset5h`, `leftWeek`, `resetWeek`, `age`); a header sorts by
+  ONE key, and *Sort by* offers them all, so the resets and the age in *Server* are chosen there.
+- **J9.** In *User* the window and account keys read ONE tool's cell, `claude-code` by default, chosen in *Sort by*; a
+  tool's header sets that tool and `left5h`. Agy has no figure, so its header gives the name order.
 
 **Conflicts found in the code, for the S1 spec** (K-numbers):
 
@@ -760,7 +898,8 @@ is read and written in the pull request, and a red scenario blocks the merge as 
 
 **Open, for the people named.**
 
-1. **The owner's rows need a VSIX from the pull request's head** (Q4, approved with epoch 3) — for the caller.
+1. **The owner's rows run ONCE, on a VSIX of the combined build E2+E3+E4** (the owner, 2026-11-26, replacing Q4's
+   VSIX of each head; § 6, step 9) — for the caller, who builds it when E3 and E4 are ready.
 2. **The PR cap.** E2 is one pull request; whether it is over the day's cap is the caller's to check against the
    recorded exceptions before it is opened.
 3. **The pre-release VSIX 2.0.901** on the owner's machine wrote automatic rows; E2S1-T11 covers them, and R14 starts
@@ -777,11 +916,15 @@ is read and written in the pull request, and a red scenario blocks the merge as 
       constants are gone from the code, the manifest and the help (E2S1-T17, T18; E2S4-T9; E2S5-T2).
 - [ ] T8 and T9 are green (E2S1-T12, T13), and their two todo files and rows are deleted.
 - [ ] The tab: one per window, grouped by host, ages that tick, every value text under the CSP (E2S2, E2S3).
+- [ ] **The table can be grouped and sorted** (entry 4.1): *Server*, *Claude account* and *User* from one model, none
+      hiding a reading; every header sorts both ways with `aria-sort`, a dash last; the choice only in the webview's
+      state, and no message for it (E2S2-T14…T21, E2S3-T14…T19).
 - [ ] `npm run compile` exit 0; `npm test` and `npm run lint` green; no suppression count grew; the sonar and
       text-controls censuses hold the new host file; `notification-sites.json` regenerated.
 - [ ] E2S1-H1, E2S3-H1 and E2S4-H1 green in CI's real-editor job on the head, named in the pull request.
 - [ ] The code gate passed, fed the scope; the own Opus review ran; every finding resolved.
-- [ ] R1, R14, R15, R5, R6 and R8 recorded by the owner on a VSIX of the head before the merge.
+- [ ] R1, R14, R15, R5, R6 and R8 recorded by the owner on ONE VSIX of the combined build E2+E3+E4 before the merge,
+      with that head's sha; E2 merges with E3 and E4 after it (§ 6, step 9).
 - [ ] Docs (S5); § 12's sentence written from the code as built.
 - [ ] `node .agents/conventions/tools/plan-lifecycle.mjs` clean.
 

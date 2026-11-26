@@ -408,3 +408,23 @@ export async function lockHolds(path: string, token: string): Promise<boolean> {
     return false;
   }
 }
+
+/**
+ * The lock as it is NOW, read with NO claim (E2.S1, § P4; the one export the permission's withdrawal needs): it makes, takes over and removes
+ * nothing, and no rule of the lock changes. `absent`: there is no lock file. `unreadable`: the path is there and cannot be looked at. Otherwise
+ * what `seen` says of the lock — and `seen` answers nothing both for a path that is gone and for one that will not `stat`, which this tells apart.
+ */
+export async function lockAsItIs(dir: string, id: string): Promise<LockSeen | 'absent' | 'unreadable'> {
+  const path = join(dir, lockName(id));
+  const looked = await seen(path);
+  if (looked !== undefined) {
+    return looked;
+  }
+  try {
+    await stat(path);
+
+    return 'unreadable';
+  } catch (reason) {
+    return codeOf(reason) === 'ENOENT' ? 'absent' : 'unreadable';
+  }
+}
