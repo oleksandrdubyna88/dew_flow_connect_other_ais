@@ -109,6 +109,9 @@ public sealed record StepRecord(
 
     /// <summary>Whether the step passed: it started, was not stopped and exited 0 — or every failure it had was excused by a clean re-run.</summary>
     public bool Passed => (Started && !TimedOut && ExitCode == 0) || Excused;
+
+    /// <summary>A selected run whose tool said that no test ran (the adapter's code or marker, S5): it is neither passed nor failed — the full run follows and ends the round (M3 of the s5 verify).</summary>
+    public bool NothingSelected { get; init; }
 }
 
 /// <summary>What a repository's own toolchain file did between a job's base commit and its worktree.</summary>
@@ -165,7 +168,7 @@ public sealed record CheckResult(CheckState State, IReadOnlyList<StepRecord> Ste
     public bool Green => State == CheckState.Green;
 
     /// <summary>The first step that did not pass, if the run failed.</summary>
-    public StepRecord? FailedStep => Steps.FirstOrDefault(step => !step.Passed);
+    public StepRecord? FailedStep => Steps.FirstOrDefault(step => !step.Passed && !step.NothingSelected);
 }
 
 /// <summary>A test the re-run excused (E4 s5 t5; SPEC F): the envelope's <c>flaky</c> row.</summary>
@@ -175,7 +178,7 @@ public sealed record CheckResult(CheckState State, IReadOnlyList<StepRecord> Ste
 /// <param name="FirstLog">The log of the first run (relative to the job's folder where the caller can tell).</param>
 /// <param name="Rerun"><c>narrowed</c> or <c>whole</c>.</param>
 /// <param name="Proof"><c>named</c> or <c>totals</c>.</param>
-public sealed record FlakyTest(string Project, string Test, string File, string FirstLog, string Rerun, string Proof);
+public sealed record FlakyTest(string Project, string Test, string File, string FirstLog, string Rerun, string Proof, int FirstExit = 0);
 
 /// <summary>
 /// What a round knows about the job that the step plan and the runner need (E4 s5 t3 and t5): the paths the job changed (base to head), whether a FULL test run has failed once in this job, how the re-run is set, and what the job has excused. The callbacks write the job's own files, so the facts hold across models.
@@ -199,4 +202,7 @@ public sealed record RoundFacts
 
     /// <summary>Called with the tests a re-run excused; the caller adds them to the job's file.</summary>
     public Action<IReadOnlyList<ExcusedTest>>? OnExcused { get; init; }
+
+    /// <summary>Whether a path is a file of the HEAD commit (the listing of the commit); a file name taken from a test's output is used in an argv only when it is one (M1 of the s5 verify). Null: no path is.</summary>
+    public Func<string, CancellationToken, Task<bool>>? InHead { get; init; }
 }

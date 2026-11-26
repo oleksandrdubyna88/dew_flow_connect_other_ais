@@ -35,8 +35,10 @@ public static partial class TestSelection
     }
 
     /// <summary>The argv of the selected run: <c>{file}</c> becomes <c>./&lt;path from the working folder&gt;</c> and <c>{stem}</c> the file name without its extension, each in place and one item per file; <c>{jobs}</c> is filled.</summary>
-    public static IReadOnlyList<string> Argv(IReadOnlyList<string> testFor, IReadOnlyList<string> files, string workingFolder, int jobs)
+    public static IReadOnlyList<string> Argv(IReadOnlyList<string> testFor, IReadOnlyList<string> allFiles, string workingFolder, int jobs)
     {
+        // M1 of the s5 verify: a name that is not a safe path is never an item of an argv, whoever the caller is (a name taken from a test's OUTPUT is the head's text).
+        var files = allFiles.Where(IsSafe).ToList();
         var folder = workingFolder == "." ? string.Empty : workingFolder;
         var result = new List<string>();
         foreach (var item in testFor)
@@ -73,11 +75,16 @@ public static partial class TestSelection
         return dot > 0 ? name[..dot] : name;
     }
 
-    private static bool IsSafe(string path)
+    /// <summary>Whether <paramref name="path"/> is inside one of the <paramref name="testFiles"/> prefixes (relative to the repository root; an empty prefix is everything).</summary>
+    public static bool IsUnder(string path, IReadOnlyList<string> testFiles) =>
+        testFiles.Any(prefix => prefix.Trim('/').Length == 0 || path.StartsWith(prefix.Trim('/') + "/", StringComparison.Ordinal));
+
+    /// <summary>A path a test tool may be given: a closed set of characters, no segment starting with <c>-</c> and none that is <c>.</c> or <c>..</c>, and a stem of letters, digits and underscores.</summary>
+    public static bool IsSafe(string path)
     {
         try
         {
-            return SafePath().IsMatch(path) && !path.Split('/').Any(segment => segment.StartsWith('-')) && StemShape().IsMatch(Stem(path));
+            return SafePath().IsMatch(path) && !path.Split('/').Any(segment => segment.StartsWith('-') || segment is "." or ".." or "") && StemShape().IsMatch(Stem(path));
         }
         catch (RegexMatchTimeoutException)
         {

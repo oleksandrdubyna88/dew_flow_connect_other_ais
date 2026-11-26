@@ -105,7 +105,14 @@ internal sealed class CoderChecks(IRoleRun run, GitHistory git, CoderOsLayer lay
     /// <summary>Said in the envelope where the order of a turn has its format slot.</summary>
     public const string FormatNote = "the toolchain file has no formatter step (it names a build and a test per project), so no format was run";
 
-    public async Task<CoderChecksRound> RunAsync(int turn, string head, CancellationToken ct, FormatResult? format = null)
+    public async Task<CoderChecksRound> RunAsync(int turn, string head, CancellationToken ct, FormatResult? format = null, IReadOnlyList<CoderCheckStep>? formatSteps = null)
+    {
+        var round = await RunRoundAsync(turn, head, ct, format);
+
+        return formatSteps is { Count: > 0 } ? round with { Steps = [.. formatSteps, .. round.Steps] } : round;
+    }
+
+    private async Task<CoderChecksRound> RunRoundAsync(int turn, string head, CancellationToken ct, FormatResult? format)
     {
         run.Phase("checks", turn);
         var clean = await ProveEqualToTheCommitAsync(ct);
@@ -141,7 +148,10 @@ internal sealed class CoderChecks(IRoleRun run, GitHistory git, CoderOsLayer lay
     /// has ended, before the next one starts, so a cancel or a hang in a later step keeps the records of the steps that ran. The number is the one the runner gave the step (<see cref="StepRecord.Number"/>), not one read back from a file name.
     /// A record that cannot be written is not a fault of the checks: it is one warning line in the runner's log, naming the part and no content.
     /// </summary>
-    private void RecordStep(string logs, StepRecord step)
+    private void RecordStep(string logs, StepRecord step) => RecordStep(run, layer, logs, step);
+
+    /// <summary>The same record for a step of the formatter turn (S5 of the s5 verify): its restore and its format step are units too.</summary>
+    internal static void RecordStep(IRoleRun run, CoderOsLayer layer, string logs, StepRecord step)
     {
         if (step.Boundary.Boundary != BoundaryRecord.UnitBoundary || step.Number <= 0)
         {
@@ -149,7 +159,7 @@ internal sealed class CoderChecks(IRoleRun run, GitHistory git, CoderOsLayer lay
         }
 
         var part = $"s{step.Number}";
-        Record(logs, part, CoderUnitRecord.CheckUnitName(layer.Job, part), step.Boundary, step.Started, $"{step.Project} {step.Step.Wire()}");
+        Record(run, layer, logs, part, CoderUnitRecord.CheckUnitName(layer.Job, part), step.Boundary, step.Started, $"{step.Project} {step.Step.Wire()}");
     }
 
     /// <summary>
@@ -249,7 +259,9 @@ internal sealed class CoderChecks(IRoleRun run, GitHistory git, CoderOsLayer lay
         }
     }
 
-    private void Record(string logs, string part, string unit, BoundaryRecord record, bool started, string what)
+    private void Record(string logs, string part, string unit, BoundaryRecord record, bool started, string what) => Record(run, layer, logs, part, unit, record, started, what);
+
+    private static void Record(IRoleRun run, CoderOsLayer layer, string logs, string part, string unit, BoundaryRecord record, bool started, string what)
     {
         if (!CoderUnitRecord.Write(logs, part, unit, record, layer.Mounts, started, what))
         {
@@ -260,9 +272,12 @@ internal sealed class CoderChecks(IRoleRun run, GitHistory git, CoderOsLayer lay
     private CoderChecksRound Unverified(int turn, string head, string sentence, IReadOnlyList<CoderCheckStep>? steps = null) =>
         new(turn, head, CoderChecksRound.TreeChanged, steps ?? [], sentence, []);
 
-    private IReadOnlyList<CoderCheckStep> Steps(CheckResult result) =>
+    private IReadOnlyList<CoderCheckStep> Steps(CheckResult result) => StepsOf(run, result.Steps);
+
+    /// <summary>The envelope's rows for the records of a run of steps.</summary>
+    internal static IReadOnlyList<CoderCheckStep> StepsOf(IRoleRun run, IEnumerable<StepRecord> records) =>
     [
-        .. result.Steps.Select(step => new CoderCheckStep(
+        .. records.Select(step => new CoderCheckStep(
             step.Project, step.Step.Wire(), step.Argv, step.ExitCode, (long)step.Duration.TotalMilliseconds,
             Path.GetRelativePath(run.Folder, step.LogPath).Replace(Path.DirectorySeparatorChar, '/')) { Network = step.Boundary.Network, WorkingFolder = step.WorkingFolder, Scope = step.Scope, ScopeFiles = step.ScopeFiles, Excused = step.Excused }),
     ];

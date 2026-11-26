@@ -109,13 +109,26 @@ public sealed class CheckRunner(IProcessLauncher launcher, CheckBoundary? bounda
                     return ended;
                 }
 
-                if (!selected.Passed && !NothingSelected(selected, step))
+                if (!selected.Passed && NothingSelected(selected, step))
+                {
+                    // M3 of the s5 verify: nothing selected is a state of its own — not a failure; the full run follows and is the one that ends the round.
+                    done[^1] = selected with { NothingSelected = true };
+                }
+                else if (!selected.Passed)
                 {
                     return new CheckResult(CheckState.Failed, done, $"{Describe(selected)}; the full test command was not run");
                 }
             }
 
             var record = await RunOneAsync(gate, step, number, request, ct);
+            request.StepFinished?.Invoke(record);
+            var position = done.Count;
+            done.Add(record);
+            if (Ended(record, done) is { } over)
+            {
+                return over;
+            }
+
             if (!record.Passed && step.Step == CheckStep.Test)
             {
                 request.Facts.OnFullFailed?.Invoke();
@@ -123,17 +136,20 @@ public sealed class CheckRunner(IProcessLauncher launcher, CheckBoundary? bounda
                 if (rerun.Record is not null)
                 {
                     done.Add(rerun.Record);
+
+                    // M4 of the s5 verify: a re-run whose unit could not be stopped ends the job as every other step does.
+                    if (Ended(rerun.Record, done) is { } survived)
+                    {
+                        return survived;
+                    }
                 }
 
-                record = rerun.Excused.Count > 0 ? record with { Excused = true } : record;
-                flaky.AddRange(rerun.Excused);
-            }
-
-            done.Insert(done.Count - (done.Count > 0 && done[^1].Scope == "rerun" ? 1 : 0), record);
-            request.StepFinished?.Invoke(record);
-            if (Ended(record, done) is { } over)
-            {
-                return over;
+                if (rerun.Excused.Count > 0)
+                {
+                    record = record with { Excused = true };
+                    done[position] = record;
+                    flaky.AddRange(rerun.Excused);
+                }
             }
 
             if (!record.Passed)
@@ -142,7 +158,27 @@ public sealed class CheckRunner(IProcessLauncher launcher, CheckBoundary? bounda
             }
         }
 
-        return new CheckResult(CheckState.Green, done, $"{done.Count} step(s) ran and every one exited 0") { Flaky = flaky };
+        return new CheckResult(CheckState.Green, done, GreenNote(done)) { Flaky = flaky };
+    }
+
+    /// <summary>The sentence of a green result. M2 of the s5 verify: "every one exited 0" only when it is so; a step a re-run excused, or a selected run that selected nothing, is named.</summary>
+    private static string GreenNote(IReadOnlyList<StepRecord> done)
+    {
+        var excused = done.Where(record => record.Excused).ToList();
+        var nothing = done.Count(record => record.NothingSelected);
+        if (excused.Count == 0 && nothing == 0)
+        {
+            return $"{done.Count} step(s) ran and every one exited 0";
+        }
+
+        var passed = done.Count(record => record.Passed && !record.Excused);
+        var text = $"{passed} step(s) passed";
+        if (excused.Count > 0)
+        {
+            text += $"; {string.Join(", ", excused.Select(record => $"the {record.Step.Wire()} step of {Shown(record.Project)}"))} failed and {(excused.Count == 1 ? "was" : "were")} excused by a re-run (see flaky)";
+        }
+
+        return nothing > 0 ? text + $"; {nothing} selected run(s) selected no test" : text;
     }
 
     private async Task<StepRecord> RunOneAsync(Gate gate, PlannedStep step, int number, CheckRequest request, CancellationToken ct) =>
@@ -179,6 +215,9 @@ public sealed class CheckRunner(IProcessLauncher launcher, CheckBoundary? bounda
 
     private sealed record Rerun(StepRecord? Record, IReadOnlyList<FlakyTest> Excused);
 
+    private static IReadOnlyList<int> TestsFailedCodes(string adapter, string? tool) =>
+        tool is not null && ToolchainDefaults.Current.Stacks.TryGetValue(adapter, out var stack) && stack.NoTestRan.TryGetValue(tool, out var row) ? row.TestsFailed : [];
+
     /// <summary>
     /// The one re-run of a failed FULL test step (E4 s5 t5; SPEC F): decided by <see cref="FlakyRule"/> from the run summary, never the digest; run once more in a new unit with only a loopback device; and a test is excused only when the re-run ITSELF exits 0 with no new failure and no
     /// execution error (re-review F0) and SHOWS it ran and passed. Nothing excused: the round stays red with the digest of the FIRST run.
@@ -188,20 +227,21 @@ public sealed class CheckRunner(IProcessLauncher launcher, CheckBoundary? bounda
         var facts = request.Facts;
         var digest = FailureDigest.Of(step.Step, step.Adapter, ReadLog(first.LogPath), request.Tree, logCut: first.LogCut);
         var input = new RerunInput(step.Step, first.Scope, first.Started, first.TimedOut, first.ExitCode == StepRecord.UnitSurvivedExitCode, first.Duration, digest.Summary,
-            [.. digest.Items.Select(item => new FailedTest(item.Code, item.File))], step.TestFor is not null, new HashSet<string>(facts.ChangedPaths, StringComparer.Ordinal), facts.ExcusedNames.Count, new HashSet<string>(facts.ExcusedNames, StringComparer.Ordinal), facts.FlakyReruns == 1);
+            [.. digest.Items.Select(item => new FailedTest(item.Code, item.File))], step.TestFor is not null, new HashSet<string>(facts.ChangedPaths, StringComparer.Ordinal), facts.ExcusedNames.Count, new HashSet<string>(facts.ExcusedNames, StringComparer.Ordinal), facts.FlakyReruns == 1) { FirstExit = first.ExitCode, TestsFailedCodes = TestsFailedCodes(step.Adapter, digest.Summary?.Tool) };
         var decision = FlakyRule.Decide(input);
         if (decision.Mode == RerunMode.None || digest.Summary is null)
         {
             return new Rerun(null, []);
         }
 
-        var narrowedFiles = decision.Tests.Select(test => test.File).Where(file => step.TestFiles.Any(prefix => file.StartsWith(prefix.Trim('/') + "/", StringComparison.Ordinal) || prefix.Trim('/').Length == 0)).Distinct(StringComparer.Ordinal).ToList();
-        var narrowed = decision.Mode == RerunMode.Narrowed && narrowedFiles.Count > 0 && step.TestFor is not null;
+        // M1 of the s5 verify: the names come from the step's OUTPUT, so a narrowed re-run takes them only when every one is a safe path under a testFiles prefix AND a file of the head commit; otherwise the whole step is run again (or none, over 300 seconds).
+        var narrowed = decision.Mode == RerunMode.Narrowed && step.TestFor is not null && await NarrowableAsync(step, decision.Tests, request, ct);
         if (decision.Mode == RerunMode.Narrowed && !narrowed && first.Duration > FlakyRule.WholeLimit)
         {
             return new Rerun(null, []);
         }
 
+        var narrowedFiles = narrowed ? decision.Tests.Select(test => test.File).Distinct(StringComparer.Ordinal).ToList() : [];
         var argv = narrowed ? TestSelection.Argv(step.TestFor!, narrowedFiles, ".", request.Jobs) : step.Argv;
         var record = (await RunOneAsync(gate, step with { Argv = argv }, nextNumber(), request, ct)) with { Scope = "rerun", ScopeFiles = narrowed ? narrowedFiles.Count : 0 };
         request.StepFinished?.Invoke(record);
@@ -213,9 +253,29 @@ public sealed class CheckRunner(IProcessLauncher launcher, CheckBoundary? bounda
             return new Rerun(record, []);
         }
 
-        facts.OnExcused?.Invoke(excused);
+        var safe = excused.Select(test => test with { Name = FlakyRule.SafeName(test.Name), File = FlakyRule.SafeName(test.File) }).ToList();
+        facts.OnExcused?.Invoke(safe);
 
-        return new Rerun(record, [.. excused.Select(test => new FlakyTest(step.Project, test.Name, test.File, Path.GetFileName(first.LogPath), narrowed ? "narrowed" : "whole", test.Proof))]);
+        return new Rerun(record, [.. safe.Select(test => new FlakyTest(step.Project, test.Name, test.File, Path.GetFileName(first.LogPath), narrowed ? "narrowed" : "whole", test.Proof, first.ExitCode))]);
+    }
+
+    private static async Task<bool> NarrowableAsync(PlannedStep step, IReadOnlyList<FailedTest> tests, CheckRequest request, CancellationToken ct)
+    {
+        var files = tests.Select(test => test.File).Distinct(StringComparer.Ordinal).ToList();
+        if (files.Count == 0 || request.Facts.InHead is not { } inHead)
+        {
+            return false;
+        }
+
+        foreach (var file in files)
+        {
+            if (!TestSelection.IsUnder(file, step.TestFiles) || !TestSelection.IsSafe(file) || !await inHead(file, ct))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>Whether the run may start, and inside what.</summary>

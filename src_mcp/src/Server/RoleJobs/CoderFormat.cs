@@ -19,12 +19,20 @@ internal sealed class CoderFormat(IRoleRun run, GitHistory git, CoderOsLayer lay
     /// <summary>The message of the format commit.</summary>
     public const string Message = "style: format (coai)";
 
-    private static readonly TimeSpan FormatTimeout = TimeSpan.FromMinutes(5);
+    /// <summary>The most the formatter may take (SPEC D: 5 minutes). Settable only for the tests, which run one at a time.</summary>
+    internal static TimeSpan FormatTimeout { get; set; } = TimeSpan.FromMinutes(5);
 
     private const int NamedPaths = 3;
 
     /// <summary>What <see cref="PrepareAsync"/> found: the state to report and whether tracked changes of the given files wait to be committed.</summary>
-    internal sealed record Prepared(FormatResult Result, bool Changed);
+    internal sealed record Prepared(FormatResult Result, bool Changed)
+    {
+        /// <summary>The envelope's rows of the units this turn ran (S5 of the s5 verify).</summary>
+        public IReadOnlyList<CoderCheckStep> Steps { get; init; } = [];
+
+        /// <summary>Set when a unit of the turn could not be stopped (M4 of the s5 verify): the job ends <c>coder-boundary</c> with this sentence, and the worktree is not touched while the process may still write.</summary>
+        public string? EndsJob { get; init; }
+    }
 
     /// <summary>A project with a formatter and the files this turn gives it.</summary>
     private sealed record Work(PlannedStep? Restore, PlannedStep Format, IReadOnlyList<string> Files);
@@ -52,16 +60,22 @@ internal sealed class CoderFormat(IRoleRun run, GitHistory git, CoderOsLayer lay
 
         var logs = Path.Combine(run.Folder, "checks", $"format-{turn}");
         var plan = work.SelectMany(item => item.Restore is null ? [item.Format] : new[] { item.Restore, item.Format }).ToList();
-        var ran = await new CheckRunner(layer.Launcher, layer.ChecksBoundary()).RunStepsAsync(plan, new CheckRequest(tree.Root, logs, CoderChecks.Jobs) { Job = layer.Job }, ct);
+        var ran = await new CheckRunner(layer.Launcher, layer.ChecksBoundary()).RunStepsAsync(plan, new CheckRequest(tree.Root, logs, CoderChecks.Jobs) { Job = layer.Job, StepFinished = step => CoderChecks.RecordStep(run, layer, logs, step) }, ct);
         var given = work.SelectMany(item => item.Files).ToHashSet(StringComparer.Ordinal);
+        var steps = CoderChecks.StepsOf(run, ran.Steps);
+        if (ran.State == CheckState.BoundaryRefused)
+        {
+            return new Prepared(new FormatResult("failed", given.Count, string.Empty, "a unit of the formatter turn could not be stopped, so the job ends here"), false) { Steps = steps, EndsJob = ran.Note };
+        }
+
         if (ran.State != CheckState.Green)
         {
             var reset = await CoderRestore.RestoreAsync(git, tree, head, ct);
 
-            return new Prepared(new FormatResult("failed", given.Count, string.Empty, reset.Length == 0 ? "the formatter, or the restore before it, did not pass; the worktree is back at the turn's commit" : reset), false);
+            return new Prepared(new FormatResult("failed", given.Count, string.Empty, reset.Length == 0 ? "the formatter, or the restore before it, did not pass; the worktree is back at the turn's commit" : reset), false) { Steps = steps };
         }
 
-        return await VerifyAsync(head, given, ct);
+        return (await VerifyAsync(head, given, ct)) with { Steps = steps };
     }
 
     private async Task<Prepared> VerifyAsync(string head, HashSet<string> given, CancellationToken ct)

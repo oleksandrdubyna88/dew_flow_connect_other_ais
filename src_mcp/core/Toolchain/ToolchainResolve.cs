@@ -61,6 +61,17 @@ public static class ToolchainResolve
             {
                 if (!before.Runs)
                 {
+                    if (after is { Runs: true })
+                    {
+                        // S1 of the s5 verify: a command the head ADDS runs as written, and is reported like a changed one.
+                        var added = $"the worktree added the {name} command of {PathSpelling.Bare(project.Path)}";
+                        changed.Add(added);
+                        if (name is "test" or "testFor")
+                        {
+                            tests.Add(added);
+                        }
+                    }
+
                     continue;
                 }
 
@@ -77,6 +88,35 @@ public static class ToolchainResolve
                         tests.Add(line);
                     }
                 }
+            }
+        }
+
+        if (atHead is not null)
+        {
+            foreach (var project in atHead.Projects.Where(project => atBase.Projects.All(candidate => candidate.Path != project.Path)))
+            {
+                changed.Add($"the worktree added the project {PathSpelling.Bare(project.Path)}");
+            }
+
+            foreach (var project in atBase.Projects)
+            {
+                var head = atHead.Projects.FirstOrDefault(candidate => candidate.Path == project.Path);
+                if (head is not null && !project.TestFiles.SequenceEqual(head.TestFiles, StringComparer.Ordinal))
+                {
+                    var line = $"the worktree changed testFiles of {PathSpelling.Bare(project.Path)}";
+                    changed.Add(line);
+                    tests.Add(line);
+                }
+            }
+
+            if (!atBase.Skip.SequenceEqual(atHead.Skip, StringComparer.Ordinal))
+            {
+                changed.Add("the worktree changed skip of the toolchain file");
+            }
+
+            if (atBase.Timeouts != atHead.Timeouts)
+            {
+                changed.Add("the worktree changed timeouts of the toolchain file");
             }
         }
 

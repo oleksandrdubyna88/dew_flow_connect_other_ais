@@ -164,6 +164,23 @@ public sealed class ACoderInstructionStepRunTests
 
     private static string Sha(string text) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
 
+    /// <summary>How many units of the instruction step (<c>i1</c>) were started: the rig's launch seam sees every systemd-run of the checks. Counted here because the unit's temp is emptied after each step (M16), so the step cannot keep a counter of its own.</summary>
+    private static Func<int> CountInstructionUnits(CoderRig rig)
+    {
+        var started = 0;
+        rig.Degrade = arguments =>
+        {
+            if (arguments.Any(argument => argument.Contains("coai-check-", StringComparison.Ordinal) && argument.EndsWith("-i1", StringComparison.Ordinal)))
+            {
+                Interlocked.Increment(ref started);
+            }
+
+            return arguments;
+        };
+
+        return () => Volatile.Read(ref started);
+    }
+
     private static string Kept(CoderRig rig, RoleJobRecord job) => File.ReadAllText(Path.Combine(rig.World.Store.FolderOf(job.JobId)!.Location, "instructions", "stdout.txt"));
 
     // ---------- d2: it runs once, in a check unit at the base, before any model ----------
@@ -171,7 +188,8 @@ public sealed class ACoderInstructionStepRunTests
     [Fact]
     public async Task D2_ADeclaredStep_RunsOnce_InTheWorktreeAtTheBase_ItsOutputIsKeptAndTheEnvelopeHoldsOnlyItsHash()
     {
-        await using var rig = await CoderRig.CreateAsync(toolchain: With($"printf 'instruction-%s-line\\n' canary; head -1 .coai/toolchain.yaml; echo run >> {BoundaryUnit.UnitTemp}/steps"));
+        await using var rig = await CoderRig.CreateAsync(toolchain: With($"printf 'instruction-%s-line\\n' canary; head -1 .coai/toolchain.yaml"));
+        var runs = CountInstructionUnits(rig);
         rig.Says("sonnet", Green());
         var job = rig.NewJob();
 
@@ -180,7 +198,7 @@ public sealed class ACoderInstructionStepRunTests
         ended.State.Should().Be(RoleJobStates.Succeeded, ended.Reason);
         var kept = Kept(rig, job);
         kept.Should().Be($"{Canary}\nversion: 1\n", "the step ran in the worktree at the base commit, where the toolchain file is the base's");
-        File.ReadAllLines(Path.Combine(rig.JobFolder(job), "tmp", "steps")).Should().ContainSingle("the step ran ONCE for the job, in the check unit's own temp folder");
+        runs().Should().Be(1, "the step ran ONCE for the job (its unit was started once; the unit's own temp is emptied after every step, so a file there cannot count runs)");
         var step = Step(rig.Envelope(job));
         step.GetProperty("declared").GetBoolean().Should().BeTrue();
         step.GetProperty("argv").EnumerateArray().Select(item => item.GetString()).Should().HaveCount(3).And.StartWith(["/bin/sh", "-c"]);
@@ -195,7 +213,8 @@ public sealed class ACoderInstructionStepRunTests
     [Fact]
     public async Task D2_TheStepIsRunOnceForTheJobWhateverTheNumberOfAttempts_AndNoTextOfItsOutputIsInALogLine()
     {
-        await using var rig = await CoderRig.CreateAsync(toolchain: With($"printf 'instruction-%s-line\\n' canary; echo run >> {BoundaryUnit.UnitTemp}/steps"));
+        await using var rig = await CoderRig.CreateAsync(toolchain: With($"printf 'instruction-%s-line\\n' canary"));
+        var runs = CountInstructionUnits(rig);
         rig.Says("sonnet", new CoderRig.Launch(null, string.Empty, Exit: 1, Stderr: "the CLI fell over: boom")).Says("opus", Green());
         var job = rig.NewJob(route: ["claude/sonnet", "claude/opus"]);
 
@@ -203,7 +222,7 @@ public sealed class ACoderInstructionStepRunTests
 
         ended.State.Should().Be(RoleJobStates.Succeeded, ended.Reason);
         rig.Launches(job).Should().HaveCount(2, "a failover started a second session");
-        File.ReadAllLines(Path.Combine(rig.JobFolder(job), "tmp", "steps")).Should().ContainSingle("the second attempt used the output of the first run again");
+        runs().Should().Be(1, "the second attempt used the output of the first run again");
         rig.World.LogText.Should().NotContain(Canary);
     }
 

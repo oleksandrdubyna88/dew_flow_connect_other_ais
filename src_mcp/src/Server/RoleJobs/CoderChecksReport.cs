@@ -112,6 +112,7 @@ internal sealed record CoderChecksReport(IReadOnlyList<CoderChecksRound> Rounds,
             json.WriteString("file", test.File);
             json.WriteString("firstLog", test.FirstLog);
             json.WriteString("rerun", test.Rerun);
+            json.WriteNumber("firstExit", test.FirstExit);
             json.WriteString("proof", test.Proof);
             json.WriteEndObject();
         }

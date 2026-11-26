@@ -36,7 +36,11 @@ public sealed record DefaultStep(
     MeasuredIn? MeasuredIn);
 
 /// <summary>What means "no test ran" for a runner: exit codes and marker lines (the exit code alone is not enough for VSTest and for the node runners).</summary>
-public sealed record NoTestRan(IReadOnlyList<int> ExitCodes, IReadOnlyList<string> Markers, string Note);
+public sealed record NoTestRan(IReadOnlyList<int> ExitCodes, IReadOnlyList<string> Markers, string Note)
+{
+    /// <summary>The exit codes the runner ends with when tests FAILED (E4 s5, M2 of the verify): a narrowed re-run may excuse a step only when its first run ended with one of them.</summary>
+    public IReadOnlyList<int> TestsFailed { get; init; } = [];
+}
 
 /// <summary>A stack: its manifest names (read), its definition files (read: a change of one is a change of the checks), its presence names (recorded, never read: a lock file, a tsconfig) and, for a built one, its default steps.</summary>
 public sealed record StackDefaults(
@@ -224,11 +228,14 @@ public sealed class ToolchainDefaults
         {
             foreach (var (runner, row) in Members(noTestElement, $"{where}.noTestRan", null))
             {
-                var fields = Members(row, $"{where}.noTestRan.{runner}", ["exitCodes", "markers", "note"]);
+                var fields = Members(row, $"{where}.noTestRan.{runner}", ["exitCodes", "markers", "note", "testsFailed"]);
                 noTest[runner] = new NoTestRan(
                     [.. Items(Required(fields, "exitCodes", $"{where}.noTestRan.{runner}"), $"{where}.noTestRan.{runner}.exitCodes").Select(code => code.TryGetInt32(out var value) ? value : throw new ToolchainDefaultsException($"{where}.noTestRan.{runner}.exitCodes: a whole number was expected"))],
                     Strings(Required(fields, "markers", $"{where}.noTestRan.{runner}"), $"{where}.noTestRan.{runner}.markers"),
-                    fields.TryGetValue("note", out var note) ? note.GetString() ?? string.Empty : string.Empty);
+                    fields.TryGetValue("note", out var note) ? note.GetString() ?? string.Empty : string.Empty)
+                {
+                    TestsFailed = fields.TryGetValue("testsFailed", out var failedCodes) ? [.. Items(failedCodes, $"{where}.noTestRan.{runner}.testsFailed").Select(code => code.TryGetInt32(out var value) ? value : throw new ToolchainDefaultsException($"{where}.noTestRan.{runner}.testsFailed: a whole number was expected"))] : [],
+                };
             }
         }
 

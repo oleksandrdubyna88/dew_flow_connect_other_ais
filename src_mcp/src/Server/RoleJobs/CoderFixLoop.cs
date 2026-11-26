@@ -98,8 +98,14 @@ internal sealed class CoderFixLoop(IRoleRun run, GitHistory git, CoderOsLayer la
             return formatHalted;
         }
 
+        if (formatted.EndsJob is not null)
+        {
+            return FormatEnded(head, report, formatted);
+        }
+
         head = formatted.Head;
         var format = formatted.Format;
+        var formatSteps = formatted.Steps;
         var checks = new CoderChecks(run, git, layer, tree, baseSha);
         while (true)
         {
@@ -108,7 +114,7 @@ internal sealed class CoderFixLoop(IRoleRun run, GitHistory git, CoderOsLayer la
                 return Ended(head, report, "timeout", TimeoutReason());
             }
 
-            var round = await checks.RunAsync(_rounds.Count, head, ct, format);
+            var round = await checks.RunAsync(_rounds.Count, head, ct, format, formatSteps);
             _rounds.Add(round);
             if (!round.Red)
             {
@@ -146,9 +152,23 @@ internal sealed class CoderFixLoop(IRoleRun run, GitHistory git, CoderOsLayer la
                 return fixHalted;
             }
 
+            if (formatted.EndsJob is not null)
+            {
+                return FormatEnded(head, report, formatted);
+            }
+
             head = formatted.Head;
             format = formatted.Format;
+            formatSteps = formatted.Steps;
         }
+    }
+
+    /// <summary>The job ends because a unit of the formatter turn could not be stopped (M4 of the s5 verify): the envelope gets a round that says so, with the turn's own records, and the stop is <c>coder-boundary</c>.</summary>
+    private CoderLoopEnd FormatEnded(string head, CoderReport? report, Formatted formatted)
+    {
+        _rounds.Add(new CoderChecksRound(_rounds.Count, head, CheckState.BoundaryRefused.Wire(), formatted.Steps, formatted.EndsJob ?? string.Empty, []) { Format = formatted.Format });
+
+        return Ended(head, report, RoleStopWords.CoderBoundary, formatted.EndsJob ?? string.Empty);
     }
 
     private CoderLoopEnd Ended(string head, CoderReport? report, string stop, string reason) =>
@@ -214,7 +234,13 @@ internal sealed class CoderFixLoop(IRoleRun run, GitHistory git, CoderOsLayer la
 
     private sealed record Committed(string Head, CoderLoopEnd? Halted);
 
-    private sealed record Formatted(string Head, FormatResult Format, CoderLoopEnd? Halted);
+    private sealed record Formatted(string Head, FormatResult Format, CoderLoopEnd? Halted)
+    {
+        public IReadOnlyList<CoderCheckStep> Steps { get; init; } = [];
+
+        /// <summary>A unit of the formatter turn could not be stopped (M4 of the s5 verify): the job ends <c>coder-boundary</c> with this sentence.</summary>
+        public string? EndsJob { get; init; }
+    }
 
     /// <summary>
     /// The formatter turn after a turn's commit (E4 s5): the formatter runs on the files that commit changed, and what it changed is committed as <c>style: format (coai)</c> through the one commit road. A format state is never a verdict: whatever it is, the checks of the round run on the head it leaves.
@@ -222,18 +248,23 @@ internal sealed class CoderFixLoop(IRoleRun run, GitHistory git, CoderOsLayer la
     private async Task<Formatted> FormatAsync(string head, int turn, CoderFixSession session, CancellationToken ct)
     {
         var prepared = await new CoderFormat(run, git, layer, tree, baseSha).PrepareAsync(head, turn, ct);
+        if (prepared.EndsJob is not null)
+        {
+            return new Formatted(head, prepared.Result, null) { Steps = prepared.Steps, EndsJob = prepared.EndsJob };
+        }
+
         if (!prepared.Changed)
         {
-            return new Formatted(head, prepared.Result, null);
+            return new Formatted(head, prepared.Result, null) { Steps = prepared.Steps };
         }
 
         var committed = await CommitAsync(CoderCommits.FormatMessage(), session, ct);
         if (committed.Halted is { } halted)
         {
-            return new Formatted(head, prepared.Result, halted);
+            return new Formatted(head, prepared.Result, halted) { Steps = prepared.Steps };
         }
 
-        return new Formatted(committed.Head.Length > 0 ? committed.Head : head, prepared.Result with { Commit = committed.Head }, null);
+        return new Formatted(committed.Head.Length > 0 ? committed.Head : head, prepared.Result with { Commit = committed.Head }, null) { Steps = prepared.Steps };
     }
 
     /// <summary>The ONE commit of a turn (turn 0 or a fix turn); the generation is compared first. No change means no commit and the head stays where it was.</summary>

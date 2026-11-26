@@ -233,6 +233,7 @@ internal sealed partial class ToolchainParse
         {
             "format" => new[] { "{jobs}", "{file}" },
             "testFor" => new[] { "{jobs}", "{file}", "{stem}" },
+            "perFile" => new[] { "{jobs}", "{file}" },
             _ => new[] { "{jobs}" },
         };
         var position = 0;

@@ -54,8 +54,8 @@
         }
       },
       "noTestRan": {
-        "vstest": { "exitCodes": [], "markers": ["No test matches the given testcase filter"] },
-        "mtp": { "exitCodes": [8], "markers": ["Zero tests ran"] }
+        "vstest": { "exitCodes": [], "markers": ["No test matches the given testcase filter"], "testsFailed": [1] },
+        "mtp": { "exitCodes": [8], "markers": ["Zero tests ran"], "testsFailed": [2] }
       }
     },
     "node": {
@@ -108,9 +108,9 @@
         }
       },
       "noTestRan": {
-        "jest": { "exitCodes": [], "markers": ["No tests found, exiting with code 1"] },
-        "vitest": { "exitCodes": [], "markers": ["No test files found, exiting with code 1"] },
-        "node-test": { "exitCodes": [], "markers": [], "note": "node:test counts a file with no test as one passing test and prints no marker: nothing says that no test ran" },
+        "jest": { "exitCodes": [], "markers": ["No tests found, exiting with code 1"], "testsFailed": [1] },
+        "vitest": { "exitCodes": [], "markers": ["No test files found, exiting with code 1"], "testsFailed": [1] },
+        "node-test": { "exitCodes": [], "markers": [], "testsFailed": [1], "note": "node:test counts a file with no test as one passing test and prints no marker: nothing says that no test ran" },
         "unknown": { "exitCodes": [], "markers": [] }
       }
     },

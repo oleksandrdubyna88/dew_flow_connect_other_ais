@@ -180,6 +180,6 @@ public sealed class AFormatStepTests
         (await FormatOf(rig, job)).State.Should().Be("formatted");
         var envelope = rig.Envelope(job);
         envelope.GetProperty("green").GetBoolean().Should().BeTrue("the poisoned runner did not survive the clean: the restore of the round brought the original back");
-        envelope.GetProperty("checks").EnumerateArray().Select(step => step.GetProperty("step").GetString()).Should().Equal("restore", "build", "test");
+        envelope.GetProperty("checks").EnumerateArray().Select(step => step.GetProperty("step").GetString()).Should().Equal("restore", "format", "restore", "build", "test"); // the formatter turn's own units are in the envelope (S5 of the s5 verify)
     }
 }

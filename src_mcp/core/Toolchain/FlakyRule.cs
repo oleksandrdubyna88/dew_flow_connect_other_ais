@@ -25,7 +25,14 @@ public sealed record FailedTest(string Name, string File);
 /// <param name="ExcusedInJob">How many tests this job has excused already.</param>
 /// <param name="AlreadyExcused">Their names.</param>
 /// <param name="Enabled"><c>COAI_FLAKY_RERUNS</c> is 1.</param>
-public sealed record RerunInput(CheckStep Step, string Scope, bool Started, bool TimedOut, bool LeftUnit, TimeSpan FirstDuration, RunSummary? Summary, IReadOnlyList<FailedTest> Failed, bool HasTestFor, IReadOnlySet<string> JobChangedFiles, int ExcusedInJob, IReadOnlySet<string> AlreadyExcused, bool Enabled);
+public sealed record RerunInput(CheckStep Step, string Scope, bool Started, bool TimedOut, bool LeftUnit, TimeSpan FirstDuration, RunSummary? Summary, IReadOnlyList<FailedTest> Failed, bool HasTestFor, IReadOnlySet<string> JobChangedFiles, int ExcusedInJob, IReadOnlySet<string> AlreadyExcused, bool Enabled)
+{
+    /// <summary>The exit code the first run ended with.</summary>
+    public int FirstExit { get; init; }
+
+    /// <summary>The exit codes the tool of the first run ends with when tests FAILED (a row of <c>shared/toolchains.json</c>): only then may a narrowed re-run turn the step green (M2 of the s5 verify).</summary>
+    public IReadOnlyList<int> TestsFailedCodes { get; init; } = [];
+}
 
 /// <summary>The rule's answer: the mode and, for none, the reason (one sentence for the record).</summary>
 public sealed record RerunDecision(RerunMode Mode, string Why, IReadOnlyList<FailedTest> Tests);
@@ -47,6 +54,12 @@ public sealed record ExcusedTest(string Name, string File, string Proof);
 public static class FlakyRule
 {
     public const int MaxFailed = 5;
+
+    /// <summary>The longest name of a test or a file kept in a record (S3 of the s5 verify).</summary>
+    public const int NameLimit = 200;
+
+    /// <summary>A test's name as it is written to the envelope and to the job's file: redacted and bounded, because it is the output's text.</summary>
+    public static string SafeName(string name) => CoaiMcp.Core.Notices.Redaction.SafeText(name, NameLimit);
 
     public const int MaxExcusedPerJob = 2;
 
@@ -75,7 +88,7 @@ public static class FlakyRule
                 return new RerunDecision(RerunMode.None, "a failed test is one whose file the job added or changed", []);
             }
 
-            if (input.AlreadyExcused.Contains(name))
+            if (input.AlreadyExcused.Contains(SafeName(name)))
             {
                 return new RerunDecision(RerunMode.None, "a failed test was already excused once in this job", []);
             }
@@ -88,7 +101,9 @@ public static class FlakyRule
             return new RerunDecision(RerunMode.None, "a third test would be excused in one job", []);
         }
 
-        var mode = input.HasTestFor ? RerunMode.Narrowed : input.FirstDuration <= WholeLimit ? RerunMode.Whole : RerunMode.None;
+        // M2: a narrowed re-run shows that the named tests pass, not that the step would; it may excuse only a step whose first exit code is the tool's "tests failed" code — any other code (a coverage gate, a crash) needs the whole step again.
+        var narrowed = input.HasTestFor && input.TestsFailedCodes.Contains(input.FirstExit);
+        var mode = narrowed ? RerunMode.Narrowed : input.FirstDuration <= WholeLimit ? RerunMode.Whole : RerunMode.None;
 
         return new RerunDecision(mode, mode == RerunMode.None ? "the first run took over 300 seconds and the file names no testFor" : string.Empty, mode == RerunMode.None ? [] : tests);
     }
@@ -136,7 +151,7 @@ public static class FlakyRule
         foreach (var test in decision.Tests)
         {
             var named = summary.PassedNames.Count(name => name == test.Name || name.EndsWith("> " + test.Name, StringComparison.Ordinal));
-            if (named == 1)
+            if (named == 1 && summary.Complete)
             {
                 excused.Add(new ExcusedTest(test.Name, test.File, "named"));
             }

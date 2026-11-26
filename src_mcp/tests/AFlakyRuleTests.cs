@@ -12,7 +12,7 @@ public sealed class AFlakyRuleTests
 
     private static RerunInput Input(Func<RerunInput, RerunInput>? change = null)
     {
-        var input = new RerunInput(CheckStep.Test, "full", true, false, false, TimeSpan.FromSeconds(30), Summary(), [new FailedTest("T.One", "tests/OneTests.cs")], false, new HashSet<string>(["src/Thing.cs"]), 0, new HashSet<string>(), true);
+        var input = new RerunInput(CheckStep.Test, "full", true, false, false, TimeSpan.FromSeconds(30), Summary(), [new FailedTest("T.One", "tests/OneTests.cs")], false, new HashSet<string>(["src/Thing.cs"]), 0, new HashSet<string>(), true) { FirstExit = 2, TestsFailedCodes = [2] };
 
         return change is null ? input : change(input);
     }

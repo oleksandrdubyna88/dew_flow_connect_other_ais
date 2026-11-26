@@ -15,7 +15,7 @@ public sealed class AFlakyRerunTests
 {
     private const string Ignore = ".flaky/\n";
 
-    private const string Failing = "echo 'failed Flaky.Tests.Sometimes (3ms)'; echo '  boom'; echo '    at Flaky.Tests.Sometimes() in tests/FlakyTests.cs:3'; echo; echo 'Test run summary: Failed!'; echo '  total: 5'; echo '  failed: 1'; echo '  succeeded: 4'; echo '  skipped: 0'; exit 1";
+    private const string Failing = "echo 'failed Flaky.Tests.Sometimes (3ms)'; echo '  boom'; echo '    at Flaky.Tests.Sometimes() in tests/FlakyTests.cs:3'; echo; echo 'Test run summary: Failed!'; echo '  total: 5'; echo '  failed: 1'; echo '  succeeded: 4'; echo '  skipped: 0'; exit 2";
 
     private const string Passing = "echo 'Test run summary: Passed!'; echo '  total: 5'; echo '  failed: 0'; echo '  succeeded: 5'; echo '  skipped: 0'; exit 0";
 
@@ -54,7 +54,7 @@ public sealed class AFlakyRerunTests
         envelope.GetProperty("green").GetBoolean().Should().BeTrue();
         var flaky = envelope.GetProperty("flaky").EnumerateArray().Should().ContainSingle().Subject;
         (flaky.GetProperty("test").GetString(), flaky.GetProperty("file").GetString(), flaky.GetProperty("rerun").GetString(), flaky.GetProperty("proof").GetString()).Should().Be(("Flaky.Tests.Sometimes", "tests/FlakyTests.cs", "whole", "totals"));
-        TestSteps(envelope).Should().Equal(("full", 1, true), ("rerun", 0, false));
+        TestSteps(envelope).Should().Equal(("full", 2, true), ("rerun", 0, false));
         rig.Rig.NoticesOf(ServerNoticeCodes.CoderTestFlaky).Should().ContainSingle();
     }
 
@@ -86,7 +86,7 @@ public sealed class AFlakyRerunTests
         var (_, ended) = await rig.RunAsync(job);
 
         (ended.State, ended.Stop).Should().Be((RoleJobStates.Failed, "not-green"), ended.Reason);
-        TestSteps(rig.Envelope(job)).Should().Equal(("full", 1, false));
+        TestSteps(rig.Envelope(job)).Should().Equal(("full", 2, false));
     }
 
     [Fact]
@@ -101,7 +101,7 @@ public sealed class AFlakyRerunTests
         var (_, ended) = await rig.RunAsync(job);
 
         ended.State.Should().Be(RoleJobStates.Failed, ended.Reason);
-        TestSteps(rig.Envelope(job)).Should().Equal(("full", 1, false));
+        TestSteps(rig.Envelope(job)).Should().Equal(("full", 2, false));
     }
 
     [Fact]
@@ -150,7 +150,7 @@ public sealed class AFlakyRerunTests
         (ended.State, ended.Stop).Should().Be((RoleJobStates.Failed, "not-green"), ended.Reason);
         var envelope = rig.Envelope(job);
         envelope.GetProperty("flaky").GetArrayLength().Should().Be(0);
-        TestSteps(envelope).Should().Equal(("full", 1, false), ("rerun", 3, false));
+        TestSteps(envelope).Should().Equal(("full", 2, false), ("rerun", 3, false));
         rig.Rig.NoticesOf(ServerNoticeCodes.CoderTestFlaky).Should().BeEmpty();
     }
 }
