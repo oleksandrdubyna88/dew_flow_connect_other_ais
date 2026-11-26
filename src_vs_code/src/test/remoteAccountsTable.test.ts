@@ -4,7 +4,7 @@ import test from 'node:test';
 import { MANAGER_WORDS } from '../remoteAccountsReply';
 import type { ManagerWord } from '../remoteAccountsReply';
 import { INSTALL_JQ } from '../remoteAccountsRows';
-import { NO_TERMINAL_SAID, WSL_ELSEWHERE_SAID, WSL_WINDOWS_SAID, blockOf, changedBlocks, tableModel } from '../remoteAccountsTable';
+import { NO_TERMINAL_SAID, WSL_ELSEWHERE_SAID, WSL_HEADING, WSL_LOGIN_SAID, blockOf, changedBlocks, tableModel } from '../remoteAccountsTable';
 import type { Block, TableModel } from '../remoteAccountsTable';
 import { HOSTS_SAID } from '../remoteHostsSaid';
 import {
@@ -340,13 +340,16 @@ test('E2S2-T11: every text of a VM went through forList once — controls out, c
 
 // ───────────────── T12 ─────────────────
 
-test('E2S2-T12: wsl has no rows in E2, and says the sentence of each platform', () => {
+test('E2S2-T12 (E3.S3): the wsl block has no rows of its own, says S1 off Windows, and holds its part on Windows', () => {
   const memory = memoryOf(['wsl', seen(reading({ claude: claude() }), 1)]);
   const windows = blockFor(tableModel(inputOf({ hosts: ['wsl', 'h'], memory, windows: true })), 'wsl');
   const other = blockFor(tableModel(inputOf({ hosts: ['wsl'], memory, windows: false })), 'wsl');
 
   assert.deepEqual(windows.rows, []);
-  assert.equal(windows.head.said, WSL_WINDOWS_SAID);
+  assert.equal(windows.head.said, '');
+  assert.equal(windows.wsl?.heading, WSL_HEADING);
+  assert.equal(windows.wsl?.login, WSL_LOGIN_SAID);
+  assert.equal(other.wsl, null, 'off Windows: S1 and nothing else');
   assert.equal(other.head.said, WSL_ELSEWHERE_SAID);
   assert.equal(windows.canRefuse, false);
   assert.equal(windows.head.kind, 'wsl');

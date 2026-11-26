@@ -3,6 +3,10 @@ import type { AccountsRead, AccountsUnreadable } from './remoteAccountsReply';
 import { accountsDigest } from './remoteAccountsScript';
 import type { AccountsMode } from './remoteAccountsScript';
 import type { HostStanding } from './remoteHosts';
+import { HOURLY_MS, eligibleOf } from './remoteAccountsTimer';
+import { WslPlace, memoryKeyOf, scopeOf, splitWslKey } from './remotePlaces';
+import { WslFacts, WslPort, doorOf, retainedAfter, wslRound } from './remoteWslRound';
+import type { PlaceCall, PlaceRun, Visited, WslHooks, WslWalk } from './remoteWslRound';
 import type { DoorAnswer } from './remotePermission';
 import type { RemoteRun } from './remoteSsh';
 import type { LiveTerminal } from './terminalSource';
@@ -16,19 +20,11 @@ import type { LiveTerminal } from './terminalSource';
  * once more, for it, with the digest of the account lines of THAT reply (E3.S2). So an account's usage is read at most once in a round and a host is called at most twice;
  * the usage reply is JOINED to the first reading (`joined`), never put in its place. The round never asks a
  * person: the door (`may`, E2.S1's) has no ask seam. A door that answers `no-permission` or `stopped` ENDS the round; `no`, `damaged` and
- * `waiting` skip that host. The scope host `wsl` is never called.</p>
+ * `waiting` skip that host. The scope host `wsl` is called only when the window gives the round a WSL port (a Windows window, E3.S3): its turn is `WslTurn`, the WSL part of the round, place by place, each place read by the same steps as a host.</p>
  *
  * <p>A reading never comes back after a Stop, a refusal or a Forget that arrived while its call was in flight: before a result is
  * published the round checks the generation, the Stop and the door again, in that order.</p>
  */
-
-/** From the END of a round to the start of the next (O4). */
-export const ROUND_GAP_MS = 600_000;
-/** After activation, or after the first eligible terminal opened: the window restores its terminals first. */
-export const FIRST_DELAY_MS = 30_000;
-/** *Refresh now* and opening the list start no round less than this after the last one ended. */
-export const REFRESH_FLOOR_MS = 60_000;
-export const HOURLY_MS = 3_600_000;
 
 export * from './remoteAccountsStateRow';
 
@@ -77,6 +73,10 @@ export interface HostMemory {
   readonly usageBlockedAt?: string | undefined;
   /** Why this place's last usage call did not give figures; cleared by the place's next first reply (E3.S2, § R2.8). */
   readonly usageMiss?: UsageMiss | undefined;
+  /** How long this place's last call took, in ms: the hover of the age says it beside the exact time (R9a). */
+  readonly tookMs?: number | undefined;
+  /** The scope host `wsl`'s own facts of the last round (E3.S3). Only on the entry `wsl`. */
+  readonly wsl?: WslFacts | undefined;
 }
 
 /** What the table says in the usage cells when the usage call of the round did not come to figures for the place. */
@@ -103,8 +103,8 @@ export function accountsHosts(live: readonly LiveTerminal[]): readonly string[] 
   return [...new Set(hosts)].sort((one, other) => (one < other ? -1 : one > other ? 1 : 0));
 }
 
-/** The hosts a round may call: `accountsHosts` without the scope host `wsl`. */
-export const callableHosts = (live: readonly LiveTerminal[]): readonly string[] => accountsHosts(live).filter((host) => host !== WSL_SCOPE);
+/** The hosts a round may call: `accountsHosts`, and the scope host `wsl` only when the window reads WSL (`wslOn`). */
+export const callableHosts = (live: readonly LiveTerminal[], wslOn = false): readonly string[] => accountsHosts(live).filter((host) => host !== WSL_SCOPE || wslOn);
 
 /** The sorted hosts, rotated to start at `round % hosts.length`: no host is always last. */
 export function roundOrder(hosts: readonly string[], round: number): readonly string[] {
@@ -201,6 +201,8 @@ export interface RoundSeams {
   readonly generation: () => number;
   /** One fixed log line for a result that was dropped. */
   readonly dropped: (host: string) => void;
+  /** The WSL port of a Windows window (E3.S3): its three calls, each asking the door in its one spawn function. Nothing in any other window, and then `wsl` is never called. */
+  readonly wsl?: WslPort | undefined;
 }
 
 export interface RoundResult {
@@ -242,9 +244,9 @@ type Step =
 const put = (memory: Memory, host: string, next: HostMemory): Memory => new Map<string, HostMemory>([...memory, [host, next]]);
 
 /** The memory of the hosts that are still in the list: a host whose last terminal closed is dropped. */
-export const liveOnly = (memory: Memory, hosts: readonly string[]): Memory => new Map([...memory].filter(([host]) => hosts.includes(host)));
+export const liveOnly = (memory: Memory, hosts: readonly string[]): Memory => new Map([...memory].filter(([key]) => hosts.includes(scopeOf(key))));
 
-const hostLive = (seams: RoundSeams, host: string): boolean => accountsHosts(seams.live()).includes(host);
+const hostLive = (seams: RoundSeams, host: string): boolean => accountsHosts(seams.live()).includes(scopeOf(host));
 
 /** A refusal drops the host's reading; the other kinds keep it. The kind is what the list reads. */
 const withAdmission = (state: RoundState, host: string, kind: NotRead): RoundState => {
@@ -305,9 +307,9 @@ const failedMemory = (prev: HostMemory, run: RemoteRun, nowMs: number): HostMemo
 const readPlaces = (state: RoundState, host: string, read: FirstRead | undefined): ReadonlySet<string> => (read?.kind === 'read' ? new Set([...state.read, host]) : state.read);
 
 /** The result of a call, published: a refused run is a failure that keeps the older reading. */
-function publishedState(state: RoundState, host: string, run: RemoteRun, read: FirstRead | undefined, nowMs: number): RoundState {
+function publishedState(state: RoundState, host: string, run: RemoteRun, read: FirstRead | undefined, nowMs: number, tookMs: number): RoundState {
   const prev = state.memory.get(host) ?? {};
-  const next = read === undefined ? failedMemory(prev, run, nowMs) : readMemory(prev, host, read, nowMs);
+  const next = { ...(read === undefined ? failedMemory(prev, run, nowMs) : readMemory(prev, host, read, nowMs)), tookMs };
   const key = usageKeyOf(read, host);
 
   return { ...state, memory: put(state.memory, host, next), roundUsage: key === undefined ? state.roundUsage : new Set([...state.roundUsage, key]), read: readPlaces(state, host, read) };
@@ -324,7 +326,7 @@ async function checked(context: Context, host: string): Promise<Gate> {
     return { kind: 'abandon' };
   }
 
-  return afterDoor(context, await context.seams.may(host));
+  return afterDoor(context, await context.seams.may(scopeOf(host)));
 }
 
 /** A Stop, a refusal or a Forget since the round started: the generation is not the round's. */
@@ -415,16 +417,16 @@ export function joined(first: Reading, firstKey: string, second: UsageCame, plac
 const firstOf = (read: AccountsRead): FirstRead => (read.kind === 'claude-only' ? { kind: 'unreadable', why: 'shape' } : read);
 
 /** The memory and the usage set after a usage call: the reading is the joined one, the miss is kept for the cell, the key is counted when it was READ. */
-function joinedState(state: RoundState, host: string, took: Joined, nowMs: number): RoundState {
+function joinedState(state: RoundState, host: string, took: Joined, nowMs: number, tookMs: number): RoundState {
   const prev = state.memory.get(host) ?? {};
   const base = took.changed ? readMemory(prev, host, took.reading, nowMs) : prev;
-  const next: HostMemory = { ...base, usageMiss: took.usageMiss };
+  const next: HostMemory = { ...base, usageMiss: took.usageMiss, tookMs };
 
   return { ...state, memory: put(state.memory, host, next), roundUsage: took.counted === undefined ? state.roundUsage : new Set([...state.roundUsage, took.counted]) };
 }
 
 /** The usage call is back: the closed host and the checks are those of any result; then the reply is joined to the first reading. */
-async function settledUsage(context: Context, state: RoundState, host: string, first: Reading, run: RemoteRun): Promise<Step> {
+async function settledUsage(context: Context, state: RoundState, host: string, first: Reading, run: RemoteRun, startedMs: number): Promise<Step> {
   const { seams } = context;
   if (!hostLive(seams, host)) {
     return closedStep(context, state);
@@ -434,7 +436,8 @@ async function settledUsage(context: Context, state: RoundState, host: string, f
     return droppedStep(seams, state, host, gate);
   }
   const came: UsageCame = run.kind === 'answered' ? { kind: 'parsed', read: seams.parse(run, 'claude-usage') } : { kind: 'refused', sentence: run.refusal };
-  const next = joinedState(state, host, joined(first, claudeKeyOf(first, host), came, host), seams.now());
+  const nowMs = seams.now();
+  const next = joinedState(state, host, joined(first, claudeKeyOf(first, host), came, host), nowMs, Math.max(0, nowMs - startedMs));
   seams.landed(next.memory, host);
 
   return { kind: 'published', state: next, read: undefined };
@@ -444,7 +447,7 @@ async function settledUsage(context: Context, state: RoundState, host: string, f
 const claudeKeyOf = (first: Reading, host: string): string => claudeAccountKey(foundOf(first) as Found, host);
 
 /** The call is back: a closed host is dropped; a result that fails a check is dropped, once logged; else it is published. */
-async function settled(context: Context, state: RoundState, host: string, run: RemoteRun): Promise<Step> {
+async function settled(context: Context, state: RoundState, host: string, run: RemoteRun, startedMs: number): Promise<Step> {
   const { seams } = context;
   if (!hostLive(seams, host)) {
     return closedStep(context, state);
@@ -454,7 +457,8 @@ async function settled(context: Context, state: RoundState, host: string, run: R
     return droppedStep(seams, state, host, gate);
   }
   const read = answeredFirst(seams, run);
-  const next = publishedState(state, host, run, read, seams.now());
+  const nowMs = seams.now();
+  const next = publishedState(state, host, run, read, nowMs, Math.max(0, nowMs - startedMs));
   seams.landed(next.memory, host);
 
   return { kind: 'published', state: next, read, digest: digestOfRun(run) };
@@ -496,7 +500,7 @@ async function beforeSpawn(context: Context, state: RoundState, host: string): P
   if (early !== undefined) {
     return early;
   }
-  const door = await seams.may(host);
+  const door = await seams.may(scopeOf(host));
   if (door !== 'yes') {
     return notYes(seams, state, host, door);
   }
@@ -505,46 +509,161 @@ async function beforeSpawn(context: Context, state: RoundState, host: string): P
   return beforeCall(context, state, host);
 }
 
+/** What a call is made with: an ssh host's is the round's `call`; a WSL place's is the walk's, which reads the running list again first. */
+type Runner = (mode: AccountsMode, digest: string | undefined) => Promise<PlaceRun | RemoteRun>;
+
+/** A WSL place whose distro was not running when it was read again: no call was made, and the place keeps nothing. */
+const withoutKey = (state: RoundState, key: string): RoundState => ({ ...state, memory: new Map([...state.memory].filter(([one]) => one !== key)) });
+
+/** The door's own answer, when a WSL call was refused by the door inside its spawn (an ssh run has none). */
+const doorAnswerOf = (run: PlaceRun | RemoteRun): DoorAnswer | undefined => (run.kind === 'refused' && 'end' in run ? doorOf(run) : undefined);
+
+/** A call that was not made: the door said no inside the spawn, or the distro had left. Nothing for a call that was made. */
+function aside(context: Context, state: RoundState, host: string, got: PlaceRun | RemoteRun): Step | undefined {
+  const door = doorAnswerOf(got);
+  if (door !== undefined && door !== 'yes') {
+    return notYes(context.seams, state, host, door);
+  }
+
+  return got.kind === 'left' ? { kind: 'skipped', state: withoutKey(state, host) } : undefined;
+}
+
 /** A host's first call: the checks, the call, then `settled`. */
-async function firstStep(context: Context, state: RoundState, host: string): Promise<Step> {
+async function firstStep(context: Context, state: RoundState, host: string, run: Runner): Promise<Step> {
   const early = await beforeSpawn(context, state, host);
   if (early !== undefined) {
     return early;
   }
-  const mode = modeFor('first');
+  const startedMs = context.seams.now();
+  const got = await run(modeFor('first'), undefined);
 
-  return settled(context, admitted(state, host), host, await context.seams.call(host, mode));
+  return aside(context, state, host, got) ?? settled(context, admitted(state, host), host, got as RemoteRun, startedMs);
 }
 
 /** A host's usage call, with the digest of THAT host's first reply: the same checks, the call, then the join. */
-async function usageStep(context: Context, state: RoundState, host: string, first: Reading, digest: string): Promise<Step> {
+async function usageStep(context: Context, state: RoundState, host: string, first: Reading, digest: string, run: Runner): Promise<Step> {
   const early = await beforeSpawn(context, state, host);
   if (early !== undefined) {
     return early;
   }
-  const mode = modeFor('usage');
+  const startedMs = context.seams.now();
+  const got = await run(modeFor('usage'), digest);
 
-  return settledUsage(context, admitted(state, host), host, first, await context.seams.call(host, mode, digest));
+  return aside(context, state, host, got) ?? settledUsage(context, admitted(state, host), host, first, got as RemoteRun, startedMs);
 }
 
 /** The first reading of a place with no account lines in its reply: nothing can be asked for, and the cell says so. */
 const withoutLines = (state: RoundState, host: string): RoundState => ({ ...state, memory: put(state.memory, host, { ...(state.memory.get(host) ?? {}), usageMiss: { why: 'no-account-lines' } }) });
 
 /** The second call, when the first reading asks for one: at most ONE usage call for a place in a round, and never a third call. */
-async function secondStep(context: Context, first: Extract<Step, { kind: 'published' }>, reading: Reading, host: string): Promise<Step> {
+async function secondStep(context: Context, first: Extract<Step, { kind: 'published' }>, reading: Reading, host: string, run: Runner): Promise<Step> {
   const { seams, policy, trigger } = context;
   if (!needsSecondCall(reading, first.state.roundUsage, first.state.memory, host, policy, seams.now(), trigger)) {
     return first;
   }
 
-  return first.digest === undefined ? { ...first, state: withoutLines(first.state, host) } : usageStep(context, first.state, host, reading, first.digest);
+  return first.digest === undefined ? { ...first, state: withoutLines(first.state, host) } : usageStep(context, first.state, host, reading, first.digest, run);
 }
 
 /** A host's first call, and the one extra call for the account that reply names, when it is due. */
-async function hostRound(context: Context, state: RoundState, host: string): Promise<Step> {
-  const first = await firstStep(context, state, host);
+async function placeRound(context: Context, state: RoundState, host: string, run: Runner): Promise<Step> {
+  const first = await firstStep(context, state, host, run);
 
-  return first.kind === 'published' && first.read?.kind === 'read' ? secondStep(context, first, first.read, host) : first;
+  return first.kind === 'published' && first.read?.kind === 'read' ? secondStep(context, first, first.read, host, run) : first;
+}
+
+/** An ssh host: its calls are the round's `call`. */
+const hostRound = (context: Context, state: RoundState, host: string): Promise<Step> =>
+  placeRound(context, state, host, (mode, digest) => context.seams.call(host, mode, digest));
+
+// ───────────────── the WSL turn (E3.S3) ─────────────────
+
+/** The answer of the door that a kept admission stands for: what the WSL part ended with, when a place's own door question said no. */
+const DOOR_OF_KIND: Readonly<Record<NotRead, DoorAnswer>> = { refused: 'no', 'not-asked': 'no-permission', full: 'no', damaged: 'damaged', unwritten: 'waiting' };
+
+/** The scope host's facts are in its entry of the memory. */
+const withFacts = (state: RoundState, facts: WslFacts): RoundState =>
+  ({ ...state, memory: put(state.memory, WSL_SCOPE, { ...(state.memory.get(WSL_SCOPE) ?? {}), wsl: facts, admission: undefined }) });
+
+/** The places of distros and users that the walk found gone, or not running, keep nothing; a list that was not read keeps all. */
+function retired(state: RoundState, walk: WslWalk<RoundState>): RoundState {
+  const kept = ([key]: readonly [string, HostMemory]): boolean => {
+    const place = splitWslKey(key);
+
+    return place === undefined || retainedAfter(walk.seen, place.distro, place.user);
+  };
+
+  return { ...state, memory: new Map([...state.memory].filter(kept)) };
+}
+
+/** The WSL part's end for a place's kept admission, or nothing when it has none. */
+function doorEnd(memory: HostMemory | undefined): Visited<RoundState>['end'] {
+  const kind = memory?.admission;
+
+  return kind === undefined ? undefined : { door: DOOR_OF_KIND[kind] };
+}
+
+/** What ends the WSL part after a place whose own door question said no: the answer that kind stands for. */
+const endAfter = (step: Step, key: string): Visited<RoundState>['end'] => (step.kind === 'abandoned' ? 'stopped' : doorEnd(step.kind === 'skipped' ? step.state.memory.get(key) : undefined));
+
+/**
+ * The scope host `wsl`'s turn: the WSL part of the round, place by place, one at a time and awaited. One class because it is one sequence of awaited
+ * steps whose state the walk's hooks and its visits both move; what leaves it is a `Step`, as for a host.
+ */
+class WslTurn {
+  private state: RoundState;
+
+  constructor(private readonly context: Context, state: RoundState, private readonly port: WslPort) {
+    this.state = state;
+  }
+
+  private hooks(): WslHooks {
+    return {
+      stillOn: async () => !(await ended(this.context)) && hostLive(this.context.seams, WSL_SCOPE),
+      facts: (facts) => { this.landsFacts(facts); },
+    };
+  }
+
+  private landsFacts(facts: WslFacts): void {
+    this.state = withFacts(this.state, facts);
+    this.context.seams.landed(this.state.memory, WSL_SCOPE);
+  }
+
+  /** One place: the same steps as a host's (the Stop, the terminal, the door, the call, the checks, the publication, the usage call), with the walk's call. */
+  private async visit(_state: RoundState, place: WslPlace, call: PlaceCall): Promise<Visited<RoundState>> {
+    const key = memoryKeyOf(place);
+    const step = await placeRound(this.context, this.state, key, (mode, digest) => call(mode, digest));
+    this.state = step.state;
+
+    return { state: step.state, end: endAfter(step, key) };
+  }
+
+  private finish(walk: WslWalk<RoundState>): Step {
+    this.state = retired(this.state, walk);
+    this.context.seams.landed(this.state.memory, WSL_SCOPE);
+
+    return walk.end === 'stopped' ? { kind: 'abandoned', state: this.state } : { kind: 'published', state: this.state, read: undefined };
+  }
+
+  async run(): Promise<Step> {
+    const early = await beforeCall(this.context, this.state, WSL_SCOPE);
+    if (early !== undefined) {
+      return early;
+    }
+    const door = await this.context.seams.may(WSL_SCOPE);
+    if (door !== 'yes') {
+      return notYes(this.context.seams, this.state, WSL_SCOPE, door);
+    }
+
+    return this.finish(await wslRound(this.port, this.hooks(), this.state, (state, place, call) => this.visit(state, place, call)));
+  }
+}
+
+/** The turn of one scope host: `wsl` is the WSL walk when the window gives the round a port; every other host is `hostRound`. */
+function turnOf(context: Context, state: RoundState, host: string): Promise<Step> {
+  const port = host === WSL_SCOPE ? context.seams.wsl : undefined;
+
+  return port === undefined ? hostRound(context, state, host) : new WslTurn(context, state, port).run();
 }
 
 /** The round's end. A generation that moved by now abandons it: its memory is never stored over what a Stop cleared. A closed host's older entry goes. */
@@ -559,10 +678,10 @@ const finished = (context: Context, state: RoundState, abandoned: boolean): Roun
  */
 export async function runRound(seams: RoundSeams, memory: Memory, round: number, trigger: Trigger, policy: UsagePolicy = USAGE_POLICY): Promise<RoundResult> {
   const context: Context = { seams, trigger, policy, token: seams.generation() };
-  const hosts = roundOrder(callableHosts(seams.live()), round);
+  const hosts = roundOrder(callableHosts(seams.live(), seams.wsl !== undefined), round);
   let state: RoundState = { memory: liveOnly(memory, hosts), roundUsage: new Set(), asked: new Set(), read: new Set() };
   for (const host of hosts) {
-    const step = await hostRound(context, state, host);
+    const step = await turnOf(context, state, host);
     state = step.state;
     if (step.kind === 'abandoned') {
       return finished(context, state, true);
@@ -574,125 +693,19 @@ export async function runRound(seams: RoundSeams, memory: Memory, round: number,
 
 // ───────────────── the timer, as decisions ─────────────────
 
-export type ArmDecision = 'arm-first' | 'clear' | 'keep';
-
-const idle = (input: { readonly armed: boolean; readonly running: boolean }): boolean => !input.armed && !input.running;
-
-/**
- * What the timer does when a terminal opens or closes or the window starts. `eligible`: a live `Creds:` terminal of a host that is not
- * refused and is called (never `wsl`). `permitted`: the permission is in force; with none, no timer is armed. Whether a host is CONTACTED is the
- * door's answer alone.
- */
-export function armFor(input: { readonly eligible: boolean; readonly permitted: boolean; readonly armed: boolean; readonly stopped: boolean; readonly running: boolean }): ArmDecision {
-  if (!armable(input)) {
-    return 'clear';
-  }
-
-  return idle(input) ? 'arm-first' : 'keep';
-}
-
-/** A timer may run only for an eligible terminal, with the permission in force and the round not stopped. */
-const armable = (input: { readonly eligible: boolean; readonly permitted: boolean; readonly stopped: boolean }): boolean => input.eligible && input.permitted && !input.stopped;
-
-const refusedIn = (standings: readonly HostStanding[], host: string): boolean => standings.some((one) => one.host === host && one.answer === 'no');
+export * from './remoteAccountsTimer';
 
 /**
  * A host that was newly refused keeps an entry that says so — its older reading goes, the kind the door will answer is kept — instead of being
  * deleted: the entry is what the list reads, and a round that ends later cannot bring the older reading back.
  */
 export const withRefusals = (memory: Memory, refused: ReadonlySet<string>): Memory =>
-  new Map([...memory].map(([host, one]): [string, HostMemory] => [host, refused.has(host) ? { ...one, reading: undefined, admission: 'refused' } : one]));
+  new Map([...memory].filter(([key]) => !refused.has(scopeOf(key)) || key === scopeOf(key)).map(([host, one]): [string, HostMemory] => [host, refused.has(host) ? refusedEntry(one) : one]));
 
-/**
- * One round, and what follows it, in a window. A round that failed — a seam rejected — is logged once through `failed`, and the timer is still set
- * (`schedule` is given nothing): rounds never stop silently. A `schedule` that fails too falls back to `fallback`, which sets the plain gap.
- */
-export async function settleRound<T>(work: () => Promise<T>, schedule: (done: T | undefined) => Promise<void>, fallback: () => void, failed: () => void): Promise<T | undefined> {
-  let done: T | undefined;
-  try {
-    done = await work();
-  } catch {
-    failed();
-  }
-  try {
-    await schedule(done);
-  } catch {
-    failed();
-    fallback();
-  }
+/** A refused host's entry: its reading and its WSL facts go, and the kind the door will answer stays. */
+const refusedEntry = (one: HostMemory): HostMemory => ({ ...Object.fromEntries(Object.entries(one).filter(([field]) => field !== 'wsl')), reading: undefined, admission: 'refused' });
 
-  return done;
-}
-
-/** The hosts the list says "no" to. */
-export const refusedHosts = (standings: readonly HostStanding[]): ReadonlySet<string> => new Set(standings.filter((one) => one.answer === 'no').map((one) => one.host));
-
-/**
- * Whether the list's change signal shows a host that is NEWLY refused, or a standing that is gone (a Forget): a result in flight is then to be dropped,
- * so the host bumps its generation. A new row — the automatic "yes" this very round wrote — bumps nothing.
- */
-export function standingsBump(known: ReadonlySet<string>, refused: ReadonlySet<string>, standings: readonly HostStanding[]): boolean {
-  const forgotten = [...known].some((host) => !standings.some((one) => one.host === host));
-
-  return forgotten || standings.some((one) => one.answer === 'no' && !refused.has(one.host));
-}
-
-/** The hosts of live terminals whose standing is not a "no". A host with no row is eligible: the round allows it by itself. */
-export const eligibleOf = (hosts: readonly string[], standings: readonly HostStanding[]): readonly string[] => hosts.filter((host) => !refusedIn(standings, host));
-
-export type NextRound = { readonly kind: 'at'; readonly atMs: number } | { readonly kind: 'clear' };
-
-export type TimerAction = { readonly kind: 'none' } | { readonly kind: 'clear' } | { readonly kind: 'start'; readonly ms: number };
-
-const afterRound = (next: NextRound, nowMs: number): TimerAction => (next.kind === 'at' ? { kind: 'start', ms: Math.max(0, next.atMs - nowMs) } : { kind: 'clear' });
-
-const ARMED: Readonly<Record<ArmDecision, TimerAction>> = { 'arm-first': { kind: 'start', ms: FIRST_DELAY_MS }, clear: { kind: 'clear' }, keep: { kind: 'none' } };
-
-/**
- * The first test-mode lock, and the ONE road from a decision to a timer: in a test run no timer is ever started, whatever `armFor` or
- * `nextAfterRound` answered. A decision after a round is an absolute time; the wait is counted from `nowMs`.
- */
-export function timerFor(decision: ArmDecision | NextRound, test: boolean, nowMs = 0): TimerAction {
-  return test ? { kind: 'none' } : actionOf(decision, nowMs);
-}
-
-/** What a read of the permission means for the window, given what it saw before. The first read of a window (`undefined`) is no edge. */
-export type PermissionEdge = 'allowed' | 'withdrawn' | 'same';
-
-export function permissionEdge(was: boolean | undefined, now: boolean): PermissionEdge {
-  if (was === undefined || was === now) {
-    return 'same';
-  }
-
-  return now ? 'allowed' : 'withdrawn';
-}
-
-/** An *Allow* starts a round at once — unless one runs, the round is stopped, or no terminal is eligible. */
-export const startsAfterAllow = (input: { readonly running: boolean; readonly stopped: boolean; readonly eligible: boolean }): boolean =>
-  !input.running && !input.stopped && input.eligible;
-
-const actionOf = (decision: ArmDecision | NextRound, nowMs: number): TimerAction => (typeof decision === 'string' ? ARMED[decision] : afterRound(decision, nowMs));
-
-/** After a round: the next one `ROUND_GAP_MS` from the END of this one, or no timer (a Stop, no eligible terminal, or no permission). */
-export const nextAfterRound = (input: { readonly stopped: boolean; readonly eligible: boolean; readonly permitted: boolean; readonly endedMs: number }): NextRound =>
-  (input.stopped || !input.eligible || !input.permitted ? { kind: 'clear' } : { kind: 'at', atMs: input.endedMs + ROUND_GAP_MS });
-
-const insideFloor = (input: { readonly lastEndMs: number | undefined; readonly now: number }): boolean => input.lastEndMs !== undefined && input.now - input.lastEndMs < REFRESH_FLOOR_MS;
-
-/** *Refresh now*: a round at once, unless one is running or the last one ended less than a minute ago. */
-export function refreshAnswer(input: { readonly running: boolean; readonly lastEndMs: number | undefined; readonly now: number }): 'start' | 'busy' | 'floor' {
-  if (input.running) {
-    return 'busy';
-  }
-
-  return insideFloor(input) ? 'floor' : 'start';
-}
-
-/** Opening the list starts a round only when a host that is not refused has nothing yet, and not inside the floor. */
-export const openStarts = (input: { readonly running: boolean; readonly lastEndMs: number | undefined; readonly now: number; readonly unreadHost: boolean }): boolean =>
-  input.unreadHost && refreshAnswer(input) === 'start';
-
-const hasAnswer = (one: HostMemory | undefined): boolean => [one?.reading, one?.failure].some((held) => held !== undefined);
+const hasAnswer = (one: HostMemory | undefined): boolean => [one?.reading, one?.failure, one?.wsl].some((held) => held !== undefined);
 
 /** A host that is not refused and has neither a reading nor a failure. */
 export const unreadHost = (hosts: readonly string[], memory: Memory, standings: readonly HostStanding[]): boolean =>

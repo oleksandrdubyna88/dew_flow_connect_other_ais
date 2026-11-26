@@ -33,7 +33,11 @@ export interface Failure {
 
 /** One place of an account block: where it is signed in, with that read's instant. */
 export interface AccountPlace {
+  /** The place's id (a host, or a WSL user's key); `shown` is what the person reads. */
   readonly place: string;
+  readonly shown: string;
+  /** How long that read took, in ms, or `null`. */
+  readonly tookMs: number | null;
   readonly readAt: number;
   readonly failure: Failure | null;
   readonly version: string | null;
@@ -59,6 +63,7 @@ export interface AccountBlock {
 /** A Codex or Antigravity row of one place, with the failure of that place's last read. */
 export interface ToolLine {
   readonly place: string;
+  readonly shown: string;
   readonly row: ToolRow;
   readonly failure: Failure | null;
 }
@@ -66,6 +71,7 @@ export interface ToolLine {
 /** A place that is in no Claude block, with its sentence and what a press on it may do. */
 export interface NoClaude {
   readonly place: string;
+  readonly shown: string;
   readonly said: string;
   readonly manager: ManagerWord | null;
   readonly action: 'read-again' | 'copy-install' | null;
@@ -74,6 +80,8 @@ export interface NoClaude {
 
 export interface UserRow {
   readonly place: string;
+  readonly shown: string;
+  readonly tookMs: number | null;
   readonly head: Head;
   readonly olderAt: number | null;
   readonly line: string | null;
@@ -158,7 +166,7 @@ export function viewOf(model: TableModel, state: ViewState, compare: Compare): V
     const places = order(group.members.map(function (one): Sorted<AccountPlace> {
       return {
         s: { name: one.block.host, account: null, left5h: null, reset5h: null, leftWeek: null, resetWeek: null, age: 0 - one.row.readAt },
-        v: { place: one.block.host, readAt: one.row.readAt, failure: failureOf(one.block), version: one.row.version },
+        v: { place: one.block.host, shown: one.block.shown, tookMs: one.block.tookMs, readAt: one.row.readAt, failure: failureOf(one.block), version: one.row.version },
       };
     }));
 
@@ -188,16 +196,16 @@ export function viewOf(model: TableModel, state: ViewState, compare: Compare): V
           }
           group.members.push({ block, row });
         } else if (row.tool === 'codex') {
-          codex.push({ s: rowValues(row, block.host), v: { place: block.host, row, failure: failureOf(block) } });
+          codex.push({ s: rowValues(row, block.host), v: { place: block.host, shown: block.shown, row, failure: failureOf(block) } });
         } else if (row.tool === 'agy') {
-          agy.push({ s: rowValues(row, block.host), v: { place: block.host, row, failure: failureOf(block) } });
+          agy.push({ s: rowValues(row, block.host), v: { place: block.host, shown: block.shown, row, failure: failureOf(block) } });
         }
       });
       if (!hasClaude) {
         const copy = block.head.kind === 'jq-missing' && block.head.manager !== null && block.head.manager !== 'none';
         none.push({
           s: { name: block.host, account: null, left5h: null, reset5h: null, leftWeek: null, resetWeek: null, age: ageOf(block.head.at) },
-          v: { place: block.host, said: block.noClaude, manager: block.head.manager, action: block.canReadAgain ? 'read-again' : copy ? 'copy-install' : null, canRefuse: block.canRefuse },
+          v: { place: block.host, shown: block.shown, said: block.noClaude, manager: block.head.manager, action: block.canReadAgain ? 'read-again' : copy ? 'copy-install' : null, canRefuse: block.canRefuse },
         });
       }
     });
@@ -221,7 +229,7 @@ export function viewOf(model: TableModel, state: ViewState, compare: Compare): V
           name: block.host, account: pick('account'), left5h: pick('left5h'), reset5h: pick('reset5h'), leftWeek: pick('leftWeek'), resetWeek: pick('resetWeek'), age: ageOf(block.head.at),
         },
         v: {
-          place: block.host, head: block.head, olderAt: block.olderAt, line: block.line, canRefuse: block.canRefuse, canReadAgain: block.canReadAgain, failure: failureOf(block), cells,
+          place: block.host, shown: block.shown, tookMs: block.tookMs, head: block.head, olderAt: block.olderAt, line: block.line, canRefuse: block.canRefuse, canReadAgain: block.canReadAgain, failure: failureOf(block), cells,
         },
       };
     });

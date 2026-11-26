@@ -236,7 +236,7 @@ const END_SENTENCES: ReadonlyMap<string, (host: string, limits: RemoteLimits, sa
 ]);
 
 /** A byte count in the unit it divides into evenly: 8 MiB stays `8 MiB`, 64 KiB says `64 KiB`. */
-function sizeWords(bytes: number): string {
+export function sizeWords(bytes: number): string {
   if (bytes % 1_048_576 === 0) {
     return `${bytes / 1_048_576} MiB`;
   }
@@ -244,7 +244,7 @@ function sizeWords(bytes: number): string {
   return bytes % 1024 === 0 ? `${bytes / 1024} KiB` : `${bytes} bytes`;
 }
 
-const tailOf = (got: Captured): string => got.stderrTail ?? '';
+export const tailOf = (got: Captured): string => got.stderrTail ?? '';
 
 /** ssh's own exit 255: it could not connect, authenticate or verify the host — never an answer. */
 const sshSentence = (host: string, said: string): string =>
@@ -293,7 +293,7 @@ function logged(seams: RemoteSeams, line: string): void {
  * It is ssh's own sentence (`Permission denied (publickey).`): the remote script's stderr goes to `/dev/null`, so no transcript
  * text can be in it.
  */
-function lastLine(tail: string): string {
+export function lastLine(tail: string): string {
   const lines = tail.split('\n').map(withoutControls);
   const last = [...lines].reverse().find((line) => line.trim().length > 0) ?? '';
 

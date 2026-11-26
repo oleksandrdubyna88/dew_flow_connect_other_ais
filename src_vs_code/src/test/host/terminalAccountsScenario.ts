@@ -3,6 +3,9 @@ import * as vscode from 'vscode';
 
 import type { CoaiExports } from '../../extension';
 import type { RemoteRun } from '../../remoteSsh';
+import type { WslPort } from '../../remoteWslRound';
+import type { WslRun } from '../../remoteWslRun';
+import { GOOD } from '../accountsFrames';
 import { until, activated } from './hostHelpers';
 
 /**
@@ -37,6 +40,7 @@ async function doorsOf(): Promise<Doors> {
  */
 async function putBack(accounts: Doors['accounts'], sessions: Doors['sessions'], before: Awaited<ReturnType<Doors['sessions']['stored']>>): Promise<void> {
   accounts.replaceCall(undefined);
+  accounts.replaceWsl(undefined);
   await sessions.restore(before);
 }
 
@@ -114,6 +118,45 @@ export async function theIconOpensOneTabAndItsModelHoldsBothHosts(): Promise<voi
     for (const one of terminals) {
       one.dispose();
     }
+    await putBack(accounts, sessions, before);
+  }
+}
+
+/** What a fake `wsl.exe` prints for a list: UTF-16LE, as the launcher decodes it. */
+const listText = (...names: readonly string[]): WslRun => ({ kind: 'answered', code: 0, stdout: Buffer.from(`${names.join('\r\n')}\r\n`, 'utf16le').toString('utf8') });
+
+/** A PC of two distros, one of them stopped: the running one has root and two users; every account call answers a good reply. */
+const FAKE_WSL: WslPort = {
+  list: (running) => Promise.resolve(running ? listText('Ubuntu') : listText('Ubuntu', 'Debian')),
+  users: () => Promise.resolve({ kind: 'answered', code: 0, stdout: 'COAI-USERS 1\nCOAI-USER root 0\nCOAI-USER alice 1000\nCOAI-USER bob 1001\nCOAI-USERS-END\n' }),
+  accounts: () => Promise.resolve({ kind: 'answered', code: 0, stdout: GOOD }),
+};
+
+/**
+ * E3S3-H1 of the accounts plan (E3.S3): one `Creds: wsl / s1` terminal, the WSL port replaced through the test door (so no `wsl.exe` starts), two distros of
+ * which one is stopped, root and two users: the tab's model holds the `wsl` block with the line of the stopped distro and the three places, each by its key.
+ * The permission is given through the keeper first. The profile is put back as it was found. CI's real-editor job runs it.
+ */
+export async function theWslPlacesAreInTheTabsModel(): Promise<void> {
+  const { accounts, sessions } = await doorsOf();
+  const before = await sessions.stored();
+  accounts.replaceCall(async (): Promise<RemoteRun> => ({ kind: 'answered', code: 0, stdout: '' }));
+  accounts.replaceWsl(FAKE_WSL);
+  const name = 'Creds: wsl / s1';
+  const terminal = vscode.window.createTerminal({ name });
+  try {
+    await until(() => vscode.window.terminals.some((one) => one.name === name), 'the terminal did not open');
+    assert.equal((await sessions.allow()).kind, 'given', 'the permission was not given through the keeper');
+    await until(() => accounts.memoryHosts().filter((key) => key.startsWith('wsl:')).length === 3, 'the round did not remember the three places');
+    await vscode.commands.executeCommand('coai.terminalAccounts');
+    await until(() => (accounts.lastModel()?.blocks.length ?? 0) === 4, 'the tab does not hold the wsl block and the three places');
+
+    const model = accounts.lastModel();
+    assert.deepEqual(model?.blocks.map((block) => block.host), ['wsl', 'wsl:Ubuntu/alice', 'wsl:Ubuntu/bob', 'wsl:Ubuntu/root']);
+    assert.deepEqual(model?.blocks.map((block) => block.shown), ['wsl', 'Ubuntu · alice', 'Ubuntu · bob', 'Ubuntu · root']);
+    assert.deepEqual(model?.blocks[0]?.wsl?.distros.map((one) => `${one.name}: ${one.said}`), ['Ubuntu: 3 users', 'Debian: not running, so not read']);
+  } finally {
+    terminal.dispose();
     await putBack(accounts, sessions, before);
   }
 }

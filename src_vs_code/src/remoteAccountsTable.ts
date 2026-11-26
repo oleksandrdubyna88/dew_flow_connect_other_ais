@@ -5,6 +5,8 @@ import { NO_MANAGER_SAID, forList, unreadableClause, unsafeSaid } from './remote
 import type { HostMemory, Memory, UsageMiss } from './remoteAccountsRound';
 import type { HostStanding } from './remoteHosts';
 import { HOSTS_SAID } from './remoteHostsSaid';
+import { isWslKey, splitWslKey } from './remotePlaces';
+import type { WslFacts } from './remoteWslRound';
 import type { Permission } from './remotePermission';
 import { percentLeft, windowLabel } from './usageWords';
 
@@ -86,11 +88,30 @@ export interface Head {
   readonly manager: ManagerWord | null;
 }
 
+/** One distro of the `wsl` block: its name and what is said of it (its users, or why it was not read). */
+export interface WslDistroLine {
+  readonly name: string;
+  readonly said: string;
+}
+
+/** What the `wsl` block holds beyond a host's: the count, the login-session line (S13, always), a line for each distro, and the notes (S3, S11, S12). */
+export interface WslPart {
+  readonly heading: string;
+  readonly count: string;
+  readonly login: string;
+  readonly distros: readonly WslDistroLine[];
+  readonly notes: readonly string[];
+}
+
 export interface Block {
-  /** The scope host as the terminal named it, WHOLE (its alphabet is closed): what a message names and what groups. E2 has no other kind of place. */
+  /** The place's id, WHOLE (its alphabet is closed): the scope host as the terminal named it, the scope host `wsl`, or the key `wsl:<distro>/<user>` of a WSL user. What a message names and what groups. */
   readonly host: string;
-  /** The host as it is drawn: cut at the sentence length through `forList`. Never a key and never posted. */
+  /** The place as it is drawn: the host cut at the sentence length through `forList`, or `<distro> · <user>`. Never a key and never posted. */
   readonly shown: string;
+  /** How long this place's last call took, in ms; `null` when no call was timed (the hover of its age says it). */
+  readonly tookMs: number | null;
+  /** The `wsl` block's own part (E3.S3); `null` for every other block. */
+  readonly wsl: WslPart | null;
   readonly head: Head;
   readonly rows: readonly ToolRow[];
   /** The instant of the older read whose rows these are, after a failure; else `null`. */
@@ -151,8 +172,10 @@ export interface TableInput {
 // ───────────────── the sentences the model owns ─────────────────
 
 export const NO_TERMINAL_SAID = 'No `Creds: <host> / <session>` terminal is open, so there is no host to read.';
-export const WSL_WINDOWS_SAID = 'WSL on this PC is not read by this build';
 export const WSL_ELSEWHERE_SAID = 'WSL is read from a Windows window only';
+export const WSL_HEADING = 'wsl — this PC';
+/** S13: under the heading of `wsl`, always. */
+export const WSL_LOGIN_SAID = 'On a distro with systemd, WSL opens a login session for each user that is read. It runs that user’s profile — root’s as root — and stays until the distro stops.';
 const NEVER_SAID = 'never read yet';
 const REFUSED_SAID = 'not allowed: your answer for this host is “Not this host”';
 const NO_PERMISSION_SAID = 'not read: there is no permission to read hosts';
@@ -472,42 +495,118 @@ function memoryHead(host: string, memory: HostMemory): Head {
   return memory.reading === undefined ? headOf('never', null, NEVER_SAID) : readHead(memory.reading);
 }
 
-function wslBlock(input: TableInput): Block {
-  const said = input.windows ? WSL_WINDOWS_SAID : WSL_ELSEWHERE_SAID;
+const noTime = (memory: HostMemory | undefined): number | null => instantOf(memory?.tookMs);
 
-  return { host: 'wsl', shown: 'wsl', head: headOf('wsl', null, said), rows: [], olderAt: null, line: null, noClaude: said, canRefuse: false, canReadAgain: false };
+const distroLine = (fact: WslFacts['distros'][number]): WslDistroLine =>
+  ({ name: forList(fact.distro, NAME_MAX), said: fact.state === 'read' ? `${fact.users} ${fact.users === 1 ? 'user' : 'users'}` : forList(fact.said, SENTENCE_MAX) });
+
+const distrosSaid = (n: number): string => (n === 0 ? 'no distros' : `${n} ${n === 1 ? 'distro' : 'distros'}`);
+
+/** The count of the heading: nothing known, a list that failed, or the distros of the list. */
+const countOf = (facts: WslFacts | undefined): string => (facts === undefined ? 'not read yet' : facts.failed === '' ? distrosSaid(facts.distros.length + facts.moreDistros) : 'not read');
+
+/** The notes under the distros, in this order: the failure (S3), the distros past the cap (S11), the users past a cap (S11), the lines not understood (S12). */
+function notesOf(facts: WslFacts): readonly string[] {
+  const lines: readonly (readonly [boolean, string])[] = [
+    [facts.failed !== '', forList(facts.failed, SENTENCE_MAX)],
+    [facts.moreDistros > 0, `and ${facts.moreDistros} more distros are not read (the limit is 16)`],
+    [facts.moreUsers > 0, `and ${facts.moreUsers} more users are not read (the limit is 16 for a distro, 32 in all)`],
+    [facts.ignored > 0, `${facts.ignored} lines of the list were not understood and are not read.`],
+  ];
+
+  return lines.flatMap(([on, text]) => (on ? [text] : []));
+}
+
+function wslPart(facts: WslFacts | undefined): WslPart {
+  return { heading: WSL_HEADING, count: countOf(facts), login: WSL_LOGIN_SAID, distros: (facts?.distros ?? []).map(distroLine), notes: facts === undefined ? [] : notesOf(facts) };
+}
+
+/** What the scope host `wsl` says of itself: not Windows (S1), a closed door, a failed list (S3 or S2), or nothing when it was read. */
+const failedOf = (facts: WslFacts | undefined): string => forList(facts?.failed ?? '', SENTENCE_MAX);
+
+function wslSaid(input: TableInput, facts: WslFacts | undefined, closed: string | undefined): string {
+  return input.windows ? (closed ?? failedOf(facts)) : WSL_ELSEWHERE_SAID;
+}
+
+/** The sentence of the scope host's `none` line in *Claude account*: what it said, or its heading and its count. */
+const noClaudeOfWsl = (said: string, facts: WslFacts | undefined): string => (said === '' ? `${WSL_HEADING} · ${countOf(facts)}` : said);
+
+function wslBlock(input: TableInput, closed: string | undefined): Block {
+  const facts = input.memory.get('wsl')?.wsl;
+  const said = wslSaid(input, facts, closed);
+  const part = input.windows && closed === undefined ? wslPart(facts) : null;
+
+  return {
+    host: 'wsl', shown: 'wsl', tookMs: null, wsl: part, head: headOf('wsl', null, said), rows: [], olderAt: null, line: null, noClaude: noClaudeOfWsl(said, facts),
+    canRefuse: false, canReadAgain: false,
+  };
 }
 
 function closedBlock(host: string, shown: string, refused: boolean, said: string): Block {
-  return { host, shown, head: headOf('not-allowed', null, said), rows: [], olderAt: null, line: null, noClaude: said, canRefuse: !refused, canReadAgain: refused };
+  return {
+    host, shown, tookMs: null, wsl: null, head: headOf('not-allowed', null, said), rows: [], olderAt: null, line: null, noClaude: said, canRefuse: !refused, canReadAgain: refused,
+  };
 }
 
 /** The instant of the older read whose rows a failed place keeps. */
 const olderAtOf = (head: Head, reading: HostMemory['reading']): number | null => (head.kind === 'failed' && reading !== undefined ? reading.atMs : null);
 
-function readBlock(host: string, shown: string, memory: HostMemory, head: Head, shared: ReadonlyMap<string, Shared>): Block {
+/** A place's id and its name on screen. */
+interface Ident {
+  readonly host: string;
+  readonly shown: string;
+}
+
+/** The name a tool row carries: a host's whole name, or a WSL user's `<distro> · <user>`. */
+const placeNameOf = (id: Ident): string => (isWslKey(id.host) ? id.shown : id.host);
+
+/** A read place with no tool has one line — but a root place has none: root is a place of nearly every distro, and a line for each would be noise (E3.S3). */
+const lineOf = (head: Head, rows: readonly ToolRow[], root: boolean): string | null => (head.kind === 'read' && rows.length === 0 && !root ? NO_TOOL_SAID : null);
+
+function readBlock(id: Ident, memory: HostMemory, head: Head, shared: ReadonlyMap<string, Shared>, root: boolean): Block {
   const { reading } = memory;
-  const rows = reading === undefined ? [] : rowsOf(host, { host, read: reading.read, at: reading.atMs, ...usageContextOf(memory) }, shared);
+  const rows = reading === undefined ? [] : rowsOf(placeNameOf(id), { host: id.host, read: reading.read, at: reading.atMs, ...usageContextOf(memory) }, shared);
   const olderAt = olderAtOf(head, reading);
 
-  return { host, shown, head, rows, olderAt, line: head.kind === 'read' && rows.length === 0 ? NO_TOOL_SAID : null, noClaude: noClaudeOf(head, rows, olderAt), canRefuse: true, canReadAgain: false };
+  return {
+    host: id.host, shown: id.shown, tookMs: noTime(memory), wsl: null, head, rows, olderAt, line: lineOf(head, rows, root), noClaude: noClaudeOf(head, rows, olderAt),
+    canRefuse: !isWslKey(id.host), canReadAgain: false,
+  };
 }
 
-function readBlockFor(input: TableInput, host: string, shown: string, shared: ReadonlyMap<string, Shared>): Block {
-  const memory = input.memory.get(host) ?? {};
+function readBlockFor(input: TableInput, id: Ident, shared: ReadonlyMap<string, Shared>): Block {
+  const memory = input.memory.get(id.host) ?? {};
+  const root = splitWslKey(id.host)?.user === 'root';
 
-  return readBlock(host, shown, memory, memoryHead(host, memory), shared);
+  return readBlock(id, memory, memoryHead(placeNameOf(id), memory), shared, root);
 }
+
+/** Why the scope host `host` is not read at all, or nothing when it is. */
+const closedSaidOf = (input: TableInput, host: string): string | undefined => notReadSaid(input, input.standings.find((one) => one.host === host));
 
 function blockFor(input: TableInput, host: string, shared: ReadonlyMap<string, Shared>): Block {
   if (host === 'wsl') {
-    return wslBlock(input);
+    return wslBlock(input, closedSaidOf(input, 'wsl'));
   }
   const shown = forList(host, SENTENCE_MAX);
   const standing = input.standings.find((one) => one.host === host);
   const closed = notReadSaid(input, standing);
 
-  return closed === undefined ? readBlockFor(input, host, shown, shared) : closedBlock(host, shown, standing?.answer === 'no', closed);
+  return closed === undefined ? readBlockFor(input, { host, shown }, shared) : closedBlock(host, shown, standing?.answer === 'no', closed);
+}
+
+/** The key's name on screen: `<distro> · <user>`. */
+const wslLabel = (key: string): string => {
+  const place = splitWslKey(key);
+
+  return place === undefined ? key : forList(`${place.distro} · ${place.user}`, SENTENCE_MAX);
+};
+
+/** The keys of the WSL places the model shows: a Windows window with the scope host `wsl` open and not closed; each is a place of the memory. */
+function wslKeys(input: TableInput, hosts: readonly string[]): readonly string[] {
+  const on = input.windows && hosts.includes('wsl') && closedSaidOf(input, 'wsl') === undefined;
+
+  return on ? [...input.memory.keys()].filter(isWslKey).sort(byCodeUnit) : [];
 }
 
 const roundPart = (round: RoundNow): RoundPart =>
@@ -523,21 +622,25 @@ const PERMISSION_OF = (permission: Permission): PermissionPart => {
   return permission === 'none' ? { kind: 'none', said: PERMISSION_NONE_SAID } : { kind: 'waiting', said: PERMISSION_WAITING_SAID };
 };
 
+const seenOf = (input: TableInput, keys: readonly string[]): readonly Seen[] =>
+  keys.flatMap((key) => {
+    const reading = input.memory.get(key)?.reading;
+
+    return reading === undefined ? [] : [{ host: key, read: reading.read, at: reading.atMs, ...usageContextOf(input.memory.get(key) ?? {}) }];
+  });
+
 /** The model, from what the window holds. Deterministic: the same input gives the same model. */
 export function tableModel(input: TableInput): TableModel {
   const hosts = [...new Set(input.hosts)].sort(byCodeUnit);
-  const seen = hosts.flatMap((host) => {
-    const reading = input.memory.get(host)?.reading;
-
-    return reading === undefined ? [] : [{ host, read: reading.read, at: reading.atMs, ...usageContextOf(input.memory.get(host) ?? {}) }];
-  });
-  const shared = sharedOf(seen);
+  const keys = wslKeys(input, hosts);
+  const shared = sharedOf(seenOf(input, [...hosts, ...keys]));
+  const placeBlock = (key: string): Block => readBlockFor(input, { host: key, shown: wslLabel(key) }, shared);
 
   return {
     v: 1,
     toolbar: { stopped: input.stopped, round: roundPart(input.round) },
     permission: PERMISSION_OF(input.permission),
-    blocks: hosts.map((host) => blockFor(input, host, shared)),
+    blocks: hosts.flatMap((host) => [blockFor(input, host, shared), ...(host === 'wsl' ? keys.map(placeBlock) : [])]),
     empty: hosts.length === 0 ? NO_TERMINAL_SAID : null,
   };
 }

@@ -6,6 +6,8 @@ import {
 } from './remoteAccountsRound';
 import type { HostStanding } from './remoteHosts';
 import type { DoorAnswer } from './remotePermission';
+import { scopeOf } from './remotePlaces';
+import type { WslPort } from './remoteWslRound';
 import type { LiveTerminal } from './terminalSource';
 
 /**
@@ -63,6 +65,8 @@ export interface DriverWorld {
   readonly door: StopDoor;
   /** The one notice is raised. */
   readonly canBeShown: () => void;
+  /** The WSL port of a Windows window (E3.S3); nothing in any other window, and then the scope host `wsl` is never called. */
+  readonly wsl?: (() => WslPort | undefined) | undefined;
 }
 
 /** Where a round in flight is: the place being called, its place in the round's order (from 1) and how many places the round calls. */
@@ -111,6 +115,7 @@ export class AccountsDriver {
 
   private seamsOf(): RoundSeams {
     const w = this.world;
+    const wslNow = (): WslPort | undefined => this.wslNow();
 
     return {
       live: w.live,
@@ -122,7 +127,17 @@ export class AccountsDriver {
       landed: (memory, host) => { this.landedFrom(memory, host); },
       generation: () => this.generation,
       dropped: (host) => { w.log(droppedLine(host)); },
+      get wsl() { return wslNow(); },
     };
+  }
+
+  /** The WSL port as the window gives it now (a test may replace it between two rounds). */
+  private wslNow(): WslPort | undefined {
+    return this.world.wsl?.();
+  }
+
+  private wslOn(): boolean {
+    return this.wslNow() !== undefined;
   }
 
   // ───────────── what the window asks of it ─────────────
@@ -201,7 +216,7 @@ export class AccountsDriver {
   // ───────────── the timer ─────────────
 
   private async eligibleNow(): Promise<boolean> {
-    return eligibleOf(callableHosts(this.world.live()), await this.world.standings()).length > 0;
+    return eligibleOf(callableHosts(this.world.live(), this.wslOn()), await this.world.standings()).length > 0;
   }
 
   private async decision(armed: boolean): Promise<ReturnType<typeof armFor>> {
@@ -236,6 +251,7 @@ export class AccountsDriver {
   private landedFrom(memory: Memory, host: string): void {
     if (this.running && this.generation === this.roundGeneration) {
       this.memoryNow = liveOnly(memory, accountsHosts(this.world.live()));
+      this.reaching(scopeOf(host));
       this.world.landed(host);
     }
   }
@@ -259,7 +275,7 @@ export class AccountsDriver {
     mine.ran = true;
     this.running = true;
     this.roundGeneration = this.generation;
-    this.order = roundOrder(callableHosts(this.world.live()), this.round);
+    this.order = roundOrder(callableHosts(this.world.live(), this.wslOn()), this.round);
     this.progressNow = this.order.length === 0 ? undefined : { host: this.order[0] ?? '', index: 1, total: this.order.length };
     this.world.landed(undefined);
     try {
@@ -387,7 +403,7 @@ export class AccountsDriver {
   }
 
   async openStarts(): Promise<boolean> {
-    const unread = unreadHost(callableHosts(this.world.live()), this.memoryNow, await this.world.standings());
+    const unread = unreadHost(callableHosts(this.world.live(), this.wslOn()), this.memoryNow, await this.world.standings());
     const starts = openStarts({ running: this.running, lastEndMs: this.lastEndMs, now: this.world.now(), unreadHost: unread });
     if (starts) {
       void this.runNow('open');

@@ -11,6 +11,9 @@ import { RoundNow, TableModel, tableModel } from './remoteAccountsTable';
 import { readableOf } from './remoteHosts';
 import type { RemoteSessions } from './remoteSessionHost';
 import { ACCOUNTS_LIMITS, defaultRemoteSeams, runAccounts } from './remoteSsh';
+import { hostPlatform } from './hostSide';
+import { defaultWslSeams, wslPortOf } from './remoteWsl';
+import type { WslPort } from './remoteWslRound';
 import { registerCommand } from './shellBridge';
 import { liveTerminals } from './terminalHost';
 
@@ -49,6 +52,8 @@ export interface TerminalAccounts {
 export interface TerminalAccountsTestDoor {
   /** Replace the call; `undefined` puts the stub back (in test mode the default call is a stub). */
   readonly replaceCall: (call: AccountsCall | undefined) => void;
+  /** Replace the WSL port (E3.S3); `undefined` puts the lock back: in test mode there is no WSL port, so no `wsl.exe` can start. */
+  readonly replaceWsl: (port: WslPort | undefined) => void;
   readonly runRoundNow: (trigger: Trigger) => Promise<RoundResult | undefined>;
   /** Whether the timer would be armed outside test mode: what `timerFor` makes of `armFor`'s answer now (never without the permission). In test mode no timer ever runs. */
   readonly armed: () => Promise<boolean>;
@@ -79,6 +84,7 @@ class AccountsWindow implements TerminalAccounts {
     say: (message, forMs) => vscode.window.setStatusBarMessage(message, forMs),
   });
   private replaced: AccountsCall | undefined;
+  private replacedWsl: WslPort | undefined;
 
   constructor(private readonly context: vscode.ExtensionContext, private readonly sessions: RemoteSessions, private readonly test: boolean) {
     this.onLanded = this.landed.event;
@@ -86,6 +92,7 @@ class AccountsWindow implements TerminalAccounts {
     this.tab = new AccountsPanel({ run: (command) => { guarded(runAccountsCommand(command, this.seams()).then(() => this.redraw())); } });
     this.door = {
       replaceCall: (call) => { this.replaced = call; },
+      replaceWsl: (port) => { this.replacedWsl = port; },
       runRoundNow: (trigger) => this.driver.runNow(trigger),
       armed: () => this.driver.armedNow(),
       memoryHosts: () => [...this.driver.memory().keys()].sort(byCodeUnit),
@@ -112,6 +119,7 @@ class AccountsWindow implements TerminalAccounts {
 
   /** The seams of the driver: the ONE call and the ONE parse, the door of the keeper, the clock and the timer. None of them asks a person. */
   private worldOf(): DriverWorld {
+    const wslPort = (log: (line: string) => void): WslPort | undefined => this.wslPort(log);
     const write = defaultRemoteSeams().log;
     const gate = logGate(write);
     const real: AccountsCall = (host, mode, digest) => runAccounts(host, mode, digest, ACCOUNTS_LIMITS, { ...defaultRemoteSeams(), log: gate.seamFor(host) });
@@ -131,6 +139,7 @@ class AccountsWindow implements TerminalAccounts {
         return run;
       },
       parse: (run, mode) => readAccounts(run, mode, Date.now()),
+      wsl: () => wslPort(gate.seamFor('wsl')),
       now: () => Date.now(),
       setTimer: (ms, run) => setTimeout(run, ms),
       clearTimer: (handle) => { clearTimeout(handle as ReturnType<typeof setTimeout>); },
@@ -140,6 +149,23 @@ class AccountsWindow implements TerminalAccounts {
       door: this.sessions,
       canBeShown: () => { canBeShownNotice(); },
     };
+  }
+
+  /**
+   * The WSL port of a round (E3.S3): a test run's replaced one, else — in a Windows window outside a test run — the actual calls, each asking the door
+   * `may('round', 'wsl')` inside its one spawn function; in any other window nothing, and the scope host `wsl` is never called.
+   */
+  wslPort(log: (line: string) => void): WslPort | undefined {
+    if (this.replacedWsl !== undefined || this.test || hostPlatform() !== 'win32') {
+      return this.replacedWsl;
+    }
+
+    return wslPortOf(defaultWslSeams(() => this.sessions.may('round', 'wsl'), log));
+  }
+
+  /** Whether this window reads WSL: it has a WSL port (a Windows window, or a test run that replaced it). The model says the sentence of S1 otherwise. */
+  private wslReads(): boolean {
+    return this.wslPort(() => undefined) !== undefined;
   }
 
   rearm = (): Promise<void> => this.driver.rearm();
@@ -186,7 +212,7 @@ class AccountsWindow implements TerminalAccounts {
       permission: await this.sessions.permission(),
       damaged: file ? 'file' : list ? 'list' : undefined,
       round: this.roundNow(summary),
-      windows: process.platform === 'win32',
+      windows: this.wslReads(),
     });
   }
 

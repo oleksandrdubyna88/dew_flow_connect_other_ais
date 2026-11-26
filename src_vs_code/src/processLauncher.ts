@@ -65,6 +65,11 @@ export interface LaunchOptions {
    * (`SIGTERM` to the child), as for a shell.</p>
    */
   readonly killTree?: boolean;
+  /**
+   * Names taken OUT of the copy of the inherited environment, compared without case (E3.S1, § W3): Windows keys are not case-sensitive and a
+   * spread of `process.env` keeps the case a key was written in. With it the child gets a full copy less those keys, never an empty map.
+   */
+  readonly withoutEnv?: readonly string[];
 }
 
 /**
@@ -81,10 +86,20 @@ export interface LaunchOptions {
 export function childEnvironment(
   additions: Readonly<Record<string, string>> | undefined,
   inherited: NodeJS.ProcessEnv = process.env,
+  without: readonly string[] = [],
 ): NodeJS.ProcessEnv | undefined {
-  return additions === undefined || Object.keys(additions).length === 0
-    ? undefined
-    : { ...inherited, ...additions };
+  return changesNothing(additions, without) ? undefined : minus({ ...inherited, ...additions }, without);
+}
+
+/** No addition and no name to take out: the spawn is handed no `env` key at all. */
+const changesNothing = (additions: Readonly<Record<string, string>> | undefined, without: readonly string[]): boolean =>
+  (additions === undefined || Object.keys(additions).length === 0) && without.length === 0;
+
+/** The environment less the names, compared without case: Windows keys are not case-sensitive. */
+function minus(env: NodeJS.ProcessEnv, without: readonly string[]): NodeJS.ProcessEnv {
+  const out = new Set(without.map((name) => name.toLowerCase()));
+
+  return Object.fromEntries(Object.entries(env).filter(([key]) => !out.has(key.toLowerCase())));
 }
 
 export interface ProcessHandle {
@@ -150,7 +165,7 @@ export function workingDirectory(shell: boolean, cwd: string | undefined): strin
 export function launch(target: string, args: readonly string[], options: LaunchOptions = {}): ProcessHandle {
   const shell = options.shell === true;
   const cwd = workingDirectory(shell, options.cwd);
-  const env = childEnvironment(options.env);
+  const env = childEnvironment(options.env, process.env, options.withoutEnv);
 
   let child: ReturnType<typeof spawn> | undefined;
   let failure = '';

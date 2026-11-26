@@ -22,7 +22,7 @@ import { aStillMissingPathIsSaidOnceAcrossSettingsChanges } from './missingPathS
 import { activationStampsThisSideInARealEditor } from './sideSeenScenario';
 import { aTerminalPressTakesTheCopiedTextAndLeavesTheClipboard, theSkipListDefaultHoldsTheTerminalDoor } from './terminalCaptureScenario';
 import { aPressOnACredsTerminalReachesTheBoundRoadOnce, theTerminalItemsFollowTheActiveTerminalAndTheAnswer } from './terminalDoorsScenario';
-import { theAccountsRoundRunsOnlyUnderThePermission, theIconOpensOneTabAndItsModelHoldsBothHosts } from './terminalAccountsScenario';
+import { theAccountsRoundRunsOnlyUnderThePermission, theIconOpensOneTabAndItsModelHoldsBothHosts, theWslPlacesAreInTheTabsModel } from './terminalAccountsScenario';
 import { theConsentOfAHostIsKeptInTheRealGlobalState, theHostsStoreWritesTheListAndTheRefusalsFile, thePermissionIsGivenAndWithdrawnThroughTheRealStores } from './terminalHostsScenario';
 import { theSkipListAddAppendsToTheUserSettingOnce } from './skipShellScenario';
 import { twoCliPathFieldsKeepThisSidesValueInARealEditor } from './twoPathFieldsScenario';
@@ -1004,6 +1004,11 @@ const SCENARIOS: readonly Scenario[] = [
     // E2S3-H1 (E2.S3): the icon opens one tab, a second press shows the same one, and the model it holds has both hosts of two terminals, one call each. CI only: it cannot start here.
     name: 'the accounts icon opens one tab, a second press shows it again, and the tab\'s model holds both hosts',
     run: theIconOpensOneTabAndItsModelHoldsBothHosts,
+  },
+  {
+    // E3S3-H1 (E3.S3): one `Creds: wsl / s1` terminal with the WSL port replaced through the test door (no wsl.exe starts): two distros of which one is stopped, root and two users — the tab's model holds the wsl block with the stopped distro's line and the three places. CI only: it cannot start here.
+    name: 'the tab\'s model holds the wsl block with the stopped distro\'s line and the three WSL places of a replaced port',
+    run: theWslPlacesAreInTheTabsModel,
   },
   {
     // S3-H1 of the E3 stories document (the chat opens from a terminal): through the test door of the BOUND skip-shell check, with the offer replaced by a

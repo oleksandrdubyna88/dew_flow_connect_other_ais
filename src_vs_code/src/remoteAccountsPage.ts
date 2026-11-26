@@ -157,16 +157,20 @@ const SCRIPT = `
       });
     });
   }
-  /** An age with its exact local time on hover, then the clock time of the instant. The clock time never moves. */
-  function ago(parent, at) {
+  /** How long a call took, in words: milliseconds under a second, else seconds with one decimal. */
+  function tookWords(ms) {
+    return ms < 1000 ? ms + ' ms' : (ms / 1000).toFixed(1) + ' s';
+  }
+  /** An age with its exact local time on hover (and, when it is known, how long the read took), then the clock time of the instant. The clock time never moves. */
+  function ago(parent, at, took) {
     var age = live(el('span', 'age'), function (t) { return agoWords(t - at); });
-    age.setAttribute('title', stamp(at));
+    age.setAttribute('title', stamp(at) + (typeof took === 'number' ? ' · the read took ' + tookWords(took) : ''));
     put(parent, age, el('span', null, ' (' + clock(at) + ')'));
     return parent;
   }
-  function when(parent, prefix, at) {
+  function when(parent, prefix, at, took) {
     if (prefix) { parent.appendChild(el('span', null, prefix)); }
-    return ago(parent, at);
+    return ago(parent, at, took);
   }
 
   function leftText(left) { return left === null ? '—' : left + '% left'; }
@@ -255,15 +259,15 @@ const SCRIPT = `
     return line;
   }
   /** What a place's heading says apart from its name: its read, its failure, or why it is not read. */
-  function status(head) {
+  function status(head, took) {
     var box = el('span', 'status');
-    if (head.kind === 'read') { return when(box, 'read ', head.at); }
+    if (head.kind === 'read') { return when(box, 'read ', head.at, took); }
     if (head.kind === 'failed') {
       box.appendChild(el('span', 'bad', head.said + ' '));
-      return ago(box, head.at);
+      return ago(box, head.at, took);
     }
     box.appendChild(el('span', head.kind === 'jq-missing' ? 'bad' : 'muted', head.said));
-    if (head.kind === 'jq-missing' && head.at !== null) { when(box, ' · read ', head.at); }
+    if (head.kind === 'jq-missing' && head.at !== null) { when(box, ' · read ', head.at, took); }
     return box;
   }
   function accountCell(row) {
@@ -313,11 +317,24 @@ const SCRIPT = `
     windowCells(row).forEach(function (cell) { tr.appendChild(cell); });
     return tr;
   }
+  /** The scope host wsl's own part: the count, the login-session line (always), a line for each distro and the notes. Every text is a textContent. */
+  function wslPart(part) {
+    var box = el('div', 'wslpart');
+    put(box, el('div', 'muted', part.count), el('div', 'muted', part.login));
+    part.distros.forEach(function (one) {
+      var line = el('div', 'distro');
+      put(line, el('strong', null, one.name), el('span', 'muted', ' ' + one.said));
+      box.appendChild(line);
+    });
+    part.notes.forEach(function (note) { box.appendChild(el('div', 'muted', note)); });
+    return box;
+  }
   function serverUnit(block) {
     var node = el('section', 'block');
     var heading = el('div', 'heading');
-    put(heading, el('strong', 'host', block.shown), status(block.head), refuseButtons(block.host, block.canRefuse, block.canReadAgain));
+    put(heading, el('strong', 'host', block.wsl === null ? block.shown : block.wsl.heading), status(block.head, block.tookMs), refuseButtons(block.host, block.canRefuse, block.canReadAgain));
     node.appendChild(heading);
+    if (block.wsl !== null) { node.appendChild(wslPart(block.wsl)); }
     if (block.head.kind === 'jq-missing') { node.appendChild(installLine(block.host, block.head.manager)); }
     if (block.olderAt !== null) { node.appendChild(when(el('div', 'older'), 'The table below is of the read of ', block.olderAt)); }
     if (block.line !== null) { node.appendChild(el('div', 'muted', block.line)); }
@@ -332,14 +349,14 @@ const SCRIPT = `
   }
 
   // ───── Claude account ─────
-  function readCell(place, failure, readAt) {
+  function readCell(place, failure, readAt, took) {
     var cell = td('Read');
     if (failure !== null) {
       cell.appendChild(el('span', 'bad', failure.said + ' '));
-      ago(cell, failure.at);
+      ago(cell, failure.at, took);
       when(cell, ' Older read ', readAt);
     } else {
-      ago(cell, readAt);
+      ago(cell, readAt, took);
     }
     return cell;
   }
@@ -362,7 +379,7 @@ const SCRIPT = `
     var body = el('tbody');
     account.places.forEach(function (one) {
       var tr = el('tr');
-      put(tr, put(td('Place'), el('strong', null, cut(one.place))), readCell(one.place, one.failure, one.readAt));
+      put(tr, put(td('Place'), el('strong', null, one.shown)), readCell(one.place, one.failure, one.readAt, one.tookMs));
       body.appendChild(tr);
     });
     node.appendChild(put(el('table', 'acct'), headRow([{ label: 'Place', key: 'name' }, { label: 'Read', key: 'age' }]), body));
@@ -370,7 +387,7 @@ const SCRIPT = `
   }
   function lineRow(line, withWindows) {
     var tr = el('tr');
-    put(tr, put(td('Place'), el('strong', null, cut(line.place))), accountCell(line.row));
+    put(tr, put(td('Place'), el('strong', null, line.shown)), accountCell(line.row));
     if (withWindows) {
       windowCells(line.row).forEach(function (cell) { tr.appendChild(cell); });
     } else {
@@ -399,7 +416,7 @@ const SCRIPT = `
     node.appendChild(el('h2', null, 'No Claude account'));
     items.forEach(function (one) {
       var row = el('div', 'none-row');
-      put(row, el('strong', null, cut(one.place)), el('span', 'muted', one.said));
+      put(row, el('strong', null, one.shown), el('span', 'muted', one.said));
       if (one.action === 'read-again') { row.appendChild(refuseButtons(one.place, false, true)); }
       if (one.action === 'copy-install') { row.appendChild(button('Copy install command', function () { post('copy-install', { place: one.place }); })); }
       node.appendChild(row);
@@ -429,9 +446,9 @@ const SCRIPT = `
   function userRow(row) {
     var tr = el('tr');
     var place = td('Place');
-    put(place, el('strong', null, cut(row.place)), refuseButtons(row.place, row.canRefuse, row.canReadAgain));
+    put(place, el('strong', null, row.shown), refuseButtons(row.place, row.canRefuse, row.canReadAgain));
     var read = td('Read');
-    read.appendChild(status(row.head));
+    read.appendChild(status(row.head, row.tookMs));
     if (row.failure !== null || row.olderAt !== null) {
       if (row.olderAt !== null) { when(read, ' Older read ', row.olderAt); }
     }
