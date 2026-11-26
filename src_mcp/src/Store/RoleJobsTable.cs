@@ -8,9 +8,9 @@ internal sealed record RoleJobRow(
     string CreatedUtc, string StartedUtc, string EndedUtc, string UpdatedUtc, string FinalModel, int Attempts, string Stop, string Reason,
     int RepairTurns, int Complexity, bool Security);
 
-/// <summary>One row of <c>role_attempts</c> (schema step 26): one try of one model, <see cref="Ordinal"/> from 1.</summary>
+/// <summary>One row of <c>role_attempts</c> (schema steps 26 and 27): one try of one model, <see cref="Ordinal"/> from 1; <see cref="KeyId"/> is the claude key it ran on (empty when it ran on none).</summary>
 internal sealed record RoleAttemptRow(
-    string JobId, int Ordinal, string Model, string Vendor, string StartedUtc, string EndedUtc, string Stop, string Reason, long TokensIn, long TokensOut);
+    string JobId, int Ordinal, string Model, string Vendor, string StartedUtc, string EndedUtc, string Stop, string Reason, long TokensIn, long TokensOut, string KeyId = "");
 
 /// <summary>
 /// The writer of schema step 26: a role job and its attempts, rewritten whole from the job file on every change — the file is the authority, this is a view of it, and every call is best-effort
@@ -69,11 +69,11 @@ internal static class RoleJobsTable
     {
         using var write = db.Command();
         write.CommandText = """
-            INSERT INTO role_attempts (job_id, ordinal, model, vendor, started_utc, ended_utc, stop, reason, tokens_in, tokens_out)
-            VALUES ($id, $ordinal, $model, $vendor, $started, $ended, $stop, $reason, $in, $out)
+            INSERT INTO role_attempts (job_id, ordinal, model, vendor, started_utc, ended_utc, stop, reason, tokens_in, tokens_out, key_id)
+            VALUES ($id, $ordinal, $model, $vendor, $started, $ended, $stop, $reason, $in, $out, $key)
             ON CONFLICT(job_id, ordinal) DO UPDATE SET
                 model = excluded.model, vendor = excluded.vendor, started_utc = excluded.started_utc, ended_utc = excluded.ended_utc,
-                stop = excluded.stop, reason = excluded.reason, tokens_in = excluded.tokens_in, tokens_out = excluded.tokens_out
+                stop = excluded.stop, reason = excluded.reason, tokens_in = excluded.tokens_in, tokens_out = excluded.tokens_out, key_id = excluded.key_id
             """;
         write.Parameters.AddWithValue("$id", a.JobId);
         write.Parameters.AddWithValue("$ordinal", a.Ordinal);
@@ -85,6 +85,7 @@ internal static class RoleJobsTable
         write.Parameters.AddWithValue("$reason", a.Reason);
         write.Parameters.AddWithValue("$in", a.TokensIn);
         write.Parameters.AddWithValue("$out", a.TokensOut);
+        write.Parameters.AddWithValue("$key", a.KeyId);
         write.ExecuteNonQuery();
     }
 }

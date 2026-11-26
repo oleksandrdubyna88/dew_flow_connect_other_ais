@@ -1,0 +1,20 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t4-prompts
+title: "The scout prompt and the judge prompt: the brief, the output shape with its limits, the read-only rule; an override is used first"
+kind: code
+complexity: 4
+dependsOn:
+  - t2-scout-contract
+  - t3-judge-contract
+parallel: false
+files:
+  - src_mcp/src/Roles/prompts/scout.md
+  - src_mcp/src/Roles/prompts/judge.md
+  - src_mcp/src/Server/RoleJobs/ScoutPrompt.cs
+  - src_mcp/src/Server/RoleJobs/JudgePrompt.cs
+  - src_mcp/tests/AScoutAndJudgePromptTests.cs
+dod:
+  - id: d1
+    item: "each built prompt holds the brief, the path of taskFile when one was given, the output shape, the rule that the role writes nothing and that an evidence text is copied from the file, and the refused arm; an override in RolePrompts is used first"
+  - id: d2
+    item: "a changed limit shows in the built prompt: the numbers come from the tables of the reader, not from the prompt file"

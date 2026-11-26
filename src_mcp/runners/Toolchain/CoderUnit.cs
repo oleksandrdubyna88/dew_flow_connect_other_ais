@@ -1,0 +1,162 @@
+using System.Text.RegularExpressions;
+using CoaiMcp.Runners.Processes;
+
+namespace CoaiMcp.Runners.Toolchain;
+
+/// <summary>
+/// The description of the unit the claude CODER runs in — the <c>systemd-run --user</c> properties, the environment and the argv — as pure values, the twin of <see cref="BoundaryUnit"/> for the one process that is allowed to write
+/// (epoch 3 E2 s2 t5, option (a) of <c>v2/spikes/RESULTS_coder_write_boundary_judgement.md</c> § 4). It reuses that class's isolation, hardening and limits; what differs is what the CLI needs and the checks do not.
+/// </summary>
+/// <remarks>
+/// <para><b>These are requests until the preflight has seen the answer</b>, exactly as for the checks: <see cref="BoundaryPreflight.CoderItems"/> asks the OS, and the tests read the effects off a real unit.</para>
+/// <para><b>What the CLI needs, and what it does not get.</b> The unit still hides <c>/home</c>, <c>/root</c>, <c>/run/user</c> and <c>/mnt</c>; the main checkout, the coder root and the worktree's <c>.git</c> are read-only and ONLY the worktree is writable
+/// among the source folders. Unlike a check it has the HOST network (the CLI talks to its vendor) and one file of the real home — the sign-in file, read-only, bound into a home of the coder's own. Measured with the real CLI on 2.1.330
+/// (<c>RESULTS_s2_check_boundary.md</c>, t5): with that home and the resolver file the CLI signed in and answered; everything it wrote was in its own home and <c>/tmp</c>, and the real <c>~/.claude</c>, <c>~/.claude.json</c> and <c>settings.json</c> were never needed
+/// — so none of them is bound, and a coder that wrote a hook into them would write it into a folder that is gone with the job.</para>
+/// <para><b>The environment is set INSIDE the unit</b> (every variable but the crossed names is unset, then the fixed list is set — see <see cref="Inner"/>; the checks use <c>env -i</c>). <b>One road for every secret: the unit's stdin.</b> <c>--setenv</c> puts the value in the unit's <c>Environment</c> property and in a 0644 transient unit file under <c>/run/user</c> for as long as the unit lives (measured, second judgement), so no explicit variable of the launch — a pool key, the row's own <c>ANTHROPIC_API_KEY</c>, any other — travels that way: each is one line at the head of the unit's stdin, which the unit's own shell reads and exports before the exec (<see cref="Cross"/>, <see cref="Inner"/>), and none is left in the environment of the <c>systemd-run</c> client. Only the few names of <see cref="PassableNames"/> — the proxy, certificate and time-zone settings of coai's own environment, the person's own network setting — still travel by NAME.</para>
+/// </remarks>
+internal static partial class CoderUnit
+{
+    /// <summary>The prefix of every coder unit; a leftover is found by it. Not <c>coai-check-</c>: a coder's unit is not a check.</summary>
+    internal const string UnitPrefix = "coai-coder-";
+
+    /// <summary>The unit's name for one launch of a job (<c>c1</c>, <c>c2</c>… — a resumed turn is a launch), without the <c>.service</c> suffix.</summary>
+    internal static string UnitName(BoundaryJob job, string part) => $"{UnitPrefix}{job.JobId}-{part}";
+
+    /// <summary>The names a launch may carry from coai's own environment into the unit besides its explicit ones: the proxy, certificate and time-zone names a box behind a corporate proxy needs to reach its vendor.</summary>
+    private static readonly string[] PassableNames =
+        ["HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "no_proxy", "SSL_CERT_FILE", "SSL_CERT_DIR", "NODE_EXTRA_CA_CERTS", "TZ"];
+
+    [GeneratedRegex("^[A-Za-z_][A-Za-z0-9_]*$")]
+    private static partial Regex Identifier();
+
+    [GeneratedRegex("^[a-z0-9][a-z0-9-]{0,15}$")]
+    private static partial Regex Part();
+
+    /// <summary>Whether <paramref name="part"/> can be the last word of a unit's name: it is spelled into the name and into <c>systemctl</c> commands, so only the safe shape is.</summary>
+    internal static bool IsPart(string part) => Part().IsMatch(part);
+
+    /// <summary>
+    /// The property that hides the claude key pool's folder from a launch that carries a key (epoch 3 E2 s7): <c>InaccessiblePaths=-&lt;keys&gt;</c> (the dash: a folder that is not there is no error). The folder is already out of sight when it lies under a hidden
+    /// path (<c>/home</c>); this makes it true where the data folder is somewhere else (<c>/var/lib/coai</c>, a temp folder), and the preflight row <see cref="BoundaryPreflight.KeysHidden"/> reads it from inside whichever way it holds. Not given to a launch that
+    /// binds the person's sign-in (the device switch) — that launch has no key to hide it from.
+    /// </summary>
+    internal static IReadOnlyList<string> KeysHidden(BoundaryHost host, BoundaryJob job) =>
+        host.BindSignIn ? [] : BoundaryUnit.KeysHidden(job);
+
+    /// <summary>The <c>-p</c> properties of the coder's unit, in the order they are given.</summary>
+    internal static IReadOnlyList<string> Properties(BoundaryHost host, BoundaryJob job, CoderProgram program, TimeSpan runtimeMax)
+    {
+        var tree = job.Tree;
+
+        return
+        [
+            .. BoundaryUnit.Isolation,
+            $"BindReadOnlyPaths={tree.MainCheckout}",
+            $"BindReadOnlyPaths={job.CoderRoot}",
+            $"BindPaths={tree.Root}",
+            $"BindReadOnlyPaths={tree.GitEntry}",
+            .. BoundaryUnit.Mounts(job),
+            $"TemporaryFileSystem={job.JobCover}:ro",
+            $"BindPaths={job.CoderFolder}",
+            $"BindPaths={job.CoderTempFolder}:{BoundaryUnit.UnitTemp}",
+            $"BindPaths={job.CoderVarTempFolder}:{BoundaryUnit.UnitVarTemp}",
+            .. host.SignInFile.Length > 0 ? [$"BindReadOnlyPaths={host.SignInFile}:{job.CoderSignInFile}"] : Array.Empty<string>(),
+            .. KeysHidden(host, job),
+            .. program.BindFolder.Length > 0 ? [$"BindReadOnlyPaths={program.BindFolder}"] : Array.Empty<string>(),
+            .. host.ResolverFile.Length > 0 ? [$"BindReadOnlyPaths={host.ResolverFile}"] : Array.Empty<string>(),
+            .. BoundaryUnit.Hardening,
+            "PrivateNetwork=no",
+            .. BoundaryUnit.Limits(job, runtimeMax),
+        ];
+    }
+
+    /// <summary>
+    /// The fixed part of the unit's environment, as <c>env -i</c> sets it inside: <c>PATH</c> of system folders, the coder's own <c>HOME</c>, <c>TMPDIR</c>, a locale and the switches that keep it quiet — and nothing else. No vendor key, no
+    /// <c>COAI_</c> name, no agent or bus socket; the values that must cross are <see cref="ByName"/>.
+    /// </summary>
+    internal static IReadOnlyList<KeyValuePair<string, string>> Environment(BoundaryHost host, BoundaryJob job) =>
+    [
+        new("PATH", BoundaryHost.SystemPath),
+        new("HOME", job.CoderHomeFolder),
+        new("TMPDIR", BoundaryUnit.UnitTemp),
+        new("LANG", "C.UTF-8"),
+        new("TERM", "dumb"),
+        new("NO_COLOR", "1"),
+        new("GIT_TERMINAL_PROMPT", "0"),
+    ];
+
+    /// <summary>
+    /// What crosses into the unit and by which road. <see cref="OnStdin"/>: every explicit variable of the request with a value, in order (the pool key first, the rest by name), one line each at the head of the unit's stdin — secrets. <see cref="ByName"/>: the
+    /// passable names coai itself has (<c>--setenv=NAME</c> copies them from the client). A name is in one list only.
+    /// </summary>
+    internal sealed record Crossing(IReadOnlyList<KeyValuePair<string, string>> OnStdin, IReadOnlyList<string> ByName)
+    {
+        /// <summary>The first lines of the unit's stdin: the value of every <see cref="OnStdin"/> name, one to a line, in order. The prompt follows them.</summary>
+        public string StdinHead => string.Concat(OnStdin.Select(pair => pair.Value + "\n"));
+    }
+
+    /// <summary>
+    /// What reaches the unit from <paramref name="request"/>: its explicit variables on stdin, and of the passable names those coai itself has by name. Each name must be a plain identifier — it is spelled into the unit's own script, never its value — and each value
+    /// must be one line: a line break or a NUL cannot be one line of stdin.
+    /// </summary>
+    /// <exception cref="ArgumentException">A name that is not an identifier, or a value that is not one line (the message never holds the value).</exception>
+    internal static Crossing Cross(ProcessRequest request, Func<string, string?> coaiEnvironment)
+    {
+        var explicitly = request.Environment
+            .Where(pair => pair.Value is not null)
+            .Select(pair => new KeyValuePair<string, string>(pair.Key, pair.Value!))
+            .OrderBy(pair => pair.Key == ClaudeKeyVariable ? 0 : 1)
+            .ThenBy(pair => pair.Key, StringComparer.Ordinal)
+            .ToList();
+        var passable = PassableNames.Where(name => request.Passthrough.Contains(name) && coaiEnvironment(name) is not null && explicitly.All(pair => pair.Key != name)).ToList();
+        var bad = explicitly.Select(pair => pair.Key).Concat(passable).FirstOrDefault(name => !Identifier().IsMatch(name));
+        if (bad is not null)
+        {
+            throw new ArgumentException($"the variable name '{bad}' cannot be handed to the coder's unit: only plain names are", nameof(request));
+        }
+
+        if (explicitly.FirstOrDefault(pair => pair.Value.AsSpan().IndexOfAny('\n', '\r', '\0') >= 0) is { Key: { } named })
+        {
+            throw new ArgumentException($"the value of '{named}' holds a line break or a NUL, so it cannot be one line of the coder's unit's stdin", nameof(request));
+        }
+
+        return new Crossing(explicitly, [.. passable]);
+    }
+
+    /// <summary>The names that cross by NAME, as the client is started with them: its own few, and these.</summary>
+    internal static IReadOnlySet<string> ClientNames(IReadOnlyList<string> byName) =>
+        new HashSet<string>([.. UnitControl.Client, .. byName], StringComparer.Ordinal);
+
+    /// <summary>
+    /// What the unit runs: a shell that UNSETS every exported variable but the by-name ones (which <c>--setenv</c> put in the unit's own environment), READS one line of its stdin into each name of <paramref name="crossing"/>'s stdin list and exports it, sets the
+    /// fixed list, then execs the program with its argv. The program and its argv are positional arguments of the shell, never text of its script; the names are identifiers, spelled into the script, never their values.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>The rest of stdin is the program's.</b> <c>read</c> takes one line at a time from a pipe and no more, and nothing else in the script reads fd 0, so the prompt behind the lines arrives whole (<c>ACoderSecretsOnStdinTests</c>). A missing line is exit 70, never a launch without its secret.</para>
+    /// <b>No crossed value is ever on a command line.</b> The first shape was <c>exec /usr/bin/env -i "NAME=$NAME" …</c>: the shell expanded the value into <c>env</c>'s argv, and <c>/proc/&lt;pid&gt;/cmdline</c> is readable by every process of the user — measured with a dummy
+    /// value, it showed in 228 of 300 tries (a shell that only exports the name: 0 of 300). Here the value stays in the environment all the way: it is never expanded, and <c>env</c> is given the fixed allow-list only (<c>PATH</c>, <c>HOME</c>… no secret). The unit's
+    /// environment is still exactly the allow-list and the crossed names: the shell's own <c>PWD</c> is unset before the exec.
+    /// </remarks>
+    internal static IReadOnlyList<string> Inner(BoundaryHost host, BoundaryJob job, CoderProgram program, IReadOnlyList<string> arguments, Crossing crossing) =>
+    [
+        "/bin/sh", "-c",
+        "for v in $(/usr/bin/env | /usr/bin/sed -n 's/^\\([A-Za-z_][A-Za-z0-9_]*\\)=.*/\\1/p'); do "
+        + $"case \" {string.Join(' ', crossing.ByName)} \" in *\" $v \"*) ;; *) unset \"$v\" 2>/dev/null ;; esac; done; "
+        + string.Concat(crossing.OnStdin.Select(pair => $"IFS= read -r {pair.Key} || exit 70; export {pair.Key}; "))
+        + "unset PWD OLDPWD; exec /usr/bin/env \"$@\"",
+        "coai-coder",
+        .. Environment(host, job).Select(pair => $"{pair.Key}={pair.Value}"),
+        program.Real,
+        .. arguments,
+    ];
+
+    /// <summary>The argv of <c>systemd-run</c> for one coder launch.</summary>
+    /// <param name="degrade">For a test only: rewrites the finished argument list. Production passes nothing.</param>
+    internal static IReadOnlyList<string> Arguments(BoundaryHost host, BoundaryJob job, CoderProgram program, string unit, TimeSpan runtimeMax, IReadOnlyList<string> arguments,
+        Crossing crossing, Func<IReadOnlyList<string>, IReadOnlyList<string>>? degrade = null) =>
+        BoundaryUnit.Wrap(unit, job.Tree.Root, [.. crossing.ByName.Select(name => $"--setenv={name}")], Properties(host, job, program, runtimeMax), Inner(host, job, program, arguments, crossing), degrade);
+
+    /// <summary>The variable the claude CLI reads a pool key from; the inner shell reads it from the first line of stdin and exports it itself (epoch 3 E2 s7, second judgement), and it is always the first line (<see cref="Cross"/>).</summary>
+    internal const string ClaudeKeyVariable = "CLAUDE_CODE_OAUTH_TOKEN";
+}

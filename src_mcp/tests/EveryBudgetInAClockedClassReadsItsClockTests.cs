@@ -58,6 +58,8 @@ public sealed class EveryBudgetInAClockedClassReadsItsClockTests
         new("src_mcp/src/Collecting/CollectRun.cs", "a wall STAMP only: the run id is the clock's instant; the run waits for nothing"),
         new("src_mcp/src/Install/SetupDependencies.cs", "carries the installer's clock to name a backup folder by its UTC instant (InstallBackup.Create); no timer, no wait — the vendor commands' deadline is the launcher's own Timeout"),
         new("src_bugs/src/RateLimiter.cs", "a rate window compared as instants (GetUtcNow ticks per subject); no timer, no wait — its own tests move the clock"),
+        new("src_mcp/src/Server/Keys/KeyStoreAccess.cs", "hands the clock's instant to the key pool as a wall STAMP (a key's added, last-used and cooldown times, compared as instants); it waits for nothing and arms no timer — the pool lock's two-second window is a Stopwatch in KeySession, on the monotonic clock (epoch 3 E2 s7)"),
+        new("src_mcp/src/Server/Keys/KeysMode.cs", "only carries the process clock in KeysRuntime to the key store (KeyStoreAccess); it arms no timer and waits for nothing (epoch 3 E2 s7)"),
     ];
 
     /// <summary>A site that is allowed to stay, and why. <paramref name="Snippet"/> must occur in exactly one site's statement of <paramref name="File"/>.</summary>

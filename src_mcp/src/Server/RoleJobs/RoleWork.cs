@@ -13,8 +13,11 @@ internal abstract record RoleWorkOutcome
     /// <summary>The role finished and has an answer — a JSON document, written to <c>result.json</c> after the generation is compared.</summary>
     public sealed record Succeeded(string ResultJson) : RoleWorkOutcome;
 
-    /// <summary>The role could not finish. <see cref="Stop"/> is a short word and <see cref="Reason"/> the sentence a person reads.</summary>
-    public sealed record Failed(string Stop, string Reason) : RoleWorkOutcome;
+    /// <summary>
+    /// The role could not finish. <see cref="Stop"/> is a short word and <see cref="Reason"/> the sentence a person reads. <see cref="ResultJson"/>, when the role has one, is written to <c>result.json</c> in the same step as the terminal
+    /// state — the evidence of a failed job that did leave something behind (the coder's branch, its checks and the last failure digest); null for the failures that leave nothing.
+    /// </summary>
+    public sealed record Failed(string Stop, string Reason, string? ResultJson = null) : RoleWorkOutcome;
 
     /// <summary>The work saw its token fire and stopped. The runner knows WHY it fired (a cancel, a timeout, a signal, a lost lease) and writes the matching state.</summary>
     public sealed record Stopped : RoleWorkOutcome;

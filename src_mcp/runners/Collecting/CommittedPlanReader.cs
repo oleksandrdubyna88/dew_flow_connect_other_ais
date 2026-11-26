@@ -41,6 +41,21 @@ public abstract record PlanRead
 /// </remarks>
 public static class CommittedPlanReader
 {
+    /// <summary>
+    /// The committed file at <paramref name="sha"/>, proved against its blob id like <see cref="ReadGuardedAsync"/>, and NOTHING about the working tree: for the reader of a plan that was approved long ago (the plan binding of a coder
+    /// job), which asks what a commit held and has no edit of the caller's to protect. The path is canonicalised and refused exactly as the guarded read refuses it.
+    /// </summary>
+    public static async Task<PlanRead> ReadAtCommitAsync(
+        GitHistory git, string repoPath, string sha, string path, CancellationToken ct)
+    {
+        var check = PlanPath.Check(path);
+        var refusal = check.Refusal.Length > 0 ? check.Refusal : ShaRefusal(sha);
+
+        return refusal.Length > 0
+            ? new PlanRead.Refused(refusal)
+            : await ReadAsync(git, repoPath, sha, check.Path, ct);
+    }
+
     public static async Task<PlanRead> ReadGuardedAsync(
         GitHistory git, string repoPath, string sha, string path, CancellationToken ct)
     {

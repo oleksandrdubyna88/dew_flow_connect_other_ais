@@ -1,0 +1,5 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: s3-plan-round-feature-folder
+title: "review_plan(featureFolder): read from git at the branch tip, validate first, pack in topological order, record what was approved"
+cornerstone: true
+dependsOn: []

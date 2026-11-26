@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using CoaiMcp.Runners.Processes;
+using CoaiMcp.Runners.Worktrees;
 
 namespace CoaiMcp.Runners.Collecting;
 
@@ -11,12 +12,15 @@ namespace CoaiMcp.Runners.Collecting;
 /// property of somebody's repository and hides for a month. (Plan round, codex.)
 /// </remarks>
 /// <param name="Ran">Whether git ran to completion at all, whatever it then said.</param>
+/// <param name="Refusal">
+/// Why coai did not start git at all (a coder-tree command that was refused before a process was made: the <c>.git</c> pointer changed, a submodule verb, an option that moves git); empty for every other answer. <see cref="Ran"/> is false with it.
+/// </param>
 /// <param name="Truncated">
 /// The launcher cut a stream — its ceiling, or the drain grace after the child ended — so <c>Out</c> is a head and not
 /// the whole. Exit 0 with this set is NOT a complete read; a reader that must be exact refuses it. Additive and
 /// defaulted: no existing caller reads it, so none changes.
 /// </param>
-public readonly record struct GitAnswer(bool Ran, bool Ok, string Out, bool Truncated = false)
+public readonly record struct GitAnswer(bool Ran, bool Ok, string Out, bool Truncated = false, string Refusal = "")
 {
     internal static GitAnswer Broken => new(false, false, string.Empty);
 
@@ -213,6 +217,10 @@ public sealed partial class GitHistory(IProcessLauncher launcher)
             ? RunAsync(repoPath, ["cat-file", "blob", oid], ct)
             : Refused;
 
+    /// <summary>The branch HEAD is on, as one line; no output (exit 1) on a detached HEAD.</summary>
+    public Task<GitAnswer> HeadBranchAsync(string repoPath, CancellationToken ct = default) =>
+        RunAsync(repoPath, ["symbolic-ref", "--quiet", "--short", "HEAD"], ct);
+
     /// <summary>The working tree's root and the commit HEAD is on — two lines, in that order.</summary>
     public Task<GitAnswer> RootAndHeadAsync(string repoPath, CancellationToken ct = default) =>
         RunAsync(repoPath, ["rev-parse", "--show-toplevel", "HEAD"], ct);
@@ -305,6 +313,29 @@ public sealed partial class GitHistory(IProcessLauncher launcher)
         {
             touched.Add(new TouchedAt(sha, path));
         }
+    }
+
+    /// <summary>
+    /// A git command on a CODER worktree — the one door for it: refused, with a sentence and no process, when the <c>.git</c> pointer is not the file coai wrote down or the command is a <c>submodule</c> verb or starts with an option that
+    /// moves git; otherwise run with <c>-c core.hooksPath=/dev/null -c core.fsmonitor=false</c> first, the tree's ROOT as the working folder, and the names that move git taken out of the environment (<see cref="CoderGit"/>).
+    /// </summary>
+    /// <remarks>
+    /// The pointer is compared BEFORE each command, not once: a check or a coder can replace the file between two of them. The base toolchain is not read through here — it is read from the MAIN repository path
+    /// (<see cref="Toolchain.ChecksAtBase"/>), so the one file that decides what runs never passes through the tree's pointer.
+    /// </remarks>
+    public async Task<GitAnswer> InCoderTreeAsync(CoderTree tree, IReadOnlyList<string> args, CancellationToken ct = default)
+    {
+        var refusal = CoderGit.Refusal(tree, args);
+        if (refusal.Length > 0)
+        {
+            return new GitAnswer(false, false, string.Empty, Refusal: refusal);
+        }
+
+        var result = await launcher.RunAsync(new ProcessRequest("git", CoderGit.Argv(args), tree.Root) { Timeout = Budget, Environment = CoderGit.Environment }, ct);
+
+        return result.TimedOut || result.Cancelled
+            ? GitAnswer.Broken
+            : new GitAnswer(true, result.ExitCode == 0, result.StdOut, result.Truncated);
     }
 
     /// <summary>A value git must never be handed: answered as "ran, and said no".</summary>

@@ -1,0 +1,23 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t3-pool-launch-measure
+title: "Measure on the installed claude CLI, with one real key the owner added through --keys add, that a launch with only the token variable works in the coder unit and that the value is readable from no place a boundary unit can reach (KEY_POOL_SPEC.md sections 1 and 10)"
+kind: measure
+complexity: 6
+dependsOn:
+  - t2-keys-one-shot
+parallel: false
+security: true
+files:
+  - v2/epoch-3/e2-coder-one-task/RESULTS_s7_key_pool.md
+  - src_mcp/tests/fixtures/role-stops
+dod:
+  - id: d1
+    item: "with haiku, at most 6 paid calls and 0.05 USD (the spend is written down): the coder unit with CLAUDE_CODE_OAUTH_TOKEN by name, an empty home of its own and NO credentials file answers; the bytes and the modification time of the person's .credentials.json are the same before and after; nothing under the real home was read or written"
+  - id: d2
+    item: "the inner command that hands the value on without an argv is written down and measured as section 1 row C4 was: the old shape is seen by a reader of /proc/<pid>/cmdline, the new shape in 0 of 300 runs, and the child's environment is the allow-list plus the one name"
+  - id: d3
+    item: "inside the real coder property set and the real check property set, each read is tried and its answer recorded: the keys folder, the transient unit file under /run/user, the unit's Environment property over the bus, /proc/<pid>/environ of the coder process from a check unit of another job; a read that succeeds changes the design (the credential road of row C8) before t5 starts"
+  - id: d4
+    item: "the CLI's answer for a refused key (a made-up token, so no cost) is saved as a fixture under tests/fixtures/role-stops with the CLI version, and the results file says which field marks it; if no stable field exists the file says so and names what t4 may read"
+  - id: d5
+    item: "the model asked to Read /proc/self/environ in the write launch is refused (or the results file records that it was not, and the scrub of t5 is then the only guard); a read-only launch with its own HOME and CLAUDE_CONFIG_DIR and the key answers; what the CLI does when the variable and a credentials file are both there is recorded"

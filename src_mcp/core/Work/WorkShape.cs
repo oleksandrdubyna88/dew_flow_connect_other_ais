@@ -78,7 +78,7 @@ internal sealed class WorkShape(WorkLevel level, string path, string node, List<
         _ => "a list of maps {id, item}",
     };
 
-    private static string Describe(YamlNode node) => node switch
+    internal static string Describe(YamlNode node) => node switch
     {
         YamlMap => "a map",
         YamlList => "a list",

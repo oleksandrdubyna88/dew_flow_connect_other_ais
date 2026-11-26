@@ -29,7 +29,7 @@ internal sealed class RoleJobStore(string dataDir, TimeProvider clock, Serilog.I
     public RoleJobFolder? FolderOf(string jobId) => RoleJobIds.IsValid(jobId) ? new RoleJobFolder(Path.Combine(JobsRoot, jobId)) : null;
 
     /// <summary>Makes the job: its folder, <c>request.json</c> and a <c>job.json</c> in state <c>queued</c>, generation 0. Request first, record last, so a record is never without its request.</summary>
-    public RoleJobRecord Create(RoleJobRequest request, RoleJobPlan? plan = null)
+    public RoleJobRecord Create(RoleJobRequest request, RoleJobPlan? plan = null, CoderPlanLink? link = null)
     {
         var folder = FolderOf(request.JobId) ?? throw new ArgumentException($"'{request.JobId}' is not a job id", nameof(request));
         Directory.CreateDirectory(folder.Location);
@@ -41,6 +41,8 @@ internal sealed class RoleJobStore(string dataDir, TimeProvider clock, Serilog.I
             Repo = request.RepoPath,
             WorkItem = request.WorkItem,
             TaskFile = request.TaskFile,
+            BaseSha = request.BaseSha,
+            Plan = link,
             TimeoutMinutes = request.TimeoutMinutes,
             Route = plan?.Route ?? [],
             Complexity = Math.Max(0, plan?.Complexity ?? 0),

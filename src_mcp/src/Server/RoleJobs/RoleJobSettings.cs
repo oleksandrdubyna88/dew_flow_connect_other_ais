@@ -52,3 +52,31 @@ internal sealed record RoleJobSettings(int MaxLiveJobs, int MemoryMegabytes, Lau
     /// <summary>True on a WSL host, where the default cap is lower: one distro's memory is shared with Windows.</summary>
     public static bool OnWsl => HostKinds.Current == HostKind.Wsl;
 }
+
+/// <summary>
+/// <c>COAI_FIX_ROUNDS</c>: how many fix turns a coder job may make when its checks are red (<c>server.md</c> § 10). One rule reads it, for every job: a whole number from 0 to 10, else 3 and a NOTE — never a refusal that would stop a job over a typing slip.
+/// </summary>
+internal static class FixRounds
+{
+    public const string Key = "COAI_FIX_ROUNDS";
+
+    public const int Default = 3;
+
+    public const int Most = 10;
+
+    /// <summary>The cap, and the sentence that says the setting was not usable (empty when it was, or when it was not set).</summary>
+    public static (int Cap, string Note) Read(Func<string, string?> settings)
+    {
+        var text = settings(Key);
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return (Default, string.Empty);
+        }
+
+        return int.TryParse(text.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out var cap) && cap <= Most
+            ? (cap, string.Empty)
+            : (Default, $"{Key} is '{Shown(text)}'; it must be a whole number from 0 to {Most}, so the default of {Default} fix turns is used");
+    }
+
+    private static string Shown(string text) => text.Length <= 40 ? text : text[..40] + "…";
+}

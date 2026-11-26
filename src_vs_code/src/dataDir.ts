@@ -590,9 +590,10 @@ export const HISTORY_THAT_CLASHES: readonly string[] =
  * <p>Both are silent when got wrong, which is why they are named rather than left to judgement:
  * `worktrees/` is scratch pruned on every `open`, so copying it moves a checkout of somebody's
  * repository onto a NAS for no benefit; and a token belongs to the side that signed in, so copying
- * one hands a machine's sign-in to another — the thing the per-side layout exists to prevent.</p>
+ * one hands a machine's sign-in to another — the thing the per-side layout exists to prevent. `keys/` is the claude key pool
+ * of the device (epoch 3 E2 s7): its setup-tokens are private files of this machine, and a copy would put every key on another.</p>
  */
-export const DATA_TO_LEAVE: readonly string[] = ['worktrees/', 'servers/'];
+export const DATA_TO_LEAVE: readonly string[] = ['worktrees/', 'servers/', 'keys/'];
 
 
 /**

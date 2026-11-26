@@ -3,6 +3,9 @@ using CoaiMcp.Runners.Processes;
 
 namespace CoaiMcp.Runners.Reviewers;
 
+/// <summary>What <see cref="ClaudeCapability.ProbeWithHelpAsync"/> concluded, and the help text it concluded it from — empty when no help came back whole.</summary>
+public sealed record ClaudeHelp(ClaudeCapability Capability, string Text);
+
 /// <summary>What the installed claude's own <c>--help</c> said about <c>--restricted</c> — or that nobody asked.</summary>
 public enum RestrictedSupport
 {
@@ -108,17 +111,26 @@ public sealed partial record ClaudeCapability(RestrictedSupport Support, string 
     /// consultation over it would be a false alarm; a second failure is a CLI that is not answering. The caller's
     /// cancellation is not an answer: it is rethrown, so a withdrawn turn is never recorded as a refusal.
     /// </remarks>
-    public static async Task<ClaudeCapability> ProbeAsync(IProcessLauncher launcher, string executable, string workingDirectory, CancellationToken ct)
+    public static async Task<ClaudeCapability> ProbeAsync(IProcessLauncher launcher, string executable, string workingDirectory, CancellationToken ct) =>
+        (await ProbeWithHelpAsync(launcher, executable, workingDirectory, ct)).Capability;
+
+    /// <summary>
+    /// <see cref="ProbeAsync"/> and the help text it read — for a caller that must judge more of the help than <c>--restricted</c> (the coder's write launch,
+    /// <see cref="ClaudeWriteCapability"/>), so it reads the SAME answer under the same timeout and retry rather than asking a second time.
+    /// </summary>
+    public static async Task<ClaudeHelp> ProbeWithHelpAsync(IProcessLauncher launcher, string executable, string workingDirectory, CancellationToken ct)
     {
         var first = await AskAsync(launcher, executable, workingDirectory, ct);
-        if (first.Support != RestrictedSupport.Unknown)
+        if (first.Capability.Support != RestrictedSupport.Unknown)
         {
             return first;
         }
 
         var second = await AskAsync(launcher, executable, workingDirectory, ct);
 
-        return second.Support == RestrictedSupport.Unknown ? second with { Reason = $"asked twice: {second.Reason}" } : second;
+        return second.Capability.Support == RestrictedSupport.Unknown
+            ? second with { Capability = second.Capability with { Reason = $"asked twice: {second.Capability.Reason}" } }
+            : second;
     }
 
     /// <summary>Whether a help text DECLARES <c>--restricted</c> as a flag — never a word in prose, never one taking a value.</summary>
@@ -136,7 +148,31 @@ public sealed partial record ClaudeCapability(RestrictedSupport Support, string 
             .Select(RestrictedOn)
             .FirstOrDefault(found => found != Declaration.Absent) == Declaration.Flag;
 
-    private static async Task<ClaudeCapability> AskAsync(IProcessLauncher launcher, string executable, string workingDirectory, CancellationToken ct)
+    /// <summary>Whether a help text DECLARES <paramref name="flag"/> as an option — with a value or without — in the option column format <see cref="RestrictedIn"/> reads, never a word in prose.</summary>
+    public static bool Declares(string helpText, string flag) =>
+        HelpLines(helpText).Any(line => OptionHead(line).Any(token => NameOf(token) == flag));
+
+    /// <summary>
+    /// What the help says about <paramref name="flag"/>: its declaration line and the wrapped lines under it, up to the next option or a blank line — empty when it is not declared.
+    /// It is where a choice list lives (<c>(choices: "acceptEdits", …)</c>), so a word elsewhere in the help is not read as a choice.
+    /// </summary>
+    public static string DescriptionOf(string helpText, string flag)
+    {
+        var lines = HelpLines(helpText);
+        var at = Array.FindIndex(lines, line => OptionHead(line).Any(token => NameOf(token) == flag));
+        if (at < 0)
+        {
+            return string.Empty;
+        }
+
+        var wrapped = lines.Skip(at + 1).TakeWhile(line => OptionHead(line).Length == 0 && line.Trim().Length > 0).Select(line => line.Trim());
+
+        return string.Join(' ', wrapped.Prepend(lines[at].Trim()));
+    }
+
+    private static string[] HelpLines(string helpText) => Ansi().Replace(helpText, string.Empty).Split('\n');
+
+    private static async Task<ClaudeHelp> AskAsync(IProcessLauncher launcher, string executable, string workingDirectory, CancellationToken ct)
     {
         try
         {
@@ -144,13 +180,15 @@ public sealed partial record ClaudeCapability(RestrictedSupport Support, string 
                 new ProcessRequest(executable, ["--help"], workingDirectory) { Timeout = ProbeTimeout },
                 ct);
             ct.ThrowIfCancellationRequested();
+            var read = Read(result);
 
-            return Read(result);
+            // The text only when it was an answer: a cut-short or failed help is no text to judge.
+            return new ClaudeHelp(read, read.Support is RestrictedSupport.Declared or RestrictedSupport.NotDeclared ? result.StdOut : string.Empty);
         }
         // What a missing or unrunnable executable throws out of Process.Start — the same three VendorProbe catches.
         catch (Exception e) when (e is System.ComponentModel.Win32Exception or IOException or InvalidOperationException)
         {
-            return Unknown($"claude --help could not be started ({e.Message})") with { CouldNotStart = true };
+            return new ClaudeHelp(Unknown($"claude --help could not be started ({e.Message})") with { CouldNotStart = true }, string.Empty);
         }
     }
 

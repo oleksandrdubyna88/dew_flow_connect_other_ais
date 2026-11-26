@@ -1,0 +1,18 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t4-agy-preflight-rows
+title: "The preflight rows of an agy coder job: with no model, the guard handler answers a set of payloads and the guard files are the expected bytes"
+kind: security
+complexity: 4
+dependsOn:
+  - t3-agy-coder-launch
+parallel: false
+security: true
+files:
+  - src_mcp/runners/Toolchain/BoundaryPreflight.cs
+  - src_mcp/runners/Toolchain/CoderBoundary.cs
+  - src_mcp/tests/AAgyCoderPreflightTests.cs
+dod:
+  - id: d1
+    item: "V9: before each agy coder job, inside the exact unit, the handler is given a write inside the worktree (allow), a write outside, a write to .git, a write through a link out, a command tool and an unreadable payload (deny each); the agent file and the hook file are read back; a wrong answer refuses the job before any launch and names the row"
+  - id: d2
+    item: "each row goes red when its part is dropped through the test seam; V10: no user manager, native Windows and macOS are refused before any process starts"

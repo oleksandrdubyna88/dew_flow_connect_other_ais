@@ -4,3 +4,4 @@ title: "Proof: one real task of this repository to green by the coder, measured 
 dependsOn:
   - s4-fix-loop
   - s5-plan-proceed-inherited
+  - s7-claude-key-pool

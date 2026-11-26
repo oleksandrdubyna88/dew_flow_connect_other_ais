@@ -6917,3 +6917,24 @@ What these tests do not prove: that the real v2 binary migrates a folder whose o
 | `MigrateV2GateTests.ANoticeThatTheDiskNeverTook_IsNotInTheSet_SoTheReadBackStillRefuses` | guard — green before and after: the set is fed by a read of the file, never by the sink's "accepted" | — |
 | `MigrateV2GateTests.TakingTheLease_AnswersTaken_ThenBusyWhileHeld_ThenTakenAgainOnceReleased`, `…ADataFolderThatCannotHoldTheLeaseFolder_AnswersUnusable_NamingWhy` | a refactor to a closed hierarchy (`LeaseTake`): behaviour unchanged, so guards — the three cases are now asserted directly | `Busy` answered as a plain failure: the two real-process busy tests (`S11_*`) go red |
 | `theInventoryIsComplete.test.ts` — *the archived v1 stores travel with the data folder, and the marker, the journal and the claims stay behind* | `migrations/v1-archive/` had no inventory entry | the line removed from `DATA_TO_MOVE`: three tests red (what moves, what clashes, and this one) |
+
+## v2 E2 — the coder job, the check boundary, the key pool, failover and restore, the retention (2026-11-26)
+
+**Where it lives.** `src_mcp/tests/ACoder*Tests.cs`, `ACheck*Tests.cs`, `AKey*Tests.cs`, `ARole*Tests.cs`, `ASubmoduleMountInTheUnitsTests.cs`, `AToolchainFileTests.cs`, `PlanBindingTests.cs`; the rigs `CoderRig`, `CoderBed`, `BoundaryBed`, `RoleFailoverRig`, `CoderSubmoduleWorld`. The tests start real `systemd-run --user` units where the host has a user manager and are skipped, with the reason, where it has not; the vendor's CLI is always the fake (`FakeCli`). Run: `flock -o … env --default-signal=INT ./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests --filter-class "*ACoder*"` (the MTP executable; `--default-signal=INT` because a backgrounded shell ignores SIGINT and the signal tests then time out). The plan: `v2/epoch-3/e2-coder-one-task/`.
+
+| Flow | Status | Where |
+|---|---|---|
+| Coder job to green: worktree at the base commit, one coder turn, the report read against the schema, the one commit, the checks, the envelope | covered | `ACoderFirstTurnTests`, `ACoderContractTests`, `ACoderWorktreeIsMadeAtTheBaseShaTests`, `ACoderChecksTests` |
+| Fix turns: red checks go back to the same session, cap, the generation compared twice | covered | `ACoderFixTurnsTests`, `ACoderFirstTurnTests` (D3) |
+| Failover between models and the restore of the worktree to the last coai commit; a limit, a refusal and a crash | covered | `ACoderFailoverTests`, `ARoleFailsOverTests`, `ARoleStopIsReadFromTheRecordedSignalsTests` |
+| The coder's unit and the check unit: what each can write and read, proved off the real unit | covered where a user manager exists | `ACoderBoundaryTests`, `ACheckBoundaryUnitTests`, `ACheckBoundaryPreflightTests` (each row goes red when its property is taken away), `ACoderJobWithNoBoundaryIsRefusedTests`, `ACheckBoundaryStopTests`, `ASubmoduleMountInTheUnitsTests` (the property lists) |
+| Submodules of the base commit provided read-only, protected from the coder's diff | covered | `ACoderSubmodulesTests`, `ACoderCommitProtectsTheSubmoduleTests` |
+| The key pool: the key reaches the unit on stdin only, the ledger and the attempt name its id, a limit cools it, no text of a key in any record | covered | `AKeyPoolTests`, `AKeyCoderLaunchTests`, `AKeyCoderBoundaryTests`, `AKeyNoLeakTests`, `AKeyHardeningTests*`, `AKeysModeTests` |
+| The coder job and the review gate: a task session inherits the feature's proceeded plan, and nothing else does | covered | `PlanBindingTests`, `RoundMachineTests` |
+| The retention: the mounts at the end of the work, a job's folders before its record, links and unreadable folders | covered | `ACoderJobFoldersTests`, `ACoderFirstTurnTests` (D3 mounts), `ARoleJobLeaseTests` (A16) |
+| The toolchain file: refusals never echo a typed value; a timeout past the maximum is refused, not thrown | covered | `AToolchainFileTests` |
+| A REAL claude CLI on a pool key, and a real coder job to green on a task of this repository | **not covered by the suite** | measured by hand with the published binary: `v2/epoch-3/e2-coder-one-task/RESULTS_coder_proof.md` (t3, t5) |
+| A check unit on a host with another systemd than 259, or a coder-jobs folder that cannot be covered (it holds the worktree, the main checkout or the coder root) | **not covered** | the fall-back is read, not run on such a host; `RESULTS_coder_proof.md` "Still open" |
+| A task whose files are under `src_vs_code` | **not covered** | E2's toolchain file has no Node project until E4 |
+
+What these tests do not prove: that a vendor's real CLI honours the unit's confinement beyond what the unit itself refuses (the fake never tries), that a key the vendor revoked is seen as dead on the first launch rather than the second, and that the PID namespace of a step can be private (PrivatePIDs was tried and taken out, see `RESULTS_coder_proof.md`).

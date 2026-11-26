@@ -1,0 +1,4 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: s1-scout-judge-contracts
+title: "Scout and judge answer strict JSON: two schemas with their strict readers, one evidence check, two prompts"
+dependsOn: []

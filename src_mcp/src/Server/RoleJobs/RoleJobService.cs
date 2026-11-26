@@ -42,16 +42,29 @@ internal sealed class RoleJobService(string dataDir, Func<string, string?> setti
     /// <summary>The process environment the runner's <c>env.json</c> is taken from.</summary>
     internal IDictionary EnvironmentSource { get; init; } = Environment.GetEnvironmentVariables();
 
+    /// <summary>The review sessions a coder's start reads the plan it is started under from; the server hands over its own store, a bare service reads the data directory's.</summary>
+    internal SessionStore? Sessions { get; init; }
+
     private RoleJobStore Store() => new(dataDir, Clock, log, RoleJobProjection.For(dataDir, log));
 
     private RoleJobKeeper Keeper(RoleJobStore store) => new(store, notice, log);
 
-    public async Task<string> StartAsync(string role, string repoPath, string? taskFile, string? brief, string? model, int? timeoutMinutes, string? workItem, CancellationToken ct = default)
+    public Task<string> StartAsync(string role, string repoPath, string? taskFile, string? brief, string? model, int? timeoutMinutes, string? workItem, CancellationToken ct = default) =>
+        StartAsync(role, repoPath, taskFile, brief, model, timeoutMinutes, workItem, null, ct);
+
+    /// <param name="baseSha">The commit a coder's worktree starts at (a full 40-character id); empty or null for the HEAD of <paramref name="repoPath"/> at this call. A role other than the coder has no base and refuses one (<see cref="CoderBase"/>).</param>
+    public async Task<string> StartAsync(string role, string repoPath, string? taskFile, string? brief, string? model, int? timeoutMinutes, string? workItem, string? baseSha, CancellationToken ct = default)
     {
-        var (request, refusal) = Checked(role, repoPath, taskFile, brief, model, timeoutMinutes, workItem);
+        var (checkedRequest, refusal) = Checked(role, repoPath, taskFile, brief, model, timeoutMinutes, workItem);
         if (refusal.Length > 0)
         {
             return RoleJobAnswers.Refused(refusal);
+        }
+
+        var (request, baseRefusal) = await CoderBase.SettledAsync(checkedRequest, baseSha, ct);
+        if (baseRefusal.Length > 0)
+        {
+            return RoleJobAnswers.Refused(baseRefusal);
         }
 
         var read = RoleJobSettings.Read(settings, OnWsl);
@@ -67,15 +80,22 @@ internal sealed class RoleJobService(string dataDir, Func<string, string?> setti
             return RoleJobAnswers.Refused(routeRefusal);
         }
 
+        // The claude key pool, before any folder is made and without waiting (KEY_POOL_SPEC.md sections 5 and 6): a route of claude models only is refused when the pool is empty (and the device switch not set) or no key can be used now; a route with another vendor starts.
+        if (RoleKeyRoad.For(dataDir, Clock, notice, settings).StartRefusal([.. plan.Route.Select(RoleRoute.Parse).OfType<CoaiMcp.Core.Roles.ModelRef>()]) is { Length: > 0 } noKey)
+        {
+            return RoleJobAnswers.Refused(noKey);
+        }
+
         var store = Store();
         var keeper = Keeper(store);
         await keeper.SweepAsync(ct);
-        RoleJobRetention.Apply(store, log);
+        RoleJobRetention.Apply(store, log, settings);
+        var link = request.Role == RoleDescriptors.Coder ? await CoderPlanBinding.CaptureAsync(Sessions ?? new SessionStore(dataDir), request, ct) : null;
 
-        return await MadeAsync(store, request, plan, config, ct);
+        return await MadeAsync(store, request, plan, link, config, ct);
     }
 
-    private async Task<string> MadeAsync(RoleJobStore store, RoleJobRequest request, RoleJobPlan plan, RoleJobSettings config, CancellationToken ct)
+    private async Task<string> MadeAsync(RoleJobStore store, RoleJobRequest request, RoleJobPlan plan, CoderPlanLink? link, RoleJobSettings config, CancellationToken ct)
     {
         Directory.CreateDirectory(store.JobsRoot);
         using var capLock = await CapLockAsync(store.JobsRoot, ct);
@@ -92,7 +112,7 @@ internal sealed class RoleJobService(string dataDir, Func<string, string?> setti
         }
 
         var made = request with { JobId = RoleJobIds.New(Clock) };
-        var job = store.Create(made, plan);
+        var job = store.Create(made, plan, link);
         store.FolderOf(made.JobId)!.WriteEnvironment(RoleRunEnvironment.Capture(EnvironmentSource));
 
         return await LaunchedAsync(store, job, config, ct);
@@ -248,7 +268,7 @@ internal sealed class RoleJobService(string dataDir, Func<string, string?> setti
     {
         var store = Store();
         await Keeper(store).SweepAsync(ct);
-        RoleJobRetention.Apply(store, log);
+        RoleJobRetention.Apply(store, log, settings);
         SweepBaStaging(store);
     }
 

@@ -1,0 +1,14 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t1-model-lists
+title: "Measure the model names of the installed codex and agy as the CLIs print them, and name the smallest model of each"
+kind: measure
+complexity: 3
+dependsOn: []
+parallel: true
+files:
+  - v2/epoch-3/e3-roles-complete/RESULTS_model_lists.md
+dod:
+  - id: d1
+    item: "the file holds, for the installed codex and agy with their versions, every model name as the CLI itself printed it (agy models; for codex the place each name was seen), and names the smallest model of each vendor, which the measure and proof tasks use"
+  - id: d2
+    item: "no model is called; a name that only a web page shows is not in the file"

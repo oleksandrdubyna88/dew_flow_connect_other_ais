@@ -82,6 +82,27 @@ public static class ServerNoticeCodes
     /// <summary>A role job ended <c>failed</c> — every model of its route stopped, or a stop that allows no failover (<c>tree-changed</c>, <c>output-invalid</c>), or its own timeout. Subject is the job id; one per job (epoch 3 E1 s3).</summary>
     public const string RoleJobFailed = "role-job-failed";
 
+    /// <summary>
+    /// A claude key of the pool was refused by the vendor and is now <c>dead</c> (epoch 3 E2 s7, KEY_POOL_SPEC.md section 5). Subject is the key id; ONE per key. It names the label and the id — never the key.
+    /// </summary>
+    public const string ClaudeKeyDead = "claude-key-dead";
+
+    /// <summary>The exact text of a pool key was found in what its own launch printed or in the coder's changed files: the key is <c>dead (exposed)</c> and must be revoked at the vendor. Subject is the key id; ONE per key.</summary>
+    public const string ClaudeKeyExposed = "claude-key-exposed";
+
+    /// <summary>Every claude key of the pool is disabled, dead or cooling: a pick found none. Subject is <c>pool</c>; at most one in 30 minutes.</summary>
+    public const string ClaudeKeysExhausted = "claude-keys-exhausted";
+
+    /// <summary>
+    /// The claude key pool of this device holds no key at all, and a role job that needs one was refused or its claude models were skipped (epoch 3 E2 s7, KEY_POOL_SPEC.md section 6). Subject is the UTC date, so one per day coalesces on the page.
+    /// </summary>
+    public const string ClaudeKeysEmpty = "claude-keys-empty";
+
+    /// <summary>
+    /// A claude role job ran on the PERSON'S OWN sign-in because the device switch <c>COAI_ROLE_CLAUDE_PERSON_SIGN_IN</c> is set and the pool holds no key (epoch 3 E2 s7). Subject is the UTC date, so one per day coalesces on the page.
+    /// </summary>
+    public const string ClaudePersonSignInUsed = "claude-person-sign-in-used";
+
     /// <summary>Every code, for the test that asserts the redactor rewrites none of them.</summary>
     public static IReadOnlyList<string> All =>
     [
@@ -105,5 +126,10 @@ public static class ServerNoticeCodes
         RoleJobLost,
         RoleModelSwitched,
         RoleJobFailed,
+        ClaudeKeyDead,
+        ClaudeKeyExposed,
+        ClaudeKeysExhausted,
+        ClaudeKeysEmpty,
+        ClaudePersonSignInUsed,
     ];
 }

@@ -1,0 +1,16 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t1-agy-write-capability
+title: "AgyWriteCapability: the measured release as the floor and every flag of the measured set declared in the help, else a refusal with the cure"
+kind: security
+complexity: 4
+dependsOn: []
+parallel: false
+security: true
+files:
+  - src_mcp/runners/Reviewers/AgyWriteCapability.cs
+  - src_mcp/tests/AAgyWriteCapabilityTests.cs
+dod:
+  - id: d1
+    item: "V6: an agy below the release the rows were measured on, or whose help does not declare each flag of the measured set, is refused before the launch with the cure and is never started with a weaker set; asked on every launch and never cached"
+  - id: d2
+    item: "the release is in the job envelope; a CLI that cannot be started and a help that does not answer are refusals that say so"

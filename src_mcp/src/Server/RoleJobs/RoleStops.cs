@@ -6,7 +6,7 @@ using CoaiMcp.Runners.Reviewers;
 
 namespace CoaiMcp.Server.RoleJobs;
 
-/// <summary>The words of a stop — what <c>role_status</c> shows in <c>attempts[].stop</c> and what <c>job.json</c> records. Three of them fail over; three end the job.</summary>
+/// <summary>The words of a stop — what <c>role_status</c> shows in <c>attempts[].stop</c> and what <c>job.json</c> records. Three of them fail over; the others end the job.</summary>
 internal static class RoleStopWords
 {
     /// <summary>The vendor refused the call for want of allowance: a spent quota, a throttle, a stated reset. Fails over.</summary>
@@ -24,8 +24,19 @@ internal static class RoleStopWords
     /// <summary>The working tree changed while a read-only role ran — the one promise it runs under was broken. Ends the job: another model would run on a tree nobody has looked at.</summary>
     public const string TreeChanged = "tree-changed";
 
+    /// <summary>
+    /// The OS layer of a coder job refused a write the coder made, or refused to start it (epoch 3 E2): the job's one promise — the coder writes its worktree and nothing else — was tested and the layer answered. Ends the job, with the layer's sentence
+    /// naming the path: another model would meet the same layer, and a coder that was stopped did not do its work.
+    /// </summary>
+    public const string CoderBoundary = "coder-boundary";
+
     /// <summary>The model answered, and the answer is not the role's output. Ends the job (a repair, where a role has one, happens before this).</summary>
     public const string OutputInvalid = "output-invalid";
+
+    /// <summary>
+    /// The exact text of the launch's claude pool key was found in what the launch printed, or in the files a coder changed (epoch 3 E2 s7): the key is dead (exposed), nothing is committed, and the job ends — another model would meet the same worktree and the same transcript.
+    /// </summary>
+    public const string KeyInOutput = "key-in-output";
 }
 
 /// <summary>
@@ -38,7 +49,7 @@ internal static class RoleStopWords
 /// <param name="Transient">A throttle that may clear while the loop waits — the one stop the LAST model waits out.</param>
 internal sealed record RoleStop(string Word, string Reason, string Kind, bool SkipsVendor, bool Transient)
 {
-    /// <summary>Limit, refusal and crash go on to the next model; the other three end the job.</summary>
+    /// <summary>Limit, refusal and crash go on to the next model; every other word ends the job.</summary>
     public bool FailsOver => Word is RoleStopWords.Limit or RoleStopWords.Refusal or RoleStopWords.Crash;
 }
 

@@ -210,8 +210,8 @@ public sealed class ARoleFailsOverTests
         var job = rig.NewJob(["claude/fable", "claude/opus"]);
         var running = Task.Run(() => rig.RunAsync(job), TestContext.Current.CancellationToken);
         RoleJobWorld.WaitFor(() => rig.World.Store.Read(job.JobId) is { Child: not null }, "the first model's CLI to start and be recorded");
-        // The store records the child when it is started; the FAKE records its own argv a moment later. A cancel in between kills it before it wrote anything, and "the first launch asked for fable" has no line to read.
-        RoleJobWorld.WaitFor(() => rig.Models().Count == 1, "the first launch to be recorded by the fake CLI itself");
+        // The child is recorded the moment it starts, and the fake writes its record of the launch a moment LATER: a cancel in between kills it first and Models() is empty (measured under load, 2 of 8 runs).
+        RoleJobWorld.WaitFor(() => rig.Launches().Count == 1, "the first model's CLI to have recorded its launch");
 
         rig.World.Store.FolderOf(job.JobId)!.RequestCancel();
         var (exit, after) = await running;
@@ -275,6 +275,18 @@ public sealed class ARoleFailsOverTests
         lines.Select(line => (line.GetProperty("provider").GetString(), line.GetProperty("model").GetString(), line.GetProperty("role").GetString(), line.GetProperty("kind").GetString(), line.GetProperty("stage").GetString()))
             .Should().Equal(("claude", "fable", "failover-probe", "role", "RoleJob"), ("codex", "astra", "failover-probe", "role", "RoleJob"));
         lines.Select(line => line.GetProperty("outcome").GetString()).Should().Equal("exit", "ok");
+    }
+
+    [Fact]
+    public async Task EveryLedgerLine_OfARoleJob_CarriesTheJobsId()
+    {
+        await using var rig = await RoleFailoverRig.CreateAsync();
+        rig.Says("fable", FakeRoleAnswers.ClaudeSpendLimit()).Says("astra", FakeRoleAnswers.CodexSays(FakeRoleAnswers.Ok));
+        var job = rig.NewJob(["claude/fable", "claude/opus", "codex/astra"]);
+
+        await rig.RunAsync(job);
+
+        rig.LedgerLines().Select(line => line.GetProperty("job").GetString()).Should().Equal([job.JobId, job.JobId], "a line of the usage ledger names the job it belongs to, so a spend can be traced to its job");
     }
 
     [Fact]

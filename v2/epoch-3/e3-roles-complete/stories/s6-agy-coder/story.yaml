@@ -1,0 +1,6 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: s6-agy-coder
+title: "The agy coder: a coder agent with a write guard inside the OS layer, each fix turn in the same conversation"
+dependsOn:
+  - s4-codex-agy-measure
+  - s5-codex-coder

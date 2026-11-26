@@ -1,0 +1,19 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t1-evidence-check
+title: "The evidence check: an item {file, line, text} of a scout or judge answer is compared with the file, and a path that leaves the repository is an error before any file is opened"
+kind: security
+complexity: 5
+dependsOn: []
+parallel: false
+security: true
+files:
+  - src_mcp/core/Roles/RoleEvidence.cs
+  - src_mcp/src/Server/RoleJobs/RoleEvidenceFiles.cs
+  - src_mcp/tests/ARoleEvidenceIsCheckedTests.cs
+dod:
+  - id: d1
+    item: "an item is verified when the file is in the tree the job read and that line holds the text after white space is collapsed; a line out of range, a file that is not there, a file over 2 MiB or not UTF-8, and a text that is not on the line each give verified false with a reason"
+  - id: d2
+    item: "S5: a path that is absolute, has a drive or `..`, runs through a link, or is a credential-shaped file (the existing rule of CredentialFiles) is an error of the answer and the file is never opened; files are read through RealPath only"
+  - id: d3
+    item: "the pure part has no IO (lines come through an interface) and core stays IsAotCompatible"

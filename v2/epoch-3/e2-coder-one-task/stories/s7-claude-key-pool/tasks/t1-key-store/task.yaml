@@ -1,0 +1,25 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t1-key-store
+title: "The key store of a device: one file per key under <dataDir>/keys/claude, an id from a hash prefix, metadata beside it, a lock, and one member that gives the text to the launch road only (KEY_POOL_SPEC.md section 3)"
+kind: security
+complexity: 6
+dependsOn: []
+parallel: false
+security: true
+files:
+  - src_mcp/src/Server/Keys
+  - shared/data-inventory.json
+  - src_mcp/tests
+dod:
+  - id: d1
+    item: "add writes k-<12 hex>.key (the text only, a temporary file then a rename) and k-<12 hex>.json (label, state, times, counts; no text); the id is the first 12 hex characters of SHA-256 of the fixed prefix line plus the text; the same text twice is refused with the label it has; the 201st key is refused"
+  - id: d2
+    item: "the folder is 0700 and the files 0600 (under a shared data folder 2770 and 0660), and each mode is READ BACK after it is set: a folder that does not keep modes refuses the add with its name and the cure; a key file found with a wider mode is not used; on Windows the owner-only ACL of PrivateAcl is set and read back"
+  - id: d3
+    item: "relabel, disable, enable and remove change only the metadata or delete the pair (the .key file first); a label is 1 to 40 characters of the allowed set, unique without case, and a label that Redaction reads as a secret is refused with the sentence that says to revoke it"
+  - id: d4
+    item: "every change and every read of the pool runs under pool.lock (a file held with FileShare.None, the SessionClaim shape, for the length of the call only); a test with a killed holder shows the lock is free again; a .key with no .json is deleted by the next call under the lock and a .json with no .key lists as missing"
+  - id: d5
+    item: "the text of a key leaves the store through ONE member, as a type whose ToString is the id and which no JSON context and no record member holds as a string; a scan test fails when a second caller of that member appears, and its companion proves the scan matches the one caller"
+  - id: d6
+    item: "shared/data-inventory.json names keys/ with move false and mention true, and both inventory tests pass"

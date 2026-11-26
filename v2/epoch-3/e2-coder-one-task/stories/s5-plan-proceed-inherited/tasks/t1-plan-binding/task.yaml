@@ -19,3 +19,5 @@ dod:
     item: "a branch named coder/x that no coder job of this data folder made is refused as today (PlanProceeded false); so is a coder job whose starting branch has no proceeded plan, and a job whose source plan changed after the start (the hash differs)"
   - id: d3
     item: "the binding is read from job.json (the authority), never from the branch name alone; every existing RoundMachine and PanelService test passes unchanged"
+  - id: d4
+    item: "the binding is refused unless the task belongs to the approved plan revision and the base SHA descends from that revision's source commit (plan gate)"

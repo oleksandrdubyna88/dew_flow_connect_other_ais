@@ -1,0 +1,19 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t2-codex-resume-measure
+title: "Measure codex exec resume: the session in a CODEX_HOME of its own, the argv that keeps the write limit, --output-schema, the text of a lost session"
+kind: measure
+complexity: 4
+dependsOn:
+  - t1-model-lists
+parallel: false
+security: true
+files:
+  - v2/spikes/RESULTS_codex_coder.md
+  - src_mcp/tests/fixtures/role-stops/codex-resume-no-session.json
+dod:
+  - id: d1
+    item: "U1: with the smallest model, 6 paid calls at most and the spend written down: a thread started by codex exec in a scratch worktree with a CODEX_HOME of its own is resumed by exec resume with the id from the stream and returns a number planted in turn 1; the same is tried from another folder and with another CODEX_HOME, and each answer is recorded"
+  - id: d2
+    item: "U2: recorded: where the session file is, the argv of a resumed turn that keeps the write limit, whether --output-schema takes shared/coder-report.schema.json on exec and on exec resume, and the text of a resume that finds no session (saved as the fixture)"
+  - id: d3
+    item: "nothing under the real home is written: the bytes and the modification time of the real sign-in file are the same before and after; the credential used is the one the owner named (SPEC section H, question 1)"

@@ -219,14 +219,29 @@ version: 1
 projects:
   - path: src_mcp
     adapter: dotnet
-    build: [dotnet, build, app.slnx, -c, Debug, "-m:{jobs}"]
-    test:  [./src_mcp/tests/bin/Debug/net10.0/App.Tests]
+    build:
+      - dotnet
+      - build
+      - app.slnx
+      - -c
+      - Debug
+      - "-m:{jobs}"
+    test:
+      - ./src_mcp/tests/bin/Debug/net10.0/App.Tests
     memoryMb: 3000
   - path: src_vs_code
     adapter: node
-skip: [audit, coverage]
-timeouts: {build: 15m, test: 30m}
+skip:
+  - audit
+  - coverage
+timeouts:
+  build: 15m
+  test: 30m
 ```
+
+Block style only: the strict YAML subset reader (epoch-3 E1) refuses flow lists and flow maps except `[]`
+(epoch-3 E2 s1, RESULTS_s1_toolchain.md). Every argv runs from the repository root with no shell; a coder job
+reads this file at its BASE commit.
 
 ## 13. Studio attachments
 
@@ -368,6 +383,8 @@ brief, repoPath, model?, timeoutMinutes?)` / `role_status(jobId, maxSeconds)` / 
 the model (roles table / complexity band), the permissions and the output schema; `start_coder` is the coder case (no
 separate tool). Placement in the epochs: decided with the Fable split review.
 
+Claude role jobs run on the **key pool** (epoch 3 E2 s7, `v2/epoch-3/e2-coder-one-task/KEY_POOL_SPEC.md`): a round robin of `claude setup-token` tokens per device, passed to the child only as `CLAUDE_CODE_OAUTH_TOKEN`; a limit switches the key (3 per job), no usable key means no wait; the consultants and the Team server slots are unchanged.
+
 ## 20. Important / responsible role and vendor failover (owner, 2026-11-22)
 
 - The **important** role always runs the strongest model, selectable per device (e.g. `fable`, codex `astra`). The router
@@ -399,3 +416,23 @@ the item status in the YAML deterministically. The page is epoch 4 E5 (was "Feat
    removes the unit after exit (use `--wait` for the result). **Memory limits need `-p MemorySwapMax=0`** besides
    `MemoryMax` — without it the 4 GB WSL swap absorbs the excess and nothing is killed. The scheduler (epoch 3 E5) uses
    both. Open: survival when the whole client process tree is killed, across `wsl --terminate`.
+
+## 23. What epoch 3 E2 (coder, one task) decided differently from sections 2, 10 and 12 (2026-11-25)
+
+Built and measured in `v2/epoch-3/e2-coder-one-task/` (`RESULTS_s1_toolchain.md`, `RESULTS_s2_check_boundary.md`, `BASELINE.md`). Where this section and §§ 2, 10 or 12 differ, this section is what was built.
+
+**Section 2 (coder delegation and tools).**
+- There is no `start_coder`, `coder_status` or `coder_cancel`: the coder is `start_role` with `role: "coder"` (§ 19), read with `role_status` and stopped with `role_cancel`. The detached runner is `coai-mcp --role-run <jobId>`, not `--coder-run`; the job files under `roles/jobs/<jobId>/` are the authority and RoundsDb `role_jobs` / `role_attempts` is a projection, not `coder_jobs`.
+- The envelope (`result.json`) has `jobId`, `baseSha`, `headSha`, `branch`, `schemaValid`, `fixTurns`, `filesChanged`, `report`, `mainCheckout` and the checks half (`green`, `checksState`, `checksNote`, `format`, `checks`, `rounds`, `fixRounds`, `lastDigest`). The job's `state` and attempts are `role_status`'s; there is no `exitCode`, `logRef` or `flaky` at job level.
+- A change of the main checkout does not fail the job. The OS layer holds it read-only, so a path in `mainCheckout.changes` is a person's edit; it is evidence for the reader of the branch (decision 8, § 16).
+- Write access is three layers, not one: the measured claude flag set R11, the claude process inside a `systemd-run --user` unit, and the checks in their own units. It is Linux and WSL only; native Windows and macOS are refused before any process starts.
+
+**Section 10 (build and test, fix loop).**
+- The stop is the job's `timeoutMinutes` (default 30), not 45 minutes. `COAI_FIX_ROUNDS` is a whole number from 0 to 10; anything else is 3 with a note, never a refusal. Each round runs the whole base-toolchain build and test on the exact commit coai made.
+- Built: the same-session `--resume` of claude, one coai commit per turn, the failure digest (at most 40 items and 16 KB), failover to the next claude model from the last coai commit, the stop words `not-green`, `not-configured`, `toolchain-refused`, `checks-changed-tree`, `coder-boundary` and `timeout`.
+- Left to E4: the formatter turn (the `format` slot says `not_configured`; no `style: format (coai)` commit is made), tests selected from the changed files, the re-run of a test that failed once (`flaky`), the stop on a repeated failure fingerprint, `codex exec resume` and agy `--conversation`, and a `review_code` started by the scheduler (here the main AI calls it, and the coder branch inherits the feature's plan proceed).
+
+**Section 12 (toolchain adapters).**
+- Only the repository's `.coai/toolchain.yaml` path is built: its reader, the check runner and the digest of MSBuild lines and of the `CoaiMcp.Tests` executable. There is no detection, no `shared/toolchains.json` and no adapter code; the `adapter` key is read and checked against a list, and today it only adds the .NET switches (`DOTNET_NOLOGO` and the like) to a `dotnet` step. Left to E4: detection, default argv, parsers for the other stacks and the reverse-graph test selection.
+- The file is the strict YAML subset: one argv item to a line; a flow list other than `[]` and every flow map are refused by name (`yaml-forbidden`). `build` and `test` cannot be skipped. `not_configured` (no file, or no command) and `toolchain_refused` (a file that is there and wrong, or a base commit that cannot be read) are never green.
+- The file is read at the BASE commit and run in the worktree, so a coder cannot change its own checks; a change it makes is reported and does not run for that job.

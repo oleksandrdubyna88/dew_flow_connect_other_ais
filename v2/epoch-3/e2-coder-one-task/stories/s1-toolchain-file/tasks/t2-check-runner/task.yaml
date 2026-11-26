@@ -17,3 +17,5 @@ dod:
     item: "a tree with no toolchain file gives checks not_configured and green false; a step over its timeout is stopped with its process tree and recorded as failed; the argv is started without a shell and the `{jobs}` placeholder is replaced"
   - id: d3
     item: "the toolchain file is read from the tree that is checked (the coder worktree at its head), and a log is cut at 20 MB"
+  - id: d4
+    item: "the checks of a coder job come from .coai/toolchain.yaml AT THE BASE SHA, never from the worktree; a toolchain change made by the coder is reported and does not run for that job (plan gate)"

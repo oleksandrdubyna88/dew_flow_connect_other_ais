@@ -11,18 +11,19 @@ namespace CoaiMcp.Server.RoleJobs;
 /// <remarks>
 /// <para><b>Names, not a copy of everything.</b> The list is <see cref="ProcessEnvironment.Passthrough"/> (what every confined launch here already copies: <c>PATH</c>, <c>HOME</c>, the locale, the
 /// proxy and certificate names, the temporary folder), <c>DOTNET_ROOT</c> (a framework-dependent runner outside the default place cannot start without it), and this product's own folder, role
-/// and log names (<c>COAI_DATA_</c>, <c>COAI_ROLE_</c>, <c>COAI_ROLES_</c>, <c>COAI_LOG_</c>). A vendor key, a token or another program's variable is not on it, so it is never written to disk by
+/// and log names (<c>COAI_DATA_</c>, <c>COAI_ROLE_</c>, <c>COAI_ROLES_</c>, <c>COAI_LOG_</c>) and the coder's worktree root (<c>COAI_CODER_ROOT</c>, so the folder the person chose is the one the runner uses) and the one setting of a coder job's loop that has no <c>COAI_ROLE_</c> name, <c>COAI_FIX_ROUNDS</c> (<see cref="FixRounds"/>). A vendor key, a token or another program's variable is not on it, so it is never written to disk by
 /// a role start; the runner applies the list again on the way in, so a hand-edited file cannot widen it.</para>
 /// </remarks>
 internal static class RoleRunEnvironment
 {
-    private static readonly string[] OwnPrefixes = ["COAI_DATA_", "COAI_ROLE_", "COAI_ROLES_", "COAI_LOG_"];
+    private static readonly string[] OwnPrefixes = ["COAI_DATA_", "COAI_ROLE_", "COAI_ROLES_", "COAI_LOG_", "COAI_CODER_", "COAI_KEYS_"];
 
     /// <summary>True for a name the runner may be handed.</summary>
     public static bool Allowed(string name) =>
         name.Length > 0
         && (ProcessEnvironment.Passthrough.Contains(name)
             || string.Equals(name, "DOTNET_ROOT", StringComparison.Ordinal)
+            || string.Equals(name, FixRounds.Key, StringComparison.Ordinal)
             || OwnPrefixes.Any(prefix => name.StartsWith(prefix, StringComparison.Ordinal)));
 
     /// <summary>The allowed variables of <paramref name="source"/> (a process environment, <see cref="Environment.GetEnvironmentVariables()"/>), by name.</summary>

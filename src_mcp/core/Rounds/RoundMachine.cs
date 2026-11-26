@@ -147,6 +147,23 @@ public static class RoundMachine
         "purpose — call review_document with newReview: true, which starts a fresh review and leaves " +
         "the finished one on the record";
 
+    /// <summary>
+    /// A coder job's session takes the plan proceed of the feature it was started under (epoch 3 E2 s5; <c>server.md</c> § 16 item 1). The caller has ALREADY proved the binding — against the job's own record and the feature's
+    /// session — so this is the state change only: a session still at its plan stage with nothing run goes to the code stage as if its plan round had proceeded, and records what it inherited.
+    /// </summary>
+    /// <remarks>
+    /// A session that has begun its own plan stage (a round run or awaiting a resolve) keeps it — a person who reviewed the plan on the coder branch by hand has a plan of their own; a document or feature session inherits nothing;
+    /// one that already inherited keeps its stage and only has the record refreshed. Nothing here can make a session proceed without a binding, because the only argument that does it is the record.
+    /// </remarks>
+    public static SessionState InheritPlan(SessionState s, InheritedPlan plan) => s switch
+    {
+        { IsDocumentSession: true } or { IsFeatureSession: true } => s,
+        { Inherited: not null } => s with { Inherited = plan },
+        { Stage: Stage.PlanReview, PlanProceeded: false, AwaitingResolve: false, RoundsRunThisStage: 0 } =>
+            s with { Stage = Stage.CodeReview, PlanProceeded = true, AdvanceOnResolve = false, Inherited = plan },
+        _ => s,
+    };
+
     public static Transition BeginCodeRound(SessionState s) => s switch
     {
         { IsDocumentSession: true } => new Transition.Refused(ThisIsADocumentSession),

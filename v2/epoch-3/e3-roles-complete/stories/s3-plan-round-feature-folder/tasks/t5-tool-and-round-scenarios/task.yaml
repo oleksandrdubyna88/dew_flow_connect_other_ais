@@ -1,0 +1,19 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t5-tool-and-round-scenarios
+title: "review_plan takes featureFolder: the tool text, the working tree guard, and the round scenarios over real stdio with FakeCli reviewers"
+kind: code
+complexity: 5
+dependsOn:
+  - t4-plan-identity-binding
+parallel: false
+files:
+  - src_mcp/src/Tools.cs
+  - src_mcp/src/Server/PanelService.cs
+  - src_mcp/tests/APlanRoundOverAFeatureFolderTests.cs
+dod:
+  - id: d1
+    item: "over real stdio with FakeCli reviewers: review_plan with featureFolder on a valid fixture launches the reviewers with the pack and its source line in the prompt; the description of review_plan names featureFolder and the scope by workItem"
+  - id: d2
+    item: "P2 end to end: an invalid folder gives a refusal, zero reviewer launches, no new round row, the same stage and round count, and no worktree"
+  - id: d3
+    item: "P4: with HEAD at the commit of the round an edited, a staged or an untracked plan file under the scope is refused and the files are named; with HEAD at another commit the note says that the working tree was not compared"

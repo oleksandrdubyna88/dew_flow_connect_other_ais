@@ -1,6 +1,6 @@
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: t3-claude-write-launch
-title: "The claude coder launch: a write arm of the launch confinement with the measured flag set, cwd = the worktree, resumable with --resume"
+title: "The claude coder launch: a write arm of the launch confinement with the measured flag set (R11), cwd = the worktree, minimal environment, resumable with --resume bound to the job"
 kind: security
 complexity: 8
 dependsOn:
@@ -11,12 +11,20 @@ security: true
 files:
   - src_mcp/runners/Consultation/LaunchConfinement.cs
   - src_mcp/runners/Consultation/ClaudeConsultant.cs
+  - src_mcp/runners/Reviewers/ClaudeCapability.cs
   - src_mcp/core/QuestionConsult/ConfinementPlanner.cs
+  - v2/spikes/RESULTS_coder_write_boundary.md
   - src_mcp/tests
 dod:
+  - id: d0
+    item: "before the argv is frozen the open items of RESULTS_coder_write_boundary_judgement.md are measured with haiku (at most 10 calls, spend recorded) and added to the results file: project hooks and .claude/hooks at the base commit (fresh and resumed, canary outside), a main checkout under /home/jinx/git, Glob and Grep outside, a new file through a directory symlink, the init line tools and mcp_servers arrays, the auto-memory folder; a measured gap either changes the flag set or is closed by the OS layer of t5"
   - id: d1
-    item: "the argv of a coder launch is exactly the flag set that RESULTS_coder_write_boundary.md names, with the worktree as cwd and as the only added directory and no MCP server; a resumed turn has the same argv plus --resume <handle>"
+    item: "the argv of a coder launch is exactly the flag set that RESULTS_coder_write_boundary.md names, with the worktree as cwd and as the only added directory and no MCP server; a resumed turn has the same argv plus --resume <handle>, and the handle is bound to the job id and the worktree (a handle of another job is refused)"
   - id: d2
-    item: "every existing consultant and question-row launch builds the same argv as before, byte for byte (the existing argv tests pass unchanged); a claude CLI that lacks a needed flag is refused before the launch with the cure, never started with a weaker boundary"
+    item: "every existing consultant and question-row launch builds the same argv as before, byte for byte (the existing argv tests pass unchanged); the write launch is a third case of the LaunchConfinement union and acceptEdits cannot reach a consult or question launch (a test)"
   - id: d3
+    item: "a claude CLI below version 2.1.330 or without --restricted, --permission-prompts or acceptEdits is refused before the launch with the cure, never started with a weaker boundary; the version is recorded in the job envelope"
+  - id: d4
+    item: "the coder launch gets the minimal environment allow-list (no COAI_ name, no other vendor key, no CLAUDE_ steering name); a test lists exactly what reaches the process"
+  - id: d5
     item: "a vendor other than claude asked for a write launch is refused with a sentence that says the coder is claude only in this epic"

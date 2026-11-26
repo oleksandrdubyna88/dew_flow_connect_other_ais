@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using CoaiMcp.Runners.Consultation;
 using CoaiMcp.Runners.Files;
 using CoaiMcp.Runners.Processes;
@@ -79,6 +80,36 @@ public sealed class AConversationPlaceTests : IDisposable
 
         await taking.Should().ThrowAsync<OperationCanceledException>();
         VibeHomeTurns.Held(folder).Should().BeFalse("a turn that never got its place must not keep the folder's in-process turn until a restart");
+    }
+
+    /// <summary>
+    /// The folder's lock is waited for off the calling thread for at most <see cref="ConsultantPlaces.LockWait"/> (10 s). The delegate
+    /// that waits must be handed the caller's token: a cancel is then read at the next jitter of the wait, not when the wait ends — which,
+    /// with the token dropped, was ten seconds after the caller had withdrawn, and then an answer of "held by another process".
+    /// </summary>
+    [Fact]
+    public async Task ACancellationWhileAnotherProcessHoldsTheFoldersLock_EndsTheWaitAtOnce_NotWhenTheLockWaitEnds()
+    {
+        var id = ConsultationStore.NewId();
+        var folder = ConsultantHomes.ConversationFolder(Homes, ConsultantHomes.Kimi, id);
+        Directory.CreateDirectory(folder);
+        var lockPath = Path.Combine(folder, ConversationFolder.LockName);
+        using var holder = HeldFile.TakeWithin(lockPath, TimeSpan.FromSeconds(1)).Should().BeOfType<Hold.Taken>("the test is the other holder of the folder's turn lock").Subject.Stream;
+        using var withdrawn = new CancellationTokenSource();
+
+        var taking = Places().ForConversationAsync(new HomeOnly(), id, _dir.At("repo"), Ceiling, withdrawn.Token);
+        await Task.Delay(TimeSpan.FromMilliseconds(300), TestContext.Current.CancellationToken);
+        taking.IsCompleted.Should().BeFalse("the lock is held, so the turn is still waiting for it");
+
+        var sinceTheCancel = Stopwatch.StartNew();
+        await withdrawn.CancelAsync();
+        var finished = await Task.WhenAny(taking, Task.Delay(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken));
+        sinceTheCancel.Stop();
+
+        finished.Should().BeSameAs(taking, "the wait must end because the caller withdrew, not because the lock wait ran out");
+        sinceTheCancel.Elapsed.Should().BeLessThan(TimeSpan.FromMilliseconds(500), "measured from the cancel");
+        var ended = async () => await taking;
+        await ended.Should().ThrowAsync<OperationCanceledException>("a withdrawn caller is a cancellation, not a refusal to retry");
     }
 
     /// <summary>

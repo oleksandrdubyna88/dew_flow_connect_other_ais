@@ -1,0 +1,17 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t4-agy-resume-measure
+title: "Measure agy --conversation: the conversation in a home of its own, the usage of turn 2, the files of the sign-in, the text of a lost conversation"
+kind: measure
+complexity: 4
+dependsOn:
+  - t1-model-lists
+parallel: false
+security: true
+files:
+  - v2/spikes/RESULTS_agy_coder.md
+  - src_mcp/tests/fixtures/role-stops/agy-conversation-not-found.json
+dod:
+  - id: d1
+    item: "U11: with the smallest model, 6 paid calls at most and the spend written down: a conversation started in a scratch folder with a HOME of its own is continued by --conversation with the id from the stream and returns a number planted in turn 1; the same from another folder; where agy keeps the conversation; whether the usage of turn 2 is the sum; the text of a conversation that is not found (saved as the fixture)"
+  - id: d2
+    item: "U6: which files of the real home agy needs to be signed in, found with an empty home plus one file at a time; nothing under the real home is written (bytes and modification time the same before and after)"

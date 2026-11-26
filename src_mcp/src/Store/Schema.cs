@@ -34,7 +34,7 @@ internal static class Schema
         TheRunsThemselves, ThePairsThemselves, WhatWasSent, HowItEnded, WhoSaidSo,
         TheSendsThemselves, WhatAPersonSaid, WhatItWasTold, WhatTheCadenceCounts,
         WhyARoundDidNotRun, TheQuestionsAsked, SecurityEvidence, WhyAConsultationFailed,
-        TheReviewersModel, TheRoundsKey, TheRoundsSize, ThePlanSource, TheRoundsAuthors, TheWorkItem, TheRoleJobs,
+        TheReviewersModel, TheRoundsKey, TheRoundsSize, ThePlanSource, TheRoundsAuthors, TheWorkItem, TheRoleJobs, TheKeyOfAnAttempt,
     ];
 
     internal const string SecurityEvidence = """
@@ -799,5 +799,13 @@ internal static class Schema
             PRIMARY KEY (job_id, ordinal)
         );
         CREATE INDEX IF NOT EXISTS role_jobs_by_state ON role_jobs (state, updated_utc);
+        """;
+
+    /// <summary>
+    /// Step 27: the claude key an attempt of a role job ran on (epoch 3 E2 s7, KEY_POOL_SPEC.md section 5) — <c>key_id</c> of <c>role_attempts</c>: the pool key's id (<c>k-</c> and 12 hex characters), <c>person-sign-in</c> for the device switch, empty for an attempt
+    /// that carried no key (another vendor, a job from before the pool). The id is a hash prefix and is not a secret. A projection of <c>job.json</c> like the rest of step 26; appended, never inserted, for the reason step 20 records.
+    /// </summary>
+    internal const string TheKeyOfAnAttempt = """
+        ALTER TABLE role_attempts ADD COLUMN key_id TEXT NOT NULL DEFAULT '';
         """;
 }

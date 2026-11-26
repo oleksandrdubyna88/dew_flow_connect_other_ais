@@ -364,6 +364,13 @@ internal static class Program
         /// </summary>
         /// <remarks>Its own <c>args[0]</c>. Exit 0 measured, 65 a wrong argument or no such job or commit, 74 a read that fails — never 64.</remarks>
         RoleDelta,
+
+        /// <summary>
+        /// The claude key pool of this device: <c>--keys list|add|import|relabel|disable|enable|remove|scan|sync</c> (epoch 3 E2 s7, KEY_POOL_SPEC.md). A key text is ONE line on stdin, never an argument; the answers carry no text.
+        /// See <see cref="Server.Keys.KeysMode"/>.
+        /// </summary>
+        /// <remarks>Its own <c>args[0]</c> and a WRITER mode: a named data folder that is missing is refused before it runs (74). Exit 0, 65 wrong arguments or data, 74 the store cannot be used, 75 the pool is busy — never 64.</remarks>
+        Keys,
     }
 
     /// <summary>
@@ -379,7 +386,7 @@ internal static class Program
     internal static readonly IReadOnlySet<Startup> WriterModes = new HashSet<Startup>
     {
         Startup.CheckConsultant, Startup.CheckModel, Startup.Collect, Startup.PairsKeep, Startup.PairsDecide,
-        Startup.UploadPairs, Startup.RequeueRefused, Startup.ProbeApi, Startup.Consultants, Startup.BackfillAuthors, Startup.MigrateV2, Startup.RoleRun,
+        Startup.UploadPairs, Startup.RequeueRefused, Startup.ProbeApi, Startup.Consultants, Startup.BackfillAuthors, Startup.MigrateV2, Startup.RoleRun, Startup.Keys,
     };
 
     /// <summary>Why <paramref name="startup"/> may not run here — empty when it may (not a writer, or its root is there).</summary>
@@ -442,6 +449,7 @@ internal static class Program
                 "--migrate-v2" => Startup.MigrateV2,
                 "--role-run" => Startup.RoleRun,
                 "--role-delta" => Startup.RoleDelta,
+                "--keys" => Startup.Keys,
                 _ => Startup.Usage,
             };
 
@@ -657,6 +665,10 @@ internal static class Program
             case Startup.RoleDelta:
                 // One object on stdout, read-only, exit 0 whatever the share; a wrong argument, no such job or commit is 65, a read that fails 74 — never 64.
                 return await RoleDeltaMode.RunAsync(args, Environment.GetEnvironmentVariable, Console.Out, Note);
+
+            case Startup.Keys:
+                // The claude key pool: the answer on stdout, a sentence on stderr, a key text only ever ONE line on stdin; 0, 65 wrong arguments or data, 74 the store cannot be used, 75 the pool is busy — never 64.
+                return Server.Keys.KeysProcess.Run(args[1..], Note);
 
             default:
                 return await ServeAsync();
@@ -2242,6 +2254,8 @@ internal static class Program
                 // same in the log — AND, since story 2.3.3, onto the page a person actually looks at.
                 note => StartupNotices.Adopted(note, SettingsFile.PathFor(dataDir), noticing, log));
             var settings = PanelSettings.FromEnvironment(configuration);
+            // The claude key pool follows its sources (the COAI_CLAUDE_KEY_* variables, the keys file): a new key is added, a changed one replaced, a missing one disabled. Logs counts only.
+            Server.Keys.KeyStartup.Sync(dataDir, configuration, log);
             // The tracker is what lets a LATER server collect reviewers this one leaves behind if
             // it dies: the timeout kill is performed by the parent, so it cannot run when the
             // parent is what went away.
@@ -2730,6 +2744,13 @@ internal static class Program
         task file at that commit (line ends read as LF), as ONE JSON object {mode, jobId, epic, commit, manifestTasks, changed, deleted, added, changedShare, threshold, pass, changedFiles, deletedFiles, addedFiles};
         pass is a share below 0.20. Reads the job folder and the repository, writes nothing, never creates the data directory. Exits 0 measured (pass or not), 65 for a wrong argument, no such job,
         a job that is not a BA job that succeeded, a repository or commit that is not there, 74 when a manifest or git cannot be read — never 64.
+        `--keys <verb>` manages the claude key pool of THIS device — the setup-tokens role jobs run on (`claude setup-token`; never your own sign-in). Verbs: `list [--json]` (metadata rows, the usable count, the list
+        revision; never a key), `add --label <name> [--account <email>]` (the key is ONE line on stdin, read with no echo on a terminal; there is no flag, file or variable that takes a key), `import [--format lines|env|creds-json]
+        [--source <name>]` (many keys from stdin: JSON lines `{"label","token"}`, 200 at most; `env` is COAI_CLAUDE_KEY_<label>=<token> lines and `creds-json` is `{"version":1,"keys":[{"label","account","token"}]}`, both synced:
+        a new key is added, a changed one replaced, one the input no longer lists is disabled, only the keys of that source), `relabel --id <k-…> --label <name>`, `disable|enable|remove --id <k-…>` (each takes
+        `--expect-revision <n>`: a stale list is "changed elsewhere"), `scan --path <folder>` (which files hold the exact text of a pool key: the path and the key id, never the text) and `sync` (the environment variables
+        COAI_CLAUDE_KEY_<label> / COAI_CLAUDE_ACCOUNT_<label> and the file at COAI_CLAUDE_KEYS_FILE, which a start does too). Files are 0600 under <data dir>/keys/claude, read back; a data folder that keeps no modes refuses an add.
+        Exits 0, 65 for a wrong argument or data (a sentence that never repeats what you typed), 74 when the store cannot be used or a named data folder is missing, 75 when the pool is busy — never 64.
         Configure it in your client as:
 
           { "mcpServers": { "coai": { "command": "<full path to coai-mcp>" } } }

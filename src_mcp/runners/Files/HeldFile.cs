@@ -30,7 +30,7 @@ namespace CoaiMcp.Runners.Files;
 /// while the hold is open inherits it, redirected or not — which is also why no TEST ever holds one in the test host (S2.43 holds it
 /// in a child). <see cref="FileShare.Inheritable"/> is not a share mode but the <c>bInheritHandle</c> of the handle's security
 /// attributes, so the open stays exclusive.</para>
-/// <para><b>On Linux the inheritable take is native</b> (<see cref="LinuxHeldFile"/>): <c>open</c> without <c>O_CLOEXEC</c> and <c>flock(LOCK_EX|LOCK_NB)</c>, because .NET's combined share mode was measured to take a
+/// <para><b>On Linux the inheritable take is native</b> (<see cref="LinuxHeldFile"/>): <c>open</c> with <c>O_CLOEXEC</c>, <c>flock(LOCK_EX|LOCK_NB)</c> and the flag cleared once the take has succeeded, because .NET's combined share mode was measured to take a
 /// SHARED lock there (L-N1, CI run 38923199105; <c>research/RESULTS_kimi_confinement.md</c> §30) — a second inheritable take succeeded. Every other take, inheritable or not, on any host, is .NET's.</para>
 /// </remarks>
 public static class HeldFile
@@ -86,18 +86,18 @@ public static class HeldFile
     /// <see cref="FileStatus.SameFileAs"/>). A mismatch means a retirement sweep unlinked the file between the open and the lock, so the taker holds an inode nobody else will ever open — two holders of one
     /// sign-in; it releases and takes again, at most <see cref="MostRetakes"/> times, then refuses. Elsewhere exactly <see cref="TakeWithin"/>: a file held open on Windows cannot be unlinked.
     /// </summary>
-    public static Hold TakeVerified(string path, TimeSpan within, bool inheritable = false) => TakeVerified(path, within, inheritable, null);
+    public static Hold TakeVerified(string path, TimeSpan within, bool inheritable = false, CancellationToken ct = default) => TakeVerified(path, within, inheritable, null, ct);
 
     /// <summary>The same, with a hook told the path right after each open and lock, so a test can unlink the file in the window the guard exists for.</summary>
-    internal static Hold TakeVerified(string path, TimeSpan within, bool inheritable, Action<string>? afterOpen) =>
-        OperatingSystem.IsLinux() ? Verified(path, within, inheritable, afterOpen) : TakeWithin(path, within, inheritable);
+    internal static Hold TakeVerified(string path, TimeSpan within, bool inheritable, Action<string>? afterOpen, CancellationToken ct = default) =>
+        OperatingSystem.IsLinux() ? Verified(path, within, inheritable, afterOpen, ct) : TakeWithin(path, within, inheritable, ct);
 
     [SupportedOSPlatform("linux")]
-    private static Hold Verified(string path, TimeSpan within, bool inheritable, Action<string>? afterOpen)
+    private static Hold Verified(string path, TimeSpan within, bool inheritable, Action<string>? afterOpen, CancellationToken ct)
     {
         for (var attempt = 0; attempt < MostRetakes; attempt++)
         {
-            var (hold, replaced) = Attempted(path, within, inheritable, afterOpen);
+            var (hold, replaced) = Attempted(path, within, inheritable, afterOpen, ct);
             if (!replaced)
             {
                 return hold;
@@ -109,9 +109,9 @@ public static class HeldFile
 
     /// <summary>One take and its verification: the hold, and whether the file was replaced under it (the hold is then already given back).</summary>
     [SupportedOSPlatform("linux")]
-    private static (Hold Hold, bool Replaced) Attempted(string path, TimeSpan within, bool inheritable, Action<string>? afterOpen)
+    private static (Hold Hold, bool Replaced) Attempted(string path, TimeSpan within, bool inheritable, Action<string>? afterOpen, CancellationToken ct)
     {
-        var hold = TakeWithin(path, within, inheritable);
+        var hold = TakeWithin(path, within, inheritable, ct);
         if (hold is not Hold.Taken taken)
         {
             return (hold, false);
@@ -162,20 +162,22 @@ public static class HeldFile
     /// <summary>
     /// <see cref="Take"/>, retried with a short jitter while the file is BUSY until <paramref name="within"/> has
     /// passed — so a reader's momentary probe is waited out, while a real holder (who holds for minutes) still
-    /// refuses. An unusable file is answered at once: waiting does not make it openable.
+    /// refuses. An unusable file is answered at once: waiting does not make it openable. A cancelled <paramref name="ct"/> ends the wait
+    /// at the next jitter (a few milliseconds), not at <paramref name="within"/>: the answer is then the <see cref="Hold.Busy"/> of the last try.
     /// </summary>
-    public static Hold TakeWithin(string path, TimeSpan within, bool inheritable = false)
+    public static Hold TakeWithin(string path, TimeSpan within, bool inheritable = false, CancellationToken ct = default)
     {
         var until = DateTime.UtcNow + within;
         while (true)
         {
             var hold = Take(path, inheritable);
-            if (hold is not Hold.Busy || DateTime.UtcNow >= until)
+            if (hold is not Hold.Busy || DateTime.UtcNow >= until || ct.IsCancellationRequested)
             {
                 return hold;
             }
 
-            Thread.Sleep(Random.Shared.Next(2, 8));
+            // The token's own handle, so a cancel wakes the sleep instead of waiting it out.
+            ct.WaitHandle.WaitOne(Random.Shared.Next(2, 8));
         }
     }
 

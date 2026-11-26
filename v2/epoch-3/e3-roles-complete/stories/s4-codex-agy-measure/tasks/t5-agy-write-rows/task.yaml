@@ -1,0 +1,20 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t5-agy-write-rows
+title: "Measure the rows B1 to B15 of the claude boundary on agy, fresh and resumed: the write tools, the hook, the modes, the .agents folder of the worktree"
+kind: measure
+complexity: 6
+dependsOn:
+  - t4-agy-resume-measure
+parallel: false
+security: true
+files:
+  - v2/spikes/RESULTS_agy_coder.md
+dod:
+  - id: d1
+    item: "one row for each flag set with the CLI version, and for each of B1 to B15 of SPEC section C1 the measured answer, fresh and resumed, with the hash of each canary before and after; 16 paid calls at most and the spend written down"
+  - id: d2
+    item: "U8 and U9: the names of the write tools and of the command tools agy offers, read from the hook payloads; whether the tools list of an agent limits them; whether the PreToolUse hook sees every write with its target path; whether a tool runs when the handler exits non-zero, prints nothing or runs past its time"
+  - id: d3
+    item: "U7 and U10: what --mode accept-edits and --sandbox each do to a write outside the worktree and to a command; whether agy loads .agents (agents, hooks, rules) from the WORKTREE when it is an --add-dir root and when it is the cwd, with a canary hook committed at the base"
+  - id: d4
+    item: "the file names ONE flag set, the guard and the additions of the unit to ship, or says REFUSE and names the row that did not hold"

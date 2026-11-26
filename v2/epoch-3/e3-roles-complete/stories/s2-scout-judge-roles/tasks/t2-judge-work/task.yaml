@@ -1,0 +1,22 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t2-judge-work
+title: "JudgeWork: the launch on the important list, the three rules of the judge as repair turns, the envelope; a named model outside the important list is refused"
+kind: code
+complexity: 6
+dependsOn:
+  - t1-scout-work
+parallel: false
+files:
+  - src_mcp/src/Server/RoleJobs/JudgeWork.cs
+  - src_mcp/src/Server/RoleJobs/JudgeRoute.cs
+  - src_mcp/src/Server/RoleJobs/RoleRoute.cs
+  - src_mcp/src/Server/RoleJobs/RoleDescriptors.cs
+  - shared/role-route-vectors.json
+  - src_mcp/tests/AJudgeRunTests.cs
+dod:
+  - id: d1
+    item: "with FakeCli a judge job ends succeeded with verdict, summary, findings (their evidence checked as the scout checks it) and decision when the brief asked to choose; an error of S8 goes back as a repair turn, 2 at most, then output-invalid"
+  - id: d2
+    item: "S9: the route of the judge is the important list; a model the caller named that is not in that list is refused before any folder with a sentence that names COAI_ROLES_MODELS; the new route vectors pass"
+  - id: d3
+    item: "the judge writes no file: a test compares the tree before and after a job"

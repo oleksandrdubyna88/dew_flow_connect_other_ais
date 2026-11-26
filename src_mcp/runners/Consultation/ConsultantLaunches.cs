@@ -16,8 +16,15 @@ namespace CoaiMcp.Runners.Consultation;
 internal static class ConsultantLaunches
 {
     /// <summary>A handle reaching an adapter unvalidated is a contract violation, not a runtime case.</summary>
-    public static void MustBeLaunchable(ConsultantLaunch launch)
+    public static void MustBeLaunchable(ConsultantLaunch launch, bool takesACoder = false)
     {
+        if (launch.Confinement is LaunchConfinement.Coder coder)
+        {
+            MustBeACoderLaunch(launch, coder, takesACoder);
+
+            return;
+        }
+
         if (launch.Handle.Length > 0 && !ConsultantHandle.IsWellFormed(launch.Handle))
         {
             throw new ArgumentException(
@@ -27,6 +34,29 @@ internal static class ConsultantLaunches
         if (launch.Confinement is LaunchConfinement.Planned planned)
         {
             MustBePlannable(launch, planned.Plan);
+        }
+    }
+
+    /// <summary>
+    /// A write launch is claude's alone (<paramref name="takesACoder"/> is only claude's adapter saying so), carries its resume handle in its own binding and not on the launch,
+    /// and stands in the worktree of its own job — each a contract violation here, the same text the preparation refuses it with.
+    /// </summary>
+    private static void MustBeACoderLaunch(ConsultantLaunch launch, LaunchConfinement.Coder coder, bool takesACoder)
+    {
+        if (!takesACoder)
+        {
+            throw new ArgumentException(CoderLaunches.ClaudeOnly, nameof(launch));
+        }
+
+        if (launch.Handle.Length > 0)
+        {
+            throw new ArgumentException(
+                "a Coder launch carries its handle in the Coder binding (Resume), made by CoderHandle.Bind for its job and worktree — never as the launch's own handle", nameof(launch));
+        }
+
+        if (CoderLaunches.WhyNot(coder) is { Length: > 0 } why)
+        {
+            throw new ArgumentException(why, nameof(launch));
         }
     }
 
@@ -67,15 +97,25 @@ internal static class ConsultantLaunches
     };
 
     /// <summary>The role a launch is filed under: the stuck consultant's, or a question row's.</summary>
-    public static string RoleOf(ConsultantLaunch launch) =>
-        launch.Confinement is LaunchConfinement.Planned ? ConsultantRoles.Question : ConsultantRoles.Consult;
+    public static string RoleOf(ConsultantLaunch launch) => launch.Confinement switch
+    {
+        LaunchConfinement.Planned => ConsultantRoles.Question,
+        LaunchConfinement.Coder => CoderLaunches.Role,
+        _ => ConsultantRoles.Consult,
+    };
 
     /// <summary>
     /// The request of a planned launch as every adapter hands it on — the one road a question row's
     /// process goes through. The minimal child environment (S1 acceptance 6) is applied here and
     /// nowhere else, so no adapter can forget it.
     /// </summary>
-    public static ProcessRequest ForQuestion(ProcessRequest request) =>
+    public static ProcessRequest ForQuestion(ProcessRequest request) => WithMinimalEnvironment(request);
+
+    /// <summary>
+    /// The request that starts its child from <see cref="ProcessEnvironment.Minimal"/> and nothing else — what a question row and a coder both ask for, so the one
+    /// definition of "minimal" is read by both and a change to it reaches both.
+    /// </summary>
+    public static ProcessRequest WithMinimalEnvironment(ProcessRequest request) =>
         request with { InheritsEnvironment = false, Passthrough = ProcessEnvironment.Minimal };
 
     /// <summary>

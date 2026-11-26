@@ -1,0 +1,21 @@
+{
+  "title": "coai coder report (flat variant for codex --output-schema)",
+  "$comment": "codex's API refuses a top-level allOf (RESULTS_codex_coder.md call 2). Flat: type object, additionalProperties false, every member required, absent ones null, status enum inside properties. The prompt text still embeds the repository's own schema; only this flag's schema differs.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["status", "reason", "dod", "notes"],
+  "properties": {
+    "status": { "type": "string", "enum": ["ok", "refused"] },
+    "reason": { "type": ["string", "null"] },
+    "dod": {
+      "type": ["array", "null"],
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "met", "evidence"],
+        "properties": { "id": { "type": "string" }, "met": { "type": "boolean" }, "evidence": { "type": "string" } }
+      }
+    },
+    "notes": { "type": ["string", "null"] }
+  }
+}

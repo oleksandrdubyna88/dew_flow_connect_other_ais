@@ -1,0 +1,17 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t2-coder-route-by-vendor
+title: "The route of a coder keeps the vendors with a shipped write launch; the words claude only leave the product"
+kind: code
+complexity: 4
+dependsOn:
+  - t1-role-defaults-rows
+parallel: false
+files:
+  - src_mcp/src/Server/RoleJobs/CoderRoute.cs
+  - src_mcp/src/Tools.cs
+  - src_mcp/tests/ACoderRouteByVendorTests.cs
+dod:
+  - id: d1
+    item: "a coder route keeps the entries whose vendor is in the table of shipped vendors and drops the others with the reason in the why of the route; a route with none is refused and names COAI_ROLES_MODELS; a model the caller named on a vendor that is not shipped is refused with a sentence that names the vendor"
+  - id: d2
+    item: "a Claude model on codex or agy is still refused by the vendor-routing rule; the tool description and the refusals name the shipped vendors and no longer say claude only"

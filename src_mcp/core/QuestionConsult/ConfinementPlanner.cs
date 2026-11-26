@@ -74,6 +74,12 @@ public static class ConfinementPlanner
     /// <summary>What a claude disk row may do: read, find, search — and no shell (F4).</summary>
     public static IReadOnlyList<string> ClaudeDiskTools { get; } = ["Read", "Glob", "Grep"];
 
+    /// <summary>
+    /// What the coder may do: the read tools of a disk row, plus <c>Edit</c> and <c>Write</c> — and still no shell (R11 of <c>v2/spikes/RESULTS_coder_write_boundary.md</c>).
+    /// Not a question row's: no plan is made from it, and <c>ClaudeConsultant</c>'s coder launch is the only reader.
+    /// </summary>
+    public static IReadOnlyList<string> ClaudeWriteTools { get; } = ["Read", "Edit", "Write", "Glob", "Grep"];
+
     /// <summary>What a claude web row may do: the two client web tools, which refuse <c>file://</c> (F6).</summary>
     public static IReadOnlyList<string> ClaudeWebTools { get; } = ["WebSearch", "WebFetch"];
 
@@ -90,7 +96,7 @@ public static class ConfinementPlanner
     /// </summary>
     private static readonly string[] SandboxVocabulary =
     [
-        "--tools", "--restricted", "--add-dir", "--permission-mode", NeverSent, "--disallowed-tools", "--allowedTools",
+        "--tools", "--restricted", "--add-dir", "--permission-mode", "--permission-prompts", NeverSent, "--disallowed-tools", "--allowedTools",
         "--allowed-tools", "--dangerously-skip-permissions",
         "--search", "-s", "--sandbox", "--ephemeral", "-C", "--full-auto", "--yolo",
         "--mode",

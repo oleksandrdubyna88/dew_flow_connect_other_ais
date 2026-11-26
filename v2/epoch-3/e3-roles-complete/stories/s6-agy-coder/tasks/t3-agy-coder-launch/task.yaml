@@ -1,0 +1,21 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t3-agy-coder-launch
+title: "The agy coder launch: the measured argv fresh and resumed with --conversation, the guard folder, the unit additions of the judgement, the minimal environment"
+kind: security
+complexity: 6
+dependsOn:
+  - t1-agy-write-capability
+  - t2-agy-write-guard
+parallel: false
+security: true
+files:
+  - src_mcp/runners/Consultation/AntigravityConsultant.cs
+  - src_mcp/runners/Toolchain/AgyCoderUnit.cs
+  - src_mcp/tests/AAgyCoderLaunchTests.cs
+dod:
+  - id: d1
+    item: "V3 and V4: the fresh argv is exactly the flag set that RESULTS_agy_coder.md names; a fix turn has --conversation with the id of turn 0 and the same guard; none of the never-flags of SPEC section C3 is reachable (a test tries each)"
+  - id: d2
+    item: "the unit has the additions the judgement listed and a home of its own in the job folder; V14: only the allow-list and the sign-in of agy reach the CLI, read from inside a real unit, and a canary value is in no recorded argv"
+  - id: d3
+    item: "every existing agy consultant, question and reviewer launch builds the same argv as before, byte for byte"

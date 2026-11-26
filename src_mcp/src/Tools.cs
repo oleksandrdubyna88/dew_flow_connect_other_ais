@@ -552,8 +552,8 @@ internal static class Tools
 
         yield return McpServerTool.Create(
             // `timeoutMinutes` and the optional strings carry C# defaults: without one the SDK publishes an argument as required.
-            async (string role, string repoPath, string? taskFile = null, string? brief = null, string? model = null, int? timeoutMinutes = null, string? workItem = null) =>
-                await (await host.CurrentAsync()).RoleJobs().StartAsync(role, repoPath, taskFile, brief, model, timeoutMinutes, workItem),
+            async (string role, string repoPath, string? taskFile = null, string? brief = null, string? model = null, int? timeoutMinutes = null, string? workItem = null, string? baseSha = null) =>
+                await (await host.CurrentAsync()).RoleJobs().StartAsync(role, repoPath, taskFile, brief, model, timeoutMinutes, workItem, baseSha),
             new McpServerToolCreateOptions
             {
                 Name = "start_role",
@@ -562,9 +562,11 @@ internal static class Tools
                     Starts `role` as a DETACHED job and answers at once with `{jobId, state, route[], launcher}` — it never waits for the role. The job outlives this call, this server and
                     your session: it is run by its own process, which holds the job's lease and writes the result into the job's folder. Read it with `role_status`, stop it with `role_cancel`.
                     Send exactly one of `taskFile` (a path inside `repoPath`, written from its top level) or `brief` (text, at most 64 KiB). `model` is optional and names one model;
-                    `timeoutMinutes` is 1 to 1440 (default 30); `workItem` is the plan item the job is for. At most `COAI_ROLE_JOBS_MAX` jobs run at once (3, and 2 on WSL): a start past the
+                    `timeoutMinutes` is 1 to 1440 (default 30); `workItem` is the plan item the job is for; `baseSha` (the coder only) is the full 40-character commit the coder's worktree starts at — without it, the HEAD of `repoPath` at this call. At most `COAI_ROLE_JOBS_MAX` jobs run at once (3, and 2 on WSL): a start past the
                     cap is REFUSED with the live job ids, never queued. A role with no descriptor in this build is refused naming the roles that can be started (today: `ba`, which plans
-                    the epic named by `taskFile` (an `epic.yaml` with no stories) into stories and tasks and writes them after `validate_work`'s rules pass; and `probe`, a diagnostic
+                    the epic named by `taskFile` (an `epic.yaml` with no stories) into stories and tasks and writes them after `validate_work`'s rules pass; `coder`, which works on ONE task —
+                    `taskFile` is its `task.yaml` — in its own git worktree made at `baseSha` and answers with the branch `coder/<jobId>`, the one commit coai made of its work, the files that
+                    changed (from git) and the coder's report, as `result` of `role_status`; there is no `start_coder` tool, the coder is this case; and `probe`, a diagnostic
                     that runs a scripted brief — `succeed`, `sleep N`, `fail WHY`, `child N` — and asks no model anything).
                     """,
                 ReadOnly = false,
@@ -580,10 +582,10 @@ internal static class Tools
                 Name = "role_status",
                 Title = "Where a detached role job stands",
                 Description = """
-                    Answers `{state, generation, attempts[{n, model, vendor, stop, reason, evidenceRef}], stalled, result}` for `jobId`, plus the role, launcher, route, stop and reason, and the
+                    Answers `{state, generation, attempts[{n, model, vendor, stop, reason, evidenceRef, keyId}], stalled, result}` for `jobId` (`keyId`: the claude pool key the attempt ran on — an id, `person-sign-in`, or empty), plus the role, launcher, route, stop and reason, and the
                     times. `maxSeconds` (0 to 50, default 0) waits up to that long for the job to END before answering. States: queued, starting, running, succeeded, failed, cancelled, lost.
                     `lost` means the job's runner died without a result (nothing held its lease any more); `stalled: true` means the runner is alive but has shown no sign of life for two
-                    minutes — it is NOT taken over; wait, or `role_cancel` it. `result` is the role's JSON answer once `succeeded`, else null. A call is also what closes a dead runner's job as
+                    minutes — it is NOT taken over; wait, or `role_cancel` it. `result` is the role's JSON answer once `succeeded` — for a coder the envelope `{jobId, baseSha, headSha, branch, schemaValid, fixTurns, filesChanged[], report, mainCheckout}` (`mainCheckout` is evidence only: what changed in the repository while the coder ran, never a failure), the same JSON as the job's `result.json` — else null. A call is also what closes a dead runner's job as
                     `lost` and writes the one notice about a stall.
                     """,
                 ReadOnly = false,

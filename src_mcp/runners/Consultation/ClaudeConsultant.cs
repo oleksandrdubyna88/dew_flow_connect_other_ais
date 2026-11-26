@@ -49,6 +49,9 @@ public sealed class ClaudeConsultant(IReviewerRuntime inner, string vendor = "cl
     /// </summary>
     private static readonly string ReadTools = string.Join(',', ConfinementPlanner.ClaudeDiskTools);
 
+    /// <summary>The coder's tools: the read tools and the two that write — still no shell (R11), ONE argument, comma-joined, the form the probe measured.</summary>
+    private static readonly string WriteTools = string.Join(',', ConfinementPlanner.ClaudeWriteTools);
+
     public string Vendor => vendor;
 
     public ConsultantMemory Memory => new ConsultantMemory.VendorRemembers();
@@ -73,6 +76,11 @@ public sealed class ClaudeConsultant(IReviewerRuntime inner, string vendor = "cl
     /// </remarks>
     public async Task<ConsultantPreparation> PrepareAsync(ConsultantLaunch launch, IProcessLauncher launcher, CancellationToken ct)
     {
+        if (launch.Confinement is LaunchConfinement.Coder coder)
+        {
+            return await PrepareCoderAsync(launch, coder, launcher, ct);
+        }
+
         var cli = await ClaudeCapability.ProbeAsync(launcher, Executable(launch.Settings), launch.RepoPath, ct);
 
         return cli switch
@@ -88,12 +96,78 @@ public sealed class ClaudeConsultant(IReviewerRuntime inner, string vendor = "cl
 
     public ReviewerInvocation Build(ConsultantLaunch launch)
     {
-        ConsultantLaunches.MustBeLaunchable(launch);
+        ConsultantLaunches.MustBeLaunchable(launch, takesACoder: true);
 
-        return launch.Confinement is LaunchConfinement.Planned planned
-            ? Planned(launch, planned.Plan)
-            : AsShipped(launch);
+        return launch.Confinement switch
+        {
+            LaunchConfinement.Coder coder => Coder(launch, coder),
+            LaunchConfinement.Planned planned => Planned(launch, planned.Plan),
+            _ => AsShipped(launch),
+        };
     }
+
+    /// <summary>
+    /// A coder's write launch, prepared: the job and the worktree and the handle checked first (a refusal that asks nothing of the CLI), then the installed claude asked its
+    /// <c>--version</c> and <c>--help</c> (<see cref="ClaudeWriteCapability"/>) — and refused with the cure when it is below 2.1.330 or lacks a flag of the measured set, never launched
+    /// with a weaker boundary. The release is on the result (<see cref="ConsultantPreparation.Ready.CliVersion"/>).
+    /// </summary>
+    private async Task<ConsultantPreparation> PrepareCoderAsync(ConsultantLaunch launch, LaunchConfinement.Coder coder, IProcessLauncher launcher, CancellationToken ct)
+    {
+        if (CoderLaunches.WhyNot(coder) is { Length: > 0 } why)
+        {
+            return new ConsultantPreparation.Refused(new ConsultFailure.LaunchRefused(why));
+        }
+
+        var asked = await ClaudeWriteCapability.ProbeAsync(launcher, Executable(launch.Settings), launch.RepoPath, ct);
+
+        return asked switch
+        {
+            ClaudeWriteCapability.Ready ready => new ConsultantPreparation.Ready(
+                launch with { Settings = launch.Settings with { ClaudeCli = ClaudeCapability.WithRestricted } },
+                ClaudeCapability.WithRestricted.Qualifier,
+                $"coder write launch: claude {ready.Version} declares --restricted, --permission-prompts and acceptEdits")
+            { CliVersion = ready.Version },
+            ClaudeWriteCapability.Refused { CouldNotStart: true } refused =>
+                new ConsultantPreparation.Refused(new ConsultFailure.CliNotFound(refused.Said, ConsultFailures.InstallCureFor("claude"))),
+            ClaudeWriteCapability.Refused refused => new ConsultantPreparation.Refused(new ConsultFailure.VendorRefused(refused.Said, refused.Cure)),
+            _ => throw new InvalidOperationException("a write capability is ready or refused"),
+        };
+    }
+
+    /// <summary>
+    /// The coder: the measured flag set R11 (<c>v2/spikes/RESULTS_coder_write_boundary.md</c>) — <c>--restricted</c>, the five tools with no shell, <c>acceptEdits</c> with nobody
+    /// to answer a prompt, no MCP server, the worktree as the only added directory and as the cwd — and <c>--resume &lt;session&gt;</c> for a resumed turn, the same argv otherwise.
+    /// Fresh and resumed were both measured (R11, 2.1.330). The model is the only option added: effort and fast mode were not measured with this set, and fast mode writes a
+    /// settings file, so neither is sent.
+    /// </summary>
+    private ReviewerInvocation Coder(ConsultantLaunch launch, LaunchConfinement.Coder coder)
+    {
+        // A coder is never built unconfined: --restricted is in the argv below, so a CLI whose help was not read as declaring it is a contract violation, as it is for a consultant.
+        if (RestrictedArgument(launch.Settings.ClaudeCli) is not [ClaudeCapability.RestrictedFlag])
+        {
+            throw new ArgumentException("a coder launch needs a claude whose help declares --restricted, and is never built without it", nameof(launch));
+        }
+
+        var request = Request(launch,
+            [
+                "-p",
+                "--output-format", "json",
+                ClaudeCapability.RestrictedFlag,
+                "--tools", WriteTools,
+                "--permission-mode", ClaudeWriteCapability.AcceptEdits,
+                ClaudeWriteCapability.PermissionPromptsFlag, "none",
+                NoMcpServers.ClaudeFlag,
+                "--add-dir", coder.Worktree,
+                .. coder.Resume.IsNone ? [] : (string[])["--resume", coder.Resume.SessionId],
+                .. launch.Settings.Model.Length > 0 ? (string[])["--model", launch.Settings.Model] : [],
+            ],
+            coder.Worktree);
+
+        return new ReviewerInvocation(vendor, CoderLaunches.Role, CoderLaunches.ForCoder(request), string.Empty, inner, Model: launch.Settings.Model);
+    }
+
+    /// <summary>The handle of the coder turn that ran for <paramref name="coder"/>: the session id its envelope reported, bound to the job and the worktree — or none.</summary>
+    public CoderHandle BindHandle(LaunchConfinement.Coder coder, ProcessResult result) => CoderHandle.Bind(coder, ReadHandle(result));
 
     /// <summary>The stuck consultant, as it ships: the read-tool allowlist (and <c>--restricted</c> where the CLI has it), the live checkout, resumable.</summary>
     private ReviewerInvocation AsShipped(ConsultantLaunch launch)
@@ -152,15 +226,93 @@ public sealed class ClaudeConsultant(IReviewerRuntime inner, string vendor = "cl
             arguments,
             cwd)
         {
-            Environment = launch.Settings.ApiKey.Length > 0
-                ? new Dictionary<string, string?> { ["ANTHROPIC_API_KEY"] = launch.Settings.ApiKey }
-                : [],
+            Environment = CredentialEnvironment(launch, arguments),
             StdIn = launch.Prompt,
             Timeout = launch.Settings.Timeout,
         };
         ConsultantLaunches.MustCarryNoLineBreak(request.Arguments);
 
         return request;
+    }
+
+    /// <summary>The variable the claude CLI reads a <c>claude setup-token</c> token from (KEY_POOL_SPEC.md section 1, C2).</summary>
+    public const string KeyVariable = "CLAUDE_CODE_OAUTH_TOKEN";
+
+    /// <summary>The variables of another credential that a launch with a pool key must not inherit: the CLI would pick one of them over the key, or bill another account.</summary>
+    internal static readonly string[] ForeignCredentials =
+    [
+        // Another credential the CLI would pick over the key:
+        "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_FOUNDRY_API_KEY", "ANTHROPIC_FOUNDRY_AUTH_TOKEN", "ANTHROPIC_AWS_API_KEY", "ANTHROPIC_IDENTITY_TOKEN", "ANTHROPIC_IDENTITY_TOKEN_FILE", "AWS_BEARER_TOKEN_BEDROCK",
+        "CLAUDE_CODE_OAUTH_REFRESH_TOKEN", "CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR", "CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR",
+        // Another host, another cloud or another route for the same call — the CLI would send its token where these point:
+        "ANTHROPIC_BASE_URL", "ANTHROPIC_BEDROCK_BASE_URL", "ANTHROPIC_BEDROCK_MANTLE_BASE_URL", "ANTHROPIC_VERTEX_BASE_URL", "ANTHROPIC_VERTEX_PROJECT_ID", "ANTHROPIC_GOOGLE_CLOUD_BASE_URL", "ANTHROPIC_FOUNDRY_BASE_URL",
+        "ANTHROPIC_FOUNDRY_RESOURCE", "ANTHROPIC_AWS_BASE_URL", "ANTHROPIC_UNIX_SOCKET", "ANTHROPIC_CUSTOM_HEADERS", "CLAUDE_CODE_CUSTOM_OAUTH_URL",
+        // The switches that make the CLI use one of them (the names are the strings of the installed CLI, 2.1.332, read with grep — no CLI was run):
+        "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY", "CLAUDE_CODE_SKIP_BEDROCK_AUTH", "CLAUDE_CODE_SKIP_VERTEX_AUTH", "CLAUDE_CODE_SKIP_FOUNDRY_AUTH",
+    ];
+
+    /// <summary>
+    /// The environment of a launch: the row's <c>ANTHROPIC_API_KEY</c>, or — for a role launch on a pool key — the key as <see cref="KeyVariable"/>, the one place this adapter sets a credential. A launch has ONE credential, and
+    /// <c>--bare</c> (OAuth is never read with it) is never in the argv of a pool launch: either is a contract violation. A read-only role's child also gets a home of its own.
+    /// </summary>
+    private static Dictionary<string, string?> CredentialEnvironment(ConsultantLaunch launch, string[] arguments)
+    {
+        Dictionary<string, string?> environment = [];
+        if (launch.Settings.ApiKey.Length > 0)
+        {
+            environment["ANTHROPIC_API_KEY"] = launch.Settings.ApiKey;
+        }
+
+        if (launch.Credential is not { } credential)
+        {
+            return environment;
+        }
+
+        if (launch.Settings.ApiKey.Length > 0)
+        {
+            throw new ArgumentException("a claude launch has ONE credential: a pool key and an ANTHROPIC_API_KEY together are a contract violation", nameof(launch));
+        }
+
+        if (arguments.Contains("--bare", StringComparer.Ordinal))
+        {
+            throw new ArgumentException("--bare is never in the argv of a pool launch: with it the CLI reads no OAuth token, so the key would be silently unused", nameof(launch));
+        }
+
+        credential.Into(environment, KeyVariable);
+        foreach (var foreign in ForeignCredentials)
+        {
+            environment[foreign] = null;
+        }
+
+        if (launch.OwnHome.Length > 0 && launch.Confinement is not LaunchConfinement.Coder)
+        {
+            foreach (var (name, value) in OwnHomeEnvironment(launch.OwnHome))
+            {
+                environment[name] = value;
+            }
+        }
+
+        return environment;
+    }
+
+    /// <summary>The names that point a CLI at a home of the launch's own (the Team server slot's shape): <c>HOME</c>, the four <c>XDG_*</c> folders and <c>CLAUDE_CONFIG_DIR</c> — and the profile folders on Windows.</summary>
+    public static IReadOnlyList<KeyValuePair<string, string>> OwnHomeEnvironment(string home)
+    {
+        List<KeyValuePair<string, string>> names =
+        [
+            new("HOME", home),
+            new("XDG_CONFIG_HOME", Path.Combine(home, ".config")),
+            new("XDG_DATA_HOME", Path.Combine(home, ".local", "share")),
+            new("XDG_CACHE_HOME", Path.Combine(home, ".cache")),
+            new("XDG_STATE_HOME", Path.Combine(home, ".local", "state")),
+            new("CLAUDE_CONFIG_DIR", Path.Combine(home, ".claude")),
+        ];
+        if (OperatingSystem.IsWindows())
+        {
+            names.AddRange([new("USERPROFILE", home), new("APPDATA", Path.Combine(home, "AppData", "Roaming")), new("LOCALAPPDATA", Path.Combine(home, "AppData", "Local"))]);
+        }
+
+        return names;
     }
 
     /// <summary>

@@ -1,0 +1,5 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: s4-codex-agy-measure
+title: "Measure first: what codex and agy give for resume and for a write limit, each row of the claude boundary tried on both, then the security judgement"
+cornerstone: true
+dependsOn: []

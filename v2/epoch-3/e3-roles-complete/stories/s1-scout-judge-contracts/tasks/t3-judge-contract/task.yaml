@@ -1,0 +1,19 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t3-judge-contract
+title: "The judge contract: shared/judge-output.schema.json and its strict reader (verdict, summary, findings with the four severity words of the gate, decision, the refused arm)"
+kind: code
+complexity: 5
+dependsOn:
+  - t1-evidence-check
+parallel: true
+files:
+  - shared/judge-output.schema.json
+  - src_mcp/core/Roles/JudgeOutput.cs
+  - src_mcp/tests/AJudgeContractTests.cs
+dod:
+  - id: d1
+    item: "the reader accepts {status: ok, verdict: approve|revise|reject, summary, findings:[{id, severity, title, detail, evidence, fix}], decision} and {status: refused, reason}; severity is one of blocking, major, minor, nit; an unknown member and a text over its length are errors that name the member"
+  - id: d2
+    item: "S8: approve with a blocking finding, revise or reject with no finding, and a finding id used twice are errors with a sentence"
+  - id: d3
+    item: "a test holds the schema file and the tables of the reader equal"

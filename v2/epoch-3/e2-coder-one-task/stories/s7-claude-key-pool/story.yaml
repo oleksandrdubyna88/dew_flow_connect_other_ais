@@ -1,0 +1,7 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: s7-claude-key-pool
+title: "Claude key pool: role jobs run on a round robin of setup-tokens kept per device, never on the person's own sign-in (KEY_POOL_SPEC.md, owner 2026-11-23)"
+dependsOn:
+  - s2-write-boundary
+  - s3-coder-role-case
+  - s4-fix-loop

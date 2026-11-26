@@ -6,6 +6,7 @@ complexity: 5
 dependsOn:
   - t1-baseline
   - t2-epic-acceptance
+  - t5-pool-key-proof
 parallel: false
 files:
   - v2/epoch-3/e2-coder-one-task/RESULTS_coder_proof.md

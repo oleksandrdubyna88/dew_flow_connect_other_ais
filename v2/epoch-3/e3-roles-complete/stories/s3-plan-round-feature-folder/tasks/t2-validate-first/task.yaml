@@ -1,0 +1,19 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t2-validate-first
+title: "featureFolder as the third plan input: one input only, the tip resolved once, the whole feature validated with the device limits before any round"
+kind: code
+complexity: 5
+dependsOn:
+  - t1-git-work-folder
+parallel: false
+files:
+  - src_mcp/src/Server/Stages/PlanInput.cs
+  - src_mcp/src/Server/Stages/FeatureFolderPlan.cs
+  - src_mcp/tests/AFeatureFolderPlanIsValidatedFirstTests.cs
+dod:
+  - id: d1
+    item: "P3: exactly one of planText, committedPlan and featureFolder is accepted and each wrong pair is refused with its own sentence; expectedCommit works with featureFolder as with committedPlan; the branch tip is resolved once and is the commit of the round"
+  - id: d2
+    item: "P2 and P12: an invalid folder is refused with 10 errors at most (code, node, message), the total and the source of the limits; the validator runs with the device limits; nothing is launched and nothing is written"
+  - id: d3
+    item: "P11: the whole preparation stays inside the 45-second deadline of PlanInputs, and a git that does not answer is a refusal before any round"

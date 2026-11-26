@@ -37,6 +37,16 @@ internal sealed class TempGitRepo : IAsyncDisposable
         return repo;
     }
 
+    /// <summary>A CLEAN clone of <paramref name="source"/>'s committed HEAD — no working-tree change of the source, no build output, every object copied (no hard link into the source).</summary>
+    public static async Task<TempGitRepo> CloneAsync(IProcessLauncher launcher, string source, string prefix = "coai-git-clone-")
+    {
+        var repo = new TempGitRepo(launcher, TempDir.For(prefix).Path);
+        var cloned = await launcher.RunAsync(new ProcessRequest("git", ["clone", "--no-hardlinks", "--quiet", source, repo.Path], source) { Timeout = TimeSpan.FromMinutes(5) });
+        cloned.ExitCode.Should().Be(0, cloned.StdErr);
+
+        return repo;
+    }
+
     /// <summary>The full sha of HEAD.</summary>
     public async Task<string> HeadAsync()
     {

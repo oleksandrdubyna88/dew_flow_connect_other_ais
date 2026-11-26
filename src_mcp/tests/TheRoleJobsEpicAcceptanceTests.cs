@@ -70,6 +70,7 @@ public sealed class TheRoleJobsEpicAcceptanceTests
             alsoInTheEnvironment:
             [
                 ("COAI_ROLE_LAUNCHER", "setsid"),
+                ("COAI_ROLE_CLAUDE_PERSON_SIGN_IN", "1"),
                 ("COAI_ROLES_MODELS", RouteSetting(route)),
                 ("COAI_ROLE_CLAUDE_CLI", RoleJobWorld.FakeCli),
                 ("FAKECLI_MODE", "vendor"),

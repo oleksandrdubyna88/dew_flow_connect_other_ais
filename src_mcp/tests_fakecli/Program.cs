@@ -6,6 +6,10 @@
 //   emit-to <dst> <text>                 — text into the file (codex -o), nothing on stdout, exit 0
 //   stderr-exit <text> <code>            — text to stderr, exit <code>
 //   sleep <ms>                           — exit 0 after the delay
+//   emit-bytes <n>                       — n bytes of 'x' on stdout in lines of 99, no pause, exit 0 (a check step that is too chatty; epoch 3 E2 s1 t2)
+//   write-files <path>...                — try to write each path; "wrote <path>" on stdout, "fake-cli: could not write <path>: <why>" on stderr; exit 0 (the fake as a coder, epoch 3 E2 s2 t5)
+//   hold-in <folder> <ms>                — write <folder>/ready, then wait <ms>, exit 0 (a coder that is working; a test waits for the file)
+//   emit-repeat <text> <times>           — <text> <times> times on stdout, exit 0 (output whose bytes outnumber its characters)
 //   busy <dir> <ms>                      — write <guid>.start (ticks), sleep, write <guid>.end (ticks)
 //   flip <flag> <firstStderr> <firstExit> <thenStdout>
 //                                        — first launch: create <flag>, stderr, exit <firstExit>;
@@ -190,6 +194,33 @@ if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor" || minimal is
 
     var steering = Steering.For(prompt.Text, read, CoaiMcp.FakeCli.ModelMap.For(args, read));
 
+    // A coder's edits (model map `writeFiles`): files below the working folder, written before the answer and before any wait.
+    if (steering.Get("WRITE_FILES") is { Length: > 0 } writeFiles && CoaiMcp.FakeCli.CwdWrites.Apply(CoaiMcp.FakeCli.PoolKey.Fill(writeFiles), Directory.GetCurrentDirectory()) is { Length: > 0 } notWritten)
+    {
+        Console.Error.WriteLine($"fake-cli: {notWritten}");
+
+        return 65;
+    }
+
+    // A CLI that leaves something in its own HOME (model map `homeFiles`, relative paths below $HOME): the transcript a real CLI keeps there. The key pool searches that folder after a keyed launch (epoch 3 E2 s7).
+    if (steering.Get("HOME_FILES") is { Length: > 0 } homeFiles && Environment.GetEnvironmentVariable("HOME") is { Length: > 0 } fakeHome && CoaiMcp.FakeCli.CwdWrites.Apply(CoaiMcp.FakeCli.PoolKey.Fill(homeFiles), fakeHome) is { Length: > 0 } notWrittenHome)
+    {
+        Console.Error.WriteLine($"fake-cli: {notWrittenHome}");
+
+        return 65;
+    }
+
+    // A coder that tries to write where it must not (model map `tryWriteFiles`): absolute paths, each attempted; a refusal is a line on stderr and the answer still follows.
+    if (steering.Get("TRY_WRITE_FILES") is { Length: > 0 } tryWriteFiles)
+    {
+        CoaiMcp.FakeCli.CoderVerbs.TryWrite(tryWriteFiles);
+    }
+
+    // A coder whose process ignores the stop signal (model map `ignoreTerm`): the unit stays until the manager's own kill lands (epoch 3 E2, the security verify's M7).
+    System.Runtime.InteropServices.PosixSignalRegistration? ignoredTerm = steering.Get("IGNORE_TERM") == "true"
+        ? System.Runtime.InteropServices.PosixSignalRegistration.Create(System.Runtime.InteropServices.PosixSignal.SIGTERM, context => context.Cancel = true)
+        : null;
+
     // A vendor that takes its time. It exists for the health probe's timeout arm: a CLI that
     // never answers `--version` must be reported as silent rather than as whatever exit code the
     // kill produced, and that cannot be tested by a stand-in which always answers at once.
@@ -198,10 +229,12 @@ if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor" || minimal is
         Thread.Sleep(napMs);
     }
 
+    GC.KeepAlive(ignoredTerm);
+
     var stderrText = steering.Get("STDERR");
     if (stderrText is { Length: > 0 })
     {
-        Console.Error.WriteLine(stderrText);
+        Console.Error.WriteLine(CoaiMcp.FakeCli.PoolKey.Fill(stderrText));
     }
 
     // `-o` means two different things to two vendors. Codex takes `-o <absolute path>.json` — where
@@ -252,6 +285,21 @@ switch (args0)
 {
     case ["emit", var text]:
         Console.Out.Write(text);
+        return 0;
+
+    case ["emit-repeat", var piece, var times]:
+        using (var repeated = new StreamWriter(Console.OpenStandardOutput(), new System.Text.UTF8Encoding(false)))
+        {
+            for (var i = 0L; i < long.Parse(times); i++)
+            {
+                repeated.Write(piece);
+            }
+        }
+
+        return 0;
+
+    case ["emit-bytes", var count]:
+        EmitBytes(long.Parse(count));
         return 0;
 
     case ["emit-to", var dst, var text]:
@@ -319,6 +367,13 @@ switch (args0)
 
         return 0;
 
+    // Epoch 3 E2 s2 t5: the fake as a CODER. `write-files` tries each path and says which it could not write (the OS layer's answer, on stderr), exiting 0; `hold-in` says it is working by writing `ready` into a folder, then waits.
+    case ["write-files", .. var writePaths]:
+        return CoaiMcp.FakeCli.CoderVerbs.WriteFiles(writePaths);
+
+    case ["hold-in", var holdFolder, var holdMs]:
+        return CoaiMcp.FakeCli.CoderVerbs.HoldIn(holdFolder, int.Parse(holdMs));
+
     // Every environment variable NAME this child was started with, one per line. The only way to ask
     // what a launch actually handed a process: a dictionary asserted in-process is a test of the
     // dictionary, and what is being measured here is what crossed the process boundary.
@@ -369,6 +424,10 @@ switch (args0)
     // Epoch 3 E1 s1: a role job's lease, held by a child for the given time (the kernel frees it when the child dies or is killed). Writes <file>.held with its pid once it holds it; 75 when busy.
     case ["lease-hold", var leaseFile, var leaseMs]:
         return CoaiMcp.FakeCli.LeaseHoldVerb.Run(leaseFile, int.Parse(leaseMs));
+
+    // Epoch 3 E2 s7: the key pool's lock file held by a child for the given time (FileShare.None; the kernel frees it when the child dies or is killed). Prints `held` once it holds it; 75 when busy.
+    case ["pool-lock-hold", var poolLock, var poolLockMs]:
+        return CoaiMcp.FakeCli.PoolLockVerb.Run(poolLock, int.Parse(poolLockMs));
 
     // Epoch 3 E1 s1 (A14): a memory hog, and a small parent that starts it as its child and writes the child's exit code — the shape of a runner and the CLI it owns.
     case ["alloc", var allocMb, var allocLog]:
@@ -445,6 +504,19 @@ switch (args0)
     default:
         Console.Error.WriteLine($"fake-cli: unknown verb [{string.Join(' ', args0)}]");
         return 64;
+}
+
+/// <summary>The <c>emit-bytes</c> verb: exactly <paramref name="count"/> bytes of ASCII on stdout, in lines of 99 characters and a newline, written through one buffered stream.</summary>
+static void EmitBytes(long count)
+{
+    var line = new byte[100];
+    Array.Fill(line, (byte)'x');
+    line[99] = (byte)'\n';
+    using var stdout = Console.OpenStandardOutput();
+    for (var written = 0L; written < count; written += line.Length)
+    {
+        stdout.Write(line, 0, (int)Math.Min(line.Length, count - written));
+    }
 }
 
 /// <summary>
@@ -700,6 +772,7 @@ static class LaunchRecord
             HoldOpen(gate);
         }
 
+        CoaiMcp.FakeCli.PoolKey.Record(dir, name);
         File.Move(writing, Path.Combine(dir, name + ".argv"));
     }
 
@@ -733,7 +806,9 @@ sealed partial class FakeCliJsonContext : System.Text.Json.Serialization.JsonSer
 /// </summary>
 static class Placeholders
 {
-    public static string Fill(string text, string prompt) =>
+    public static string Fill(string text, string prompt) => CoaiMcp.FakeCli.PoolKey.Fill(FillPaths(text, prompt));
+
+    private static string FillPaths(string text, string prompt) =>
         System.Text.RegularExpressions.Regex.Replace(
             text,
             @"\{\{(cwd-file|adddir-file|prompt-path|path-in-prompt):([^}]+)\}\}",

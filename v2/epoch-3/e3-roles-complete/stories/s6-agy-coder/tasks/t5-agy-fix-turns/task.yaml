@@ -1,0 +1,18 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t5-agy-fix-turns
+title: "The fix loop with an agy conversation: --conversation with the handle of turn 0, the usage of each turn, a lost conversation is a crash"
+kind: code
+complexity: 5
+dependsOn:
+  - t4-agy-preflight-rows
+parallel: false
+files:
+  - src_mcp/src/Server/RoleJobs/CoderWork.cs
+  - src_mcp/src/Server/RoleJobs/CoderFixLoop.cs
+  - src_mcp/tests_fakecli/CoderVerbs.cs
+  - src_mcp/tests/AAgyCoderFixTurnsTests.cs
+dod:
+  - id: d1
+    item: "FakeCli as agy: red, then green after 2 fix turns; the recorded argv shows --conversation with the id of turn 0 on both, with the same home and guard folder; an invalid report gets ONE repair turn in the same conversation"
+  - id: d2
+    item: "V13 and V16: a turn that answers with the recorded not-found text ends the attempt as a crash and the next model starts from the last coai commit; the usage line of each turn holds that turn only (the sum agy reports is subtracted)"

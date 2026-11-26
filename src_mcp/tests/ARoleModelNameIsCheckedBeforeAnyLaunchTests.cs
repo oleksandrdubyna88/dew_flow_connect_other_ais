@@ -30,7 +30,7 @@ public sealed class ARoleModelNameIsCheckedBeforeAnyLaunchTests
     {
         settings.TryAdd("COAI_ROLE_LAUNCHER", "setsid");
 
-        return new RoleJobService(world.DataDir, name => settings.GetValueOrDefault(name), world.Log, notice => { world.Notices.Enqueue(notice); return true; })
+        return new RoleJobService(world.DataDir, name => name == "COAI_ROLE_CLAUDE_PERSON_SIGN_IN" ? settings.GetValueOrDefault(name) ?? "1" : settings.GetValueOrDefault(name), world.Log, notice => { world.Notices.Enqueue(notice); return true; })
         {
             Clock = world.Clock,
             Launcher = new DetachedLauncher(new NothingStarted(), NoRunnerStarted.Succeeds),
