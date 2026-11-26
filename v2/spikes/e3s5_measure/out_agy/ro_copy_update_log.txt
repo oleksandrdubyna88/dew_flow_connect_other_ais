@@ -1,0 +1,9 @@
+W1126 13:08:07.318958       1 auto_updater.go:312] Directory /home/<user>/coai-e3s6/prog/agycopy is not fully accessible (readable: true, writable: false), skipping update
+I1126 13:08:07.324891       1 server.go:2366] Backend project ID updated dynamically to: default-cli-project
+I1126 13:08:07.327481      94 manager.go:1710] Slash commands unchanged, skipping update
+I1126 13:08:08.976842     683 manager.go:1710] Slash commands unchanged, skipping update
+I1126 13:08:08.976947     676 manager.go:1710] Slash commands unchanged, skipping update
+I1126 13:08:09.013036       1 server.go:2366] Backend project ID updated dynamically to: default-cli-project
+I1126 13:08:09.014279       1 server.go:1287] Starting conversation update stream for 7c69b6af-534c-425a-8830-1fcb52270451
+I1126 13:08:09.022109       1 manager.go:1710] Slash commands unchanged, skipping update
+I1126 13:08:09.022478    1092 manager.go:1710] Slash commands unchanged, skipping update

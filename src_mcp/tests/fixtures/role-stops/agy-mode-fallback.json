@@ -1,0 +1,32 @@
+{
+  "cli": "agy",
+  "cliVersion": "1.5.18",
+  "recordedUtc": "2026-11-26T12:11:36.740Z",
+  "recordedBy": "epoch 3 E3 s6 t7 (measure), run live on 2026-11-26 on a scratch copy of the owner subscription sign-in, standard input closed, no model turn; not a fixture of the E1 s3 story",
+  "how": "agy-mode-fallback",
+  "argv": [
+    "--print=",
+    "--input-format",
+    "stream-json",
+    "--output-format",
+    "stream-json",
+    "--model",
+    "gemini-3.8-flash-low",
+    "--add-dir",
+    "<worktree>",
+    "--mode",
+    "auto",
+    "--agent",
+    "coai-coder"
+  ],
+  "envOverrides": [
+    "HOME=<a scratch folder>",
+    "the unit has a coder agent and a guard hook in its working directory"
+  ],
+  "stdin": "",
+  "exitCode": 0,
+  "signal": null,
+  "seconds": 1,
+  "stdout": "{\"event\":\"init\",\"conversation_id\":\"544f00e2-308b-45d8-a005-be195be21742\",\"init\":{\"model\":\"gemini-3.8-flash-low\",\"cwd\":\"<scratch folder>/c/agyhome\",\"agent\":\"coai-coder\",\"tools\":[\"ask_custom_permission\",\"ask_permission\",\"ask_question\",\"browser_click_element\",\"browser_drag_pixel_to_pixel\",\"browser_get_dom\",\"browser_get_network_request\",\"browser_input\",\"browser_list_network_requests\",\"browser_mouse_down\",\"browser_mouse_up\",\"browser_move_mouse\",\"browser_press_key\",\"browser_refresh_page\",\"browser_resize_window\",\"browser_scroll\",\"browser_scroll_dom\",\"browser_select_option\",\"browser_subagent\",\"call_mcp_tool\",\"capture_browser_console_logs\",\"capture_browser_screenshot\",\"click_browser_pixel\",\"command_status\",\"define_subagent\",\"delete_knowledge\",\"execute_browser_javascript\",\"find_by_name\",\"finish\",\"generate_image\",\"grep_search\",\"invoke_subagent\",\"list_browser_pages\",\"list_dir\",\"list_permissions\",\"list_plugin_accounts\",\"list_resources\",\"manage_inbox\",\"manage_subagents\",\"manage_task\",\"multi_replace_file_content\",\"notebook_edit\",\"notebook_execution\",\"open_browser_url\",\"read_browser_page\",\"read_resource\",\"read_url_content\",\"replace_file_content\",\"run_command\",\"run_workflow\",\"schedule\",\"search_marketplace\",\"search_web\",\"sed_file\",\"send_command_input\",\"send_message\",\"view_file\",\"wait\",\"wait_5_seconds\",\"write_to_file\"],\"permission_mode\":\"request-review\"}}\n",
+  "stderr": "warning: --mode auto is not available for this account; continuing in the default mode.\n"
+}

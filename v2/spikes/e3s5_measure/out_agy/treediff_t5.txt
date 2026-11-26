@@ -1,0 +1,6 @@
+10c10,12
+< ./c/hooklog.jsonl e3b0c44298fc
+---
+> ./c/hooklog.jsonl 8679fea7df94
+> ./c/hooklog_prev.jsonl e3b0c44298fc
+> ./c/hooklog_t5.jsonl e3b0c44298fc

@@ -1,0 +1,12 @@
+11,12c11,12
+< ./c/hooklog.jsonl 58f781b1d5d4
+< ./c/hooklog_prev.jsonl e3b0c44298fc
+---
+> ./c/hooklog.jsonl dfce48e686b9
+> ./c/hooklog_prev.jsonl 58f781b1d5d4
+13a14
+> ./c/hooklog_t2.jsonl e3b0c44298fc
+36c37
+< ./cr/wt/a_r.txt 9660b3303631
+---
+> ./cr/wt/a_r.txt 7f322d0d6cea

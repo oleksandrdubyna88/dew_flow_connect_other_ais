@@ -1,0 +1,10 @@
+10,11c10,11
+< ./c/hooklog.jsonl 1afa7619346b
+< ./c/hooklog_prev.jsonl 8679fea7df94
+---
+> ./c/hooklog.jsonl 4b7531e02073
+> ./c/hooklog_prev.jsonl 1afa7619346b
+13a14
+> ./c/hooklog_t7.jsonl e3b0c44298fc
+31a33
+> ./cr/wt/cmd_nomode.txt 97b2c3264942
