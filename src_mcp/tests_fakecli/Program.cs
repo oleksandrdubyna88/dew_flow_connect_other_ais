@@ -147,6 +147,12 @@ if (args.Length >= 2 && args[0] == "vendor-mcp")
     return CoaiMcp.FakeCli.McpVendor.Run(args[1], args[2..]);
 }
 
+// The hook handler of the agy coder's guard (epoch 3 E3 s6 t2): the real code of the product, started the way agy starts the hook — from the folder of hooks.json, the payload on stdin.
+if (args is ["--agy-hook"])
+{
+    return CoaiMcp.Runners.Reviewers.AntigravityCoderGuard.RunHook(Console.In, Console.Out, Directory.GetCurrentDirectory());
+}
+
 var minimal = MinimalSteering.Load(args);
 Func<string, string?> read = minimal is { } fromFile ? name => fromFile.GetValueOrDefault(name) : Environment.GetEnvironmentVariable;
 if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor" || minimal is not null)
