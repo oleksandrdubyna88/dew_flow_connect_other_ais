@@ -7,6 +7,7 @@ public enum ToolchainField
     Text,
     Argv,
     SkipList,
+    TextList,
     Projects,
     Timeouts,
 }
@@ -69,6 +70,10 @@ public static class ToolchainTables
             ["adapter"] = ToolchainField.Text,
             ["build"] = ToolchainField.Argv,
             ["test"] = ToolchainField.Argv,
+            ["restore"] = ToolchainField.Argv,
+            ["format"] = ToolchainField.Argv,
+            ["testFor"] = ToolchainField.Argv,
+            ["testFiles"] = ToolchainField.TextList,
             ["memoryMb"] = ToolchainField.Integer,
         },
         ["path", "adapter"]);

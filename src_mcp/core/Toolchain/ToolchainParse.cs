@@ -107,7 +107,20 @@ internal sealed partial class ToolchainParse
 
         Keys(map, ToolchainTables.Project, where);
 
-        return new ToolchainProject(Path(map, where), Adapter(map, where), Command(map, "build", where), Command(map, "test", where), Memory(map, where));
+        var path = Path(map, where);
+        var adapter = Adapter(map, where);
+        var build = Command(map, "build", where);
+        var test = Command(map, "test", where);
+        var restore = Command(map, "restore", where);
+        var format = Command(map, "format", where);
+        var testFor = Command(map, "testFor", where);
+        var testFiles = TestFiles(map, where);
+        if (testFor.Stated && map.Find("testFiles") is null)
+        {
+            Fault($"line {map.Find("testFor")!.Line}: 'testFor' of {where} needs 'testFiles': the folder prefixes inside the project that hold test files, so that coai knows which files a turn changed are tests");
+        }
+
+        return new ToolchainProject(path, adapter, build, test, Memory(map, where)) { Restore = restore, Format = format, TestFor = testFor, TestFiles = testFiles };
     }
 
     private string Path(YamlMap map, string where)
@@ -198,9 +211,73 @@ internal sealed partial class ToolchainParse
 
         var argv = ((YamlList)entry.Value).Items.Cast<YamlScalar>().Select(item => item.Text).ToList();
         NoSecret(argv, entry, key, where);
+        Placeholders(argv, entry, key, where);
 
         return new ToolchainCommand(true, argv);
     }
+
+    /// <summary>The placeholders a command may hold: <c>{jobs}</c> anywhere; <c>{file}</c> in <c>format</c> (an item of its own: it becomes one item per file) and in <c>testFor</c>; <c>{stem}</c> in <c>testFor</c>. Any other <c>{name}</c> is refused, so a typo is not started as text.</summary>
+    private void Placeholders(List<string> argv, YamlEntry entry, string key, string where)
+    {
+        var allowed = key switch
+        {
+            "format" => new[] { "{jobs}", "{file}" },
+            "testFor" => new[] { "{jobs}", "{file}", "{stem}" },
+            _ => new[] { "{jobs}" },
+        };
+        foreach (var item in argv)
+        {
+            foreach (var name in PlaceholderShape().Matches(item).Select(match => match.Value).Distinct(StringComparer.Ordinal))
+            {
+                if (!allowed.Contains(name))
+                {
+                    Fault($"line {entry.Line}: '{key}' of {where} holds the placeholder {name}, which '{key}' may not hold (it may hold {string.Join(", ", allowed)})");
+                }
+            }
+
+            if (key == "format" && item.Contains("{file}", StringComparison.Ordinal) && item != "{file}")
+            {
+                Fault($"line {entry.Line}: 'format' of {where} holds {{file}} inside an item; {{file}} must be an item of its own, because it is replaced by one item per file");
+            }
+        }
+    }
+
+    /// <summary>The folder prefixes of <c>testFiles</c>: each a path inside the project, like <c>path</c>; one that leaves the project (absolute, a drive, <c>..</c>) is refused with the key named.</summary>
+    private List<string> TestFiles(YamlMap map, string where)
+    {
+        if (map.Find("testFiles") is not { } entry)
+        {
+            return [];
+        }
+
+        if (NotStrings(entry.Value) is { Length: > 0 } shown)
+        {
+            Fault($"line {entry.Line}: 'testFiles' of {where} must be a list of strings, one folder prefix to a line, not {shown}");
+
+            return [];
+        }
+
+        var prefixes = new List<string>();
+        foreach (var text in ((YamlList)entry.Value).Items.Cast<YamlScalar>().Select(item => item.Text))
+        {
+            var canonical = RepoPaths.Canonical(text);
+            if (RepoPaths.WhyNotRelative(canonical) is { Length: > 0 } why)
+            {
+                Fault($"line {entry.Line}: 'testFiles' of {where} holds '{text}', which {why}; a prefix must name a folder inside the project");
+
+                continue;
+            }
+
+            prefixes.Add(canonical);
+        }
+
+        NoSecret(prefixes, entry, "testFiles", where);
+
+        return prefixes;
+    }
+
+    [GeneratedRegex("\\{[A-Za-z_][A-Za-z0-9_]*\\}", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex PlaceholderShape();
 
     /// <summary>A secret never goes in argv: it shows in the process list and in every record of the step. The fault names the class and never repeats the text.</summary>
     private void NoSecret(List<string> argv, YamlEntry entry, string key, string where)

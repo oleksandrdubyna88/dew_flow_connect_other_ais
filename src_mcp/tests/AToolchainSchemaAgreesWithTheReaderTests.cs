@@ -55,7 +55,7 @@ public sealed class AToolchainSchemaAgreesWithTheReaderTests
                 {
                     ToolchainField.Integer => "integer",
                     ToolchainField.Text => "string",
-                    ToolchainField.Argv or ToolchainField.SkipList or ToolchainField.Projects => "array",
+                    ToolchainField.Argv or ToolchainField.SkipList or ToolchainField.TextList or ToolchainField.Projects => "array",
                     ToolchainField.Timeouts => "object",
                     _ => throw new InvalidOperationException(),
                 },
@@ -76,6 +76,21 @@ public sealed class AToolchainSchemaAgreesWithTheReaderTests
         }
 
         return property.TryGetProperty("const", out _) ? "integer" : property.GetProperty("type").GetString()!;
+    }
+
+    [Fact]
+    public void TestFor_NeedsTestFiles_InTheSchemaAsInTheReader()
+    {
+        Defs().GetProperty("project").GetProperty("dependentRequired").GetProperty("testFor").EnumerateArray().Select(name => name.GetString()).Should().Equal("testFiles");
+    }
+
+    [Fact]
+    public void TheComment_SaysTheRuleOfSpecA2()
+    {
+        using var document = JsonDocument.Parse(File.ReadAllText(Path.Combine(RepoPaths.Root(), "shared", "toolchain.schema.json")));
+        var comment = document.RootElement.GetProperty("$comment").GetString()!;
+
+        comment.Should().Contain("states no command at all").And.Contain("run exactly as written").And.Contain("`skip` of `restore` or `format` takes that step out of a defaulted project");
     }
 
     [Fact]

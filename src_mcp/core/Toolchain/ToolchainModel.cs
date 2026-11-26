@@ -21,7 +21,24 @@ public sealed record ToolchainCommand(bool Stated, IReadOnlyList<string> Argv)
 /// <param name="Build">The build command.</param>
 /// <param name="Test">The test command — for this repository the MTP executable, never <c>dotnet test</c>.</param>
 /// <param name="MemoryMb">The memory the scheduler reserves for the project's heavy steps, or null when the file does not say.</param>
-public sealed record ToolchainProject(string Path, string Adapter, ToolchainCommand Build, ToolchainCommand Test, int? MemoryMb);
+/// <remarks>A project of the file runs EXACTLY what it states (SPEC §A2). The names <c>restore</c>, <c>format</c>, <c>testFor</c> and <c>testFiles</c> are init properties so that every earlier construction of a project stays valid.</remarks>
+public sealed record ToolchainProject(string Path, string Adapter, ToolchainCommand Build, ToolchainCommand Test, int? MemoryMb)
+{
+    /// <summary>The restore command (epoch 3 E4): runs before the build, on the host network. Not stated: the adapter's default, only for a project that states no command at all.</summary>
+    public ToolchainCommand Restore { get; init; } = ToolchainCommand.NotStated;
+
+    /// <summary>The formatter, run on the files a turn changed (<c>{file}</c> is replaced by one item per file). Not stated: the adapter's default, only for a project that states no command at all.</summary>
+    public ToolchainCommand Format { get; init; } = ToolchainCommand.NotStated;
+
+    /// <summary>The command that runs the tests of some files first (<c>{file}</c> or <c>{stem}</c>): the repository's own word for "run the tests of these files". There is no default. It needs <see cref="TestFiles"/>.</summary>
+    public ToolchainCommand TestFor { get; init; } = ToolchainCommand.NotStated;
+
+    /// <summary>The folder prefixes, inside the project, that hold test files; empty when the file names none.</summary>
+    public IReadOnlyList<string> TestFiles { get; init; } = [];
+
+    /// <summary>Whether the file states ANY command for the project: a project that states none gets the adapter's defaults of its own folder; one that states any is run exactly as written, and only its stated steps run.</summary>
+    public bool StatesACommand => Build.Stated || Test.Stated || Restore.Stated || Format.Stated || TestFor.Stated;
+}
 
 /// <summary>How long one build step and one test step may run before the process tree is killed.</summary>
 public sealed record ToolchainTimeouts(TimeSpan Build, TimeSpan Test)

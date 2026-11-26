@@ -259,4 +259,111 @@ public sealed class AToolchainFileTests
     {
         Right("---\n# the checks of this repository\n" + OneProject("    # the build\n    build:\n      - dotnet\n")).Projects.Single().Build.Argv.Should().Equal("dotnet");
     }
+
+    // ---- epoch 3 E4 s3 t1: restore, format, testFor, testFiles ----
+
+    private const string FourNames = "    restore:\n      - npm\n      - ci\n    format:\n      - prettier\n      - --write\n      - \"{file}\"\n    testFor:\n      - jest\n      - \"{file}\"\n      - --testNamePattern={stem}\n    testFiles:\n      - tests\n      - src/tests\n";
+
+    [Fact]
+    public void TheFourNames_AreRead_AsArgvListsAndFolderPrefixes()
+    {
+        var project = Right(OneProject(FourNames)).Projects.Single();
+
+        project.Restore.Argv.Should().Equal("npm", "ci");
+        project.Format.Argv.Should().Equal("prettier", "--write", "{file}");
+        project.TestFor.Argv.Should().Equal("jest", "{file}", "--testNamePattern={stem}");
+        project.TestFiles.Should().Equal("tests", "src/tests");
+        project.StatesACommand.Should().BeTrue();
+        project.Build.Stated.Should().BeFalse("a name the file does not state stays not stated: only the stated steps run");
+    }
+
+    [Fact]
+    public void AProjectWithOnlyPathAndAdapter_StatesNoCommand_AndOneWithAnyOfTheNamesDoes()
+    {
+        Right(OneProject(string.Empty)).Projects.Single().StatesACommand.Should().BeFalse();
+        foreach (var name in new[] { "build", "test", "restore", "format", "testFor" })
+        {
+            var lines = name == "testFor" ? "    testFor:\n      - x\n    testFiles:\n      - t\n" : $"    {name}:\n      - x\n";
+            Right(OneProject(lines)).Projects.Single().StatesACommand.Should().BeTrue(name);
+        }
+    }
+
+    [Theory]
+    [InlineData("build", "{file}", "build", "{file}")]
+    [InlineData("test", "{stem}", "test", "{stem}")]
+    [InlineData("restore", "{file}", "restore", "{file}")]
+    [InlineData("format", "{stem}", "format", "{stem}")]
+    [InlineData("format", "{unit}", "format", "{unit}")]
+    [InlineData("testFor", "{unit}", "testFor", "{unit}")]
+    [InlineData("build", "{project}", "build", "{project}")]
+    public void APlaceholderTheCommandMayNotHold_IsRefused_NamingTheMemberAndThePlaceholder(string key, string placeholder, string member, string named)
+    {
+        var lines = $"    {key}:\n      - tool\n      - \"{placeholder}\"\n" + (key == "testFor" ? "    testFiles:\n      - t\n" : string.Empty);
+
+        RefusedBy(OneProject(lines)).Should().Contain(member).And.Contain(named);
+    }
+
+    [Fact]
+    public void FileInsideAFormatItem_IsRefused_BecauseItIsReplacedByOneItemPerFile()
+    {
+        RefusedBy(OneProject("    format:\n      - tool\n      - \"--path={file}\"\n")).Should().Contain("format").And.Contain("item of its own");
+    }
+
+    [Fact]
+    public void JobsIsAllowedInEveryCommand_AndFileAndStemInTestForInsideAnItem()
+    {
+        Right(OneProject("    restore:\n      - tool\n      - \"-j{jobs}\"\n    testFor:\n      - tool\n      - \"--only={file}:{stem}\"\n    testFiles:\n      - t\n")).Projects.Single().TestFor.Argv.Should().Contain("--only={file}:{stem}");
+    }
+
+    [Fact]
+    public void ATestForWithNoTestFiles_IsRefused_NamingTheMember()
+    {
+        RefusedBy(OneProject("    testFor:\n      - jest\n      - \"{file}\"\n")).Should().Contain("testFor").And.Contain("testFiles");
+    }
+
+    [Theory]
+    [InlineData("../elsewhere")]
+    [InlineData("/etc")]
+    [InlineData("a/../../b")]
+    [InlineData("C:/x")]
+    public void ATestFilesPrefixThatLeavesTheProject_IsRefused_NamingTheMember(string prefix)
+    {
+        RefusedBy(OneProject($"    testFor:\n      - jest\n    testFiles:\n      - \"{prefix}\"\n")).Should().Contain("testFiles").And.Contain(prefix);
+    }
+
+    [Theory]
+    [InlineData("restore")]
+    [InlineData("format")]
+    [InlineData("testFor")]
+    [InlineData("testFiles")]
+    public void TheReadersRefusalRuleForArgvText_CoversEachOfTheFourNewLists(string key)
+    {
+        const string Secret = "--token=ghp_0123456789abcdef0123456789abcdef0123";
+        var lines = $"    {key}:\n      - tool\n      - \"{Secret}\"\n" + (key == "testFor" ? "    testFiles:\n      - t\n" : string.Empty);
+
+        var sentence = RefusedBy(OneProject(lines));
+
+        sentence.Should().Contain($"{key}").And.NotContain(Secret, "the refusal must not repeat the secret it refuses");
+    }
+
+    [Fact]
+    public void TheVersionStaysOne_AndThisRepositorysCommittedFile_ReadsToTheSameModelAsBefore()
+    {
+        ToolchainTables.Version.Should().Be(1);
+        var read = ToolchainFile.Read(new WorkFile.Text(File.ReadAllText(Path.Combine(RepoPaths.Root(), ".coai", "toolchain.yaml"))));
+
+        var project = read.Should().BeOfType<ToolchainRead.Configured>().Subject.Toolchain.Projects.Should().ContainSingle().Subject;
+        project.Should().BeEquivalentTo(new ToolchainProject("src_mcp", "dotnet", new ToolchainCommand(true, ["dotnet", "build", "dew_flow_connect_other_ais.slnx", "-c", "Debug", "-m:{jobs}"]), new ToolchainCommand(true, ["./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests"]), 3000));
+        project.StatesACommand.Should().BeTrue();
+        project.Restore.Stated.Should().BeFalse();
+        project.Format.Stated.Should().BeFalse();
+        project.TestFor.Stated.Should().BeFalse();
+        project.TestFiles.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void SkipOfRestoreOrFormat_IsLegal_BecauseItTakesThatStepOutOfADefaultedProject()
+    {
+        Right(OneProject(string.Empty) + "skip:\n  - restore\n  - format\n").Skip.Should().Equal("restore", "format");
+    }
 }

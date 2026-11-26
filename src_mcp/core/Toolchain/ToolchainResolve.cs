@@ -56,7 +56,7 @@ public static class ToolchainResolve
         return true;
     }
 
-    private static bool Stated(ToolchainProject project) => project.Build.Stated || project.Test.Stated;
+    private static bool Stated(ToolchainProject project) => project.StatesACommand;
 
     // ---- (1) the file at the base ----
 
