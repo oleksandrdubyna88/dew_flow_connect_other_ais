@@ -82,6 +82,8 @@ export interface CaptureOptions {
   readonly maxStdoutBytes?: number;
   /** Kill the whole tree of the child, with no shell in the way (`LaunchOptions.killTree`). */
   readonly killTree?: boolean;
+  /** Names taken out of the child's copy of the environment, without case (`LaunchOptions.withoutEnv`, E3.S1). */
+  readonly withoutEnv?: readonly string[];
 }
 
 /**
@@ -212,7 +214,7 @@ function present<T extends object>(entries: T): { [K in keyof T]?: Exclude<T[K],
 
 /** What `launch` is asked: the shell and the environment as before, and each option only when it was given. */
 function launchOptions(shell: boolean, env: Readonly<Record<string, string>> | undefined, options: CaptureOptions = {}): LaunchOptions {
-  return { shell, ...present({ env, cwd: options.cwd, killTree: options.killTree }) };
+  return { shell, ...present({ env, cwd: options.cwd, killTree: options.killTree, withoutEnv: options.withoutEnv }) };
 }
 
 /**
