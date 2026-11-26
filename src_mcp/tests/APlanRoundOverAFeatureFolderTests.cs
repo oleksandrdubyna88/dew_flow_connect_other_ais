@@ -1,6 +1,8 @@
 using System.Text;
 using System.Text.Json;
+using CoaiMcp.Core.Work;
 using CoaiMcp.Runners.Processes;
+using CoaiMcp.Server;
 using FluentAssertions;
 using Xunit;
 
@@ -245,6 +247,100 @@ public sealed class APlanRoundOverAFeatureFolderTests : IDisposable
         {
             await StdioServer.StopAsync(server);
         }
+    }
+
+    // ---------- s3 t6: the guard compares every packed file, the context outside the scope too ----------
+
+    private const string StoryScope = "plan/epoch-1/e1-core/stories/s1-first";
+
+    /// <summary>A plan whose epic names a spec file, so that the context of a one-story scope holds all five kinds of file a round reads outside the story: feature.yaml, the plan file, epoch.yaml, the epic's YAML and its spec.</summary>
+    private static Dictionary<string, string> PlanWithASpec()
+    {
+        var plan = WorkPlan.Base();
+        plan[WorkPlan.Epic + "/epic.yaml"] += "spec: SPEC.md\n";
+        plan[WorkPlan.Epic + "/SPEC.md"] = "# The spec of the epic\n";
+
+        return plan;
+    }
+
+    private async Task<string> RefusedForTheStoryAsync(TempGitRepo repo)
+    {
+        var server = Server();
+        try
+        {
+            await OpenAsync(server, repo);
+            var answer = await StdioServer.Call(server, 3, "review_plan", $$"""{"repoPath":{{JsonSerializer.Serialize(repo.Path)}},"branch":"{{Branch}}","featureFolder":"plan","workItem":"{{StoryScope}}"}""", timeoutSeconds: 120);
+            answer.TryGetProperty("error", out var error).Should().BeTrue($"the working tree differs from the commit, got: {answer}");
+            Prompts().Should().BeEmpty("no reviewer was launched");
+
+            return error.GetString()!;
+        }
+        finally
+        {
+            await StdioServer.StopAsync(server);
+        }
+    }
+
+    public static TheoryData<string> ContextFiles => ["plan/feature.yaml", "plan/PLAN.md", "plan/epoch-1/epoch.yaml", "plan/epoch-1/e1-core/epic.yaml", "plan/epoch-1/e1-core/SPEC.md"];
+
+    [Theory]
+    [MemberData(nameof(ContextFiles))]
+    public async Task P4_AnEditOfAFileOfTheContextOutsideTheScope_RefusesTheRound_NamingTheFile(string file)
+    {
+        await using var repo = await RepoAsync(PlanWithASpec());
+        Lay(repo, new() { [file] = File.ReadAllText(Path.Combine(repo.Path, file)) + "# an edit nobody committed\n" });
+
+        var refused = await RefusedForTheStoryAsync(repo);
+
+        refused.Should().ContainAll($"'{file}'", "differ in the working tree", "the reviewers read the commit");
+    }
+
+    [Fact]
+    public async Task P4_AStagedChangeOfAContextFile_RefusesTheRound_NamingTheFile()
+    {
+        await using var repo = await RepoAsync(PlanWithASpec());
+        Lay(repo, new() { ["plan/epoch-1/epoch.yaml"] = File.ReadAllText(Path.Combine(repo.Path, "plan/epoch-1/epoch.yaml")) + "# staged, not committed\n" });
+        await repo.GitAsync("add", "plan/epoch-1/epoch.yaml");
+
+        (await RefusedForTheStoryAsync(repo)).Should().ContainAll("'plan/epoch-1/epoch.yaml'", "differ in the working tree");
+    }
+
+    [Fact]
+    public async Task P4_ADeletedFileOfTheContext_RefusesTheRound_NamingTheFile()
+    {
+        await using var repo = await RepoAsync(PlanWithASpec());
+        File.Delete(Path.Combine(repo.Path, "plan/epoch-1/e1-core/SPEC.md"));
+
+        (await RefusedForTheStoryAsync(repo)).Should().ContainAll("'plan/epoch-1/e1-core/SPEC.md'", "differ in the working tree");
+    }
+
+    [Fact]
+    public void P4_TheGuardTakesItsListFromThePack_EveryPackedPathIsCompared_WithoutAChangeOfTheGuard()
+    {
+        var files = PlanWithASpec();
+        files["feature.yaml"] += "plan: PLAN.md\n";
+        files["PLAN.md"] = "# The plan\n";
+        var outcome = WorkPack.Build(new ListedFolder(files), new StrictYamlReader(), "plan", StoryScope);
+        var pack = outcome.Should().BeOfType<PackOutcome.Packed>(outcome is PackOutcome.Refused refused ? refused.Sentence : string.Empty).Subject.Pack;
+
+        pack.Sections.Should().HaveCountGreaterThan(5, "the pack holds the context and the story");
+        foreach (var section in pack.Sections)
+        {
+            WorkingTreeGuard.Differing($" M {section.Path}\0", pack).Should().Equal([section.Path], $"the edit of '{section.Path}', a file the reviewers read, is compared");
+        }
+
+        WorkingTreeGuard.Differing(" M plan/epoch-1/e1-core/RESULTS_e1.md\0?? notes.txt\0 M app.cs\0", pack).Should().BeEmpty("a file the reviewers do not read is no reason to refuse");
+    }
+
+    [Fact]
+    public void P4_TheRefusalSaysFilesTheReviewersRead_NotFilesOfTheScope_AndNamesAtMostTen()
+    {
+        var many = Enumerable.Range(1, 12).Select(number => $"plan/file-{number:00}.yaml").ToList();
+
+        var said = WorkingTreeGuard.Sentence(many, "0123456789abcdef");
+
+        said.Should().StartWith("12 file(s) the reviewers read differ in the working tree").And.NotContain("of the scope").And.NotContain("plan file(s)");
+        said.Should().Contain("'plan/file-10.yaml'").And.NotContain("'plan/file-11.yaml'").And.Contain("and 2 more");
     }
 
     [Fact]

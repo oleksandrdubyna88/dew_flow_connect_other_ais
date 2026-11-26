@@ -167,11 +167,11 @@ internal static class WorkingTreeGuard
         var status = await git.FolderStatusAsync(placed.Lines[0], [folder], ct);
         var statusGate = CommittedPlanReader.CaptureGate(status, $"asking whether the plan files under '{folder}' are edited");
 
-        return statusGate.Length > 0 ? (statusGate, string.Empty) : (Sentence(Differing(status.Out, pack), tip, pack.Scope), string.Empty);
+        return statusGate.Length > 0 ? (statusGate, string.Empty) : (Sentence(Differing(status.Out, pack), tip), string.Empty);
     }
 
     /// <summary>The plan files that differ: a file of the pack that is edited, staged or deleted, and a new <c>.yaml</c> file under the scope (a node the pack could not hold).</summary>
-    private static List<string> Differing(string porcelain, Pack pack)
+    internal static List<string> Differing(string porcelain, Pack pack)
     {
         var packed = pack.Sections.Select(section => section.Path).ToHashSet(StringComparer.Ordinal);
         var below = pack.Scope + "/";
@@ -181,7 +181,7 @@ internal static class WorkingTreeGuard
             .Select(entry => entry.Path).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)];
     }
 
-    private static string Sentence(List<string> files, string tip, string scope)
+    internal static string Sentence(List<string> files, string tip)
     {
         if (files.Count == 0)
         {
@@ -191,6 +191,6 @@ internal static class WorkingTreeGuard
         var shown = string.Join(", ", files.Take(Listed).Select(file => $"'{file}'"));
         var more = files.Count > Listed ? $" and {(files.Count - Listed).ToString(CultureInfo.InvariantCulture)} more" : string.Empty;
 
-        return $"{files.Count.ToString(CultureInfo.InvariantCulture)} plan file(s) of '{scope}' differ in the working tree from commit {GitIds.Short(tip)}: {shown}{more} — the reviewers read the commit, not your edits; commit them (or put them back) and call again";
+        return $"{files.Count.ToString(CultureInfo.InvariantCulture)} file(s) the reviewers read differ in the working tree from commit {GitIds.Short(tip)}: {shown}{more} — the reviewers read the commit, not your edits; commit them (or put them back) and call again";
     }
 }
