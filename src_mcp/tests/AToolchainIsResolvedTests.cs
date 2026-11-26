@@ -172,13 +172,21 @@ public sealed class AToolchainIsResolvedTests
     }
 
     [Fact]
-    public void ADifferenceOfAFact_IsListed_NotJudged()
+    public void ADifferenceOfAFactThatIsNotADefinition_IsListed_NotJudged()
     {
-        var head = new[] { ("package.json", Package("\"test\": \"jest\", \"build\": \"tsc\"")), ("package-lock.json", "{}") };
+        var head = Node.Append(("tsconfig.json", "{}"));
 
         var toolchain = Resolved(Resolve(NoFile, Tree(Node, head)));
 
-        toolchain.Differences.Should().Contain(line => line.Contains("build was 'none' at the base and is 'script' at the head"));
+        toolchain.Differences.Should().Contain(line => line.Contains("tsconfig was 'false' at the base and is 'true' at the head"));
+    }
+
+    [Fact]
+    public void AScriptAddedAtTheHead_IsAChangeOfTheDefinition_AndIsRefused()
+    {
+        var head = new[] { ("package.json", Package("\"test\": \"jest\", \"build\": \"tsc\"")), ("package-lock.json", "{}") };
+
+        Refused(Resolve(NoFile, Tree(Node, head))).Should().Contain("the worktree changed scripts.build of package.json");
     }
 
     // ---- d3: known and not built; nothing found ----

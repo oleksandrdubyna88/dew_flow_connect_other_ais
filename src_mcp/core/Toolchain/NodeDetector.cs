@@ -56,13 +56,13 @@ public static class NodeDetector
 
             foreach (var (workspaceFile, workspaceRoot, _) in parsed)
             {
-                if (WorkspacePatterns(workspaceRoot) is { } declared && PatternProblem(declared) is { Length: > 0 } problem)
+                if (WorkspacePatternsOf(workspaceRoot) is { } declared && PatternProblem(declared) is { Length: > 0 } problem)
                 {
                     return new Detection.Refused($"{PathSpelling.Spell(workspaceFile.Path)} {problem}; {Cure}");
                 }
             }
 
-            var workspaceRoots = parsed.Select(item => (Folder: ProjectGraph.Folder(item.File.Path), Patterns: WorkspacePatterns(item.Root))).Where(item => item.Patterns is not null).Select(item => (item.Folder, Patterns: item.Patterns!)).ToList();
+            var workspaceRoots = parsed.Select(item => (Folder: ProjectGraph.Folder(item.File.Path), Patterns: WorkspacePatternsOf(item.Root))).Where(item => item.Patterns is not null).Select(item => (item.Folder, Patterns: item.Patterns!)).ToList();
             var projects = new List<DetectedProject>();
             foreach (var (file, root, _) in parsed)
             {
@@ -98,7 +98,7 @@ public static class NodeDetector
     }
 
     /// <summary>The patterns of <c>workspaces</c> (an array of texts, or an object with a <c>packages</c> array), or null when the manifest declares none. A root that declares an empty list is still a workspace root.</summary>
-    private static List<string>? WorkspacePatterns(JsonElement root)
+    internal static List<string>? WorkspacePatternsOf(JsonElement root)
     {
         if (!root.TryGetProperty("workspaces", out var workspaces))
         {
@@ -291,7 +291,7 @@ public static class NodeDetector
         {
             new("packageManager", "npm"),
             new("lock", locks[0]),
-            new("workspaces", WorkspacePatterns(root) is null ? "false" : "true"),
+            new("workspaces", WorkspacePatternsOf(root) is null ? "false" : "true"),
             new("build", hasBuild ? "script" : "none"),
             new("typecheck", hasTypecheckScript ? "script" : typecheck ? "tsc" : "none"),
             new("test", hasTest ? "script" : scripts.ContainsKey("test") ? "placeholder" : "none"),

@@ -9,7 +9,7 @@ namespace CoaiMcp.Core.Toolchain;
 /// <para><b>The order.</b> (1) A file at the base commit wins; detection decides nothing for a project that states a command. A project of the file that states NO command (<c>path</c> and <c>adapter</c> only) gets the adapter's defaults for its own folder, read at the base, and a refusal of the detector there refuses the file
 /// (source <c>file+defaults</c>). (2) No file at the base: detection at the base AND at the head. <c>COAI_TOOLCHAIN_DETECT=off</c> gives E2's answer, no file is <c>not_configured</c>; anything but <c>on</c> and <c>off</c> is <c>on</c>, with a note.</para>
 /// <para><b>Both trees.</b> The head is the commit coai made, so it is the coder's. A project only the head has is added with the defaults and marked <c>DefinedByHead</c>. <b>A step (project and step name) that the base had and the head has not is <c>toolchain_refused</c></b>: <c>the worktree removed &lt;step&gt; of &lt;project&gt;</c>.
-/// A manifest of a stack that is known and not built (php, rust, python, java), at the base or at the head, is refused with the stack, the path and the cure. The compare of the check DEFINITIONS (the scripts of a package, the test projects of a solution) is story s3 t5; this function reports the differences and does not judge them.</para>
+/// A manifest of a stack that is known and not built (php, rust, python, java), at the base or at the head, is refused with the stack, the path and the cure. The check DEFINITION of a project the base has (the scripts of a package, the test projects of a solution, its targets and imports: <see cref="CheckDefinition"/>) must be the same at the head, or the job is refused; the other differences of facts are reported and not judged.</para>
 /// <para><b>Never green, never partial.</b> <c>not_configured</c> and <c>toolchain_refused</c> plan no step. One refused project refuses the repository: a repository that is half checked would be shown green.</para>
 /// </remarks>
 public static class ToolchainResolve
@@ -119,7 +119,8 @@ public static class ToolchainResolve
                 return new ToolchainResolution.Refused($"the project {PathSpelling.Spell(project.Path)} of {ToolchainTables.FilePath} names no command, and no {project.Adapter} manifest was found in {PathSpelling.Spell(project.Path)} at the base commit; name its build and test commands");
             }
 
-            var merged = Merge(baseProjects, ((Detection.Detected)headDetected).Projects, differences);
+            var headProjects = ((Detection.Detected)headDetected).Projects;
+            var merged = Merge(baseProjects, headProjects, differences);
             if (merged.Refusal.Length > 0)
             {
                 return new ToolchainResolution.Refused(merged.Refusal);
@@ -128,6 +129,11 @@ public static class ToolchainResolve
             if (projects.Count + merged.Projects.Count > ManifestLimits.MaxProjects)
             {
                 return new ToolchainResolution.Refused($"the projects of {ToolchainTables.FilePath} and their defaults are more than the limit of {ManifestLimits.MaxProjects.ToString(CultureInfo.InvariantCulture)}");
+            }
+
+            if (Frozen(baseProjects, headProjects, baseSet, headSet) is { Length: > 0 } changedDefinition)
+            {
+                return new ToolchainResolution.Refused(changedDefinition);
             }
 
             projects.AddRange(merged.Projects.Select(item => new ResolvedProject(item.Detected.Id, "defaults", item.DefinedByHead, null, item.Detected)));
@@ -194,7 +200,8 @@ public static class ToolchainResolve
 
         var differences = new List<string>();
         var baseProjects = ((Detection.Detected)baseDetected).Projects;
-        var merged = Merge(baseProjects, ((Detection.Detected)headDetected).Projects, differences);
+        var headProjects = ((Detection.Detected)headDetected).Projects;
+        var merged = Merge(baseProjects, headProjects, differences);
         if (merged.Refusal.Length > 0)
         {
             return new ToolchainResolution.Refused(merged.Refusal);
@@ -203,6 +210,11 @@ public static class ToolchainResolve
         if (merged.Projects.Count > ManifestLimits.MaxProjects)
         {
             return new ToolchainResolution.Refused($"{merged.Projects.Count.ToString(CultureInfo.InvariantCulture)} projects were found in all (the head added some), over the limit of {ManifestLimits.MaxProjects.ToString(CultureInfo.InvariantCulture)}; {Cure}");
+        }
+
+        if (Frozen(baseProjects, headProjects, baseSet, headSet) is { Length: > 0 } changedDefinition)
+        {
+            return new ToolchainResolution.Refused(changedDefinition);
         }
 
         if (merged.Projects.All(item => item.Detected.Steps.Count == 0))
@@ -279,6 +291,29 @@ public static class ToolchainResolve
 
     /// <summary>A fact value for a sentence: the value of a short word fact as it is, a list of paths spelled and capped.</summary>
     private static string Shown(string name, string value) => name is "projects" or "testProjects" ? PathSpelling.SpellFact(value) : $"'{(value.Length > 40 ? value[..40] + "..." : value)}'";
+
+    /// <summary>
+    /// <b>A detected check cannot be changed by the job it checks</b> (SPEC §A4, decision 11): for every project the base has, the check definition (<see cref="CheckDefinition"/>) at the head must be the base's. The first project whose definition differs gives the refusal, which names the member and the cure; empty when every definition is the same. A project only the head has is not compared.
+    /// </summary>
+    private static string Frozen(IReadOnlyList<DetectedProject> atBase, IReadOnlyList<DetectedProject> atHead, ManifestSet baseSet, ManifestSet headSet)
+    {
+        foreach (var project in atBase)
+        {
+            var head = atHead.FirstOrDefault(candidate => candidate.Id == project.Id);
+            if (head is null)
+            {
+                continue;
+            }
+
+            var changed = CheckDefinition.Changed(CheckDefinition.Of(project, baseSet), CheckDefinition.Of(head, headSet));
+            if (changed.Count > 0)
+            {
+                return CheckDefinition.Refusal(project.Id, changed);
+            }
+        }
+
+        return string.Empty;
+    }
 
     private static IEnumerable<string> Differences(DetectedProject baseProject, DetectedProject head)
     {

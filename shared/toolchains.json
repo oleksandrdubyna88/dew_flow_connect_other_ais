@@ -1,12 +1,12 @@
 {
   "version": 1,
-  "comment": "The defaults coai uses for a repository that has no .coai/toolchain.yaml (epoch 3 E4, SPEC section A3). EMBEDDED in coai-mcp (src_mcp/core/Toolchain/ToolchainDefaults.cs): nothing reads this file from a repository or the data folder at run time. Every argv is started WITHOUT a shell. An argv item may hold only {jobs}, {unit} and, in a format step, {file}; no item is ever copied from a manifest. Every argv below is a command that story s1 saw work INSIDE the check unit of E2 (RESULTS_s1_dotnet.md, RESULTS_s1_node.md, RESULTS_s1_format.md); a step with the host network names the heading of the RESULTS file that measured why. There is no default testFor. A step that is null does not exist for the stack. presence names are recorded by name and never read; definitionFiles are read because a change of one is a change of the checks. php, rust, python and java are known and not built: their manifests are refused by name.",
+  "comment": "The defaults coai uses for a repository that has no .coai/toolchain.yaml (epoch 3 E4, SPEC section A3). EMBEDDED in coai-mcp (src_mcp/core/Toolchain/ToolchainDefaults.cs): nothing reads this file from a repository or the data folder at run time. Every argv is started WITHOUT a shell. An argv item may hold only {jobs}, {unit} and, in a format step, {file}; no item is ever copied from a manifest. Every argv below is a command that story s1 saw work INSIDE the check unit of E2 (RESULTS_s1_dotnet.md, RESULTS_s1_node.md, RESULTS_s1_format.md); a step with the host network names the heading of the RESULTS file that measured why. There is no default testFor. A step that is null does not exist for the stack. presence names are recorded by name and object id and never read (a changed one is a change of the check definition: CheckDefinition compares them); definitionFiles are read because a change of one is a change of the checks. php, rust, python and java are known and not built: their manifests are refused by name.",
   "stacks": {
     "dotnet": {
       "built": true,
       "manifests": ["*.slnx", "*.sln", "*.csproj", "*.fsproj", "*.vbproj"],
       "definitionFiles": ["global.json", "*.props", "*.targets"],
-      "presence": [".editorconfig"],
+      "presence": [".editorconfig", "nuget.config", "Directory.Build.rsp", "MSBuild.rsp", "*.runsettings", "testconfig.json"],
       "switches": {
         "NO_COLOR": "1",
         "DOTNET_NOLOGO": "1",
@@ -53,7 +53,7 @@
     "node": {
       "built": true,
       "manifests": ["package.json"],
-      "presence": ["package-lock.json", "npm-shrinkwrap.json", "pnpm-lock.yaml", "yarn.lock", "bun.lock", "bun.lockb", "tsconfig.json", ".prettierrc*", "prettier.config.*"],
+      "presence": ["package-lock.json", "npm-shrinkwrap.json", "pnpm-lock.yaml", "yarn.lock", "bun.lock", "bun.lockb", "tsconfig.json", ".prettierrc*", "prettier.config.*", ".npmrc", "jest.config.*", "vitest.config.*", "vitest.workspace.*", "vite.config.*", ".mocharc*", "babel.config.*", ".babelrc*"],
       "switches": {
         "NO_COLOR": "1",
         "CI": "true"

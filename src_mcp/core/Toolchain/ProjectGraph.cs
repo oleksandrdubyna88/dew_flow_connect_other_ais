@@ -136,8 +136,74 @@ public static class ProjectGraph
         return (new ProjectFacts(path, [.. references.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)], [.. outside.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)], [.. unresolved.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)], [.. packages], properties, conditioned), null);
     }
 
+    /// <summary>
+    /// The elements that make a project a test project and choose its runner, RAW — with every condition of the element and of the groups and <c>Choose</c>/<c>When</c> blocks around it, and without case (item 4 of the list for s3 t5): each property of <see cref="TestProperties"/> with its text, each
+    /// <c>PackageReference</c> or <c>PackageVersion</c> of <see cref="VsTestPackage"/>. The facts reader evaluates nothing; this list is what a definition compare reads instead, so a head cannot turn a fact off by a condition the reader skipped. Sorted; null when the text is not XML.
+    /// </summary>
+    public static IReadOnlyList<string>? TestFactElements(string text)
+    {
+        var document = Parse(text);
+        if (document?.Root is not { } root)
+        {
+            return null;
+        }
+
+        var facts = new List<string>();
+        foreach (var element in root.Descendants())
+        {
+            var name = element.Name.LocalName;
+            var property = TestProperties.FirstOrDefault(candidate => string.Equals(candidate, name, StringComparison.OrdinalIgnoreCase));
+            var isPackage = (string.Equals(name, "PackageReference", StringComparison.OrdinalIgnoreCase) || string.Equals(name, "PackageVersion", StringComparison.OrdinalIgnoreCase))
+                && string.Equals(((string?)element.Attribute("Include") ?? (string?)element.Attribute("Update") ?? string.Empty).Trim(), VsTestPackage, StringComparison.OrdinalIgnoreCase);
+            if (property is null && !isPackage)
+            {
+                continue;
+            }
+
+            var conditions = string.Join(" && ", element.AncestorsAndSelf().Select(node => (string?)node.Attribute("Condition")).Where(condition => condition is not null).Reverse());
+            facts.Add((property is not null ? $"property {property}={element.Value.Trim().ToLowerInvariant()}" : $"package {VsTestPackage.ToLowerInvariant()}") + (conditions.Length > 0 ? $" when {conditions}" : string.Empty));
+        }
+
+        facts.Sort(StringComparer.Ordinal);
+
+        return facts;
+    }
+
     /// <summary>Whether a text is well-formed XML under the reader's rules (no DTD, no resolver): a definition file that is not is refused, never skipped.</summary>
     public static bool IsWellFormed(string text) => Parse(text) is not null;
+
+    /// <summary>
+    /// The names of the elements that can change what a build or a test RUNS, from a project, <c>.props</c> or <c>.targets</c> text: <c>Sdk:&lt;the Sdk attribute of Project&gt;</c>, <c>Target:&lt;Name&gt;</c>, <c>Import:&lt;Project&gt;</c> (with its <c>Sdk</c>) and <c>UsingTask:&lt;TaskName&gt;</c>, sorted. A condition does not take an element out: a Target
+    /// behind a condition is a Target. Null when the text cannot be read as XML (a DTD, not XML).
+    /// </summary>
+    public static IReadOnlyList<string>? BuildElements(string text)
+    {
+        var document = Parse(text);
+        if (document?.Root is not { } root)
+        {
+            return null;
+        }
+
+        var names = new List<string>();
+        if ((string?)root.Attribute("Sdk") is { } sdk)
+        {
+            names.Add("Sdk:" + sdk.Trim());
+        }
+
+        foreach (var element in root.Descendants())
+        {
+            switch (element.Name.LocalName)
+            {
+                case "Target": names.Add("Target:" + ((string?)element.Attribute("Name") ?? string.Empty).Trim()); break;
+                case "Import": names.Add("Import:" + ((string?)element.Attribute("Project") ?? string.Empty).Trim() + (element.Attribute("Sdk") is { } importSdk ? "@" + importSdk.Value.Trim() : string.Empty)); break;
+                case "UsingTask": names.Add("UsingTask:" + ((string?)element.Attribute("TaskName") ?? (string?)element.Attribute("AssemblyFile") ?? string.Empty).Trim()); break;
+            }
+        }
+
+        names.Sort(StringComparer.Ordinal);
+
+        return names;
+    }
 
     private static XDocument? Parse(string text)
     {

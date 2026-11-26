@@ -109,9 +109,20 @@ public static class ManifestSearch
                 continue;
             }
 
-            if (Classify(entry.Path, table) is not { } kind)
+            if (ClassifyNamed(entry.Path, table) is not { } kind)
             {
+                if (entry.Type == "blob" && IsGeneratedImport(entry.Path))
+                {
+                    // MSBuild imports obj/<project>.*.props and *.targets by a wildcard of its own, and the search never enters obj: the NAME of such a file is recorded (never read) so that a head that adds one is a change of the check definition.
+                    candidates.Add(new ManifestCandidate(entry.Path, "dotnet", ManifestKind.Present, entry.Oid, entry.Size));
+                }
+
                 continue;
+            }
+
+            if (kind.Kind != ManifestKind.Present && !kind.Exact)
+            {
+                return new ManifestSelection.Refused($"the file {PathSpelling.Spell(entry.Path, entry.Oid)} is named like a manifest or a definition file with a different case: a tool on a file system without case would read it and one with case would not, so coai does not guess; rename it, or name the commands in {ToolchainTables.FilePath}");
             }
 
             if (PathProblem(entry.Path, entry.Oid) is { Length: > 0 } problem)
@@ -192,8 +203,14 @@ public static class ManifestSearch
         return false;
     }
 
-    /// <summary>What a path is for, by its name and its place — or null when the search does not look at it.</summary>
-    public static (string Stack, ManifestKind Kind)? Classify(string path, ToolchainDefaults table)
+    /// <summary>What a path is for, by its name and its place — or null when the search does not look at it. Names are matched without case (see <see cref="ClassifyNamed"/>).</summary>
+    public static (string Stack, ManifestKind Kind)? Classify(string path, ToolchainDefaults table) =>
+        ClassifyNamed(path, table) is { } named ? (named.Stack, named.Kind) : null;
+
+    /// <summary>
+    /// <see cref="Classify"/> with whether the name matched EXACTLY: a name that matches only without case (<c>Package.json</c>, <c>Directory.Build.TARGETS</c>) is the odd spelling that a tool on a file system without case would read and one with case would not (S6 of the s2 security verify).
+    /// </summary>
+    public static (string Stack, ManifestKind Kind, bool Exact)? ClassifyNamed(string path, ToolchainDefaults table)
     {
         var segments = path.Split('/');
         if (segments.Length - 1 > ManifestLimits.MaxFolderDepth || segments.Take(segments.Length - 1).Any(Skipped))
@@ -202,35 +219,47 @@ public static class ManifestSearch
         }
 
         var name = segments[^1];
-        foreach (var stack in table.Stacks.Values)
+        foreach (var comparison in new[] { StringComparison.Ordinal, StringComparison.OrdinalIgnoreCase })
         {
-            if (stack.Manifests.Any(pattern => Matches(pattern, name)))
+            foreach (var stack in table.Stacks.Values)
             {
-                return (stack.Id, ManifestKind.Manifest);
-            }
+                if (stack.Manifests.Any(pattern => Matches(pattern, name, comparison)))
+                {
+                    return (stack.Id, ManifestKind.Manifest, comparison == StringComparison.Ordinal);
+                }
 
-            if (stack.DefinitionFiles.Any(pattern => Matches(pattern, name)))
-            {
-                return (stack.Id, ManifestKind.Definition);
-            }
+                if (stack.DefinitionFiles.Any(pattern => Matches(pattern, name, comparison)))
+                {
+                    return (stack.Id, ManifestKind.Definition, comparison == StringComparison.Ordinal);
+                }
 
-            if (stack.Presence.Any(pattern => Matches(pattern, name)))
-            {
-                return (stack.Id, ManifestKind.Present);
+                if (stack.Presence.Any(pattern => Matches(pattern, name, comparison)))
+                {
+                    return (stack.Id, ManifestKind.Present, comparison == StringComparison.Ordinal);
+                }
             }
         }
 
         return null;
     }
 
+    /// <summary>A <c>.props</c> or <c>.targets</c> file in an <c>obj</c> folder, at any depth: MSBuild imports <c>obj/&lt;project&gt;.*.props</c> and <c>.targets</c> by itself.</summary>
+    public static bool IsGeneratedImport(string path)
+    {
+        var segments = path.Split('/');
+
+        return segments.Length > 1 && segments.Take(segments.Length - 1).Any(segment => string.Equals(segment, "obj", StringComparison.OrdinalIgnoreCase))
+            && (path.EndsWith(".props", StringComparison.OrdinalIgnoreCase) || path.EndsWith(".targets", StringComparison.OrdinalIgnoreCase));
+    }
+
     /// <summary>A name against a pattern with at most one <c>*</c> (<c>*.csproj</c>, <c>.prettierrc*</c>, <c>prettier.config.*</c>); ordinal, case-sensitive, never a path.</summary>
-    public static bool Matches(string pattern, string name)
+    public static bool Matches(string pattern, string name, StringComparison comparison = StringComparison.Ordinal)
     {
         var star = pattern.IndexOf('*', StringComparison.Ordinal);
 
         return star < 0
-            ? string.Equals(pattern, name, StringComparison.Ordinal)
-            : name.Length >= pattern.Length - 1 && name.StartsWith(pattern[..star], StringComparison.Ordinal) && name.EndsWith(pattern[(star + 1)..], StringComparison.Ordinal);
+            ? string.Equals(pattern, name, comparison)
+            : name.Length >= pattern.Length - 1 && name.StartsWith(pattern[..star], comparison) && name.EndsWith(pattern[(star + 1)..], comparison);
     }
 
     private static bool Skipped(string folder) => folder.StartsWith('.') || ManifestLimits.SkippedFolders.Contains(folder, StringComparer.Ordinal);

@@ -118,7 +118,7 @@ public static class DotnetDetector
         return string.Empty;
     }
 
-    private static string NearestProps(Dictionary<string, string> props, string folder)
+    internal static string NearestProps(Dictionary<string, string> props, string folder)
     {
         var current = folder;
         while (true)
@@ -260,7 +260,7 @@ public static class DotnetDetector
     }
 
     /// <summary>The runner of a project as the measured facts say: <c>mtp</c>, <c>vstest</c>, empty for a test project whose runner cannot be told, null for a project that is not a test project.</summary>
-    private static string? RunnerOf(ProjectFacts project)
+    internal static string? RunnerOf(ProjectFacts project)
     {
         var mtp = (project.Properties.TryGetValue("UseMicrosoftTestingPlatformRunner", out var a) && a) || (project.Properties.TryGetValue("TestingPlatformDotnetTestSupport", out var b) && b);
         var vstest = project.Packages.Contains(ProjectGraph.VsTestPackage, StringComparer.OrdinalIgnoreCase);
