@@ -1,6 +1,7 @@
 import { readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import * as vscode from 'vscode';
+import { byCodeUnit } from './codeUnitOrder';
 import { thisMachine } from './chatStoreLock';
 import type { ChatPanels } from './chatPanels';
 import { threads } from './chatThread';
@@ -555,7 +556,7 @@ const textOrNothing = (path: string): Promise<string | undefined> =>
   });
 
 const namesOf = async (folder: string, prefix: string): Promise<readonly string[]> =>
-  (await readdir(folder).catch(() => [] as string[])).filter((one) => one.startsWith(prefix)).sort();
+  (await readdir(folder).catch(() => [] as string[])).filter((one) => one.startsWith(prefix)).sort(byCodeUnit);
 
 /** The withdrawal files of the folder with their text: raw reads, for the `finally` of a scenario only. */
 async function withdrawnOf(folder: string): Promise<StoredBefore['withdrawn']> {

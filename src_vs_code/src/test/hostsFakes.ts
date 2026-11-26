@@ -230,7 +230,7 @@ export class FakeDisk implements RefusalsDisk {
   };
 
   /** The names of the withdrawal files on the fake folder, in code-unit order. */
-  withdrawnNames = (): readonly string[] => [...this.files.keys()].filter((name) => name.startsWith(this.withdrawnPrefix)).sort();
+  withdrawnNames = (): readonly string[] => [...this.files.keys()].filter((name) => name.startsWith(this.withdrawnPrefix)).sort(byCodeUnit);
 
   /** The calls whose name starts with `prefix`. */
   called = (prefix: string): readonly string[] => this.calls.filter((one) => one.startsWith(prefix));

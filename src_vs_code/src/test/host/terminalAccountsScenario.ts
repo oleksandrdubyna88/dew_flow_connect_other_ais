@@ -1,6 +1,7 @@
 import * as assert from 'node:assert/strict';
 import * as vscode from 'vscode';
 
+import { byCodeUnit } from '../../codeUnitOrder';
 import type { CoaiExports } from '../../extension';
 import type { RemoteRun } from '../../remoteSsh';
 import type { WslPort } from '../../remoteWslRound';
@@ -84,7 +85,7 @@ export async function theAccountsRoundRunsOnlyUnderThePermission(): Promise<void
     await until(() => calls.length >= 2, 'the Allow did not start a round');
     await until(() => accounts.memoryHosts().length === 2, 'the round did not remember its two hosts');
 
-    assert.deepEqual([...calls].sort(), [`${HOST_A} no-claude-usage`, `${HOST_B} no-claude-usage`], 'the first round did not call each host once, and none else (wsl is never called)');
+    assert.deepEqual([...calls].sort(byCodeUnit), [`${HOST_A} no-claude-usage`, `${HOST_B} no-claude-usage`], 'the first round did not call each host once, and none else (wsl is never called)');
   } finally {
     for (const one of terminals) {
       one.dispose();
@@ -124,7 +125,7 @@ export async function theIconOpensOneTabAndItsModelHoldsBothHosts(): Promise<voi
     await until(() => (accounts.lastModel()?.blocks.length ?? 0) === 2, 'the tab does not hold both hosts');
 
     assert.deepEqual(accounts.lastModel()?.blocks.map((block) => block.host), [HOST_A, HOST_B], 'the blocks of the model are not the two hosts, in code-unit order');
-    assert.deepEqual([...calls].sort(), [`${HOST_A} no-claude-usage`, `${HOST_B} no-claude-usage`], 'each host was not called exactly once');
+    assert.deepEqual([...calls].sort(byCodeUnit), [`${HOST_A} no-claude-usage`, `${HOST_B} no-claude-usage`], 'each host was not called exactly once');
     assert.equal(vscode.window.tabGroups.all.flatMap((group) => group.tabs).filter((tab) => tab.label === 'AI accounts and usage').length, 1, 'a second press opened a second tab');
   } finally {
     for (const one of terminals) {
