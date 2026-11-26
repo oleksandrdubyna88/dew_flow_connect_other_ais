@@ -2,9 +2,10 @@
 
 > Status: **record, 2026-11-26.** Measurement W9 of
 > [../todo/PLAN_the_terminal_panel_shows_the_accounts_and_their_usage.md](../todo/PLAN_the_terminal_panel_shows_the_accounts_and_their_usage.md),
-> § 5: the gate for its epic E3, WSL on this PC. What the plan took from it, and the one item it left open for the
-> owner (the login session of surprise 1), are in that § 5. The parts (a) to (g) as the plan set them are in the
-> plan's appendix, § K.7. This file is public: a Windows user name is written `<user>`.
+> § 5: the gate for its epic E3, WSL on this PC. What the plan took from it is in that § 5. The one item it left
+> open for the owner (the login session of surprise 1) was answered the same day: the owner accepted the session,
+> as the plan's decision 25. The parts (a) to (g) as the plan set them are in the plan's appendix, § K.7, and the
+> item as it stood open in § K.17. This file is public: a Windows user name is written `<user>`.
 
 Date: 2026-11-26 (owner's go the same day). Run from inside the WSL distro `Ubuntu`, calling `/mnt/c/Windows/System32/wsl.exe`
 (written `W` below). No Python was started. The disposable distro `coai-w9` was created for the check and is gone.

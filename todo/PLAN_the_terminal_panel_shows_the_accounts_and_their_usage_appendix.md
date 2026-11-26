@@ -2458,3 +2458,125 @@ The second and third items of the list.
   UID its range, at most 16 are taken, and a call for a user that is not there fails as a call. Its own
   place is read as root, which gives it nothing. It cannot make the round read ANOTHER user as root, or a system
   account: this side too takes UID 0 only under the name `root`, and a UID from 1 to 999 never.
+
+### K.17 to K.23 — seven more passages, moved with the approval of epoch 4 on 2026-11-26
+
+These seven were moved from the plan as it stood at `ee7242e9`, word for word, in the commit that records the
+stop of epoch 3 at its entries 3.1 and 3.2 and the owner's approval of epoch 4. The plan needed room for that
+record, for the owner's decision 25 — the login session that WSL opens for a user it reads is accepted — and
+for what gate E2-G1 fixed in the security spec of E2.S1, and it stays under 100 KB. As above, none is a rule
+of its own: each is the text of a measurement that has been run, an item that the owner has since answered,
+a judgement, a table of who builds what, or a list of how older decisions stand. The plan keeps every rule,
+and says in a few lines what each passage holds. Where the plan of today says something else, the plan of
+today holds — K.17 above all, whose last paragraph is an open item that is closed now, and K.22 and K.23,
+which the plan of today words anew for the login session.
+
+### K.17 — § 5: the table of the four measurements, what W9 showed, and the item W9 left open
+
+The table as it was set before the measurements ran, with the paragraph on what W9 showed and the item that
+was open for the owner until decision 25.
+
+| # | What is measured, and where | What the result does |
+|---|---|---|
+| W6 | **Backups, on a VM** (unchanged; the appendix, § I, § 5). As a Linux user with no live Claude Code session: `~/.claude.json` and `~/.claude/backups/` before and after each of 12 usage reads from `/` | **Gate for growth.** It selects the usage policy of E4: a read makes no backup, or Claude Code keeps a fixed number → every round; a backup each time that nothing retires → at most once an hour for each account under a budget the owner approves, or only on *Refresh now* |
+| W7 | **A trace of every program start, on a VM** (unchanged): one usage read under `strace -f -e trace=execve`, stdin `/dev/null`, from `/` | **Gate.** A program that is not Claude Code's own — a hook's command, an MCP server — and the Claude usage read stays off until the owner decides. Until W7 has run this plan does not claim "starts nothing of the person's" |
+| W8 | A start of `agy --version` on a VM: its time, what it writes, what it starts | **A record** (decision 16) |
+| W9 | **WSL on this PC, in a disposable distro with two users**, made for the check and removed after it. **Run 2026-11-26.** Its parts (a) to (g) as they were set: the appendix, § K.7 | **Gate for E3.** The WSL road is specified on what W9 shows. **"Read-only" is promised for WSL only as far as (c) shows**: that a read as A changes nothing in B's home or root's, and in A's only what Claude Code itself writes (decision 13); and that a read as root changes nothing in A's or B's, and in root's only what the tools themselves write. **(b) is the fact behind "root's own `HOME`"**: if a call with `-u root` can be given another, root is not read until the spec of E3.S1 closes that road. (d) decides who runs the users script, root or the default user; root's own place is read as root either way. (f) is the fact behind Q2 |
+
+**What W9 showed**, part by part, is in that file (one Ubuntu 24.04 distro with systemd; called from inside
+another distro, from a Windows process only for the `HOME` check). **(b):** no `HOME` or `WSLENV` of the caller
+changes the `HOME` of a call, for root too — WSL closes that road, so root is read as far as (b) goes. **(c):**
+no script changed a file in any of the three homes; no vendor tool was installed. **(d):** the same answer as
+root and as the default user. **(e):** a killed call leaves no process of its own. **(f):** § 2 and residual
+12. Also seen: 2 calls that failed at 30 s with WSL's own `WSAETIMEDOUT`, and none of 52 later ones. *Not
+measured:* the lists with no distro and with none running; a read with a real vendor tool; a Windows process
+as the caller of every call.
+
+**Open after W9 — the owner's to choose, then the spec of E3.S1; no ledger entry.** On a distro with systemd
+the first `-u <user>` call after the distro starts makes WSL open a login session for that user, root included
+(`/bin/login -f`, `systemd --user`, a login `bash`). It ran the user's `~/.bash_profile`; a first login made
+two empty files in that home (`.motd_shown`, `.cache/motd.legal-displayed`); it stays until the distro stops;
+and the check before a start as UID 0 does not reach it. With `systemd=false` none of this happens. **So these
+do not hold there as written:** "nothing as root but the users script and the read of root's own place" (*What
+this plan does NOT do*, the Definition of Done); the permission's text, which names only `claude` and `agy` as
+started; and "in A's only what Claude Code itself writes" (W9, above). § 2 and *Security* said "no profile is
+read"; both now say what was measured. To accept the session, or to read fewer users, is a change of this
+plan. **Until the owner has chosen, the spec of E3.S1 is not final and no code reads a WSL place.**
+
+### K.18 — *Security*: finding F1 is answered, not gone
+
+**Finding F1 is answered, not gone** (the appendix, § B). With E1 the consent no longer came first: an old "yes" was
+used with no press, and a host was allowed by a terminal's name. **Before the permission nothing is contacted now,
+whatever is stored and whatever a terminal is called.** After it, what F1 says of a name holds again, by the
+person's own word: any program that can open a terminal named `Creds: <host> / x` makes the extension log in to
+that host within 10 minutes and run the fixed script; a terminal named `Creds: wsl / x` makes it read every user
+of every running distro, root among them. The name chooses the host and nothing else, from an alphabet with no option and no shell
+character; ssh refuses a host whose key is not known, asks for no password and forwards no agent; nothing of a
+reply goes back to whoever opened the terminal. The question says "and the ones opened later" in plain words,
+because that sentence is the whole of this residual.
+
+### K.19 — *Security*, the things named and not prevented: a user's program, the inherited `PATH`, a kill
+
+The second, third and fourth of the list, which had four items at `ee7242e9`; the plan of today names a fifth,
+the login session.
+
+- **A program that a Linux user owns is started by our timer.** The script starts `claude` and `agy` as found in
+  that user's `~/.local/bin`. Whoever can write there decides what runs — as that user, and never as another
+  user: a user's program is never started as root. On a VM that ends at the VM. **In WSL it does not:** a Linux process can start Windows programs
+  as the Windows user (interop). That is WSL's own boundary, and it is open to that Linux user at any time; what
+  is new is that our timer starts the program with nobody at that user's keyboard. The permission's text says
+  that `claude` and `agy` as found there are started.
+- **The inherited `PATH`** is not used (§ 4), so a Windows program is not started by its name.
+- **What a kill leaves.** No process of the call: after `wsl.exe` was killed none was left in the distro, with a
+  background child and with a script on stdin too (W9e). The script's own limits end each vendor command in any
+  case.
+
+### K.20 — *Boundaries with other plans*: the table
+
+| Item | Built by | The other plan's part |
+|---|---|---|
+| The pinned ssh call, the session script, the chat doors, the per-host answer `coai.terminalHosts`, the question `read-remote-session` | [PLAN_the_chat_opens_from_a_terminal.md](../research/PLAN_the_chat_opens_from_a_terminal.md) (shipped in 0.87.0; it names this plan at its line 315) | **This revision replaces the per-host consent of that plan** (Q1): a per-host "yes" allows nothing any more, the question `read-remote-session` is retired, and the chat doors read under the one permission and not without it. That changes a released behaviour: a person with per-host answers is asked once more. Kept of it: the store's key, its "no" rows as the copies of refusals, *Not this host*. Added here: the refusals file (E1), the door answer `waiting`, the re-read before every spawn |
+| The todo T46, the 30 s ceiling | this plan, E3.S2 | The todo file is closed by the stories document of E3 |
+| The todos T8 and T9, the session door | this plan, E2.S1 | The todo files are closed by the stories document of E2 |
+| A timed-out ssh call ends its whole tree | [PLAN_a_timed_out_ssh_call_ends_its_whole_tree.md](PLAN_a_timed_out_ssh_call_ends_its_whole_tree.md) | Nothing here: it is the launcher's on Linux and macOS, and older than this plan. The WSL road needs no part of it |
+| The gauge of coai's own rounds | [../research/PLAN_every_round_is_counted.md](../research/PLAN_every_round_is_counted.md) and [PLAN_the_round_counter_tail.md](PLAN_the_round_counter_tail.md) | Nothing: no shared store, no shared reader |
+| The account and limits line inside Claude Code | the agent-models mod | Nothing is changed there; this plan carries its word rules over and tests them against its cases |
+
+### K.21 — *Owner decisions*: decisions 1–20, which do not stand as they were, and which are cited
+
+Decisions 1–20 are of 2026-11-19: the owner's words are in the appendix, § A, and the list with how each stands
+after the stop is in § J, word for word. **They stand, but for these:** 4 — usage is still read once for each
+account, and the view groups by HOST now (23); 8 (O3) — the one consent is the permission of 22, for both doors;
+14 (N2) and 18 (Q1) — replaced by 22: nothing runs by itself before the permission, and no host is allowed by
+itself; 19 (Q2) — replaced by Q3's answer; 20 — neither setting is built: `coai.terminalAccountsAllowNewHosts` is
+retired by 22, and the install's own "yes" takes the place of `coai.terminalAccountsInstallMissingTools`. Cited
+below: 5 ("left", a dash, never a zero), 7 (O2, full emails in the view), 13 (N1, the writes of Claude Code are
+accepted; a disturbed session and unbounded growth are not), 16 (N4, `agy --version` every round), 17 (N5, the
+install of `jq`, E6).
+
+### K.22 — *Security*: what an attacker gains
+
+**What an attacker gains** (the list of the stopped plan holds: the appendix, § I, *Security*), with these
+changes:
+
+- **A program that opens a terminal named `Creds: evil / x`.** Before the permission: nothing. After it: as F1,
+  above. It still cannot push out or undo a "no".
+- **Someone who is that Linux user**, and **root in a distro**: neither reaches the extension through a reply,
+  and root cannot make the round read another user as root, or a system account. Both word for word: the
+  appendix, § K.16.
+- **Another Linux user of a distro whose root is read** gains nothing by a file or a folder they can write: as
+  UID 0 the script checks the owner and the mode before every start, and a tool that fails the check is not
+  started (the rule above). What is left is residual 13.
+- **A second window, or a reload, racing a refusal, the Stop or a withdrawal**: the file, as built.
+- **Logs**: a failed read logs the place, how it ended and the runner's own last line; a script's stderr goes to
+  `/dev/null`; stdout is never logged.
+
+### K.23 — *Security*: the edges
+
+**The edges.** (1) Read-only ssh calls that a TIMER starts, to every host of an open `Creds:` terminal that is not
+refused — **now only after one explicit permission**. (2) New: local `wsl.exe` calls by the same timer — an
+enumeration, the users script as root, the accounts script as each Linux user, and as root for root's own
+place. (3) On a usage read, a start of
+Claude Code there, which calls Anthropic with that user's own login (off until E4). (4) In every round, a start of
+`agy` for its version. (5) Text from a VM or a distro drawn in a webview. E6 adds a sixth, a call that changes a
+machine.
