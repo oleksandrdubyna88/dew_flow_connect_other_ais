@@ -988,7 +988,7 @@ whom on this PC; **(f)** a change of a machine (E6, so the next release's). Area
 authorisation: their specs are Fable's by the security row, outside the quota. Planned mark, made by its
 stories document: E3.S2 for (a) and (b).
 
-Cornerstones: 1 of 2 — E1.S2
+Cornerstones: 2 of 2 — E1.S2, E3.S2
 
 ### E1 — The read-only feature, end to end · DONE, merged as #1047 (`d0241e45`)
 
