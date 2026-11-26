@@ -130,6 +130,48 @@ public sealed class AKeySourcesTests
     }
 
     [Fact]
+    public void AKeyWhoseAccountChanges_LosesTheCooldownAnotherKeyOfTheOldAccountGaveIt_ButTheKeyThatHitTheLimitKeepsItsOwn()
+    {
+        using var world = new KeyWorld();
+        var run = new KeysRun(world);
+        var file = Path.Combine(world.DataDir, "keys.env");
+        File.WriteAllText(file, EnvLines(("one", "a", "old@example.com"), ("two", "b", "old@example.com")));
+        File.SetUnixFileMode(file, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        run.Settings["COAI_CLAUDE_KEYS_FILE"] = file;
+        run.Do(string.Empty, "sync").Code.Should().Be(0);
+        new KeyPool(world.Access()).Record(KeyWorld.IdOf(KeyWorld.Token("a")), new KeyLaunchReport(KeyLaunchEnd.Limit, "Resets in 3h"));
+        CooldownOf(run, "two").Should().NotBeNull("the limit was the old account's, which the key shared then");
+
+        File.WriteAllText(file, EnvLines(("one", "a", "new@example.com"), ("two", "b", "new@example.com")));
+        var synced = run.Do(string.Empty, "sync");
+
+        synced.Code.Should().Be(0, synced.Err);
+        CooldownOf(run, "two").Should().BeNull("the key was wrongly put on the old account: that limit was not its");
+        CooldownOf(run, "one").Should().NotBeNull("the vendor stopped THIS key: its own cooldown stays whatever account it is filed under");
+    }
+
+    [Fact]
+    public void AKeyWhoseAccountOnlyChangesCase_KeepsTheCooldownItWasGiven()
+    {
+        using var world = new KeyWorld();
+        var run = new KeysRun(world);
+        var file = Path.Combine(world.DataDir, "keys.env");
+        File.WriteAllText(file, EnvLines(("one", "a", "me@example.com"), ("two", "b", "me@example.com")));
+        File.SetUnixFileMode(file, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        run.Settings["COAI_CLAUDE_KEYS_FILE"] = file;
+        run.Do(string.Empty, "sync").Code.Should().Be(0);
+        new KeyPool(world.Access()).Record(KeyWorld.IdOf(KeyWorld.Token("a")), new KeyLaunchReport(KeyLaunchEnd.Limit, "Resets in 3h"));
+
+        File.WriteAllText(file, EnvLines(("one", "a", "me@example.com"), ("two", "b", "ME@example.com")));
+        run.Do(string.Empty, "sync").Code.Should().Be(0);
+
+        CooldownOf(run, "two").Should().NotBeNull("the same account written another way is the same account");
+    }
+
+    private static string? CooldownOf(KeysRun run, string label) =>
+        Rows(run).EnumerateArray().Single(row => row.GetProperty("label").GetString() == label).TryGetProperty("cooldownUntilUtc", out var until) && until.ValueKind == JsonValueKind.String ? until.GetString() : null;
+
+    [Fact]
     public void TheDeviceSettingKeysFile_IsReadToo_WhenTheVariableIsNotSet()
     {
         using var world = new KeyWorld();

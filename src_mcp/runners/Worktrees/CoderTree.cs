@@ -31,6 +31,11 @@ public sealed record CoderTree(string Root, string MainCheckout, string Expected
 {
     private const string Prefix = "gitdir: ";
 
+    /// <summary>
+    /// The names of the worktree a coder's diff may not touch (<see cref="CoderMounts.Protected"/>): <c>.gitmodules</c> and every submodule's path. Empty for a tree that protects nothing — the tree of before the recorded change of epoch 3 E2 s6 — and then no diff is refused for them.
+    /// </summary>
+    public IReadOnlyList<string> Protected { get; init; } = [];
+
     /// <summary>The <c>.git</c> entry of a tree.</summary>
     public string GitEntry => Path.Combine(Root, ".git");
 

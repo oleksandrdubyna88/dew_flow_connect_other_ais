@@ -89,7 +89,7 @@ internal sealed class RoleJobService(string dataDir, Func<string, string?> setti
         var store = Store();
         var keeper = Keeper(store);
         await keeper.SweepAsync(ct);
-        RoleJobRetention.Apply(store, log);
+        RoleJobRetention.Apply(store, log, settings);
         var link = request.Role == RoleDescriptors.Coder ? await CoderPlanBinding.CaptureAsync(Sessions ?? new SessionStore(dataDir), request, ct) : null;
 
         return await MadeAsync(store, request, plan, link, config, ct);
@@ -268,7 +268,7 @@ internal sealed class RoleJobService(string dataDir, Func<string, string?> setti
     {
         var store = Store();
         await Keeper(store).SweepAsync(ct);
-        RoleJobRetention.Apply(store, log);
+        RoleJobRetention.Apply(store, log, settings);
         SweepBaStaging(store);
     }
 

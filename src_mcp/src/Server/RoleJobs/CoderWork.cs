@@ -67,8 +67,8 @@ internal sealed class CoderWork : IRoleWork
             return failure;
         }
 
-        var prepared = made.Prepared!;
-        var layer = LayerFor(run, prepared);
+        var layer = await LayerForAsync(run, made.Prepared!, ct);
+        var prepared = made.Prepared! with { Tree = layer.Job.Tree };
 
         // The fix cap is read ONCE, here: it is the job's, and a model that takes over does not bring turns of its own (epoch 3 E2 s4 t3).
         var (cap, note) = FixRounds.Read(run.Settings);
@@ -94,14 +94,25 @@ internal sealed class CoderWork : IRoleWork
             Restore = token => CoderRestore.RestoreAsync(git, prepared.Tree, loop.LastCommit, token),
         };
 
-        return await failover.RunAsync(CoderPrompt.Build(site.PromptInputs, new RolePrompts(run.DataDir)), ct);
+        try
+        {
+            return await failover.RunAsync(CoderPrompt.Build(site.PromptInputs, new RolePrompts(run.DataDir)), ct);
+        }
+        finally
+        {
+            // The work is over, checks included: nothing reads a mount's source any more. A runner that lost the job leaves them — the job may be running again in another one.
+            if (run.StillWriter())
+            {
+                CoderJobFolders.RemoveMounts(layer.Job, run.Request.JobId, e => run.Log.Warning(e, "role job {JobId}: the submodule mounts could not be removed; they stay until the job's retention", run.Request.JobId));
+            }
+        }
     }
 
     /// <summary>
     /// The OS layer of this job: the boundary job (the worktree writable, the main checkout and the coder root read-only, the job's own folders — the coder's home among them — under <see cref="CoderOsLayer.JobFolder"/>), and ONE launcher for
     /// every process of it, so the systemd-run client of a turn is recorded in <c>job.json</c> like any CLI child. The layer lives as long as the work: the repair turn and the fix turns of the checks run in it too, on the same home.
     /// </summary>
-    private CoderOsLayer LayerFor(IRoleRun run, Prepared prepared)
+    private async Task<CoderOsLayer> LayerForAsync(IRoleRun run, Prepared prepared, CancellationToken ct)
     {
         var folder = CoderOsLayer.JobFolder(run.Settings, said => run.Log.Warning("role job {JobId}: {Said}", run.Request.JobId, said), run.Request.JobId);
 
@@ -110,7 +121,16 @@ internal sealed class CoderWork : IRoleWork
         // The key pool's folder is hidden from a launch that carries a key (InaccessiblePaths), and the preflight proves a read of it fails from inside.
         var job = BoundaryJob.ForCoder(run.Request.JobId, prepared.Tree, folder) with { KeysFolder = Path.Combine(run.DataDir, "keys"), KeysFile = KeysFileOf(run) };
 
-        return new CoderOsLayer(job, (Turns ?? CoderOsLayer.ShippedTurns)(launcher), launcher);
+        // The submodules of the base commit (epoch 3 E2 s6, the recorded change): provided read-only into every unit of the job, from the main checkout's own object store and with no network; the tree protects '.gitmodules' and their paths from the coder's diff.
+        var mounts = await new CoderSubmodules(launcher).ProvideAsync(prepared.Tree.MainCheckout, prepared.BaseSha, prepared.Tree.Root, job.MountsFolder, ct);
+        foreach (var declared in mounts.Declared.Where(mount => !mount.Provided))
+        {
+            run.Log.Warning("role job {JobId}: the submodule {Path} is {Note}", run.Request.JobId, declared.Path, declared.Note);
+        }
+
+        job = job with { Tree = prepared.Tree with { Protected = mounts.Protected }, Mounts = mounts.Binds(prepared.Tree.Root) };
+
+        return new CoderOsLayer(job, (Turns ?? CoderOsLayer.ShippedTurns)(launcher), launcher) { Mounts = mounts };
     }
 
     /// <summary>The keys file the person named, as a full path (empty when none): hidden from a keyed coder's unit.</summary>

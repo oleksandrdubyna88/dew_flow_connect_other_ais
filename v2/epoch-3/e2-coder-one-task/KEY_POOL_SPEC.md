@@ -415,7 +415,9 @@ each key keeping its id (sha256 prefix) whatever its source:
    `coai-mcp --keys import`; the image holds the unit, never a key (pending the owner's answer on IAM role + AWS CLI).
 
 `account` (subscription email) lets the pool know which keys share one limit: a limit signal cools down every key of
-the same account, not only the one that hit it.
+the same account, not only the one that hit it. Each cooldown records the key whose limit set it. When a sync files a key under a
+different account, a cooldown that another key gave it ends (that limit was the old account's); a cooldown from the key's
+own limit stays. Accounts are compared without case.
 
 ### Measured 2026-11-23 — the creds source
 

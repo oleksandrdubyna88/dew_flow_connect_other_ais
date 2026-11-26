@@ -261,9 +261,9 @@ internal sealed class KeyPool(KeyStoreAccess access)
 
     private static KeyRecord Apply(KeyRecord key, KeyLaunchReport report, ClaudeKeySecret? secret, DateTime now) => report.End switch
     {
-        KeyLaunchEnd.Succeeded => key with { CooldownUntilUtc = null, ConsecutiveCooldowns = 0 },
+        KeyLaunchEnd.Succeeded => key with { CooldownUntilUtc = null, CooldownFrom = string.Empty, ConsecutiveCooldowns = 0 },
         KeyLaunchEnd.Limit => Limited(key, report, secret, now),
-        KeyLaunchEnd.Throttled => key with { CooldownUntilUtc = Later(key.CooldownUntilUtc, now + ThrottleCooldown) },
+        KeyLaunchEnd.Throttled => CooledTo(key, now + ThrottleCooldown, string.Empty),
         KeyLaunchEnd.AuthRefused => Dead(key, KeyDeadReasons.Auth, key.AuthStops + 1),
         KeyLaunchEnd.Exposed => Dead(key, KeyDeadReasons.Exposed, key.AuthStops),
         _ => key,
@@ -276,9 +276,8 @@ internal sealed class KeyPool(KeyStoreAccess access)
             : CooldownParser.Until(report.Reason, new DateTimeOffset(now, TimeSpan.Zero), key.ConsecutiveCooldowns).UtcDateTime;
         var said = secret is null ? report.Reason : secret.Scrub(report.Reason);
 
-        return key with
+        return CooledTo(key, until, string.Empty) with
         {
-            CooldownUntilUtc = Later(key.CooldownUntilUtc, until),
             ConsecutiveCooldowns = key.ConsecutiveCooldowns + 1,
             LimitStops = key.LimitStops + 1,
             Note = Redaction.SafeText(said, 200),
@@ -292,7 +291,9 @@ internal sealed class KeyPool(KeyStoreAccess access)
         AuthStops = authStops,
     };
 
-    private static DateTime Later(DateTime? current, DateTime wanted) => current is { } existing && existing > wanted ? existing : wanted;
+    /// <summary>The cooldown moves to <paramref name="wanted"/> unless the key already had a later one; the key whose limit set it is recorded with it (empty: the key's own).</summary>
+    private static KeyRecord CooledTo(KeyRecord key, DateTime wanted, string from) =>
+        key.CooldownUntilUtc is { } existing && existing > wanted ? key : key with { CooldownUntilUtc = wanted, CooldownFrom = from };
 
     private void AfterRecording(KeySession session, IReadOnlyList<KeyEntry> entries, KeyRecord before, KeyRecord after, KeyLaunchReport report, DateTime now)
     {
@@ -322,7 +323,7 @@ internal sealed class KeyPool(KeyStoreAccess access)
 
         foreach (var sibling in entries.Select(entry => entry.Record).Where(other => other.Id != limited.Id && other.State == KeyStates.Enabled && other.Account.Equals(limited.Account, StringComparison.OrdinalIgnoreCase)))
         {
-            session.SaveRecord(sibling with { CooldownUntilUtc = Later(sibling.CooldownUntilUtc, until) });
+            session.SaveRecord(CooledTo(sibling, until, limited.Id));
         }
     }
 }

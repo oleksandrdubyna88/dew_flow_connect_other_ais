@@ -177,7 +177,7 @@ internal sealed class KeyAdmin(KeyStoreAccess access)
         Change(id, expectedRevision, (_, entry) =>
             entry.Record.DeadReason == KeyDeadReasons.Exposed
                 ? KeyResult<KeyRecord>.Refused(ExposedIsFinal)
-                : KeyResult<KeyRecord>.Of(entry.Record with { State = KeyStates.Enabled, DeadReason = string.Empty, SyncDisabled = false, CooldownUntilUtc = null, ConsecutiveCooldowns = 0 }));
+                : KeyResult<KeyRecord>.Of(entry.Record with { State = KeyStates.Enabled, DeadReason = string.Empty, SyncDisabled = false, CooldownUntilUtc = null, CooldownFrom = string.Empty, ConsecutiveCooldowns = 0 }));
 
     /// <summary>What a person is told when an exposed key is enabled or added again: the text is burnt.</summary>
     internal const string ExposedIsFinal = "this key's text was found where it must never be (its job's output or the coder's files): it is dead for good — revoke it at the vendor, remove it, and add a NEW key";

@@ -107,7 +107,7 @@ internal sealed partial class RoleModelLauncher(Func<string, string?> settings, 
             return new RoleLaunched(scrubbed.Launch, null, runtime, WithoutCredential(invocation), scrubbed.Launch.Process is { } process ? runtime.ReadHandle(process) : string.Empty, KeyId: keyId, KeyExposed: scrubbed.OwnFound || inHome) { ExposedIds = scrubbed.OtherIds };
         }
 
-        return await LaunchCoderAsync(runtime, invocation, pooled?.Secret, keyId, ct);
+        return await LaunchCoderAsync(runtime, invocation, pooled?.Secret, keyId, outputDir, ct);
     }
 
     /// <summary>The folders a CLI with its own home expects to find (<c>HOME</c>, the four <c>XDG_*</c> folders, the CLI's own configuration folder), made before the launch so a CLI that does not create them still starts.</summary>
@@ -129,9 +129,9 @@ internal sealed partial class RoleModelLauncher(Func<string, string?> settings, 
     /// The coder's launch: the same executor and classification, with the process itself started by the layer. A write the layer stopped, or a launch it refused, is on the result as <see cref="RoleLaunched.OsStop"/>; a refused launch
     /// has no <see cref="RoleLaunched.Launch"/> — nothing ran, so nothing is read and no ledger line is made.
     /// </summary>
-    private async Task<RoleLaunched> LaunchCoderAsync(IConsultantRuntime runtime, ReviewerInvocation invocation, ClaudeKeySecret? secret, string keyId, CancellationToken ct)
+    private async Task<RoleLaunched> LaunchCoderAsync(IConsultantRuntime runtime, ReviewerInvocation invocation, ClaudeKeySecret? secret, string keyId, string outputDir, CancellationToken ct)
     {
-        var turn = new CoderTurnLauncher(Layer!);
+        var turn = new CoderTurnLauncher(Layer!, outputDir);
         var finished = await new ReviewerExecutor(turn).LaunchOnceAsync(invocation, ct);
         var stop = turn.Outcome is { } outcome ? CoderOsLayer.StopOf(outcome) : null;
         var scrubbed = secret is null ? new Scrubbed(finished, false, []) : Scrub(finished, secret);

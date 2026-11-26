@@ -41,9 +41,12 @@ internal static class BoundaryUnit
             $"BindPaths={tree.Root}",
             $"BindReadOnlyPaths={tree.MainCheckout}",
             $"BindReadOnlyPaths={tree.GitEntry}",
-            $"BindPaths={job.JobRoot}",
+            .. Mounts(job),
+            .. JobView(job),
             $"BindPaths={job.TempFolder}:{UnitTemp}",
             $"BindPaths={job.VarTempFolder}:{UnitVarTemp}",
+            .. KeysHidden(job),
+            .. SignInHidden(host),
             .. host.ReadOnlyCaches.Select(cache => $"BindReadOnlyPaths={cache}"),
             .. network == CheckNetwork.Host && host.ResolverFile.Length > 0 ? [$"BindReadOnlyPaths={host.ResolverFile}"] : Array.Empty<string>(),
             .. Hardening,
@@ -51,6 +54,36 @@ internal static class BoundaryUnit
             .. Limits(job, runtimeMax),
         ];
     }
+
+    /// <summary>
+    /// The submodule mounts of the job, one property each (epoch 3 E2 s6, the recorded change): a folder of coai's own bound READ-ONLY at its path in the worktree (<c>BindReadOnlyPaths=&lt;source&gt;:&lt;target&gt;</c>), after the worktree's own <c>.git</c> entry and
+    /// before anything that binds a folder of the job. Nothing else of the list changes: a job with no mount has exactly the list E2 recorded, and one with a mount has that list and these elements.
+    /// </summary>
+    internal static IReadOnlyList<string> Mounts(BoundaryJob job) => [.. job.Mounts.Select(mount => $"BindReadOnlyPaths={mount.Source}:{mount.Target}")];
+
+    /// <summary>
+    /// What hides the claude key pool's folder and the keys file from a unit, wherever they lie (<c>InaccessiblePaths=-&lt;path&gt;</c>: the dash — a path that is not there is no error). A path under a hidden folder (<c>/home</c>) is out of sight already; this makes it true where the data
+    /// folder is somewhere else (<c>/var/lib/coai</c>). One list for a check unit and a coder's unit (<see cref="CoderUnit.KeysHidden"/> only adds the device switch): the key material is in no unit of this family, and each has a preflight row that reads it from inside.
+    /// </summary>
+    internal static IReadOnlyList<string> KeysHidden(BoundaryJob job) =>
+        [.. new[] { job.KeysFolder, job.KeysFile }.Where(path => path.Length > 0).Select(path => $"InaccessiblePaths=-{path}")];
+
+    /// <summary>The person's own sign-in file at its real path, hidden from a check unit where the home is not under a hidden folder: a check never needs it (a coder's unit gets it bound at a path of its own home, never at this one).</summary>
+    internal static IReadOnlyList<string> SignInHidden(BoundaryHost host) =>
+        host.RealHome.Length > 0 && System.IO.Path.IsPathFullyQualified(host.RealHome) && !host.RealHome.Any(c => char.IsWhiteSpace(c) || char.IsControl(c) || c is ':' or '\\')
+            ? [$"InaccessiblePaths=-{System.IO.Path.Combine(host.RealHome, ".claude", ".credentials.json")}"]
+            : [];
+
+    /// <summary>
+    /// What a check unit sees of the job's own folder (epoch 3 E2, the E3 judgement of the write boundary): an empty READ-ONLY tmpfs over the job folder, and on top of it only the folders the checks use (<see cref="BoundaryJob.CheckFolders"/>), each bound writable. The job
+    /// folder also holds the CODER's home and config (<see cref="BoundaryJob.CoderFolder"/>) — its CLI's settings, its transcripts, its caches — which a check, running code the coder wrote, must neither read nor change; before this, the whole job folder was bound writable and the
+    /// coder's folder with it.
+    /// </summary>
+    internal static IReadOnlyList<string> JobView(BoundaryJob job) =>
+    [
+        $"TemporaryFileSystem={job.JobCover}:ro",
+        .. job.CheckFolders.Select(folder => $"BindPaths={folder}"),
+    ];
 
     /// <summary>
     /// What hides the host from a unit, for a check and for a coder alike: <c>/home</c>, <c>/root</c> and <c>/run/user</c> are empty tmpfs (<c>ProtectHome=tmpfs</c>), <c>/mnt</c> and <c>/dev/shm</c> too, the rest of the file system is read-only, and the WSL

@@ -42,7 +42,47 @@ internal sealed class BoundaryBed : IAsyncDisposable
 
     public BoundaryHost Host { get; }
 
-    public BoundaryJob Job { get; }
+    public BoundaryJob Job { get; private set; }
+
+    /// <summary>
+    /// Gives the job ONE read-only mount (epoch 3 E2 s6, the recorded change): a folder of coai's own with the given files, bound read-only at <paramref name="relative"/> in the worktree. The source is in the job's mounts folder, not inside the job folder (a unit
+    /// binds the job folder writable, and a mount's source must not be reachable through it); the target is made as the empty folder git leaves for a gitlink.
+    /// </summary>
+    public ReadOnlyMount Mount(string relative, params (string Name, string Text)[] files)
+    {
+        var source = Path.Combine(Job.MountsFolder, $"m{Job.Mounts.Count}");
+        Directory.CreateDirectory(source);
+        foreach (var (name, text) in files)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(Path.Combine(source, name))!);
+            File.WriteAllText(Path.Combine(source, name), text);
+        }
+
+        var target = Path.Combine(Worktree, relative);
+        Directory.CreateDirectory(target);
+        var mount = new ReadOnlyMount(source, target);
+        Job = Job with { Mounts = [.. Job.Mounts, mount] };
+
+        return mount;
+    }
+
+    /// <summary>Moves the job's folder to <paramref name="root"/> (a folder of the test's own); the folders under the old one are not carried over.</summary>
+    public void UseJobRoot(string root) => Job = Job with { JobRoot = root };
+
+    /// <summary>
+    /// Puts the job's folder into a folder of its own that holds another job's folder too (what the coder-jobs folder is): <c>&lt;parent&gt;/jobs/job-a</c>, with a sibling <c>job-b</c> that has a coder folder and a file in it. Returns that sibling's file, which a unit of this job must not see.
+    /// </summary>
+    public string UseJobsFolderWithAnotherJob()
+    {
+        var jobs = Path.Combine(Parent(), "jobs");
+        UseJobRoot(Path.Combine(jobs, "job-a"));
+        var other = Path.Combine(jobs, "job-b", "coder", "home");
+        Directory.CreateDirectory(other);
+        var secret = Path.Combine(other, "transcript.txt");
+        File.WriteAllText(secret, "another job's coder home\n");
+
+        return secret;
+    }
 
     public WatchedLauncher Launcher => _bed.Launcher;
 

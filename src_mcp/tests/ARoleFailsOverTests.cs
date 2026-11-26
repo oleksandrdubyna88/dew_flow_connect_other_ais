@@ -278,6 +278,18 @@ public sealed class ARoleFailsOverTests
     }
 
     [Fact]
+    public async Task EveryLedgerLine_OfARoleJob_CarriesTheJobsId()
+    {
+        await using var rig = await RoleFailoverRig.CreateAsync();
+        rig.Says("fable", FakeRoleAnswers.ClaudeSpendLimit()).Says("astra", FakeRoleAnswers.CodexSays(FakeRoleAnswers.Ok));
+        var job = rig.NewJob(["claude/fable", "claude/opus", "codex/astra"]);
+
+        await rig.RunAsync(job);
+
+        rig.LedgerLines().Select(line => line.GetProperty("job").GetString()).Should().Equal([job.JobId, job.JobId], "a line of the usage ledger names the job it belongs to, so a spend can be traced to its job");
+    }
+
+    [Fact]
     public async Task TheAttempts_AreInJobJson_InRoleAttempts_AndRoleStatusShowsThem_WithEvidenceUnderTheirFolder()
     {
         await using var rig = await RoleFailoverRig.CreateAsync();

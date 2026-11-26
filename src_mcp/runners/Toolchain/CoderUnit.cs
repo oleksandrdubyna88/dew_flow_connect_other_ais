@@ -42,7 +42,7 @@ internal static partial class CoderUnit
     /// binds the person's sign-in (the device switch) — that launch has no key to hide it from.
     /// </summary>
     internal static IReadOnlyList<string> KeysHidden(BoundaryHost host, BoundaryJob job) =>
-        host.BindSignIn ? [] : [.. new[] { job.KeysFolder, job.KeysFile }.Where(path => path.Length > 0).Select(path => $"InaccessiblePaths=-{path}")];
+        host.BindSignIn ? [] : BoundaryUnit.KeysHidden(job);
 
     /// <summary>The <c>-p</c> properties of the coder's unit, in the order they are given.</summary>
     internal static IReadOnlyList<string> Properties(BoundaryHost host, BoundaryJob job, CoderProgram program, TimeSpan runtimeMax)
@@ -56,6 +56,8 @@ internal static partial class CoderUnit
             $"BindReadOnlyPaths={job.CoderRoot}",
             $"BindPaths={tree.Root}",
             $"BindReadOnlyPaths={tree.GitEntry}",
+            .. BoundaryUnit.Mounts(job),
+            $"TemporaryFileSystem={job.JobCover}:ro",
             $"BindPaths={job.CoderFolder}",
             $"BindPaths={job.CoderTempFolder}:{BoundaryUnit.UnitTemp}",
             $"BindPaths={job.CoderVarTempFolder}:{BoundaryUnit.UnitVarTemp}",

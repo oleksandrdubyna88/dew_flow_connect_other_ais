@@ -538,6 +538,10 @@ public sealed class UsageLedger(string dataDir)
     /// <see cref="LaunchOptions"/> to <see cref="LaunchOptions.None"/> and this repository's rule is that an absent value
     /// is an EMPTY value, never a null (the epic-3 code round).</para>
     /// </remarks>
+    /// <param name="job">
+    /// The id of the role job the line belongs to (a coder's launch, its fix turns): the line of a role job names its job, as a Team-server line does, so a spend can be traced to the job that made it. Empty for every kind that is no job (a consultation,
+    /// a consultant check, a question row, a probe).
+    /// </param>
     /// <param name="resetsUtc">
     /// The reset the turn's refusal STATED — <see cref="StatedResetOf"/> of its terminal outcome — or empty. Epic 5's code
     /// round of research/PLAN_every_round_is_counted.md: a consultation, a consultant check and a question row are local
@@ -547,8 +551,8 @@ public sealed class UsageLedger(string dataDir)
     /// </param>
     public void RecordJob(
         string email, string provider, string model, string role, string outcome, TimeSpan elapsed, Usage usage, string kind, string stage,
-        LaunchOptions ranWith, string consultation = "", string resetsUtc = "", string keyId = "") =>
-        Append(JobEntry(email, provider, model, role, outcome, elapsed, usage, kind, stage, new JobPlace(ranWith)) with { ResetsUtc = resetsUtc, Consultation = consultation, KeyId = keyId });
+        LaunchOptions ranWith, string consultation = "", string resetsUtc = "", string keyId = "", string job = "") =>
+        Append(JobEntry(email, provider, model, role, outcome, elapsed, usage, kind, stage, new JobPlace(ranWith, Job: job)) with { ResetsUtc = resetsUtc, Consultation = consultation, KeyId = keyId });
 
     /// <summary>One Team-server launch of a job: the overload above, with what the launch ran with and where.</summary>
     /// <remarks>

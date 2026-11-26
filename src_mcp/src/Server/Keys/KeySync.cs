@@ -68,16 +68,19 @@ internal sealed class KeySync(KeyStoreAccess access, KeyAdmin admin)
         }
     }
 
-    /// <summary>The key is the same: its account may have changed, and a key a sync disabled comes back.</summary>
+    /// <summary>The key is the same: its account may have changed (a cooldown another key of the OLD account gave it then ends: that limit was not this key's), and a key a sync disabled comes back.</summary>
     private static void Unchanged(KeySession session, List<KeyEntry> entries, KeyEntry mine, KeyInput input, Counts counts)
     {
         var record = mine.Record;
         var back = record.SyncDisabled && record.State == KeyStates.Disabled;
+        var moved = !record.Account.Equals(input.Account, StringComparison.OrdinalIgnoreCase) && record.CooldownFrom.Length > 0;
         var updated = record with
         {
             Account = input.Account,
             State = back ? KeyStates.Enabled : record.State,
             SyncDisabled = back ? false : record.SyncDisabled,
+            CooldownUntilUtc = moved ? null : record.CooldownUntilUtc,
+            CooldownFrom = moved ? string.Empty : record.CooldownFrom,
         };
         if (updated == record)
         {

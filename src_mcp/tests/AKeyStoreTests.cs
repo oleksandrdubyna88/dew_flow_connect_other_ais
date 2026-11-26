@@ -129,8 +129,7 @@ public sealed class AKeyStoreTests
     {
         Assert.SkipWhen(OperatingSystem.IsWindows(), "modes are a Unix thing");
         using var world = new KeyWorld(shared: true);
-        File.SetUnixFileMode(world.DataDir, PrivateFolder | UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute | UnixFileMode.SetGroup);
-        Assert.SkipUnless((File.GetUnixFileMode(world.DataDir) & UnixFileMode.SetGroup) != 0, "this file system does not keep the setgid bit");
+        Assert.SkipUnless(SetgidSupport.Real.TryApply(world.DataDir, PrivateFolder | UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute | UnixFileMode.SetGroup, out var why), why);
 
         world.AddKey("one", "a");
 
