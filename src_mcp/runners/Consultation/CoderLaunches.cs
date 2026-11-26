@@ -17,21 +17,21 @@ internal static class CoderLaunches
     /// <summary>The label a coder turn is filed under.</summary>
     public const string Role = "coder";
 
-    /// <summary>The sentence a vendor other than claude is refused with.</summary>
-    public const string ClaudeOnly =
-        "the coder is claude only in this epoch: a write launch is measured and built for the claude CLI alone, and no other vendor's CLI is given one";
+    /// <summary>The sentence a runtime that has no coder type is refused with: a write launch is built only by a vendor that has an <see cref="ICoderVendor"/>, and is launched only when the table ships it.</summary>
+    public const string NoCoderLaunch =
+        "this runtime has no coder launch: a write launch is built only by a vendor that has a coder type, and launched only on a vendor that shared/coder-boundary-releases.json ships";
 
-    /// <summary>What a person can do about <see cref="ClaudeOnly"/>.</summary>
-    public const string ClaudeOnlyCure = "set the coder's model to a claude model in ConnectOtherAIs";
+    /// <summary>What a person can do about <see cref="NoCoderLaunch"/>.</summary>
+    public const string NoCoderLaunchCure = "set the coder's model to a model of a shipped coder vendor (claude, or a vendor the table of coder boundaries ships) in ConnectOtherAIs";
 
     /// <summary>The refusal every runtime but claude answers a coder launch with, before anything is launched.</summary>
-    public static ConsultantPreparation.Refused NotClaude { get; } = new(new ConsultFailure.VendorRefused(ClaudeOnly, ClaudeOnlyCure));
+    public static ConsultantPreparation.Refused NoCoder { get; } = new(new ConsultFailure.VendorRefused(NoCoderLaunch, NoCoderLaunchCure));
 
     private static readonly StringComparer SamePlace = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
 
     /// <summary>
-    /// Why a coder launch must not start — empty when its job, worktree and handle agree (and, when <paramref name="vendors"/> is given, its vendor ships). The vendor comes first (epoch 3 E3 s7 t1): a vendor the table does not ship is refused with a sentence that names the shipped ones, before anything
-    /// else is asked of the launch. The launcher (<c>RoleModelLauncher</c>) asks with its own set, so the adapter that builds the argv asks only about the job, the worktree and the handle.
+    /// Why a coder launch must not start — empty when its job, worktree and handle agree (and, when <paramref name="vendors"/> is given, its vendor ships). The vendor comes first (epoch 3 E3 s7 t1): a vendor the table does not ship is refused with a sentence that names the shipped ones,
+    /// before anything else is asked of the launch. The launcher (<c>RoleModelLauncher</c>) asks with its own set, so the adapter that builds the argv asks only about the job, the worktree and the handle.
     /// </summary>
     internal static string WhyNot(LaunchConfinement.Coder coder, CoderVendorSet? vendors = null) =>
         vendors?.Resolve(coder.Vendor) is CoderVendorResolution.Refused refused ? refused.Sentence

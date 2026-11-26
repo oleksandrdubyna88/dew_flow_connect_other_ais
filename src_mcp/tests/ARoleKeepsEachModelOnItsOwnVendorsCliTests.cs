@@ -101,7 +101,7 @@ public sealed class ARoleKeepsEachModelOnItsOwnVendorsCliTests
     public void ADefaultsFileThatBreaksTheRule_IsABuildFault()
     {
         var broken = File.ReadAllText(Path.Combine(RepoPaths.Root(), "shared", "role-defaults.json"))
-            .Replace("\"coder\": [ { \"model\": \"sonnet\", \"vendor\": \"claude\" } ]", "\"coder\": [ { \"model\": \"sonnet\", \"vendor\": \"agy\" } ]", StringComparison.Ordinal);
+            .Replace("\"orchestrator\": [ { \"model\": \"opus\", \"vendor\": \"claude\" } ]", "\"orchestrator\": [ { \"model\": \"sonnet\", \"vendor\": \"agy\" } ]", StringComparison.Ordinal);
         broken.Should().Contain("\"vendor\": \"agy\" } ]", "positive control: the edit is in the text");
 
         var parse = () => RoleDefaults.Parse(broken);

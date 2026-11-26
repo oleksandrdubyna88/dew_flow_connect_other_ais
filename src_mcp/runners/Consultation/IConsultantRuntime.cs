@@ -196,7 +196,7 @@ public interface IConsultantRuntime : IAnsweringRuntime
     Task<ConsultantPreparation> PrepareAsync(ConsultantLaunch launch, IProcessLauncher launcher, CancellationToken ct) =>
         // A write launch is claude's alone (epoch 3 E2 s2 t3, d5): a vendor that says nothing here still refuses it, with the sentence.
         Task.FromResult<ConsultantPreparation>(launch.Confinement is LaunchConfinement.Coder
-            ? CoderLaunches.NotClaude
+            ? CoderLaunches.NoCoder
             : new ConsultantPreparation.Ready(launch, string.Empty, string.Empty));
 
     /// <summary>The vendor's own id for this conversation, read off whatever the process said — or empty.</summary>

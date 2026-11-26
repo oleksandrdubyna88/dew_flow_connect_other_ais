@@ -45,7 +45,7 @@ internal static class ConsultantLaunches
     {
         if (!takesACoder)
         {
-            throw new ArgumentException(CoderLaunches.ClaudeOnly, nameof(launch));
+            throw new ArgumentException(CoderLaunches.NoCoderLaunch, nameof(launch));
         }
 
         if (launch.Handle.Length > 0)

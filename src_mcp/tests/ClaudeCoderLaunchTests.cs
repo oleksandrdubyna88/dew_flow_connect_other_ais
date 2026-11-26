@@ -248,11 +248,11 @@ public sealed class ClaudeCoderLaunchTests
         var prepared = await adapter.PrepareAsync(launch, new WatchedLauncher(new ProcessLauncher(), AnAcceptableClaude), TestContext.Current.CancellationToken);
 
         var refused = prepared.Should().BeOfType<ConsultantPreparation.Refused>(vendor).Subject;
-        refused.Failure.Should().BeOfType<ConsultFailure.VendorRefused>().Which.Said.Should().Be(CoderLaunches.ClaudeOnly);
-        CoderLaunches.ClaudeOnly.Should().Contain("claude only").And.Contain("epoch");
+        refused.Failure.Should().BeOfType<ConsultFailure.VendorRefused>().Which.Said.Should().Be(CoderLaunches.NoCoderLaunch);
+        CoderLaunches.NoCoderLaunch.Should().Contain("no coder launch").And.NotContain("claude only");
 
         var build = () => adapter.Build(launch);
-        build.Should().Throw<ArgumentException>().WithMessage("*claude only*", $"{vendor}: reaching Build with a coder launch is a contract violation");
+        build.Should().Throw<ArgumentException>().WithMessage("*no coder launch*", $"{vendor}: reaching Build with a coder launch is a contract violation");
     }
 
     [Fact]

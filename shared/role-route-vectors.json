@@ -4,8 +4,8 @@
   "default": {
    "roles": {
     "orchestrator": [ { "model": "opus", "vendor": "claude" } ],
-    "coder": [ { "model": "sonnet", "vendor": "claude" } ],
-    "scout": [ { "model": "sonnet", "vendor": "claude" } ],
+    "coder": [ { "model": "sonnet", "vendor": "claude" }, { "model": "opus", "vendor": "claude" }, { "model": "terra", "vendor": "codex" }, { "model": "gemini-4-argon-medium", "vendor": "agy" } ],
+    "scout": [ { "model": "sonnet", "vendor": "claude" }, { "model": "haiku", "vendor": "claude" }, { "model": "terra", "vendor": "codex" } ],
     "important": [ { "model": "fable", "vendor": "claude" }, { "model": "astra", "vendor": "codex" } ],
     "ba": [ { "model": "fable", "vendor": "claude" }, { "model": "opus", "vendor": "claude" } ]
    },
@@ -116,27 +116,27 @@
   {
    "name": "a coder task takes the model of its complexity band, then the coder list",
    "table": "default", "role": "coder", "task": { "kind": "code", "complexity": 7 },
-   "expect": { "models": [ "opus@claude", "sonnet@claude" ], "why": "band" }
+   "expect": { "models": [ "opus@claude", "sonnet@claude", "terra@codex", "gemini-4-argon-medium@agy" ], "why": "band" }
   },
   {
    "name": "a coder task of a low complexity takes the small band model",
    "table": "default", "role": "coder", "task": { "kind": "code", "complexity": 2 },
-   "expect": { "models": [ "haiku@claude", "sonnet@claude" ] }
+   "expect": { "models": [ "haiku@claude", "sonnet@claude", "opus@claude", "terra@codex", "gemini-4-argon-medium@agy" ] }
   },
   {
    "name": "a coder task whose band model is the list's model has one entry",
    "table": "default", "role": "coder", "task": { "kind": "code", "complexity": 4 },
-   "expect": { "models": [ "sonnet@claude" ] }
+   "expect": { "models": [ "sonnet@claude", "opus@claude", "terra@codex", "gemini-4-argon-medium@agy" ] }
   },
   {
    "name": "a coder task of complexity 9 takes the top band and is not important",
    "table": "default", "role": "coder", "task": { "kind": "code", "complexity": 9 },
-   "expect": { "models": [ "fable@claude", "sonnet@claude" ] }
+   "expect": { "models": [ "fable@claude", "sonnet@claude", "opus@claude", "terra@codex", "gemini-4-argon-medium@agy" ] }
   },
   {
    "name": "a coder job with no task facts takes the coder list",
    "table": "default", "role": "coder",
-   "expect": { "models": [ "sonnet@claude" ], "why": "coder list" }
+   "expect": { "models": [ "sonnet@claude", "opus@claude", "terra@codex", "gemini-4-argon-medium@agy" ], "why": "coder list" }
   },
   {
    "name": "a complexity no band covers falls back to the role's list",
@@ -146,12 +146,12 @@
   {
    "name": "bands are for the coder only: a scout of complexity 7 takes the scout list",
    "table": "default", "role": "scout", "task": { "complexity": 7 },
-   "expect": { "models": [ "sonnet@claude" ] }
+   "expect": { "models": [ "sonnet@claude", "haiku@claude", "terra@codex" ] }
   },
   {
    "name": "an explicit model beats the band: it goes first, then the band is not used",
    "table": "default", "role": "coder", "model": "haiku", "task": { "complexity": 7 },
-   "expect": { "models": [ "haiku@claude", "sonnet@claude" ] }
+   "expect": { "models": [ "haiku@claude", "sonnet@claude", "opus@claude", "terra@codex", "gemini-4-argon-medium@agy" ] }
   },
   {
    "name": "security: true takes the important list",
@@ -186,7 +186,7 @@
   {
    "name": "the same explicit model is accepted when the task is not important",
    "table": "default", "role": "coder", "model": "sonnet", "task": { "security": false, "complexity": 9 },
-   "expect": { "models": [ "sonnet@claude" ] }
+   "expect": { "models": [ "sonnet@claude", "opus@claude", "terra@codex", "gemini-4-argon-medium@agy" ] }
   },
   {
    "name": "an empty role list is a refusal that names COAI_ROLES_MODELS",

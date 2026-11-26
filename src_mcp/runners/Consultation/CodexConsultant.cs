@@ -57,7 +57,7 @@ public sealed class CodexConsultant(CodexRuntime inner, string vendor = "codex")
         // The coder is claude only in this epoch (t3, d5): asked before the tier, which a refused launch has no use for.
         if (launch.Confinement is LaunchConfinement.Coder)
         {
-            return CoderLaunches.NotClaude;
+            return CoderLaunches.NoCoder;
         }
 
         if (!inner.TierDependsOnRelease(launch.Settings.Fast))

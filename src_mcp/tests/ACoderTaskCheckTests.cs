@@ -98,7 +98,7 @@ public sealed class ACoderTaskCheckTests
         var answer = Parse(await Start(ServiceFor(world), repo, file));
 
         answer.TryGetProperty("error", out var error).Should().BeFalse(error.ToString());
-        Route(answer).Should().Equal("claude/sonnet");
+        Route(answer).Should().Equal("claude/sonnet", "claude/opus");
     }
 
     [Fact]
@@ -300,7 +300,7 @@ public sealed class ACoderTaskCheckTests
 
         var answer = Parse(await StartWith(world, repo, TaskOf(complexity: 4), model: "gpt-5.5"));
 
-        Error(answer).Should().Be("the coder is claude only in this epic; gpt-5.5 is codex", "the caller asked for that model: it is refused, never swapped for another one");
+        Error(answer).Should().StartWith("the coder cannot run gpt-5.5 on codex: ").And.Contain("shipped are claude").And.NotContain("claude only", "the caller asked for that model: it is refused, never swapped for another one");
         NoJobFolder(world);
     }
 
@@ -318,7 +318,7 @@ public sealed class ACoderTaskCheckTests
     {
         var routed = new RouteResult.Routed([new ModelRef("gpt-5.5", "codex"), new ModelRef("sonnet", "claude")], "the model the caller named, then the coder list");
 
-        CoderRoute.Narrow(routed, "gpt-5.5").Should().BeOfType<RouteResult.Refused>().Which.Reason.Should().Be("the coder is claude only in this epic; gpt-5.5 is codex");
+        CoderRoute.Narrow(routed, "gpt-5.5").Should().BeOfType<RouteResult.Refused>().Which.Reason.Should().StartWith("the coder cannot run gpt-5.5 on codex: ").And.Contain("COAI_ROLES_MODELS");
         CoderRoute.Narrow(routed, "sonnet").Should().BeOfType<RouteResult.Routed>().Which.Models.Should().BeEquivalentTo(new[] { new ModelRef("sonnet", "claude") }, "a claude name asked for is not a refusal; the list entry of another vendor is dropped as before");
         CoderRoute.Narrow(routed).Should().BeOfType<RouteResult.Routed>().Which.Models.Should().BeEquivalentTo(new[] { new ModelRef("sonnet", "claude") }, "no model named by the caller: the entries of other vendors are dropped as before");
     }
