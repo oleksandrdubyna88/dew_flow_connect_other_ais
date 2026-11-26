@@ -1,6 +1,6 @@
 # coai v2 — epoch 3, epic E4 (adapters dotnet + node, coder hardening) — epic plan for the gate (generated)
 
-Parent plan: v2/PLAN.md; architecture: v2/architecture/server.md (§10, §11, §12, §15, §16 row 9, §23); built on epoch-3 E2 (the coder, the toolchain file, the check boundary, the fix loop, the claude key pool) and, for story s6, on E3 (the vendor seam; the codex and agy coder). The full spec is SPEC.md in the same folder; its digest is below, before the YAML files. This is the plan AFTER the plan gate of 2026-11-25 (proceed, 5 findings accepted: SPEC section P) and after two later changes of 2026-11-25 (SPEC section Q): the answers of the owner to questions 1, 2, 4 and 5, and `doneWhen` line 8 from the security judgement of E3. **It also carries the owner's decision of 2026-11-26, which is a plan change** (SPEC A3, A4, D12, D13, decision 11 and plan-gate item 1 of section P, and the yaml of s2 t5, s3 story, s3 t3, t4, t5, t6 and s7 t2): the coder's head is no longer refused for what it changes — its own definitions run, and what it changed is reported.
+Parent plan: v2/PLAN.md; architecture: v2/architecture/server.md (§10, §11, §12, §15, §16 row 9, §23); built on epoch-3 E2 (the coder, the toolchain file, the check boundary, the fix loop, the claude key pool) and, for story s6, on E3 (the vendor seam; the codex and agy coder). The full spec is SPEC.md in the same folder; its digest is below, before the YAML files. This is the plan AFTER the plan gate of 2026-11-25 (proceed, 5 findings accepted: SPEC section P) and after two later changes of 2026-11-25 (SPEC section Q): the answers of the owner to questions 1, 2, 4 and 5, and `doneWhen` line 8 from the security judgement of E3. **It also carries the owner's decision of 2026-11-26, which is a plan change** (SPEC A3, A4, D12, D13, decision 11 and plan-gate item 1 of section P, and the yaml of s2 t5, s3 story, s3 t3, t4, t5, t6 and s7 t2): the coder's head is no longer refused for what it changes — its own definitions run, and what it changed is reported. **And the plan re-review of 2026-11-26 (session c0112e7a, proceed; SPEC section R):** three accepted findings (F0 the re-run must itself be clean, F1 one precedence rule for the toolchain file across the head's transitions, F2 the format step in its own unit and the clean after it) and one rejected (F3, `dotnet test` on this repository, measured in s1).
 
 | Story | Tasks | Complexity sum | Depends on |
 |---|---|---|---|
@@ -36,7 +36,7 @@ scheduler before E5). (8) Five step names run: restore, format, build, typecheck
 `skip`. (9) npm only; pnpm, yarn and bun are refused by name (the owner confirmed npm only, 2026-11-25). (10) The toolchain file gets `restore`, `format`,
 `testFor` and `testFiles`; `version` stays 1. (11) ~~A detected check cannot be changed by the job it checks.~~ **Superseded by the owner's decision of 2026-11-26** ("Let's widen it so the coder is comfortable. Let it restore packages from the internet itself; no proxy or address lists"; on tests and helper scripts: "allow everything"): nothing the head changes is refused; the head's own definitions run and what it changed in them is reported (A4).
 
-**A. Where the checks come from.** One pure function, `ToolchainResolve`. A file at the base wins, and a project that states a
+**A. Where the checks come from.** One pure function, `ToolchainResolve`. **One precedence rule for the toolchain file across the head's transitions: the HEAD's state wins** — the head adds a file: the head's file runs; changes it: the head's file runs; deletes it: the head's detection runs; each is reported as a difference (D15 to D17, s3 t3 d4). A file that is there decides, and a project that states a
 command runs exactly what it states (this repository's file reads as today). A file project that states no command gets the
 adapter's defaults. No file: detection at the base commit AND at the head commit, both read from the main repository's git objects
 (never the working tree, never through the worktree's `.git` pointer). The data is `shared/toolchains.json`, embedded in the
@@ -81,11 +81,11 @@ cut. A scan keeps home paths and user names out of the recordings. Scenarios R1 
 
 **D. The formatter turn.** After a turn's commit the formatter runs on the files that commit added or changed (the adapter's
 extensions, no manifest, no lock file, 200 at most), each written `./<path>` so a file name is never an option, inside the
-boundary with only a loopback device, 5 minutes at most. It may change only the files it was given: anything else, or a failure,
-puts the worktree back to the turn's commit through `CoderRestore`. The result is committed as `style: format (coai)` through the
+boundary **in a unit of its own** with only a loopback device, 5 minutes at most. It may change only the files it was given: anything else, or a failure,
+puts the worktree back to the turn's commit through `CoderRestore`. **A formatter can change ignored files** (a runner under `node_modules`): only the tracked changes of the given files are taken, then `git clean -ffdx` and an empty `status --ignored` are required before the checks of the round, and the restore step runs again (re-review F2). The result is committed as `style: format (coai)` through the
 one commit road (generation first, the pool-key search of E2 s7). A format state is never a verdict and never goes to the coder.
 The default formatter runs only with evidence that the repository uses one (prettier with a configuration; for .NET the form s1
-measures, or none). Scenarios F1 to F6.
+measures, or none). Scenarios F1 to F7.
 
 **E. Selection** (gate finding 2). Level one, which projects run: a project is left out only when coai can show that the diff
 does not reach it. **A node project always runs**: a workspace, a `file:` dependency, a relative import or a script can join it to
@@ -106,8 +106,8 @@ names, the job itself changed**; a test excused once already; a third excused te
 re-run shows that it ran and passed**: its name exactly once among the passed tests the re-run names, or, for a whole re-run of a
 tool that names no passed test, a complete summary with the same total and zero failed. No test ran, a filter that matched
 nothing, a name that matches twice, a total that differs: nothing is excused, and the first digest goes to the coder. An excused
-test is listed under `flaky` with its proof and raises one notice. Stated limit: a narrowed re-run can excuse an order-dependent
-failure; it is listed, never hidden. `COAI_FLAKY_RERUNS` 0 or 1. Scenarios K1 to K12.
+test is listed under `flaky` with its proof and raises one notice. **The re-run must itself be clean** (re-review F0): it excuses a failure only when it completes with exit 0, no new failure and no execution error; otherwise the round stays red. Stated limit: a narrowed re-run can excuse an order-dependent
+failure; it is listed, never hidden. `COAI_FLAKY_RERUNS` 0 or 1. Scenarios K1 to K13.
 
 **G. No progress.** A red round whose fingerprint set equals the one before it is a repeat; a fix turn that changes no file is a
 repeat and its checks are not run again; two repeats in a row end the job with `no-progress`, which never fails over. Scenarios
@@ -377,9 +377,9 @@ files:
   - src_mcp/tests/AToolchainIsResolvedTests.cs
 dod:
   - id: d1
-    item: "a file at the base commit gives the source `file`, and detection decides nothing for a project that states a command; a project of the file that states NO command gets the adapter's defaults of its own folder at the base (source `file+defaults`), and a refusal of the detector there refuses the file"
+    item: "ONE precedence rule across the head's transitions (SPEC A1, re-review F1): the toolchain file of the HEAD wins — the base's file when the head left it alone, the head's file when it adds or changes it, and the head's detection when it deletes it; a file gives the source `file`, and detection decides nothing for a project that states a command; a project of the file that states NO command gets the adapter's defaults of its own folder at the base (source `file+defaults`), and a refusal of the detector there refuses the file"
   - id: d2
-    item: "no file at the base: detection at the base and at the head; a project only the head has is added with the defaults; the head's projects are what runs; a step (project and step name) that the base had and the head has not is REPORTED as lost with the line `the worktree removed <step> of <project>` and is never refused (owner decision 2026-11-26, SPEC A4)"
+    item: "no file at the head: detection at the base and at the head; a project only the head has is added with the defaults; the head's projects are what runs; a step (project and step name) that the base had and the head has not is REPORTED as lost with the line `the worktree removed <step> of <project>` and is never refused (owner decision 2026-11-26, SPEC A4)"
   - id: d3
     item: "a manifest of a stack that is known and not built (php, rust, python, java), at the base or at the head, is toolchain_refused and names the stack, the path and the cure; no manifest of any known stack is not_configured; one refused project refuses the repository; neither state is ever green and no step is planned"
   - id: d4
@@ -493,9 +493,11 @@ dod:
   - id: d1
     item: "T1: the checks of a coder job on a fixture repository with no file run the detected steps in real units and end green, for a node project and for a dotnet unit; with a file the steps are the file's, and every existing test of ChecksAtBase passes unchanged"
   - id: d2
-    item: "D3: a head commit that deletes the test script or a test project loses that step, the loss is reported (`the worktree removed <step> of <project>`) and the head's other steps run; a head that deletes the lock file, adds a manifest of an unbuilt stack or breaks the toolchain file cannot be run and is refused for that reason only; a head commit that adds or changes .coai/toolchain.yaml is reported (ToolchainChange.Added or Changed) and the HEAD's file is the file that runs"
+    item: "D3: a head commit that deletes the test script or a test project loses that step, the loss is reported (`the worktree removed <step> of <project>`) and the head's other steps run; a head that deletes the lock file, adds a manifest of an unbuilt stack or breaks the toolchain file cannot be run and is refused for that reason only; a head commit that adds or changes .coai/toolchain.yaml is reported (ToolchainChange.Added or Changed) and the HEAD's file is the file that runs; one that deletes it is reported (Removed) and the head's detection runs (SPEC A1, the one precedence rule)"
   - id: d3
     item: "the head is read as the COMMIT coai made, from the main repository's objects: an untracked or ignored manifest in the worktree changes nothing; T5: the rule that the worktree and HEAD are the same after the checks holds for the restore step (a restore that leaves a file git would add is tree_changed, never green)"
+  - id: d4
+    item: "A1, one acceptance case per transition of the toolchain file, each on a real fixture with real units: (a) the head ADDS the file (the base had none) → the head's steps run and ToolchainChange is Added; (b) the head CHANGES it → the head's steps run, ToolchainChange is Changed and a changed test command is named in changedTestCommands; (c) the head DELETES it → the head's detection runs, ToolchainChange is Removed and every command the base's file stated is listed as lost; each is reported as a difference and none is refused for the transition"
 ```
 
 ## v2/epoch-3/e4-adapters-coder-hardening/stories/s3-steps-in-boundary/tasks/t4-envelope-toolchain/task.yaml
@@ -744,6 +746,8 @@ dod:
     item: "F3 and F4: after the run coai compares the worktree with the turn's commit: a changed path that was not given, a new file git would add or a HEAD that moved puts the worktree back to the turn's commit through CoderRestore, the restore step runs again and the state is `refused` with the paths; a formatter that exits non-zero, runs over its time or cannot start gives the same reset and the state `failed`"
   - id: d4
     item: "F5: no formatter in the resolved toolchain is the state `not_configured` and no process starts; a format state never makes a round red or green and is never sent to the coder"
+  - id: d5
+    item: "F7 (re-review F2): the format step runs in a unit of its own (new home and temp); after it coai takes only the tracked changes of the given files into the format commit, then runs git clean -ffdx and requires an empty git status --porcelain --ignored before the checks of the round, and the restore step runs again; on a real fixture a formatter that rewrites an ignored file (a runner under node_modules) leaves nothing of it in the checks, and a clean that cannot be proven refuses the round with a fixed sentence"
 ```
 
 ## v2/epoch-3/e4-adapters-coder-hardening/stories/s5-format-selection-rerun/tasks/t2-format-commit/task.yaml
@@ -842,6 +846,8 @@ dod:
     item: "K11: on a real fixture a testFor whose filter matches no test gives a re-run in which no test ran: nothing is excused, the round is red and the coder gets the digest of the first run"
   - id: d4
     item: "K8: COAI_FLAKY_RERUNS is 0 or 1 (1 by default; another value is 1 with a note) and with 0 no re-run starts; the count of excused tests is a file in the job folder (a temporary file and a rename), so it holds across models"
+  - id: d5
+    item: "K13 (re-review F0): a re-run excuses an original failure only when the re-run ITSELF completes with exit 0, shows no new failure and has no execution error (a unit that could not start or be stopped, a timeout, a cut log, a tool crash); on a real fixture a re-run in which the named test passes but the step exits non-zero, or another test fails, or the unit times out, excuses nothing and the round stays red with the digest of the first run"
 ```
 
 ## v2/epoch-3/e4-adapters-coder-hardening/stories/s5-format-selection-rerun/tasks/t6-this-repository-selects/task.yaml
@@ -1020,7 +1026,7 @@ dod:
   - id: d2
     item: "a scenario of its own for the selected run: a dotnet fixture repository whose file AT THE BASE names testFiles and testFor: red in the selected run and no full run, one fix turn, the selected run green, then the full run green; the steps are the file's and detection decides nothing"
   - id: d3
-    item: "D12 end to end: a turn that replaces the test script of the node fixture with `echo passed` is NOT refused: the head's script runs, the envelope says `definitionsChanged: true` and names the changed test command (owner decision 2026-11-26); a repository with a Cargo.toml and no file ends failed with the stop toolchain-refused, zero steps and no green (nothing can be run for it); a repository with no manifest ends with not-configured"
+    item: "A1 end to end, one case per transition of the toolchain file (the head adds it, changes it, deletes it: the head's state wins, each reported); D12 end to end: a turn that replaces the test script of the node fixture with `echo passed` is NOT refused: the head's script runs, the envelope says `definitionsChanged: true` and names the changed test command (owner decision 2026-11-26); a repository with a Cargo.toml and no file ends failed with the stop toolchain-refused, zero steps and no green (nothing can be run for it); a repository with no manifest ends with not-configured"
   - id: d4
     item: "the MCP client is killed while the full run is going: a new client reads the same job to its end, green, with the generation unchanged and no lost notice; review_code on coder/<jobId> is accepted through the plan the branch inherits (E2 s5); nothing outside the worktree changed, and every step record names the unit boundary"
 ```
