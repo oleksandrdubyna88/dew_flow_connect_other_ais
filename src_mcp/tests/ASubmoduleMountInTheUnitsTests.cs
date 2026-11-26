@@ -63,7 +63,13 @@ public sealed class ASubmoduleMountInTheUnitsTests
     ];
 
     /// <summary>The person's sign-in file at the (stand-in) real home's path, hidden from a check unit: the one property a check unit got besides the job view and the pids.</summary>
-    private static readonly string[] SignInHidden = ["InaccessiblePaths=-/nonexistent/home/.claude/.credentials.json", "InaccessiblePaths=-/nonexistent/home/.gemini/antigravity-cli/antigravity-oauth-token"];
+    /// <summary>The real sign-in file of codex, hidden in every unit (C3 item 2 of the fourth security verify of s7 t6).</summary>
+    private static readonly string[] CodexHidden = ["InaccessiblePaths=-/nonexistent/home/.codex/auth.json"];
+
+    /// <summary>The real sign-in file of agy, hidden in every unit.</summary>
+    private static readonly string[] AgyHidden = ["InaccessiblePaths=-/nonexistent/home/.gemini/antigravity-cli/antigravity-oauth-token"];
+
+    private static readonly string[] SignInHidden = ["InaccessiblePaths=-/nonexistent/home/.claude/.credentials.json", .. CodexHidden, .. AgyHidden];
 
     [Fact]
     public void TheCover_IsTheFolderThatHoldsTheJobFolders_WhenItCanBeCovered_AndTheJobFolderItselfWhenItCannot()
@@ -120,7 +126,7 @@ public sealed class ASubmoduleMountInTheUnitsTests
         File.WriteAllText(Path.Combine(real, ".claude", ".credentials.json"), "made-up-sign-in-line-not-a-credential\n");
         var host = NoHome() with { RealHome = link };
 
-        BoundaryUnit.SignInHidden(host).Should().Equal($"InaccessiblePaths=-{real}/.claude/.credentials.json", $"InaccessiblePaths=-{real}/.gemini/antigravity-cli/antigravity-oauth-token");
+        BoundaryUnit.SignInHidden(host).Should().Equal($"InaccessiblePaths=-{real}/.claude/.credentials.json", $"InaccessiblePaths=-{real}/.codex/auth.json", $"InaccessiblePaths=-{real}/.gemini/antigravity-cli/antigravity-oauth-token");
         BoundaryPreflight.Command(Job(), host, CheckNetwork.Host, string.Empty).Should().Contain(real).And.NotContain(link, "the rows read the resolved home");
     }
 
@@ -182,7 +188,9 @@ public sealed class ASubmoduleMountInTheUnitsTests
         string[] e2 =
         [
             .. E2Isolation,
-            $"BindReadOnlyPaths={M}", "BindReadOnlyPaths=/w", $"BindPaths={W}", $"BindReadOnlyPaths={W}/.git", $"TemporaryFileSystem={J}:ro", $"BindPaths={J}/coder/claude", $"BindPaths={J}/coder/{TempName}:{BoundaryUnit.UnitTemp}", $"BindPaths={J}/coder/vartmp:{BoundaryUnit.UnitVarTemp}", "InaccessiblePaths=-/nonexistent/home/.gemini/antigravity-cli/antigravity-oauth-token",
+            $"BindReadOnlyPaths={M}", "BindReadOnlyPaths=/w", $"BindPaths={W}", $"BindReadOnlyPaths={W}/.git", $"TemporaryFileSystem={J}:ro", $"BindPaths={J}/coder/claude", $"BindPaths={J}/coder/{TempName}:{BoundaryUnit.UnitTemp}", $"BindPaths={J}/coder/vartmp:{BoundaryUnit.UnitVarTemp}",
+            .. CodexHidden,
+            .. AgyHidden,
             .. E2Hardening,
             "PrivateNetwork=no",
             .. E2Limits,

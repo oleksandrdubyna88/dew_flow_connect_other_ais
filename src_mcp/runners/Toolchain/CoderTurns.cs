@@ -51,12 +51,15 @@ public sealed class CoderTurns(CoderBoundary boundary, FilesystemInvariant invar
             return new CoderTurnOutcome.Refused(unsigned, new BoundaryRecord(BoundaryRecord.UnitBoundary, [], "host", CoderBoundary.NetworkReason, []));
         }
 
-        // What the vendor writes for every launch (agy's guard folder, written and read back), before the preflight asks the unit about it.
-        if (bound.Vendor.PrepareLaunch(job) is { Length: > 0 } unprepared)
+        // The vendor's own files and tripwires, before EVERY launch (s5 t2): a launch that cannot have them is refused here, before the unit's preflight and before anything of it starts.
+        var original = request;
+        var prepared = bound.PrepareLaunch(job, request);
+        if (prepared.Problem.Length > 0)
         {
-            return new CoderTurnOutcome.Refused(unprepared, new BoundaryRecord(BoundaryRecord.UnitBoundary, [], "host", CoderBoundary.NetworkReason, []));
+            return new CoderTurnOutcome.Refused(prepared.Problem, new BoundaryRecord(BoundaryRecord.UnitBoundary, [], "host", CoderBoundary.NetworkReason, []));
         }
 
+        request = prepared.Request;
         var admission = await bound.AdmitAsync(job, request.Executable, ct, CoderBoundary.CarriesKey(request), request.Timeout + UnitControl.Backstop);
         if (admission is BoundaryAdmission.Refused refused)
         {
@@ -70,6 +73,7 @@ public sealed class CoderTurns(CoderBoundary boundary, FilesystemInvariant invar
 
         var before = await SnapshotAsync(job.Tree.MainCheckout, ct);
         var run = await bound.RunAsync((BoundaryAdmission.Admitted)admission, job, request, part, ct);
+        bound.CollectLaunch(job, original, request);
         var after = await SnapshotAsync(job.Tree.MainCheckout, ct);
         var evidence = CoderMainEvidence.Of(before.Snapshot, after.Snapshot, before.Why.Length > 0 ? before.Why : after.Why);
 

@@ -64,7 +64,8 @@ internal static partial class CoderUnit
             $"BindPaths={job.CoderVarTempFolder}:{BoundaryUnit.UnitVarTemp}",
             .. host.SignInFile.Length > 0 ? [$"BindReadOnlyPaths={host.SignInFile}:{job.CoderSignInFileOf(vendor)}"] : Array.Empty<string>(),
             .. KeysHidden(host, job),
-            .. BoundaryUnit.VendorSignInsHidden(host),
+            // The real sign-in files of the vendors whose coder gets a COPY are not in a claude coder's unit either (C3 item 2).
+            .. BoundaryUnit.CopyVendorSignInHidden(host),
             .. program.BindFolder.Length > 0 ? [$"BindReadOnlyPaths={program.BindFolder}"] : Array.Empty<string>(),
             .. host.ResolverFile.Length > 0 ? [$"BindReadOnlyPaths={host.ResolverFile}"] : Array.Empty<string>(),
             .. BoundaryUnit.Hardening,

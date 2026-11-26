@@ -36,7 +36,7 @@ internal static class CoderCommits
 
         foreach (var token in tokens ?? [])
         {
-            if (await SearchWorkingTreeAsync(git, tree, token, ct, TokenHit) is { } leaked)
+            if (await SearchWorkingTreeAsync(git, tree, token, ct, () => TokenHit(token.Id)) is { } leaked)
             {
                 return (string.Empty, leaked);
             }
@@ -75,7 +75,7 @@ internal static class CoderCommits
 
         foreach (var token in pending.Out.Length > 0 ? tokens ?? [] : [])
         {
-            if (await SearchStagedAsync(git, tree, pending.Out, token, ct, TokenHit) is { } leaked)
+            if (await SearchStagedAsync(git, tree, pending.Out, token, ct, () => TokenHit(token.Id)) is { } leaked)
             {
                 // What was staged is unstaged again: nothing of the turn is committed, and the worktree stays as the coder left it.
                 await git.InCoderTreeAsync(tree, ["reset", "-q"], ct);
@@ -126,11 +126,11 @@ internal static class CoderCommits
         new(RoleStopWords.KeyInOutput, "the exact text of the turn's claude key is in what the coder wrote, so nothing was committed, the key is dead (exposed) and the job stops; revoke the key at the vendor");
 
     /// <summary>A token of a sign-in copy is in what the coder wrote (K3): the job ends <c>coder-boundary</c>, nothing is committed. The sentence names the copy and says nothing of the text.</summary>
-    private static RoleWorkOutcome.Failed TokenHit() =>
-        new(RoleStopWords.CoderBoundary, "a token of the sign-in copy made for this job is in what the coder wrote, so nothing was committed and the job stops; the copy was made for the job and is deleted with it, so the token the vendor gave is short-lived or a placeholder, but the coder's change is not committed");
+    private static RoleWorkOutcome.Failed TokenHit(string id) =>
+        new(RoleStopWords.CoderBoundary, $"a token of the sign-in copy made for this job ({id}) is in what the coder wrote, so nothing was committed and the job stops; the copy was made for the job and is deleted with it, so the token the vendor gave is short-lived or a placeholder, but the coder's change is not committed");
 
-    private static RoleWorkOutcome.Failed Unsearchable(string why) =>
-        new("coder-commit", $"the files the coder wrote could not be searched for the turn's claude key ({why}), so nothing was committed");
+    private static RoleWorkOutcome.Failed Unsearchable(string why, bool forSignInTokens = false) =>
+        new("coder-commit", $"the files the coder wrote could not be searched for {(forSignInTokens ? "the tokens of the job's sign-in copies" : "the turn's claude key")} ({why}), so nothing was committed");
 
     /// <summary>
     /// The files git would add (modified and new, not ignored — git's own list) searched as they are on disk, BEFORE anything is staged. A link is not followed: what git commits is the link, not what it points at. Null when nothing was found.
@@ -140,7 +140,7 @@ internal static class CoderCommits
         var listed = await git.InCoderTreeAsync(tree, ["ls-files", "-z", "--others", "--modified", "--exclude-standard"], ct);
         if (!listed.Ran || !listed.Ok || listed.Truncated)
         {
-            return Unsearchable("git could not list the changed files");
+            return Unsearchable("git could not list the changed files", hit is not null);
         }
 
         return HoldsTheKey(tree.Root, listed.Out, secret) ? (hit ?? Exposed)() : null;
@@ -159,7 +159,7 @@ internal static class CoderCommits
         var diff = await git.InCoderTreeAsync(tree, ["diff", "--cached", "--text", "--no-textconv", "--no-ext-diff", "--no-renames"], ct);
         if (!diff.Ran || !diff.Ok)
         {
-            return Unsearchable("git could not show the staged changes");
+            return Unsearchable("git could not show the staged changes", hit is not null);
         }
 
         if (!diff.Truncated)
@@ -171,7 +171,7 @@ internal static class CoderCommits
         var raw = await git.InCoderTreeAsync(tree, ["diff", "--cached", "--raw", "-z", "--no-renames", "--no-ext-diff"], ct);
         if (!raw.Ran || !raw.Ok || raw.Truncated)
         {
-            return Unsearchable("the staged changes are too many to list");
+            return Unsearchable("the staged changes are too many to list", hit is not null);
         }
 
         foreach (var id in BlobsOf(raw.Out))
@@ -179,7 +179,7 @@ internal static class CoderCommits
             var blob = await git.InCoderTreeAsync(tree, ["cat-file", "blob", id], ct);
             if (!blob.Ran || !blob.Ok || blob.Truncated)
             {
-                return Unsearchable("a staged file is too large to read");
+                return Unsearchable("a staged file is too large to read", hit is not null);
             }
 
             if (secret.IsIn(System.Text.Encoding.UTF8.GetBytes(blob.Out)))

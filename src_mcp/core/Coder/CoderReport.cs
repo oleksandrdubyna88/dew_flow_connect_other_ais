@@ -46,10 +46,39 @@ public static class CoderReportReader
             return new CoderRead.Wrong(["the answer is not one JSON object"]);
         }
 
+        // The flat output schema of codex (V19) makes every member required, so codex writes the members the status does not use as null: only such a null is read as absent.
+        root = WithoutUnusedNulls(root);
         var problems = new List<string>();
         var status = Text(root, "status", string.Empty, problems);
 
         return status == "refused" ? ReadRefused(root, problems) : ReadReport(root, taskDodIds, status, problems);
+    }
+
+    /// <summary>
+    /// The answer without the members its status does not use when they are <c>null</c> (<c>reason</c> and <c>notes</c> of an <c>ok</c> report, <c>dod</c> and <c>notes</c> of a <c>refused</c> one) — and nothing else: a null of any other member, and a member of another name, stay as they were.
+    /// </summary>
+    private static JsonElement WithoutUnusedNulls(JsonElement root)
+    {
+        if (!root.TryGetProperty("status", out var status) || status.ValueKind != JsonValueKind.String)
+        {
+            return root;
+        }
+
+        string[] unused = status.GetString() switch { "ok" => ["reason", "notes"], "refused" => ["dod", "notes"], _ => [] };
+        if (!unused.Any(name => root.TryGetProperty(name, out var member) && member.ValueKind == JsonValueKind.Null))
+        {
+            return root;
+        }
+
+        var node = System.Text.Json.Nodes.JsonNode.Parse(root.GetRawText())!.AsObject();
+        foreach (var name in unused.Where(name => node.TryGetPropertyValue(name, out var value) && value is null))
+        {
+            node.Remove(name);
+        }
+
+        using var document = JsonDocument.Parse(node.ToJsonString());
+
+        return document.RootElement.Clone();
     }
 
     /// <summary>The <c>refused</c> arm: its two keys and nothing else.</summary>

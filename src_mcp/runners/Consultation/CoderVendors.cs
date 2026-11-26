@@ -137,11 +137,6 @@ internal interface ICoderVendor
     /// <summary>What the rows of the vendor's preflight do not prove, for the job's envelope: the ids that only a measure on a release can show (class <c>release</c>), named as measured and never as probed. Empty for a vendor that says nothing.</summary>
     string NotProvedByPreflight => string.Empty;
 
-    /// <summary>
-    /// What the vendor writes before EVERY launch, on the files its unit will get (class <c>launch</c> of the judgement: agy's guard folder, written and read back). Empty when the launch may go on, else the sentence that refuses it; nothing is started on a refusal.
-    /// </summary>
-    string PrepareLaunch(BoundaryJob job) => string.Empty;
-
     /// <summary>What the vendor puts right before the unit of the turn starts, after the preflight (agy: the records the preflight's own probes of the guard wrote are put away, so the records read after the turn are the turn's). Empty, or the sentence that refuses the launch.</summary>
     string BeforeStart(BoundaryJob job) => string.Empty;
 
@@ -170,6 +165,23 @@ internal interface ICoderVendor
 
     /// <summary>The home layout of the vendor's CLI.</summary>
     CoderHomeLayout Home(BoundaryJob job);
+
+    /// <summary>The arguments of turn 0 when the launch names files (the output file the answer is read from). A vendor that names none keeps the two-argument form.</summary>
+    IReadOnlyList<string> FreshArgv(string model, string worktree, CoderLaunchFiles files) => FreshArgv(model, worktree);
+
+    /// <summary>The arguments of a resumed turn when the launch names files.</summary>
+    IReadOnlyList<string> ResumedArgv(string model, string worktree, string sessionId, CoderLaunchFiles files) => ResumedArgv(model, worktree, sessionId);
+
+    /// <summary>
+    /// Asked before EVERY launch, after the sign-in copy is made and before the unit's preflight (epoch 3 E3 s5 t2): the files the vendor's CLI reads from its home are written there (codex: <c>config.toml</c>, the output schema), the tripwires are looked at, and the request that is launched comes back — or the sentence that
+    /// says the launch must not start. The default launches the request as it is.
+    /// </summary>
+    CoderLaunchPrepared PrepareLaunch(BoundaryHost host, BoundaryJob job, ProcessRequest request) => new(request, string.Empty);
+
+    /// <summary>After the vendor's unit ended: what it wrote inside the unit that the host must read is brought to where the launch named it (codex: the report file). The default does nothing.</summary>
+    void CollectLaunch(BoundaryJob job, ProcessRequest original, ProcessRequest launched)
+    {
+    }
 
     /// <summary>The program the unit runs, as the unit must be given it: its real path, with a problem when it cannot be run inside the layer.</summary>
     CoderProgram Program(string executable, string path, BoundaryJob job);
@@ -309,8 +321,8 @@ internal static class CoderVendors
     /// <summary>claude: always launchable, as it was before the seam.</summary>
     public static ICoderVendor Claude => ClaudeCoderVendor.Instance;
 
-    /// <summary>The set the product launches from: the embedded table and the vendors that have a type. Today that is claude alone; s5 and s6 each add their vendor's type.</summary>
+    /// <summary>The set the product launches from: the embedded table and the vendors that have a type. claude and codex (whose row is not launchable until s5 t5 turns the mark on); s6 adds agy's type.</summary>
     public static CoderVendorSet Shipped => Loaded.Value;
 
-    private static readonly Lazy<CoderVendorSet> Loaded = new(() => CoderVendorSet.Of(CoderBoundaryTable.Shipped, AgyCoderVendor.Instance));
+    private static readonly Lazy<CoderVendorSet> Loaded = new(() => CoderVendorSet.Of(CoderBoundaryTable.Shipped, CodexCoderVendor.Instance, AgyCoderVendor.Instance));
 }

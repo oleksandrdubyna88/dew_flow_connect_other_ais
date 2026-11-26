@@ -124,6 +124,12 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
         return SignInCopy.Gate(recipe, SignInCopy.ExpiryOfFile(recipe, state.CopyFile), nowUtc, runtimeMax, Vendor.Id);
     }
 
+    /// <summary>The vendor's own preparation of the launch (<see cref="ICoderVendor.PrepareLaunch"/>): files it needs in its home, its tripwires, and the request to launch.</summary>
+    internal CoderLaunchPrepared PrepareLaunch(BoundaryJob job, ProcessRequest request) => Vendor.PrepareLaunch(host, job, request);
+
+    /// <summary>What the vendor's unit wrote that the host must read, brought to where the launch named it (<see cref="ICoderVendor.CollectLaunch"/>).</summary>
+    internal void CollectLaunch(BoundaryJob job, ProcessRequest original, ProcessRequest launched) => Vendor.CollectLaunch(job, original, launched);
+
     private async Task<string> MakeCopyAsync(BoundaryJob job, string executable, TimeSpan runtimeMax, CoderSignInRecipe.CopyForJob recipe, SignInJobState state, DateTime nowUtc, CancellationToken ct)
     {
         var source = state.RealFile;

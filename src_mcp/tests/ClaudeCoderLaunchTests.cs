@@ -224,8 +224,8 @@ public sealed class ClaudeCoderLaunchTests
 
     private static readonly string[] Others = ["codex", "antigravity", "local", "api", "vibe", "kimi"];
 
-    // agy has a coder launch since epoch 3 E3 s6 (AAgyCoderLaunchTests); it stays in Others so the scan below still sees every runtime, and is not refused here.
-    public static TheoryData<string> OtherVendors() => [.. Others.Where(vendor => vendor != "antigravity")];
+    // codex has a coder of its own since epoch 3 E3 s5 t2 (ACodexCoderLaunchTests) and agy since s6 (AAgyCoderLaunchTests); every other runtime is still refused a write launch. Both stay in Others so the scan below still sees every runtime.
+    public static TheoryData<string> OtherVendors() => [.. Others.Where(vendor => vendor is not ("codex" or "antigravity"))];
 
     private static IConsultantRuntime Adapter(string vendor) => vendor switch
     {

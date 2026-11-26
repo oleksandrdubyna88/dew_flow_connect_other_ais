@@ -85,18 +85,18 @@ internal sealed class AgyCoderVendor(HookHandler? handler = null) : ICoderVendor
 
     public CoderProgram Program(string executable, string path, BoundaryJob job) => CoderProgram.Resolve(executable, path, job);
 
-    /// <summary>The guard folder, written and read back before EVERY launch (G5, AG-G3); a refusal ends the launch.</summary>
-    public string PrepareLaunch(BoundaryJob job)
+    /// <summary>The guard folder, written and read back before EVERY launch (G5, AG-G3); a refusal ends the launch. The request is launched as it is.</summary>
+    public CoderLaunchPrepared PrepareLaunch(BoundaryHost host, BoundaryJob job, ProcessRequest request)
     {
         var prepared = AntigravityCoderGuard.Prepare(AgyCoderUnit.GuardFolder(job), Handler, job.Tree.Root, AgyCoderUnit.RecordsFile(job));
         if (prepared is AntigravityReadOnly.Prepared.Failed failed)
         {
-            return failed.Reason;
+            return new CoderLaunchPrepared(request, failed.Reason);
         }
 
         AfterPrepare?.Invoke(job);
 
-        return string.Empty;
+        return new CoderLaunchPrepared(request, string.Empty);
     }
 
     /// <summary>The preflight of the agy coder: its own rows, in place of the claude coder's (U1 to U9, AG-B1, AG-R1, AG-R2, AG-B3, AG-G1 to AG-G3), asked inside the exact launch unit (<see cref="AgyCoderPreflight"/>).</summary>
