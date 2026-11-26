@@ -125,7 +125,18 @@ internal sealed class CoderWork : IRoleWork
             Restore = token => CoderRestore.RestoreAsync(git, prepared.Tree, loop.LastCommit, token),
         };
 
-        return await failover.RunAsync(PromptFor, ct);
+        try
+        {
+            return await failover.RunAsync(PromptFor, ct);
+        }
+        finally
+        {
+            // The work is over, checks included: nothing reads a mount's source any more. A runner that lost the job leaves them — the job may be running again in another one.
+            if (run.StillWriter())
+            {
+                CoderJobFolders.RemoveMounts(layer.Job, run.Request.JobId, e => run.Log.Warning(e, "role job {JobId}: the submodule mounts could not be removed; they stay until the job's retention", run.Request.JobId));
+            }
+        }
     }
 
     /// <summary>

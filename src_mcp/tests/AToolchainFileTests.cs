@@ -204,7 +204,7 @@ public sealed class AToolchainFileTests
     {
         var sentence = RefusedBy(OneProject(string.Empty) + $"skip:\n  - {step}\n");
 
-        sentence.Should().Contain("'skip'").And.Contain($"'{step}'");
+        sentence.Should().Contain("'skip'").And.NotContain($"'{step}'", "a value the person typed is not echoed");
         foreach (var legal in ToolchainTables.SkippableSteps)
         {
             sentence.Should().Contain(legal);
@@ -242,7 +242,66 @@ public sealed class AToolchainFileTests
     [Fact]
     public void TwoProjectsWithOnePath_AreRefused_NamingTheKey()
     {
-        RefusedBy(OneProject(string.Empty) + "  - path: src_mcp\n    adapter: node\n").Should().Contain("'path'").And.Contain("src_mcp");
+        RefusedBy(OneProject(string.Empty) + "  - path: src_mcp\n    adapter: node\n").Should().Contain("'path'").And.NotContain("src_mcp", "a path the person typed is not echoed");
+    }
+
+    /// <summary>A token-shaped string: what a person may paste into the wrong place. The refusal is printed and recorded, so it must never carry it.</summary>
+    private const string Pasted = "ghp_0123456789abcdefghijklmnopqrstuvwxyzAB";
+
+    [Theory]
+    [InlineData("version: {0}\nprojects:\n  - path: src_mcp\n    adapter: dotnet\n")]
+    [InlineData("version: 1\nprojects: {0}\n")]
+    [InlineData("version: 1\nprojects:\n  - {0}\n")]
+    [InlineData("version: 1\nprojects:\n  - path: {0}\n    adapter: dotnet\n    build: {0}\n")]
+    [InlineData("version: 1\nprojects:\n  - path: src_mcp\n    adapter: {0}\n    test: {0}\n")]
+    [InlineData("version: 1\nprojects:\n  - path: src_mcp\n    adapter: dotnet\n    memoryMb: {0}\n")]
+    [InlineData("version: 1\nprojects:\n  - path: src_mcp\n    adapter: dotnet\nskip:\n  - {0}\n")]
+    [InlineData("version: 1\nprojects:\n  - path: src_mcp\n    adapter: dotnet\nskip: {0}\n")]
+    [InlineData("version: 1\nprojects:\n  - path: src_mcp\n    adapter: dotnet\ntimeouts: {0}\n")]
+    [InlineData("version: 1\nprojects:\n  - path: src_mcp\n    adapter: dotnet\ntimeouts:\n  build: {0}\n")]
+    [InlineData("version: 1\nprojects:\n  - path: {0}\n    adapter: dotnet\n  - path: {0}\n    adapter: dotnet\n")]
+    public void ATokenShapedValue_InTheWrongPlace_IsRefused_AndNeverEchoed(string template)
+    {
+        var read = Read(template.Replace("{0}", Pasted, StringComparison.Ordinal));
+
+        var refused = read.Should().BeOfType<ToolchainRead.Refused>(template).Subject;
+        refused.Sentence.Should().NotContain(Pasted, "a refusal is printed and recorded");
+        refused.Faults.Should().NotContain(fault => fault.Contains(Pasted, StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("{0}: x\n")]
+    [InlineData("timeouts:\n  {0}: 5m\n")]
+    public void ATokenShapedKey_IsRefused_AndNeverEchoed_WhileARealLookingOneIsNamed(string template)
+    {
+        string Put(string key) => OneProject(template.Replace("{0}", key, StringComparison.Ordinal));
+
+        var token = Read(Put(Pasted)).Should().BeOfType<ToolchainRead.Refused>().Subject;
+        var named = Read(Put("buidl")).Should().BeOfType<ToolchainRead.Refused>().Subject;
+
+        token.Sentence.Should().NotContain(Pasted, "a key is typed by a person too: a token pasted where a key goes is not echoed");
+        token.Sentence.Should().Contain($"a key of {Pasted.Length} characters");
+        named.Sentence.Should().Contain("'buidl'", "a name of the shape of a real key is spelled, so a typo is found");
+    }
+
+    [Fact]
+    public void ATokenShapedKey_InAProject_IsNeverEchoed()
+    {
+        var refused = Read($"version: 1\nprojects:\n  - path: src_mcp\n    adapter: dotnet\n    {Pasted}: x\n").Should().BeOfType<ToolchainRead.Refused>().Subject;
+
+        refused.Sentence.Should().NotContain(Pasted);
+    }
+
+    [Theory]
+    [InlineData("2147483647h")]
+    [InlineData("2147483647m")]
+    [InlineData("9223372036854775807s")]
+    [InlineData("99999999999999999999h")]
+    public void ATimeoutThatPassesTheIntegerLimitButNotTheMaximum_IsRefused_NotThrown(string value)
+    {
+        var read = () => Read(OneProject(string.Empty) + $"timeouts:\n  build: {value}\n");
+
+        read.Should().NotThrow().Which.Should().BeOfType<ToolchainRead.Refused>().Which.Sentence.Should().Contain("'build'");
     }
 
     [Fact]

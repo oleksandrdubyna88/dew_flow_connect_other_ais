@@ -66,6 +66,24 @@ internal sealed class BoundaryBed : IAsyncDisposable
         return mount;
     }
 
+    /// <summary>Moves the job's folder to <paramref name="root"/> (a folder of the test's own); the folders under the old one are not carried over.</summary>
+    public void UseJobRoot(string root) => Job = Job with { JobRoot = root };
+
+    /// <summary>
+    /// Puts the job's folder into a folder of its own that holds another job's folder too (what the coder-jobs folder is): <c>&lt;parent&gt;/jobs/job-a</c>, with a sibling <c>job-b</c> that has a coder folder and a file in it. Returns that sibling's file, which a unit of this job must not see.
+    /// </summary>
+    public string UseJobsFolderWithAnotherJob()
+    {
+        var jobs = Path.Combine(Parent(), "jobs");
+        UseJobRoot(Path.Combine(jobs, "job-a"));
+        var other = Path.Combine(jobs, "job-b", "coder", "home");
+        Directory.CreateDirectory(other);
+        var secret = Path.Combine(other, "transcript.txt");
+        File.WriteAllText(secret, "another job's coder home\n");
+
+        return secret;
+    }
+
     public WatchedLauncher Launcher => _bed.Launcher;
 
     public string Main => _bed.Repo.Path;

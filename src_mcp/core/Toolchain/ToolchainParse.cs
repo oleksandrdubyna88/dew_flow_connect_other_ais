@@ -44,7 +44,7 @@ internal sealed partial class ToolchainParse
     {
         foreach (var entry in map.Entries.Where(entry => !level.Fields.ContainsKey(entry.Key)))
         {
-            Fault($"line {entry.Line}: '{entry.Key}' is not a key of {where} (the keys are {string.Join(", ", level.Fields.Keys)})");
+            Fault($"line {entry.Line}: {KeyShown(entry.Key)} is not a key of {where} (the keys are {string.Join(", ", level.Fields.Keys)})");
         }
 
         foreach (var required in level.Required.Where(key => map.Find(key) is null))
@@ -53,8 +53,17 @@ internal sealed partial class ToolchainParse
         }
     }
 
-    /// <summary>What a node is, for a sentence: a scalar shows its text, anything else says what it is.</summary>
-    private static string Shown(YamlNode node) => node is YamlScalar { Kind: not YamlScalarKind.Null } scalar ? $"'{scalar.Text}'" : WorkShape.Describe(node);
+    /// <summary>A key a person typed, for a sentence: spelled only when it has the shape of a real key (a short name); anything else — a token pasted as a key — is described by its length.</summary>
+    private static string KeyShown(string key) => KeyShape().IsMatch(key) ? $"'{key}'" : $"a key of {key.Length} characters";
+
+    [GeneratedRegex("^[A-Za-z][A-Za-z0-9_-]{0,31}$", RegexOptions.CultureInvariant)]
+    private static partial Regex KeyShape();
+
+    /// <summary>
+    /// What a node is, for a sentence: its kind, and for a string its length — NEVER its text. A person may paste anything into this file, a token included, and a refusal is printed and recorded; only the keys of the file (names the person chose for the structure)
+    /// and the legal values are ever spelled.
+    /// </summary>
+    private static string Shown(YamlNode node) => node is YamlScalar { Kind: YamlScalarKind.String } scalar ? $"a string of {scalar.Text.Length} characters" : WorkShape.Describe(node);
 
     /// <summary>What stops a value being a list of strings — the first item that is not one, or the value itself — or empty when it is one.</summary>
     private static string NotStrings(YamlNode value) => value switch
@@ -90,7 +99,7 @@ internal sealed partial class ToolchainParse
         var projects = list.Items.Select((item, index) => Project(item, index + 1)).ToList();
         foreach (var path in projects.Where(project => project.Path.Length > 0).GroupBy(project => project.Path, StringComparer.Ordinal).Where(group => group.Count() > 1))
         {
-            Fault($"line {entry.Line}: 'path' {path.Key} names more than one project");
+            Fault($"line {entry.Line}: {path.Count()} projects name the same 'path'");
         }
 
         return projects;
@@ -136,7 +145,7 @@ internal sealed partial class ToolchainParse
 
         if (!ToolchainTables.Adapters.Contains(text))
         {
-            Fault($"line {entry.Line}: 'adapter' of {where} is '{text}'; the adapters are {string.Join(", ", ToolchainTables.Adapters)}");
+            Fault($"line {entry.Line}: 'adapter' of {where} is not one of the adapters (the value is a string of {text.Length} characters); the adapters are {string.Join(", ", ToolchainTables.Adapters)}");
         }
 
         return text;
@@ -301,7 +310,7 @@ internal sealed partial class ToolchainParse
         var steps = ((YamlList)entry.Value).Items.Cast<YamlScalar>().Select(item => item.Text).ToList();
         foreach (var step in steps.Where(step => !ToolchainTables.SkippableSteps.Contains(step)))
         {
-            Fault($"line {entry.Line}: 'skip' names '{step}'; the steps that can be skipped are {string.Join(", ", ToolchainTables.SkippableSteps)} (build and test cannot)");
+            Fault($"line {entry.Line}: 'skip' names a step that cannot be skipped (a string of {step.Length} characters); the steps that can be skipped are {string.Join(", ", ToolchainTables.SkippableSteps)} (build and test cannot)");
         }
 
         return steps;
@@ -346,16 +355,19 @@ internal sealed partial class ToolchainParse
     private static TimeSpan? Parsed(string text)
     {
         var digits = text[..^1];
-        if (!long.TryParse(digits, NumberStyles.None, CultureInfo.InvariantCulture, out var count) || count > int.MaxValue)
+        if (!long.TryParse(digits, NumberStyles.None, CultureInfo.InvariantCulture, out var count))
         {
             return null;
         }
 
+        // The count is compared with the maximum in ITS unit before any TimeSpan is made: a count of 2147483647 hours passes an integer limit and overflows TimeSpan.FromHours, which throws instead of refusing.
+        var most = ToolchainTables.MaxTimeout;
+
         return text[^1] switch
         {
-            's' => TimeSpan.FromSeconds(count),
-            'm' => TimeSpan.FromMinutes(count),
-            _ => TimeSpan.FromHours(count),
+            's' => count <= (long)most.TotalSeconds ? TimeSpan.FromSeconds(count) : null,
+            'm' => count <= (long)most.TotalMinutes ? TimeSpan.FromMinutes(count) : null,
+            _ => count <= (long)most.TotalHours ? TimeSpan.FromHours(count) : null,
         };
     }
 

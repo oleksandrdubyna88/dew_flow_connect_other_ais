@@ -96,6 +96,13 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
             return Refuse(prepared.Sentence, []);
         }
 
+        if (job.JobRootOnDiskProblem() is { Length: > 0 } linked)
+        {
+            BoundaryFolders.Tidy(job, prepared.Copy, job.CoderTempFolder, job.CoderVarTempFolder);
+
+            return Refuse(linked, []);
+        }
+
         try
         {
             return await AskAsync(launchHost, job, program, prepared.Copy, ct);

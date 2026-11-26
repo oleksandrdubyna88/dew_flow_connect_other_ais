@@ -132,3 +132,59 @@ Window: from the main AI's write of the task file to the end of the code gate. T
 - The main AI here is the same model (`claude-opus-5-5`); its effort level was not set for this window.
 - The ledger line of the coder's turn has an empty `job` field (the key id is there); the job id is found by time and key. A todo for the ledger.
 - Not repeated here: the key scan after the job (`--keys scan`): data folder 30 files, job folder 10, coder worktree 7,275, coder jobs folder 411, the driver's folder 16 — every one "no hit". The coder's home holds no `.credentials.json`; the person's sign-in file was last changed at 18:21 UTC, before the job.
+
+## The four follow-ups of the t3 run (2026-11-25, branch `feat/v2-ep3-e2-coder`, one commit each)
+
+1. **The ledger's `job` field** — done. The coder's line (and a fix turn's) now carries the job id; test `EveryLedgerLine_OfARoleJob_CarriesTheJobsId`, seen red (`""`) then green.
+2. **The check unit sees the coder's folder** — done for the claude coder (the E3 judgement's finding for E2). The check unit gets an empty read-only tmpfs over the job folder and binds only `home`, `nuget-packages`, `npm-cache` and `dotnet-home` on top; a new preflight row `coder-folder-hidden` proves it from inside before each job. Still open: the build step's host network; the other coder jobs' folders are visible read-only when the coder-jobs folder is outside `/home`. Described in `research/module_server.md`.
+3. **The HeldFile flake** — a product cause found by reading, not by reproducing: the descriptor of an inheritable take was not close-on-exec during the take, so a process started by another test's thread meanwhile could keep the flock after a failed take. Fixed (close-on-exec until the take succeeded); the old test has not been seen to fail again, which is not proof. If it fails a third time, the cause is another one.
+4. **The retention** — the plan only said "the retention sweep" (`EPIC_BUNDLE.md`, `RESULTS_coder_proof.md` above), without a rule. Implemented: the mounts of a coder job go when its work ends (not when a runner that lost the job ends); the coder job's own folder and mounts go with its record at the 30 days / 200 jobs of `RoleJobRetention`. **Not decided and not done:** what ends a coder WORKTREE and its `coder/<jobId>` branch (they hold the commit); a person's decision.
+
+### After the security verify of the four follow-ups (2026-11-26, `RESULTS_e2_followups_security_verify.md`)
+
+Done: M1 (a job folder must be its own real path; refused in both admissions), M2 (the key folder, the keys file and the person's sign-in file are hidden from the check unit, with rows `keys-folder-hidden` and `sign-in-not-in-unit`, and `KeysFolderProblem()` asked), S2 of the E3 judgement (the coder-jobs folder is covered in both units when it can be), the retention removes a coder job's folders BEFORE its record and unlinks links without listing their targets, the stale words and the docs errors, the empty coder folder row. **Still open** (todo items for E2 or its successors):
+- The build step still has the host network (restore with the network, build without: a later story).
+- S1, `PrivatePIDs=yes` in the check unit, was tried and taken out: the step's command becomes PID 1 of its namespace, which ignores a SIGTERM it has no handler for, so `ACheckBoundaryStopTests` (timeout, cancel) found the unit still running and the stop waited for `TimeoutStopSec`; the step's recorded pids are also numbers of another namespace. To do: a short stop timeout and the pids read from outside, or an init wrapper; then a preflight row and an answer for systemd older than 257.
+- When the coder-jobs folder cannot be covered (it holds the worktree, the main checkout or the coder root, or is `/tmp`), only this job's folder is covered and another job's folder is as visible as it was.
+- Nothing asks whether a job's units are gone before its folder is removed (R5): safe by distance only (30 days or 200 newer jobs).
+- An exception of `CoderSubmodules.ProvideAsync` leaves a half-made mounts folder until the job's retention.
+- Where a job's folders were made is not in its record (R4): two machines on one data folder, or a changed `COAI_CODER_JOBS`, leave them.
+- What ends a coder worktree and its `coder/<jobId>` branch.
+- The one window of the HeldFile fix (a child between its fork and its exec).
+
+Second pass of the verify (M3, done): the key folder, the keys file and the person's home are resolved once where they are made, so a data folder or a home spelled through a link is hidden at its real path and the rows read the real path; the keys row no longer expands a glob character in a key path; a folder of mode 000 made by a check no longer keeps its job's record. Still open from that pass: S1 can be redone with `KillSignal=SIGKILL` on the unit (a stop is then immediate) and the step's pids read from outside; the fall-back cover (see above) wants, for E3, a refusal or a canary row.
+- A task with files under `src_vs_code` is not checked by E2's toolchain file: it has no Node (extension) project until E4 adds one, measured first (the E2 code gate's finding 3, rejected for E2).
+
+
+## t5 — the pool-key proof, second paid run (2026-11-26): GREEN, haiku, 0.0024 USD
+
+**Short answer.** One real coder job (claude haiku) on a small doc task ended `succeeded`, `green` true, `fixTurns` 0, `schemaValid` true, on the pool key **k-2b88f1669d85** (200usd), with the person's sign-in untouched. Spend **0.00236 USD** (38,092 tokens in, 1,430 out, 31,435 of them cached; the cost guard was 0.08 USD). This is the second paid run of the two allowed; the first (above) was answered with the account's spend limit, and the change recorded since is the whole E2 follow-up chain (the ledger job id, the check unit without the coder's folder and with the keys hidden, the retention, M1/M2/M3). The other key (claude-2, k-48f7cfb0c731) is still under the vendor's weekly limit (resets 2026-11-28 04:00 Paris), so **the second job with the other key was not run** (d3): the vendor would have refused it, and the pool, as it should, did not offer it (`not usable now`, cooldown until 2026-11-26T14:52:06Z).
+
+### What was run
+
+- Binary `/home/jinx/coai-t3/bin/coai-mcp` **2.1.0-keys.3**, the native-AOT publish of head 964f037a (project `src_mcp/src/CoaiMcp.csproj`, Release, linux-x64, `-warnaserror`, Version 2.1.0-keys.3, exit 0, under the shared lock); the previous binary is kept as `coai-mcp.keys2`. Data folder `/home/jinx/coai-t3/data` only; settings: coder list `claude/haiku` only, `COAI_FIX_ROUNDS` 3 (the t3 settings are in `settings.t3.json`); person sign-in switch off. Driver `/home/jinx/coai-t3/t5run/t5-driver.sh` (the t3 driver with the guard at 0.08 USD, this task, a small environment for the server, no environment printed).
+- Repository: the t3 clone `/home/jinx/git/coai-v2-t3-clone`, branch `t5-main-ai`: one clone-only commit aa3c8c66 on 964f037a with the task `…/tasks/t6-status-line/task.yaml` (kind simple-docs: the Status line of `KEY_POOL_SPEC.md` says the pool is built and merged) and a narrowed test step (the whole solution is built, one test class is run). Never pushed.
+- Job **r20261126012559-2183e184**, 01:25:59 UTC, 106 s. The coder's commit 042af4bf on `coder/r20261126012559-2183e184`: one file, `KEY_POOL_SPEC.md`, 1 line changed (the Status line now says "built and merged into the E2 coder branch on 2026-11-25").
+
+### d1 — the key is in the ledger line and the attempt; the unit has no bind of the sign-in
+
+- The ledger line (`usage.jsonl`): kind role, claude, haiku, role coder, outcome ok, **`keyId` k-2b88f1669d85, `job` r20261126012559-2183e184** (the `job` field is filled now: the first of the four follow-ups). The attempt (`job.json` and `role_status`): `attempts[0].keyId` k-2b88f1669d85, stop empty.
+- The coder's unit (`attempts/1/unit-c1.json`, 30 properties): `BindReadOnlyPaths` of the main checkout, the coder root, the version folder of the claude CLI and the resolver file; `BindPaths` of the worktree and of the coder's folder and its two temp folders; **no property names `.credentials.json`** (checked by a search of every name and value); `InaccessiblePaths=-/home/jinx/coai-t3/data/keys`; and **`TemporaryFileSystem=/home/jinx/coai-t3/coder-jobs:ro`** (the cover over the folder that holds every job's folder). Its preflight: all 17 rows held, among them `sign-in-not-in-unit`, `keys-folder-hidden` and `submodules-readonly`.
+- The keys' counters (`--keys list --json`; the account's e-mail is not copied here):
+
+| | before | after |
+|---|---|---|
+| k-2b88f1669d85 (200usd) | launches 1 (the t3 job), no cooldown | **launches 2**, **lastUsedUtc 2026-11-26T01:26:01Z**, limitStops 0, no cooldown |
+| k-48f7cfb0c731 (claude-2) | launches 1, lastUsedUtc 2026-11-25T14:52:03Z, cooldown until 2026-11-26T14:52:06Z | unchanged |
+
+### d2 — the person's sign-in file and the scans
+
+`~/.claude/.credentials.json`: sha256 (first 12 hex) **515a95ac49dc**, 1,959 bytes, mtime 2026-11-25 22:20:38 (+0100) before and after, the same. `coai-mcp --keys scan --path` after the job: the data folder (43 files) no hit; the log folder (6 files) no hit; the worktree (7,302 files) no hit; the job's folder under coder-jobs (87 files, the coder's home among them) no hit; the driver's folder (18 files) no hit.
+
+### The checks ran in tonight's check unit
+
+The journal of the user manager shows the units `coai-check-r20261126012559-2183e184-pre-host`, `-pre-none`, `-s1` (the build, 1 min 26 s, 3.2 GB peak) and `-s2` (the test class: 3 tests, 0 failed): the preflight of both network states, then the two steps, from the binary made at 964f037a — so with the cover over the coder-jobs folder (here `/home/jinx/coai-t3/coder-jobs`, which holds no worktree, so the cover is that folder and not the fall-back), only `home`, `nuget-packages`, `npm-cache` and `dotnet-home` of the job's folder bound, the key folder hidden and the sign-in's real path hidden. The check unit's property list and rows are not written into the job's record (only the coder's are, in `unit-c1.json`); that they held is shown by the admission, which a failed row would have refused before the build. That was the one thing this run did not show as a recorded list; it is recorded since (the commit after this run): `checks/round-<turn>/unit-s<n>.json` beside each step's log, and `unit-preflight.json` for a refused preflight.
+
+### Limits
+
+One task, one doc line, one key, haiku. The vendor's real CLI accepted a pool key on stdin and never saw the person's sign-in; the proof does not say what a different vendor error mid-job would do (the first t5 run saw the spend limit and the pool cooled the key as designed).

@@ -64,7 +64,7 @@ public sealed record BoundaryJob(
     public IReadOnlyList<ReadOnlyMount> Mounts { get; init; } = [];
 
     /// <summary>
-    /// The folder the mounts' sources are made in: a SIBLING of the job folder, never inside it — a unit binds the job folder writable, and a source reachable through it could be changed from inside, read-only bind or not. No unit binds it; it is only a source.
+    /// The folder the mounts' sources are made in: a SIBLING of the job folder, never inside it — a unit may bind a folder of the job writable, and a source reachable through it could be changed from inside, read-only bind or not. No unit binds it; it is only a source.
     /// </summary>
     public string MountsFolder => JobRoot.TrimEnd(System.IO.Path.DirectorySeparatorChar) + ".mounts";
 
@@ -85,6 +85,39 @@ public sealed record BoundaryJob(
 
     /// <summary>The folder of <c>DOTNET_CLI_HOME</c>.</summary>
     public string DotnetFolder => Path.Combine(JobRoot, "dotnet-home");
+
+    /// <summary>
+    /// The folder a unit covers with an empty read-only tmpfs before it binds what it needs of the job (S2 of the security verify of the E2 follow-ups): the folder that HOLDS the job folders — the coder-jobs folder — so another job's folders (their coder homes) are not
+    /// readable from this job's unit wherever that folder lies; or the job folder itself when the holding folder cannot be covered. It cannot when it is the root of the file system, or holds (or is) the worktree, the main checkout or the coder root — a tmpfs there
+    /// would hide what the unit is given at those paths — or is a folder the units bind their own temp folders at.
+    /// </summary>
+    public string JobCover
+    {
+        get
+        {
+            var parent = System.IO.Path.GetDirectoryName(JobRoot.TrimEnd(System.IO.Path.DirectorySeparatorChar)) ?? string.Empty;
+            var unsafeToCover = parent.Length == 0 || parent == System.IO.Path.GetPathRoot(parent)
+                || new[] { Tree.Root, Tree.MainCheckout, CoderRoot, "/tmp", "/var/tmp" }.Any(held => Inside(parent, held));
+
+            return unsafeToCover ? JobRoot : parent;
+        }
+    }
+
+    /// <summary>
+    /// The sentence that says the job folder is not its own real path, or empty — asked once the folders are made. A job folder spelled through a link (the data folder, the home or <c>COAI_CODER_JOBS</c> behind one) would be covered and bound at its SPELLING, which inside a unit
+    /// whose <c>/home</c> is an empty tmpfs is a path the link is not at: the real folder would be left under no cover, read-only, with the coder's home in it.
+    /// </summary>
+    public string JobRootOnDiskProblem()
+    {
+        var real = Files.RealPath.Resolve(JobRoot);
+
+        return real.Ok && string.Equals(System.IO.Path.TrimEndingDirectorySeparator(real.Path), System.IO.Path.TrimEndingDirectorySeparator(JobRoot), StringComparison.Ordinal)
+            ? string.Empty
+            : $"The job folder '{JobRoot}' is not its own real path ({(real.Ok ? real.Path : real.Why)}): a link in its path would put the unit's cover and binds at a path the folder is not at, so the job was refused.";
+    }
+
+    /// <summary>The per-job folders a check unit binds at their own path (its <c>HOME</c>, the package and cache folders): every folder of <see cref="Folders"/> but the two temp folders, which are bound at <c>/tmp</c> and <c>/var/tmp</c>. The coder's folder is not one of them.</summary>
+    public IReadOnlyList<string> CheckFolders => [HomeFolder, NuGetFolder, NpmFolder, DotnetFolder];
 
     /// <summary>Every per-job folder coai makes, in the order they are made.</summary>
     public IReadOnlyList<string> Folders => [HomeFolder, TempFolder, VarTempFolder, NuGetFolder, NpmFolder, DotnetFolder];
@@ -111,10 +144,29 @@ public sealed record BoundaryJob(
     /// The folder of the claude key pool of this device (<c>&lt;data&gt;/keys</c>), when the job runs on it (epoch 3 E2 s7): a coder launch with a pool key gets <c>InaccessiblePaths=</c> of it, and its preflight proves a read of it fails from inside the unit. Empty
     /// when there is none to hide (a job started without a data folder, in a test of the boundary alone).
     /// </summary>
-    public string KeysFolder { get; init; } = string.Empty;
+    public string KeysFolder
+    {
+        get => _keysFolder;
+        init => _keysFolder = RealOrSpelled(value);
+    }
 
-    /// <summary>The keys FILE the person named (<c>COAI_CLAUDE_KEYS_FILE</c> or the device setting <c>keysFile</c>), wherever it lies: hidden from a keyed coder's unit as the key folder is (second judgement) — a file outside <c>/home</c> would otherwise be readable there. Empty when none.</summary>
-    public string KeysFile { get; init; } = string.Empty;
+    private readonly string _keysFolder = string.Empty;
+
+    /// <summary>The keys FILE the person named (<c>COAI_CLAUDE_KEYS_FILE</c> or the device setting <c>keysFile</c>), by its real path: hidden from a keyed coder's unit as the key folder is (second judgement) — a file outside <c>/home</c> would otherwise be readable there. Empty when none.</summary>
+    public string KeysFile
+    {
+        get => _keysFile;
+        init => _keysFile = RealOrSpelled(value);
+    }
+
+    private readonly string _keysFile = string.Empty;
+
+    /// <summary>
+    /// The real path of a key path, resolved ONCE where the job is made: a data folder, a keys file or a home spelled through a link would otherwise be put into <c>InaccessiblePaths=-</c> and into the rows as the spelling, which inside a unit whose <c>/home</c> is an
+    /// empty tmpfs is a path the link is not at — the real keys would stay readable and the rows would say hidden. A path that cannot be resolved stays as spelled.
+    /// </summary>
+    internal static string RealOrSpelled(string path) =>
+        path.Length > 0 && Files.RealPath.Resolve(path) is { Ok: true } real ? real.Path : path;
 
     /// <summary>The sentence that says the keys folder cannot be hidden from a unit — it is spelled into <c>InaccessiblePaths=</c>, whose value is split at a space, so a path with a space, a colon, a backslash or a control character is refused — or empty.</summary>
     public string KeysFolderProblem() =>

@@ -1,4 +1,5 @@
 using CoaiMcp.Core.Toolchain;
+using CoaiMcp.Runners.Files;
 using CoaiMcp.Runners.Toolchain;
 using CoaiMcp.Runners.Worktrees;
 using FluentAssertions;
@@ -55,13 +56,111 @@ public sealed class ASubmoduleMountInTheUnitsTests
 
     private static readonly string[] E2Limits = ["RuntimeMaxSec=300", "MemoryMax=2000M", "MemorySwapMax=0"];
 
+    /// <summary>What a check unit has of the job folder since the coder's folder was taken out of it: an empty read-only tmpfs over it, and the folders the checks use bound on top — the one change to the list E2 recorded.</summary>
+    private static readonly string[] JobView =
+    [
+        $"TemporaryFileSystem={J}:ro", $"BindPaths={J}/home", $"BindPaths={J}/nuget-packages", $"BindPaths={J}/npm-cache", $"BindPaths={J}/dotnet-home",
+    ];
+
+    /// <summary>The person's sign-in file at the (stand-in) real home's path, hidden from a check unit: the one property a check unit got besides the job view and the pids.</summary>
+    private static readonly string[] SignInHidden = ["InaccessiblePaths=-/nonexistent/home/.claude/.credentials.json"];
+
+    [Fact]
+    public void TheCover_IsTheFolderThatHoldsTheJobFolders_WhenItCanBeCovered_AndTheJobFolderItselfWhenItCannot()
+    {
+        // /w holds the worktree here, so it cannot be covered: the job folder is.
+        Job().JobCover.Should().Be(J);
+
+        BoundaryJob At(string root, string worktree, string main) =>
+            new("j1", new CoderTree(worktree, main, "gitdir: x\n"), root, NetworkChoice.None("t"), NetworkChoice.None("t"), 2000);
+
+        At("/data/jobs/j1", "/w/coai-coder-j1", "/w/main").JobCover.Should().Be("/data/jobs", "a folder of its own: another job's folders are under the cover too");
+        At("/j1", "/w/coai-coder-j1", "/w/main").JobCover.Should().Be("/j1", "the root of the file system is never covered");
+        At(BoundaryUnit.UnitTemp + "/j1", "/w/coai-coder-j1", "/w/main").JobCover.Should().Be(BoundaryUnit.UnitTemp + "/j1", "that is the folder the units bind their own temp folder at");
+        At("/data/jobs/j1", "/data/jobs/coai-coder-j1", "/w/main").JobCover.Should().Be("/data/jobs/j1", "the folder holds the worktree, which the unit is given at that path");
+        At("/data/jobs/j1", "/w/coai-coder-j1", "/data/jobs/main").JobCover.Should().Be("/data/jobs/j1", "the folder holds the main checkout, which the unit is given at that path");
+    }
+
+    /// <summary>A real folder with a link beside it that points at it — the data folder spelled through a link. Returns (link, real) with the real path as the disk answers it.</summary>
+    private static (string Link, string Real) LinkedFolder(TempDir temp)
+    {
+        var real = Path.Combine(Runners.Files.RealPath.Resolve(temp.Path).Path, "real-data");
+        Directory.CreateDirectory(Path.Combine(real, "keys"));
+        File.WriteAllText(Path.Combine(real, "keys.txt"), "made-up\n");
+        var link = Path.Combine(temp.Path, "linked-data");
+        Directory.CreateSymbolicLink(link, real);
+
+        return (link, real);
+    }
+
+    [Fact]
+    public void TheKeyPaths_AreResolvedWhereTheJobIsMade_SoEveryUnitHidesTheRealPath_NotTheSpelling()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "a symbolic link needs a privilege on Windows");
+        using var temp = TempDir.For("coai-m3-");
+        var (link, real) = LinkedFolder(temp);
+
+        var job = Job() with { KeysFolder = Path.Combine(link, "keys"), KeysFile = Path.Combine(link, "keys.txt") };
+
+        job.KeysFolder.Should().Be(Path.Combine(real, "keys"));
+        job.KeysFile.Should().Be(Path.Combine(real, "keys.txt"));
+        var hidden = new[] { $"InaccessiblePaths=-{real}/keys", $"InaccessiblePaths=-{real}/keys.txt" };
+        BoundaryUnit.Properties(NoHome(), job, CheckNetwork.Host, TimeSpan.FromMinutes(5)).Should().Contain(hidden).And.NotContain(property => property.Contains("linked-data", StringComparison.Ordinal));
+        CoderUnit.KeysHidden(NoHome() with { BindSignIn = false }, job).Should().Equal(hidden);
+        BoundaryPreflight.Command(job, NoHome(), CheckNetwork.Host, string.Empty).Should().Contain($"{real}/keys {real}/keys.txt", "the row reads the real paths too");
+    }
+
+    [Fact]
+    public void ThePersonsSignInFile_IsHiddenAtItsRealPath_WhenTheHomeIsSpelledThroughALink()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "a symbolic link needs a privilege on Windows");
+        using var temp = TempDir.For("coai-m3-");
+        var (link, real) = LinkedFolder(temp);
+        Directory.CreateDirectory(Path.Combine(real, ".claude"));
+        File.WriteAllText(Path.Combine(real, ".claude", ".credentials.json"), "made-up-sign-in-line-not-a-credential\n");
+        var host = NoHome() with { RealHome = link };
+
+        BoundaryUnit.SignInHidden(host).Should().Equal($"InaccessiblePaths=-{real}/.claude/.credentials.json");
+        BoundaryPreflight.Command(Job(), host, CheckNetwork.Host, string.Empty).Should().Contain(real).And.NotContain(link, "the rows read the resolved home");
+    }
+
+    [Fact]
+    public void TheChecksUnit_HidesTheKeyFolderAndTheKeysFile_AtTheirRealPaths_AsTheCodersUnitDoes()
+    {
+        var job = Job() with { KeysFolder = "/var/lib/coai/keys", KeysFile = "/srv/coai.keys" };
+
+        var properties = BoundaryUnit.Properties(NoHome(), job, CheckNetwork.Host, TimeSpan.FromMinutes(5));
+
+        properties.Should().Contain(["InaccessiblePaths=-/var/lib/coai/keys", "InaccessiblePaths=-/srv/coai.keys"]);
+        BoundaryUnit.KeysHidden(job).Should().Equal(["InaccessiblePaths=-/var/lib/coai/keys", "InaccessiblePaths=-/srv/coai.keys"]);
+        CoderUnit.KeysHidden(NoHome() with { BindSignIn = false }, job).Should().Equal(BoundaryUnit.KeysHidden(job), "one list for both units");
+        CoderUnit.KeysHidden(NoHome() with { BindSignIn = true }, job).Should().BeEmpty("a launch that binds the person's sign-in has no key to hide it from");
+    }
+
+    [Fact]
+    public void TheChecksUnit_BindsNoPartOfTheJobFolderButTheFoldersTheChecksUse_AndNeverTheCodersFolder()
+    {
+        var job = Job();
+
+        var properties = BoundaryUnit.Properties(NoHome(), job, CheckNetwork.Private, TimeSpan.FromMinutes(5));
+
+        properties.Should().NotContain($"BindPaths={J}", "the whole job folder is no longer bound: the coder's home and config are in it");
+        properties.Where(property => property.Contains(job.CoderFolder, StringComparison.Ordinal)).Should().BeEmpty("no property of a check unit names the coder's folder");
+        properties.Should().Contain($"TemporaryFileSystem={J}:ro");
+        job.CheckFolders.Should().NotContain(folder => folder.StartsWith(job.CoderFolder, StringComparison.Ordinal));
+        job.CheckFolders.Should().OnlyContain(folder => properties.Contains($"BindPaths={folder}"));
+        var cover = properties.ToList().IndexOf($"TemporaryFileSystem={J}:ro");
+        job.CheckFolders.Should().OnlyContain(folder => properties.ToList().IndexOf($"BindPaths={folder}") > cover, "a folder is bound after the tmpfs that would otherwise hide it");
+    }
+
     [Fact]
     public void TheChecksUnit_WithNoMount_IsTheListE2Recorded_AndWithOne_ThatListPlusOneReadOnlyBindAndNothingElse()
     {
         string[] e2 =
         [
             .. E2Isolation,
-            $"BindPaths={W}", $"BindReadOnlyPaths={M}", $"BindReadOnlyPaths={W}/.git", $"BindPaths={J}", $"BindPaths={J}/{TempName}:{BoundaryUnit.UnitTemp}", $"BindPaths={J}/vartmp:{BoundaryUnit.UnitVarTemp}",
+            $"BindPaths={W}", $"BindReadOnlyPaths={M}", $"BindReadOnlyPaths={W}/.git", .. JobView, $"BindPaths={J}/{TempName}:{BoundaryUnit.UnitTemp}", $"BindPaths={J}/vartmp:{BoundaryUnit.UnitVarTemp}",
+            .. SignInHidden,
             .. E2Hardening,
             "PrivateNetwork=yes",
             .. E2Limits,
@@ -83,7 +182,7 @@ public sealed class ASubmoduleMountInTheUnitsTests
         string[] e2 =
         [
             .. E2Isolation,
-            $"BindReadOnlyPaths={M}", "BindReadOnlyPaths=/w", $"BindPaths={W}", $"BindReadOnlyPaths={W}/.git", $"BindPaths={J}/coder", $"BindPaths={J}/coder/{TempName}:{BoundaryUnit.UnitTemp}", $"BindPaths={J}/coder/vartmp:{BoundaryUnit.UnitVarTemp}",
+            $"BindReadOnlyPaths={M}", "BindReadOnlyPaths=/w", $"BindPaths={W}", $"BindReadOnlyPaths={W}/.git", $"TemporaryFileSystem={J}:ro", $"BindPaths={J}/coder", $"BindPaths={J}/coder/{TempName}:{BoundaryUnit.UnitTemp}", $"BindPaths={J}/coder/vartmp:{BoundaryUnit.UnitVarTemp}",
             .. E2Hardening,
             "PrivateNetwork=no",
             .. E2Limits,

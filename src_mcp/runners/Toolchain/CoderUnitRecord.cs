@@ -23,6 +23,9 @@ public static class CoderUnitRecord
     /// <summary>The unit's name for one launch of <paramref name="job"/> (<c>coai-coder-&lt;job&gt;-&lt;part&gt;</c>).</summary>
     public static string UnitName(BoundaryJob job, string part) => CoderUnit.UnitName(job, part);
 
+    /// <summary>The unit's name for one step of the checks of <paramref name="job"/> (<c>coai-check-&lt;job&gt;-&lt;part&gt;</c>).</summary>
+    public static string CheckUnitName(BoundaryJob job, string part) => BoundaryUnit.UnitName(job, part);
+
     internal static string FileName(string part) => $"unit-{part}.json";
 
     /// <summary>
@@ -40,7 +43,8 @@ public static class CoderUnitRecord
     /// <param name="record">What the launch was bounded by and what the preflight said.</param>
     /// <param name="mounts">The submodules of the job and whether each was provided.</param>
     /// <param name="started">False when the preflight refused the launch and no unit of the coder ran.</param>
-    public static bool Write(string folder, string part, string unit, BoundaryRecord record, CoderMounts mounts, bool started = true)
+    /// <param name="step">What the unit ran, when it was a step of the checks (<c>src_mcp build</c>): written as <c>step</c>; the coder's own launches pass none.</param>
+    public static bool Write(string folder, string part, string unit, BoundaryRecord record, CoderMounts mounts, bool started = true, string step = "")
     {
         if (!CoderUnit.IsPart(part))
         {
@@ -52,7 +56,7 @@ public static class CoderUnitRecord
             Directory.CreateDirectory(folder);
             var target = Path.Combine(folder, FileName(part));
             var temp = target + ".tmp";
-            File.WriteAllBytes(temp, Render(part, unit, record, mounts, started));
+            File.WriteAllBytes(temp, Render(part, unit, record, mounts, started, step));
             File.Move(temp, target, overwrite: true);
 
             return true;
@@ -63,7 +67,7 @@ public static class CoderUnitRecord
         }
     }
 
-    private static byte[] Render(string part, string unit, BoundaryRecord record, CoderMounts mounts, bool started)
+    private static byte[] Render(string part, string unit, BoundaryRecord record, CoderMounts mounts, bool started, string step)
     {
         using var stream = new MemoryStream();
         using (var json = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true }))
@@ -72,6 +76,11 @@ public static class CoderUnitRecord
             json.WriteString("unit", unit);
             json.WriteString("part", part);
             json.WriteBoolean("started", started);
+            if (step.Length > 0)
+            {
+                json.WriteString("step", step);
+            }
+
             json.WriteString("boundary", record.Boundary);
             json.WriteString("network", record.Network);
             json.WriteString("networkReason", record.NetworkReason);

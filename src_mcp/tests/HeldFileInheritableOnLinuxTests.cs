@@ -124,6 +124,41 @@ public sealed class HeldFileInheritableOnLinuxTests : IDisposable
         HeldFile.Probe(LockFile).Should().Be(LockProbe.Free, "the descriptor leaked with its flock: nobody else can take the file until this process exits");
     }
 
+    /// <summary>
+    /// The product cause of the flake of the test above (it failed twice in the coverage run, where tests run in parallel and slowly): the descriptor was opened WITHOUT <c>O_CLOEXEC</c> from the start, so a process another test started on another thread
+    /// between the <c>open</c> and the close on the failure path inherited the descriptor — and with it the open file description, whose <c>flock</c> then outlived the close. The descriptor must be close-on-exec until the take has succeeded; only then is it handed
+    /// to every child.
+    /// </summary>
+    [Fact]
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+    public void TheDescriptor_IsCloseOnExec_WhileTheStreamIsBeingMade_AndInheritable_OnceTheTakeSucceeded()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "the native take is Linux's");
+        const long closeOnExec = 0x80000;
+        long during = -1;
+        var hold = LinuxHeldFile.TakeInheritable(LockFile, handle =>
+        {
+            during = FlagsOf(handle);
+
+            return new FileStream(handle, FileAccess.ReadWrite, bufferSize: 0);
+        });
+
+        var taken = hold.Should().BeOfType<Hold.Taken>().Subject;
+        try
+        {
+            (during & closeOnExec).Should().Be(closeOnExec, "a process started while the stream is being made must not inherit a descriptor whose take has not succeeded");
+            (FlagsOf(taken.Stream.SafeFileHandle) & closeOnExec).Should().Be(0, "a take that succeeded is inherited by every child: that is what the tree hold wants");
+        }
+        finally
+        {
+            taken.Stream.Dispose();
+        }
+    }
+
+    /// <summary>The <c>flags:</c> line of the descriptor in <c>/proc/self/fdinfo</c>: the octal open flags, <c>O_CLOEXEC</c> (<c>02000000</c>) among them.</summary>
+    private static long FlagsOf(Microsoft.Win32.SafeHandles.SafeFileHandle handle) =>
+        Convert.ToInt64(File.ReadAllLines($"/proc/self/fdinfo/{handle.DangerousGetHandle()}").Single(line => line.StartsWith("flags:", StringComparison.Ordinal))["flags:".Length..].Trim(), 8);
+
     [Fact]
     public async Task L_N1a_ANonInheritableTake_BesideAnInheritableHold_IsBusy()
     {

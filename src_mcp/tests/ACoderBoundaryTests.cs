@@ -21,6 +21,21 @@ public sealed class ACoderBoundaryTests
     private static void NeedAUserManager() => Assert.SkipUnless(SystemdUser.Works(out var why), why);
 
     [Fact]
+    public async Task TheCodersUnit_CannotSeeAnotherJobsFolder_WhenTheJobFoldersLieInAFolderOfTheirOwn()
+    {
+        NeedAUserManager();
+        await using var bed = await CoderBed.CreateAsync();
+        var others = bed.Inner.UseJobsFolderWithAnotherJob();
+        bed.Job.JobCover.Should().Be(Path.GetDirectoryName(bed.Job.JobRoot));
+
+        var run = await RunAsync(bed, bed.Shell($"if [ -e {others} ]; then echo sees-other-job; else echo hidden-other-job; fi; if {{ true > \"$HOME/from-unit.txt\"; }} 2>/dev/null; then echo wrote-home; else echo refused-home; fi"));
+
+        run.Result.ExitCode.Should().Be(0, run.Result.StdErr);
+        run.Result.StdOut.Split('\n', StringSplitOptions.RemoveEmptyEntries).Should().Contain(["hidden-other-job", "wrote-home"], "another job's coder home is not in this coder's unit, and its own home is writable");
+        File.Exists(others).Should().BeTrue("a positive control: the file is there on the host");
+    }
+
+    [Fact]
     public async Task TheFakeCoder_WritesInItsWorktree_AndIsStoppedInTheMainCheckout_BesideTheWorktree_AndInTheGitPointer_TheOutcomeNamesEveryPath_AndIsNotGreen()
     {
         NeedAUserManager();

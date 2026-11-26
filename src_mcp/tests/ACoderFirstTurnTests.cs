@@ -240,6 +240,60 @@ public sealed class ACoderFirstTurnTests
         Directory.Exists(rig.WorktreeOf(job)).Should().BeTrue("the worktree stays for the retention sweep");
     }
 
+    /// <summary>The mounts folder of a job as <see cref="CoderSubmodules"/> leaves it — <c>&lt;job folder&gt;.mounts/m0</c> with a read-only file in a read-only folder — planted before the job runs, so the job's end is seen taking it away.</summary>
+    private static string PlantMounts(CoderRig rig, RoleJobRecord job)
+    {
+        var mounts = rig.JobFolder(job) + ".mounts";
+        var source = Path.Combine(mounts, "m0", "rules");
+        Directory.CreateDirectory(source);
+        var file = Path.Combine(source, "rule.md");
+        File.WriteAllText(file, "rule one\n");
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(file, UnixFileMode.UserRead);
+            File.SetUnixFileMode(source, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+        }
+
+        return mounts;
+    }
+
+    [Fact]
+    public async Task D3_AFinishedJob_TakesItsSubmoduleMountsAway_AndKeepsItsRecordAndItsWorktree()
+    {
+        await using var rig = await CoderRig.CreateAsync();
+        rig.Says("sonnet", CoderRig.Edits("src/thing.cs"), CoderRig.Report());
+        var job = rig.NewJob();
+        var mounts = PlantMounts(rig, job);
+
+        var (_, ended) = await rig.RunAsync(job);
+
+        ended.State.Should().Be(RoleJobStates.Succeeded, ended.Reason);
+        Directory.Exists(mounts).Should().BeFalse("nothing reads a mount's source once the work, the checks included, is over");
+        Directory.Exists(rig.JobFolder(job)).Should().BeTrue("the job's own folder stays until the job's retention");
+        Directory.Exists(rig.WorktreeOf(job)).Should().BeTrue("the worktree holds the coder's work: it is not the mounts' to remove");
+        rig.World.Store.Read(job.JobId).Should().NotBeNull("the record stays");
+    }
+
+    [Fact]
+    public async Task D3_AStaleRunner_LeavesTheSubmoduleMounts_TheJobMayBeRunningAgainOnThem()
+    {
+        await using var rig = await CoderRig.CreateAsync();
+        rig.Says("sonnet", CoderRig.Edits("src/thing.cs"), CoderRig.Report());
+        var job = rig.NewJob();
+        var mounts = PlantMounts(rig, job);
+
+        var (exit, _) = await rig.RunAsync(job, boundary: point =>
+        {
+            if (point == "before-commit")
+            {
+                rig.World.Store.BumpGeneration(job.JobId);
+            }
+        });
+
+        exit.Should().Be(RoleRunner.NotTheWriter);
+        Directory.Exists(mounts).Should().BeTrue("a runner that lost the job does not take away what the job's next runner reads");
+    }
+
     [Fact]
     public async Task D3_ARunnerThatTurnsStaleAfterTheCommit_PublishesNoResult()
     {
