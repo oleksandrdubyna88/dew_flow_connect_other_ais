@@ -8,8 +8,14 @@ internal static class WorkPackText
 {
     private const int MinimumFence = 3;
 
-    internal static string Compose(IReadOnlyList<WorkPackFiles.Section> sections, string notSent) =>
-        notSent + "\n\n" + string.Join("\n", sections.Select(Section));
+    internal static string Compose(IReadOnlyList<WorkPackFiles.Section> sections, string notSent, IReadOnlyList<WorkPackOrder.Dependency>? dependencies = null) =>
+        notSent + "\n\n" + (dependencies is { Count: > 0 } ? Outside(dependencies) + "\n\n" : string.Empty) + string.Join("\n", sections.Select(Section));
+
+    /// <summary>
+    /// The line of the nodes OUTSIDE the scope that a node of the scope depends on, each with its title — the same lines the approval carries (<c>D</c> lines), so what the approval id covers is what the reviewers read (code checkpoint of 2026-11-26). Not sent as files: the reviewers are told the dependency exists and what it is called.
+    /// </summary>
+    private static string Outside(IReadOnlyList<WorkPackOrder.Dependency> dependencies) =>
+        $"**Depends on, outside the scope** (named in the approval; the files are not sent): {string.Join("; ", dependencies.Select(dependency => $"{dependency.Node} (\"{dependency.Title.ReplaceLineEndings(" ")}\")"))}.";
 
     private static string Section(WorkPackFiles.Section section)
     {

@@ -185,6 +185,21 @@ public sealed class AJudgeContractTests
     }
 
     [Fact]
+    public void D1_TheLimits_CountUnicodeCodePoints_NotUtf16Units_SoTheyAgreeWithTheJsonSchema()
+    {
+        // An emoji outside the basic plane is TWO UTF-16 units and ONE character: the schema's maxLength counts characters.
+        var answer = Valid();
+        answer["summary"] = string.Concat(Enumerable.Repeat("\U0001F600", 800));
+        Finding(answer)["title"] = string.Concat(Enumerable.Repeat("\U0001F600", 120));
+        Finding(answer)["fix"] = string.Concat(Enumerable.Repeat("\U0001F600", 600));
+
+        ReadOf(answer).Should().BeOfType<JudgeRead.Answer>("800 emoji are 800 characters, under the limit of 1,500, though they are 1,600 UTF-16 units");
+
+        answer["summary"] = string.Concat(Enumerable.Repeat("\U0001F600", 1501));
+        ProblemsOf(answer).Should().ContainSingle().Which.Should().StartWith("summary:").And.Contain("1501 characters, at most 1500");
+    }
+
+    [Fact]
     public void D1_TheCounts_AreHeld_At30Findings_5Evidence_And8Rejected()
     {
         var thirtyOne = Approve();

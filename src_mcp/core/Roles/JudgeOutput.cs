@@ -86,15 +86,24 @@ public static class JudgeOutputReader
         }
 
         var problems = new List<string>();
-        var status = root.TryGetProperty("status", out var word) && word.ValueKind == JsonValueKind.String ? word.GetString() : null;
+        var status = StatusOf(root);
         RoleOutputShape.UnknownKeys(root, status == "refused" ? RefusedKeys : OkKeys, string.Empty, problems);
-        if (status == "refused")
-        {
-            var reason = RoleOutputShape.Required(root, "reason", string.Empty, int.MaxValue, problems);
 
-            return problems.Count > 0 ? new JudgeRead.Wrong(problems) : new JudgeRead.Refused(reason);
-        }
+        return status == "refused" ? ReadRefused(root, problems) : ReadAnswer(root, status, problems);
+    }
 
+    private static string? StatusOf(JsonElement root) =>
+        root.TryGetProperty("status", out var word) && word.ValueKind == JsonValueKind.String ? word.GetString() : null;
+
+    private static JudgeRead ReadRefused(JsonElement root, List<string> problems)
+    {
+        var reason = RoleOutputShape.Required(root, "reason", string.Empty, int.MaxValue, problems);
+
+        return problems.Count > 0 ? new JudgeRead.Wrong(problems) : new JudgeRead.Refused(reason);
+    }
+
+    private static JudgeRead ReadAnswer(JsonElement root, string? status, List<string> problems)
+    {
         if (status != "ok")
         {
             problems.Add($"status: must be \"ok\" or \"refused\", not '{RoleOutputShape.Printable(status ?? "(missing)")}'");

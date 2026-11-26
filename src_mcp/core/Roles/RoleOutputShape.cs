@@ -28,10 +28,7 @@ internal static class RoleOutputShape
         }
 
         var text = value.GetString()!;
-        if (text.Length > max)
-        {
-            problems.Add($"{Where(at, key)}: {text.Length} characters, at most {max}");
-        }
+        TooLong(text, max, Where(at, key), problems);
 
         return text;
     }
@@ -52,10 +49,7 @@ internal static class RoleOutputShape
         }
 
         var text = value.GetString() ?? string.Empty;
-        if (text.Length > max)
-        {
-            problems.Add($"{Where(at, key)}: {text.Length} characters, at most {max}");
-        }
+        TooLong(text, max, Where(at, key), problems);
 
         return text;
     }
@@ -70,9 +64,9 @@ internal static class RoleOutputShape
             {
                 problems.Add($"{where}: must be a non-empty string (not only white space)");
             }
-            else if (item.GetString()!.Length > maxText)
+            else if (TooLong(item.GetString()!, maxText, where, problems))
             {
-                problems.Add($"{where}: {item.GetString()!.Length} characters, at most {maxText}");
+                continue;
             }
             else
             {
@@ -125,6 +119,25 @@ internal static class RoleOutputShape
         return items;
     }
 
+    /// <summary>
+    /// How many CHARACTERS a text has, the way a JSON schema's <c>maxLength</c> counts them: Unicode code points, not UTF-16 units — an emoji outside the basic plane is one character here and two <c>string.Length</c> units, so a limit of 1,500 must take 800 of them.
+    /// </summary>
+    public static int Characters(string text) => text.EnumerateRunes().Count();
+
+    /// <summary>Adds the problem "N characters, at most M" when <paramref name="text"/> has more than <paramref name="max"/> characters (<see cref="Characters"/>); says whether it did.</summary>
+    private static bool TooLong(string text, int max, string where, List<string> problems)
+    {
+        var count = Characters(text);
+        if (count <= max)
+        {
+            return false;
+        }
+
+        problems.Add($"{where}: {count} characters, at most {max}");
+
+        return true;
+    }
+
     /// <summary>The keys of one evidence item; every one is required.</summary>
     public static readonly IReadOnlyList<string> EvidenceKeys = ["file", "line", "text"];
 
@@ -134,10 +147,7 @@ internal static class RoleOutputShape
         var text = item.TryGetProperty("text", out var quoted) && quoted.ValueKind == JsonValueKind.String ? quoted.GetString()! : string.Empty;
         AddUnless(problems, ProblemOfPath(item, where, file));
         AddUnless(problems, RoleEvidence.BlankProblem($"{where}.text", text));
-        if (text.Length > RoleEvidence.MaxTextLength)
-        {
-            problems.Add($"{where}.text: {text.Length} characters, at most {RoleEvidence.MaxTextLength}");
-        }
+        TooLong(text, RoleEvidence.MaxTextLength, $"{where}.text", problems);
 
         return new EvidenceItem(file, Line(item, where, problems), text);
     }

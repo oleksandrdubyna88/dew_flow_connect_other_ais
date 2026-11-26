@@ -279,4 +279,24 @@ public sealed class AWorkPackIsTopologicalTests
             $"(packed by the server from {Feature}/epoch-1/e2-more at commit aaaaaaaaaaaa, approval {pack.ApprovalId}, {pack.Sections.Count} files, {pack.Bytes} bytes; validate_work: valid, limits device)");
     }
 
+
+    [Fact]
+    public void D2_AStoryScopedPack_NamesTheStoryAndTheTaskOfAnotherStoryItDependsOn_InItsText_BeforeTheFiles()
+    {
+        var pack = Packed(Plan(), "epoch-1/e2-more/stories/s1-more");
+
+        var line = pack.Text.Split('\n').Single(one => one.StartsWith("**Depends on, outside the scope**", StringComparison.Ordinal));
+        line.Should().Contain("epoch-1/e1-core/s1-first (\"Story s1-first\")").And.Contain("epoch-1/e1-core/s1-first/t1-a (\"Task t1-a\")", "the task of ANOTHER story that a task of this story depends on is named with its title, as the approval names it");
+        pack.Text.IndexOf(line, StringComparison.Ordinal).Should().BeLessThan(pack.Text.IndexOf("## ", StringComparison.Ordinal), "the line stands before the first file section");
+        pack.Bytes.Should().Be(Encoding.UTF8.GetByteCount(pack.Text));
+    }
+
+    [Fact]
+    public void D2_AnEpicScopedPack_HasTheTextItHadBeforeTheLine_SoAnApprovedEpicRoundKeepsItsTextId()
+    {
+        var pack = Packed(Plan(), "epoch-1/e2-more");
+
+        pack.Approval.Should().Contain(line => line.Kind == "D", "the epic depends on e1-core: the approval names it");
+        pack.Text.Should().NotContain("Depends on, outside the scope", "the text of an epoch or an epic scope is unchanged, byte for byte");
+    }
 }

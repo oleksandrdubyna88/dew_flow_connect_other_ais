@@ -104,7 +104,8 @@ public static class WorkPack
         }
 
         var approval = Approval(read.Sections, plan.Dependencies);
-        var text = WorkPackText.Compose(read.Sections, WorkPackText.NotSent(folder, feature, plan, featureFolder));
+        // A story or a task is read WITHOUT the epics and stories it depends on, so the reviewers are told which they are; the text of an epoch or an epic scope stays what it was, byte for byte (an approved round of one carries its text id).
+        var text = WorkPackText.Compose(read.Sections, WorkPackText.NotSent(folder, feature, plan, featureFolder), scope.Story is not null ? plan.Dependencies : []);
         var bytes = Encoding.UTF8.GetByteCount(text);
         var pack = new Pack(text, scope.Folder.Length == 0 ? featureFolder : $"{featureFolder}/{scope.Folder}", IdOf(approval), approval, [.. read.Sections.Select(section => new PackSection(section.Path, section.Bytes))], bytes);
 
