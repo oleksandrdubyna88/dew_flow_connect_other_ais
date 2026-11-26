@@ -52,7 +52,7 @@ test('A3-T23: the Stop holds against a stale window\'s view, and survives a relo
 
   assert.equal(await stoppedIn(b), true, 'a stale window\'s notice write started a stopped round');
   const round = roundIn(b);
-  await runRound(round.seams, new Map(), 0, 'timer', OFF);
+  await runRound(round.seams, new Map(), 0, 'timer', OFF, 'on');
   assert.deepEqual([round.called, round.admitted], [[], []], 'a stale window\'s notice write started a stopped round');
   assert.equal(armWhen(await stoppedIn(b)), 'clear');
 
@@ -127,7 +127,7 @@ test('A3-T23: stopped() is asked before EVERY call: a Stop written to the file b
   });
   const seams: RoundSeams = { ...base.seams, stopped: () => stoppedIn(mine), admit: (host) => mine.keeper.admit(host) };
 
-  const result = await runRound(seams, new Map(), 0, 'timer', OFF);
+  const result = await runRound(seams, new Map(), 0, 'timer', OFF, 'on');
 
   assert.deepEqual(base.calls.map((call) => call.host), ['a'], 'a stopped round made one more call');
   assert.equal(result.abandoned, true);
@@ -144,7 +144,7 @@ test('A3-T23: a state row that cannot be read is a stop, and only a person\'s pr
     assert.equal(stoppedOf(damaged), true, `${name}: a state row that could not be read let the round run`);
     assert.equal(await stoppedIn(w), true, `${name}: a state row that could not be read let the round run`);
     const round = roundIn(w);
-    await runRound(round.seams, new Map(), 0, 'timer', OFF);
+    await runRound(round.seams, new Map(), 0, 'timer', OFF, 'on');
     assert.deepEqual([round.called, round.admitted], [[], []], `${name}: a state row that could not be read let the round run`);
     assert.equal(armWhen(await stoppedIn(w)), 'clear');
     // `told` and `autoNoticed` write nothing.
@@ -159,7 +159,7 @@ test('A3-T23: a state row that cannot be read is a stop, and only a person\'s pr
     assert.deepEqual(backing.values.get(STATE_KEY), {}, `${name}: a start did not write an empty row`);
     assert.equal(await stoppedIn(started), false);
     const next = roundIn(started);
-    await runRound(next.seams, new Map(), 0, 'timer', OFF);
+    await runRound(next.seams, new Map(), 0, 'timer', OFF, 'on');
     assert.equal(next.called.length, 2, `${name}: after a start the round did not run`);
 
     const damagedAgain = new Backing();
@@ -208,7 +208,7 @@ test('A3-T24: nothing of a reading is stored', async () => {
 
   let memory = new Map();
   for (let round = 0; round < 3; round += 1) {
-    memory = new Map((await runRound(seams, memory, round, 'timer', { kind: 'every-round' })).memory);
+    memory = new Map((await runRound(seams, memory, round, 'timer', { kind: 'every-round' }, 'on')).memory);
   }
   assert.ok(memory.size === 2, 'the rounds did not run, so the store assertions below see nothing');
   // The window DOES hold the marks (in memory only): a reading that carried none would make the store checks below pass over nothing.

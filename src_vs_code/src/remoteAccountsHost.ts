@@ -6,7 +6,7 @@ import { notify, notifyThen } from './notify';
 import { oneAtATime } from './oneAtATime';
 import { readAccounts } from './remoteAccountsReply';
 import {
-  AccountsCall, Memory, RoundResult, RoundSeams, STATE_KEY, TimerAction, Trigger, accountsHosts, accountsStateOf, armFor, callFor, droppedLine, eligibleOf, isStopped, liveOnly, logGate,
+  ACCOUNTS_READING, AccountsCall, Memory, RoundResult, RoundSeams, STATE_KEY, TimerAction, Trigger, accountsHosts, accountsStateOf, armFor, callFor, droppedLine, eligibleOf, isStopped, liveOnly, logGate,
   ROUND_GAP_MS, memoryAfter, nextAfterRound, openStarts, refreshAnswer, refusedHosts, runRound, settleRound, standingsBump, startTheRound, stateMerge, stopTheRound, timerFor, unreadHost, withRefusals,
 } from './remoteAccountsRound';
 import { AccountsView, ChooseSeams, NoticeSeams, Row, accountsRows, choose, copyDecisionFor, tellAfterRound } from './remoteAccountsRows';
@@ -50,7 +50,7 @@ export interface TerminalAccountsTestDoor {
   /** Replace the call; `undefined` puts the stub back (in test mode the default call is a stub). */
   readonly replaceCall: (call: AccountsCall | undefined) => void;
   readonly runRoundNow: (trigger: Trigger) => Promise<RoundResult | undefined>;
-  /** Whether the timer would be armed: what `armFor` answers now. In test mode no timer ever runs. */
+  /** Whether the timer would be armed outside test mode: what `timerFor` makes of `armFor`'s answer now (never, while the reading is off). In test mode no timer ever runs. */
   readonly armed: () => Promise<boolean>;
   readonly memoryHosts: () => readonly string[];
   /** The labels, descriptions, details and kinds of the items last given to the list. */
@@ -113,7 +113,7 @@ class AccountsWindow implements TerminalAccounts {
     this.door = {
       replaceCall: (call) => { this.replaced = call; },
       runRoundNow: (trigger) => this.runNow(trigger),
-      armed: async () => (await this.decision(false)) === 'arm-first',
+      armed: async () => timerFor(await this.decision(false), false).kind === 'start',
       memoryHosts: () => [...this.memoryNow.keys()].sort(byCodeUnit),
       lastItems: () => this.shown,
     };
@@ -136,7 +136,8 @@ class AccountsWindow implements TerminalAccounts {
     return {
       live: windowTerminals,
       stopped: () => this.stoppedNow(),
-      admit: (host) => this.sessions.admitHost(host),
+      // While the reading is off no host is admitted, so the door writes no automatic "yes" row for one.
+      admit: (host) => (ACCOUNTS_READING === 'off' ? Promise.resolve({ kind: 'not-asked' }) : this.sessions.admitHost(host)),
       call: async (host, mode) => {
         const run = await callFor(this.test, real, this.replaced)(host, mode);
         if (run.kind === 'answered') {
@@ -189,6 +190,9 @@ class AccountsWindow implements TerminalAccounts {
    */
   async runNow(trigger: Trigger): Promise<RoundResult | undefined> {
     if (this.disposed) {
+      return undefined;
+    }
+    if (ACCOUNTS_READING === 'off') {
       return undefined;
     }
     const mine = { ran: false };

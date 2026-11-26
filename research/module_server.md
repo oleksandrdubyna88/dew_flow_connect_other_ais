@@ -5015,7 +5015,11 @@ behind a link — and held on every platform by `AReviewRootBehindALinkTests`, w
 itself. It is the product's ONE comparison of a path git answered with a path somebody spelled: the
 feature stage's top-level check and the gate history's repository match go through it as well, and
 `Same` answers `false` for a path this machine cannot resolve (a NUL, another operating system's
-record) rather than throwing `GetFullPath`'s argument validation at a yes-or-no question.
+record) rather than throwing `GetFullPath`'s argument validation at a yes-or-no question. The two resolved paths are
+compared with the case rule of the operating system, `WorktreePaths.Comparison`, the one rule `WorktreeManager`'s root guard and `ReviewTreeRoot.Real` use as well: `Ordinal` on Linux, where
+`Repo` and `repo` are two folders, and `OrdinalIgnoreCase` on Windows and macOS (2026-11-25, held by
+`AWorktreePathIsComparedByItsRealPathTests`). A case-sensitive macOS volume or a case-insensitive Linux mount is not
+detected: both comparisons follow the operating system, not the volume.
 
 **What removal will not do.** There is no mode, flag or method anywhere that removes more than one
 tree - the argument is a NAME and it must match a record we hold, so a separator, a `..`, a round

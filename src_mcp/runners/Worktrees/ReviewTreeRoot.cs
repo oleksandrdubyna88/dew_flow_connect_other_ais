@@ -143,8 +143,7 @@ public sealed class ReviewTreeRoot(IProcessLauncher launcher, string path)
     /// parent is a link to an outside folder).
     /// </summary>
     /// <remarks>Case: <c>OrdinalIgnoreCase</c> on Windows and macOS, as before; <c>Ordinal</c> on Linux, where names differing by case are different folders.</remarks>
-    internal RealPathResult Real(string candidate) => RealPath.ResolveBelow(
-        path, candidate, OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+    internal RealPathResult Real(string candidate) => RealPath.ResolveBelow(path, candidate, WorktreePaths.Comparison);
 
     /// <summary>Where the tree of this name is.</summary>
     public string TreeAt(string name) => System.IO.Path.Combine(path, name);

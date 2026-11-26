@@ -38,6 +38,19 @@ export type UsagePolicy = { readonly kind: 'every-round' } | { readonly kind: 'h
  */
 export const USAGE_POLICY: UsagePolicy = { kind: 'off' };
 
+/** Whether the accounts round reads any host at all. */
+export type AccountsReading = 'off' | 'on';
+
+/**
+ * The cut of the accounts plan's stop: in a build from main the round reads no host. With `off` no timer is armed (`timerFor`), no round
+ * calls a runner or asks the door (`runRound`), and the list is one row that says so (`accountsRows`). The modules stay: a later build
+ * sets this to `on` when it asks the person for its one permission.
+ */
+export const ACCOUNTS_READING: AccountsReading = 'off';
+
+/** What the list and the notices say while `ACCOUNTS_READING` is `off`. */
+export const READING_OFF_SAID = 'The accounts reading is off in this build: it comes back when the next build asks for one permission.';
+
 export type Reading = Extract<AccountsRead, { kind: 'read' }>;
 type Unreadable = Extract<AccountsRead, { kind: 'unreadable' }>;
 type Found = Extract<Reading['claude'], { state: 'found' }>;
@@ -384,7 +397,7 @@ const finished = (context: Context, state: RoundState, abandoned: boolean): Roun
  * One round: for each host of the rotated order, in turn and AWAITED, the steps of `hostRound`. `policy` is `USAGE_POLICY` unless a test
  * hands one in: it is a constant of the build, not a setting.
  */
-export async function runRound(seams: RoundSeams, memory: Memory, round: number, trigger: Trigger, policy: UsagePolicy = USAGE_POLICY): Promise<RoundResult> {
+async function readRound(seams: RoundSeams, memory: Memory, round: number, trigger: Trigger, policy: UsagePolicy): Promise<RoundResult> {
   const context: Context = { seams, trigger, policy, token: seams.generation() };
   const hosts = roundOrder(accountsHosts(seams.live()), round);
   let state: RoundState = { memory: liveOnly(memory, hosts), roundUsage: new Set(), allowedNow: [] };
@@ -398,6 +411,17 @@ export async function runRound(seams: RoundSeams, memory: Memory, round: number,
 
   return finished(context, state, false);
 }
+
+/** The cut: no door, no call, no memory. `abandoned` keeps the window's memory as it was and skips every notice. */
+const noRound = (seams: RoundSeams): Promise<RoundResult> => Promise.resolve({ memory: new Map(), allowedNow: [], endedMs: seams.now(), abandoned: true });
+
+const ROUND_OF: Readonly<Record<AccountsReading, (seams: RoundSeams, memory: Memory, round: number, trigger: Trigger, policy: UsagePolicy) => Promise<RoundResult>>> =
+  { off: noRound, on: readRound };
+
+/** One round, or none while `reading` is `off` (the build's constant unless a test hands one in). */
+export const runRound = (
+  seams: RoundSeams, memory: Memory, round: number, trigger: Trigger, policy: UsagePolicy = USAGE_POLICY, reading: AccountsReading = ACCOUNTS_READING,
+): Promise<RoundResult> => ROUND_OF[reading](seams, memory, round, trigger, policy);
 
 // ───────────────── the timer, as decisions ─────────────────
 
@@ -472,16 +496,20 @@ const afterRound = (next: NextRound, nowMs: number): TimerAction => (next.kind =
 const ARMED: Readonly<Record<ArmDecision, TimerAction>> = { 'arm-first': { kind: 'start', ms: FIRST_DELAY_MS }, clear: { kind: 'clear' }, keep: { kind: 'none' } };
 
 /**
- * The first test-mode lock, and the ONE road from a decision to a timer: in a test run no timer is ever started, whatever `armFor` or
- * `nextAfterRound` answered. A decision after a round is an absolute time; the wait is counted from `nowMs`.
+ * The first test-mode lock, and the ONE road from a decision to a timer: in a test run, or while the reading is `off`, no timer is ever
+ * started, whatever `armFor` or `nextAfterRound` answered. A decision after a round is an absolute time; the wait is counted from `nowMs`.
  */
-export function timerFor(decision: ArmDecision | NextRound, test: boolean, nowMs = 0): TimerAction {
-  if (test) {
+export function timerFor(decision: ArmDecision | NextRound, test: boolean, nowMs = 0, reading: AccountsReading = ACCOUNTS_READING): TimerAction {
+  if (timerLocked(test, reading)) {
     return { kind: 'none' };
   }
 
-  return typeof decision === 'string' ? ARMED[decision] : afterRound(decision, nowMs);
+  return actionOf(decision, nowMs);
 }
+
+const timerLocked = (test: boolean, reading: AccountsReading): boolean => test || reading === 'off';
+
+const actionOf = (decision: ArmDecision | NextRound, nowMs: number): TimerAction => (typeof decision === 'string' ? ARMED[decision] : afterRound(decision, nowMs));
 
 /** After a round: the next one `ROUND_GAP_MS` from the END of this one, or no timer. */
 export const nextAfterRound = (input: { readonly stopped: boolean; readonly eligible: boolean; readonly endedMs: number }): NextRound =>

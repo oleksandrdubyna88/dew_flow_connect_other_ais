@@ -9,6 +9,7 @@ import { notify, notifyThen } from './notify';
 import { ALLOW_NEW_HOSTS_KEY, allowNewHostsFrom, copyWouldReplace, ignoredLayerOf, ignoredWorkspaceValues, IgnoredValue, userLayerReader } from './modelKeys';
 import { MIGRATION_TRIGGERS, scheduleCatalogMigration } from './catalogMigrationHost';
 import { Notice } from './notice';
+import { autoCounts } from './remoteHosts';
 
 /**
  * The ONE construction of this side's settings reader.
@@ -60,11 +61,12 @@ function afterOverlayWrite(context: vscode.ExtensionContext, key: string): void 
 }
 
 /**
- * Whether the accounts round may allow a host that has no answer by itself. Read from the person's own user layer, afresh at every
+ * Whether the accounts round may allow a host that has no answer by itself: the person's own setting AND the build's constant (`AUTOMATIC_ALLOW`, which
+ * is `off` in this build, so this is `false` whatever the setting says). Read from the person's own user layer, afresh at every
  * call, through `userLayer` and NEVER through `readerFor`: that one answers from this side's overlay first, a second place the value
  * could come from. The caller passes a NEW configuration object each time.
  */
-export const allowsNewHosts = (config: vscode.WorkspaceConfiguration): boolean => allowNewHostsFrom(userLayer(config)(ALLOW_NEW_HOSTS_KEY));
+export const allowsNewHosts = (config: vscode.WorkspaceConfiguration): boolean => autoCounts(allowNewHostsFrom(userLayer(config)(ALLOW_NEW_HOSTS_KEY)));
 
 /** The repository layer that sets `key` and is ignored for it, folder first. */
 export const ignoredLayerFor = (config: vscode.WorkspaceConfiguration, key: string): 'workspace' | 'folder' | undefined =>
