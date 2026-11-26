@@ -270,6 +270,29 @@ public sealed class AToolchainFileTests
     }
 
     [Theory]
+    [InlineData("{0}: x\n")]
+    [InlineData("timeouts:\n  {0}: 5m\n")]
+    public void ATokenShapedKey_IsRefused_AndNeverEchoed_WhileARealLookingOneIsNamed(string template)
+    {
+        string Put(string key) => OneProject(template.Replace("{0}", key, StringComparison.Ordinal));
+
+        var token = Read(Put(Pasted)).Should().BeOfType<ToolchainRead.Refused>().Subject;
+        var named = Read(Put("buidl")).Should().BeOfType<ToolchainRead.Refused>().Subject;
+
+        token.Sentence.Should().NotContain(Pasted, "a key is typed by a person too: a token pasted where a key goes is not echoed");
+        token.Sentence.Should().Contain($"a key of {Pasted.Length} characters");
+        named.Sentence.Should().Contain("'buidl'", "a name of the shape of a real key is spelled, so a typo is found");
+    }
+
+    [Fact]
+    public void ATokenShapedKey_InAProject_IsNeverEchoed()
+    {
+        var refused = Read($"version: 1\nprojects:\n  - path: src_mcp\n    adapter: dotnet\n    {Pasted}: x\n").Should().BeOfType<ToolchainRead.Refused>().Subject;
+
+        refused.Sentence.Should().NotContain(Pasted);
+    }
+
+    [Theory]
     [InlineData("2147483647h")]
     [InlineData("2147483647m")]
     [InlineData("9223372036854775807s")]

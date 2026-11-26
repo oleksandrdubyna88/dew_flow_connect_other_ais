@@ -43,7 +43,7 @@ internal sealed partial class ToolchainParse
     {
         foreach (var entry in map.Entries.Where(entry => !level.Fields.ContainsKey(entry.Key)))
         {
-            Fault($"line {entry.Line}: '{entry.Key}' is not a key of {where} (the keys are {string.Join(", ", level.Fields.Keys)})");
+            Fault($"line {entry.Line}: {KeyShown(entry.Key)} is not a key of {where} (the keys are {string.Join(", ", level.Fields.Keys)})");
         }
 
         foreach (var required in level.Required.Where(key => map.Find(key) is null))
@@ -51,6 +51,12 @@ internal sealed partial class ToolchainParse
             Fault($"the key '{required}' is missing from {where}");
         }
     }
+
+    /// <summary>A key a person typed, for a sentence: spelled only when it has the shape of a real key (a short name); anything else — a token pasted as a key — is described by its length.</summary>
+    private static string KeyShown(string key) => KeyShape().IsMatch(key) ? $"'{key}'" : $"a key of {key.Length} characters";
+
+    [GeneratedRegex("^[A-Za-z][A-Za-z0-9_-]{0,31}$", RegexOptions.CultureInvariant)]
+    private static partial Regex KeyShape();
 
     /// <summary>
     /// What a node is, for a sentence: its kind, and for a string its length — NEVER its text. A person may paste anything into this file, a token included, and a refusal is printed and recorded; only the keys of the file (names the person chose for the structure)
