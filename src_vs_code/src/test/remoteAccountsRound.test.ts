@@ -258,7 +258,7 @@ test('A3-T17: the usage policy is one constant, and E1 ships it off', async () =
   const shipped = world({ hosts, reply: both });
   memory = new Map();
   for (let round = 0; round < 6; round += 1) {
-    memory = new Map((await runRound(shipped.seams, memory, round, 'timer')).memory);
+    memory = new Map((await runRound(shipped.seams, memory, round, 'timer', USAGE_POLICY, 'on')).memory);
   }
   assert.equal(shipped.calls.length, 12);
   assert.equal(usageCalls(shipped), 0, 'E1 would run the usage command before W6 and W7');
@@ -339,7 +339,7 @@ test('A3-T20: the first round and the gap', () => {
   const decide = (over: Partial<Parameters<typeof armFor>[0]> = {}): ArmDecision => armFor({ eligible: true, armed: false, stopped: false, running: false, ...over });
 
   assert.equal(decide(), 'arm-first', 'an eligible host at activation did not arm a first round');
-  assert.deepEqual(timerFor('arm-first', false), { kind: 'start', ms: FIRST_DELAY_MS });
+  assert.deepEqual(timerFor('arm-first', false, 0, 'on'), { kind: 'start', ms: FIRST_DELAY_MS });
   assert.equal(FIRST_DELAY_MS, 30_000);
   assert.equal(decide({ eligible: false }), 'clear', 'a reload with no eligible host armed a round');
   assert.equal(decide({ armed: true }), 'keep', 'an open while armed re-armed the timer');
@@ -427,20 +427,20 @@ test('A3-T26: the parser reads the mode that was sent, the extra call\'s too', a
 test('A3-T27: the two test-mode locks, pure', async () => {
   const decisions: readonly ArmDecision[] = ['arm-first', 'clear', 'keep'];
   for (const decision of decisions) {
-    assert.deepEqual(timerFor(decision, true), { kind: 'none' }, 'a round armed itself in a test run');
+    assert.deepEqual(timerFor(decision, true, 0, 'on'), { kind: 'none' }, 'a round armed itself in a test run');
   }
-  assert.notDeepEqual(timerFor('arm-first', false), { kind: 'none' });
-  assert.deepEqual(timerFor('clear', false), { kind: 'clear' });
-  assert.deepEqual(timerFor('keep', false), { kind: 'none' });
+  assert.notDeepEqual(timerFor('arm-first', false, 0, 'on'), { kind: 'none' });
+  assert.deepEqual(timerFor('clear', false, 0, 'on'), { kind: 'clear' });
+  assert.deepEqual(timerFor('keep', false, 0, 'on'), { kind: 'none' });
 
   // The timer after a round goes through the same lock: the next round is the gap from the END of the last, counted from now.
   const next = nextAfterRound({ stopped: false, eligible: true, endedMs: 1_000_000 });
-  assert.deepEqual(timerFor(next, true, 1_000_000), { kind: 'none' }, 'a round armed itself in a test run');
-  assert.deepEqual(timerFor(next, false, 1_000_000), { kind: 'start', ms: ROUND_GAP_MS });
-  assert.deepEqual(timerFor(next, false, 1_100_000), { kind: 'start', ms: ROUND_GAP_MS - 100_000 }, 'the gap was counted from the wrong moment');
-  assert.deepEqual(timerFor(next, false, 9_000_000), { kind: 'start', ms: 0 }, 'a gap that is over waited a negative time');
-  assert.deepEqual(timerFor({ kind: 'clear' }, false), { kind: 'clear' });
-  assert.deepEqual(timerFor({ kind: 'clear' }, true), { kind: 'none' });
+  assert.deepEqual(timerFor(next, true, 1_000_000, 'on'), { kind: 'none' }, 'a round armed itself in a test run');
+  assert.deepEqual(timerFor(next, false, 1_000_000, 'on'), { kind: 'start', ms: ROUND_GAP_MS });
+  assert.deepEqual(timerFor(next, false, 1_100_000, 'on'), { kind: 'start', ms: ROUND_GAP_MS - 100_000 }, 'the gap was counted from the wrong moment');
+  assert.deepEqual(timerFor(next, false, 9_000_000, 'on'), { kind: 'start', ms: 0 }, 'a gap that is over waited a negative time');
+  assert.deepEqual(timerFor({ kind: 'clear' }, false, 0, 'on'), { kind: 'clear' });
+  assert.deepEqual(timerFor({ kind: 'clear' }, true, 0, 'on'), { kind: 'none' });
 
   const real: string[] = [];
   const realCall = (host: string): Promise<RemoteRun> => { real.push(host); return Promise.resolve({ kind: 'answered', code: 0, stdout: '' }); };
@@ -648,7 +648,7 @@ test('A3-T29 (F1): a generation that moved by the end of the round abandons it, 
   const w = world({ hosts: ['a'] });
   const seams = { ...w.seams, landed: () => { w.control.generation += 1; } };
 
-  const result = await runRound(seams, new Map(), 0, 'timer', OFF);
+  const result = await runRound(seams, new Map(), 0, 'timer', OFF, 'on');
 
   assert.equal(result.abandoned, true, 'a Stop given as the round ended did not abandon it');
   assert.deepEqual([...memoryAfter(new Map(), result)], [], 'a stopped round\'s memory came back');
@@ -695,7 +695,7 @@ test('A3-T22 (F3): a round that fails is settled: logged once, and the timer is 
   assert.deepEqual(scheduled, [undefined], 'rounds stopped silently: no timer was asked for after a failed round');
   assert.equal(fallbacks.length, 0);
   // The timer that is then set is the planner\'s, from now, and outside test mode it starts.
-  assert.deepEqual(timerFor(nextAfterRound({ stopped: false, eligible: true, endedMs: 5_000 }), false, 5_000), { kind: 'start', ms: ROUND_GAP_MS });
+  assert.deepEqual(timerFor(nextAfterRound({ stopped: false, eligible: true, endedMs: 5_000 }), false, 5_000, 'on'), { kind: 'start', ms: ROUND_GAP_MS });
 
   // A scheduler that fails too: the fallback sets the timer.
   const both = await settleRound(() => Promise.reject(new Error('x')), () => Promise.reject(new Error('y')), () => { fallbacks.push('fallback'); }, () => { log.push('failed'); });

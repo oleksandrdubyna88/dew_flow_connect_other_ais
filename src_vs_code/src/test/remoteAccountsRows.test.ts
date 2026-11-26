@@ -52,7 +52,7 @@ const memoryOf = (...entries: readonly (readonly [string, HostMemory])[]): Memor
 const person = (host: string, answer: 'yes' | 'no' = 'yes'): HostStanding => ({ host, answer, how: 'person', askedUtc: '2026-11-20T10:00:00.000Z' });
 const auto = (host: string, askedUtc = '2026-11-21T09:00:00.000Z'): HostStanding => ({ host, answer: 'yes', how: 'auto', askedUtc });
 
-const rowsOf = (over: Partial<AccountsView>, nowMs = NOW): readonly Row[] => accountsRows(view(over), nowMs);
+const rowsOf = (over: Partial<AccountsView>, nowMs = NOW): readonly Row[] => accountsRows(view(over), nowMs, 'on');
 const labelsOf = (rows: readonly Row[]): readonly string[] => rows.map((row) => row.label);
 const separators = (rows: readonly Row[]): readonly string[] => rows.filter((row) => row.kind === 'separator').map((row) => row.label);
 const usageRows = (rows: readonly Row[]): readonly Extract<Row, { kind: 'usage' }>[] => rows.filter((row): row is Extract<Row, { kind: 'usage' }> => row.kind === 'usage');
