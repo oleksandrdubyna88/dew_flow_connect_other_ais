@@ -292,11 +292,16 @@ public sealed class AWorkPackIsTopologicalTests
     }
 
     [Fact]
-    public void D2_AnEpicScopedPack_HasTheTextItHadBeforeTheLine_SoAnApprovedEpicRoundKeepsItsTextId()
+    public void D2_AnEpicScopedPack_NamesItsOutsideDependenciesToo_AndItsApprovalLinesAreTheSame()
     {
         var pack = Packed(Plan(), "epoch-1/e2-more");
 
-        pack.Approval.Should().Contain(line => line.Kind == "D", "the epic depends on e1-core: the approval names it");
-        pack.Text.Should().NotContain("Depends on, outside the scope", "the text of an epoch or an epic scope is unchanged, byte for byte");
+        var line = pack.Text.Split('\n').Single(one => one.StartsWith("**Depends on, outside the scope**", StringComparison.Ordinal));
+        var outside = pack.Approval.Where(approval => approval.Kind == "D").ToList();
+        outside.Should().NotBeEmpty("the epic depends on e1-core: the approval names it");
+        foreach (var dependency in outside)
+        {
+            line.Should().Contain($"{dependency.Key} (\"{dependency.Value}\")", "the reviewers read what the approval covers: every D line, node and title");
+        }
     }
 }

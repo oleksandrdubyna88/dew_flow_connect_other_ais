@@ -104,8 +104,8 @@ public static class WorkPack
         }
 
         var approval = Approval(read.Sections, plan.Dependencies);
-        // A story or a task is read WITHOUT the epics and stories it depends on, so the reviewers are told which they are; the text of an epoch or an epic scope stays what it was, byte for byte (an approved round of one carries its text id).
-        var text = WorkPackText.Compose(read.Sections, WorkPackText.NotSent(folder, feature, plan, featureFolder), scope.Story is not null ? plan.Dependencies : []);
+        // Every scope is read WITHOUT the nodes it depends on outside it, so the reviewers are told which they are: the same lines the approval carries (owner decision 2026-11-26, Q8; before it only a story or a task scope said so). The approval id does not change; the text id of a scope with an outside dependency does.
+        var text = WorkPackText.Compose(read.Sections, WorkPackText.NotSent(folder, feature, plan, featureFolder), plan.Dependencies);
         var bytes = Encoding.UTF8.GetByteCount(text);
         var pack = new Pack(text, scope.Folder.Length == 0 ? featureFolder : $"{featureFolder}/{scope.Folder}", IdOf(approval), approval, [.. read.Sections.Select(section => new PackSection(section.Path, section.Bytes))], bytes);
 
