@@ -43,8 +43,14 @@ public static class WorktreePaths
         var second = first.Ok ? RealPath.Resolve(other) : first;
 
         return first.Ok && second.Ok
-            && string.Equals(Key(first.Path), Key(second.Path), StringComparison.OrdinalIgnoreCase);
+            && string.Equals(Key(first.Path), Key(second.Path), Comparison);
     }
+
+    /// <summary>Case: <c>OrdinalIgnoreCase</c> on Windows and macOS; <c>Ordinal</c> on Linux, where two names differing by case are two folders.</summary>
+    /// <remarks>The one case rule of every worktree path decision: <see cref="Same"/>, <c>WorktreeManager</c>'s root guard and
+    /// <c>ReviewTreeRoot.Real</c> all compare with it. It follows the operating system, not the volume.</remarks>
+    public static StringComparison Comparison =>
+        OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 
     /// <summary>The path with every link on it resolved, root-down — what <c>realpath</c> answers.</summary>
     /// <exception cref="IOException">The path cannot be resolved (a loop, too many links, a NUL, a <c>..</c> after a missing name); the message says which.</exception>

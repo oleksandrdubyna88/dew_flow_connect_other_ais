@@ -375,10 +375,7 @@ public sealed class WorktreeManager(IProcessLauncher launcher, string storageRoo
     /// disk that is case-insensitive while the spelling differs only by case is still matched, because git and the
     /// configuration spell it the same way.</para>
     /// </remarks>
-    private RealPathResult UnderOurRoot(string path) => RealPath.ResolveBelow(storageRoot, path, RootComparison);
-
-    private static StringComparison RootComparison =>
-        OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+    private RealPathResult UnderOurRoot(string path) => RealPath.ResolveBelow(storageRoot, path, WorktreePaths.Comparison);
 
     private static string OwnerFile(string path) => path.TrimEnd(Separators) + OwnerSuffix;
 

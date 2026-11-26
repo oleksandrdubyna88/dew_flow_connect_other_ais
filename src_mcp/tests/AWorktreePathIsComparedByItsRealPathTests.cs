@@ -42,6 +42,54 @@ public sealed class AWorktreePathIsComparedByItsRealPathTests : IDisposable
     }
 
     [Fact]
+    public void TwoFoldersThatDifferOnlyByTheCaseOfALetter_AreNotTheSameWhereTheFileSystemKeepsCase()
+    {
+        if (OperatingSystem.IsWindows() || OperatingSystem.IsMacOS())
+        {
+            Assert.Skip("the file system of this operating system ignores case: Repo and repo are one folder here");
+        }
+
+        var upper = Directory.CreateDirectory(_work.At("Repo")).FullName;
+        if (Directory.Exists(_work.At("repo")))
+        {
+            Assert.Skip("the temporary folder of this machine is on a mount that ignores case: Repo and repo cannot be two folders here");
+        }
+
+        var lower = Directory.CreateDirectory(_work.At("repo")).FullName;
+
+        WorktreePaths.Same(upper, lower).Should().BeFalse("on Linux Repo and repo are two folders");
+    }
+
+    [Fact]
+    public void OneFolderSpelledWithADifferentCase_IsTheSameWhereTheOperatingSystemIgnoresCase()
+    {
+        if (!OperatingSystem.IsWindows() && !OperatingSystem.IsMacOS())
+        {
+            Assert.Skip("the file system of this operating system keeps case: Repo and repo are two folders here");
+        }
+
+        var folder = Directory.CreateDirectory(_work.At("Repo")).FullName;
+        var otherCase = _work.At("repo");
+        if (!Directory.Exists(otherCase))
+        {
+            Assert.Skip("the temporary folder of this machine is on a case-sensitive volume: repo is not Repo here");
+        }
+
+        WorktreePaths.Same(folder, otherCase).Should().BeTrue("on Windows and macOS Repo and repo are one folder");
+    }
+
+    [Fact]
+    public void OneFolderReachedByALinkAndByATrailingSlash_IsTheSame()
+    {
+        var folder = Directory.CreateDirectory(_work.At("folder")).FullName;
+        var link = _work.At("alias");
+        Link(link, folder);
+
+        WorktreePaths.Same(folder, link).Should().BeTrue("the link resolves to the folder");
+        WorktreePaths.Same(folder, folder + Path.DirectorySeparatorChar).Should().BeTrue("a trailing slash is the same folder");
+    }
+
+    [Fact]
     public void ALoopOfLinks_IsNotSilentlyItsOwnSpelling()
     {
         var one = _work.At("one");
