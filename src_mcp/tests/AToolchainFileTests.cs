@@ -247,6 +247,7 @@ public sealed class AToolchainFileTests
 
     /// <summary>A token-shaped string: what a person may paste into the wrong place. The refusal is printed and recorded, so it must never carry it.</summary>
     private const string Pasted = "ghp_0123456789abcdefghijklmnopqrstuvwxyzAB";
+    private const string Part = "ghp_012345";
 
     [Theory]
     [InlineData("version: {0}\nprojects:\n  - path: src_mcp\n    adapter: dotnet\n")]
@@ -282,6 +283,22 @@ public sealed class AToolchainFileTests
         token.Sentence.Should().NotContain(Pasted, "a key is typed by a person too: a token pasted where a key goes is not echoed");
         token.Sentence.Should().Contain($"a key of {Pasted.Length} characters");
         named.Sentence.Should().Contain("'buidl'", "a name of the shape of a real key is spelled, so a typo is found");
+    }
+
+    /// <summary>The security verify's M6: the reader's own refusals repeated 40 characters of the line (a bare value line, a ':' in a plain value, text after a quote, a duplicate key). Each is the line number and a fixed sentence now.</summary>
+    [Theory]
+    [InlineData("{0}\n")]
+    [InlineData("a: {0}: x\n")]
+    [InlineData("a: \"x\" {0}\n")]
+    [InlineData("{0}: 1\n{0}: 2\n")]
+    [InlineData("a: \"\\{0}\"\n")]
+    public void AYamlFaultOfTheReader_NeverRepeatsTheText_OnlyItsLineAndAFixedSentence(string tail)
+    {
+        var refused = Read(OneProject(tail.Replace("{0}", Pasted, StringComparison.Ordinal))).Should().BeOfType<ToolchainRead.Refused>(tail).Subject;
+
+        refused.Sentence.Should().NotContain(Pasted).And.NotContain(Part, "not even a part of the line is repeated");
+        refused.Faults.Should().NotContain(fault => fault.Contains(Part, StringComparison.Ordinal));
+        refused.Sentence.Should().Contain(" line ").And.Contain("yaml-", "the line and the fault code are what is said");
     }
 
     [Fact]
