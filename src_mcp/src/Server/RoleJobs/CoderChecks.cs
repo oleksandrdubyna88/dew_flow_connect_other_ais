@@ -93,7 +93,7 @@ internal sealed class CoderChecks(IRoleRun run, GitHistory git, CoderOsLayer lay
     private IReadOnlyList<CoderCheckStep> Steps(CheckResult result) =>
     [
         .. result.Steps.Select(step => new CoderCheckStep(
-            step.Project, step.Step == CheckStep.Build ? "build" : "test", step.Argv, step.ExitCode, (long)step.Duration.TotalMilliseconds,
+            step.Project, step.Step.Wire(), step.Argv, step.ExitCode, (long)step.Duration.TotalMilliseconds,
             Path.GetRelativePath(run.Folder, step.LogPath).Replace(Path.DirectorySeparatorChar, '/'))),
     ];
 

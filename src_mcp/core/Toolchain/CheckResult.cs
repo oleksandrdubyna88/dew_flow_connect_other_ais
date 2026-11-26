@@ -32,18 +32,32 @@ public static class CheckStates
     };
 }
 
-/// <summary>Which of a project's two steps a record is about.</summary>
+/// <summary>Which step of a round a record is about: the names that run in E4 are restore, build, typecheck and test.</summary>
 public enum CheckStep
 {
     Build,
     Test,
+    Restore,
+    Typecheck,
+}
+
+/// <summary>The words of a step on the wire and in a log name.</summary>
+public static class CheckSteps
+{
+    public static string Wire(this CheckStep step) => step switch
+    {
+        CheckStep.Restore => "restore",
+        CheckStep.Build => "build",
+        CheckStep.Typecheck => "typecheck",
+        _ => "test",
+    };
 }
 
 /// <summary>
 /// What one step did, written down whole: the argv it was started with (after <c>{jobs}</c> was replaced), how it ended, how long it took and where its output is.
 /// </summary>
 /// <param name="Project">The project's path in the toolchain file.</param>
-/// <param name="Step">Build or test.</param>
+/// <param name="Step">Restore, build, typecheck or test.</param>
 /// <param name="Argv">What was started, executable first. Never contains a secret: the reader refuses one.</param>
 /// <param name="Started">False when the process could not be started (no such file, no right to run it); <see cref="ExitCode"/> is then <see cref="NotStartedExitCode"/>.</param>
 /// <param name="ExitCode">The exit code; <see cref="NotStartedExitCode"/> for a step that never started; for a step stopped at its timeout, what the killed process left.</param>
@@ -73,6 +87,9 @@ public sealed record StepRecord(
 
     /// <summary>The adapter of the project the step belongs to (<c>dotnet</c>, <c>node</c>…): the failure digest chooses its reader by it (<see cref="FailureDigest"/>). Empty when the record was not made by the check runner.</summary>
     public string Adapter { get; init; } = string.Empty;
+
+    /// <summary>The folder the step started in, relative to the repository root; <c>.</c> is the root (a step of the file always runs from it).</summary>
+    public string WorkingFolder { get; init; } = ".";
 
     /// <summary>Whether the step passed: it started, was not stopped and exited 0.</summary>
     public bool Passed => Started && !TimedOut && ExitCode == 0;

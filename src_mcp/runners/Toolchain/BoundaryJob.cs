@@ -164,7 +164,15 @@ public sealed record BoundaryJob(
     public string CoderRoot => Path.GetDirectoryName(Tree.Root) ?? string.Empty;
 
     /// <summary>The network state of a step.</summary>
-    public NetworkChoice NetworkOf(Core.Toolchain.CheckStep step) => step == Core.Toolchain.CheckStep.Build ? BuildNetwork : TestNetwork;
+    public NetworkChoice NetworkOf(Core.Toolchain.CheckStep step) => step switch
+    {
+        Core.Toolchain.CheckStep.Build => BuildNetwork,
+        Core.Toolchain.CheckStep.Restore => RestoreNetwork,
+        _ => TestNetwork,
+    };
+
+    /// <summary>A restore fetches packages: the HOST network, always, whatever a job says of its build (story s1, <c>RESULTS_s1_dotnet.md</c> M1 and <c>RESULTS_s1_node.md</c> M4: it needs the registry, and it is the only step that does).</summary>
+    public static NetworkChoice RestoreNetwork { get; } = NetworkChoice.OnHost("a restore fetches packages and needs the registry; measured in RESULTS_s1_dotnet.md (M1) and RESULTS_s1_node.md (M4)");
 
     /// <summary>
     /// The sentence that says why this job cannot be bounded, or empty. The paths go into <c>BindPaths=</c>, whose value is split at a space and at a colon, so a path with either, a backslash or a control character is refused

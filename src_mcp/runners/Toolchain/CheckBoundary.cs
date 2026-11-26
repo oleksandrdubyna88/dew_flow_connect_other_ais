@@ -131,9 +131,10 @@ public sealed class CheckBoundary(IProcessLauncher launcher, BoundaryHost host)
     /// <param name="timeout">The step's deadline. The unit's <c>RuntimeMaxSec</c> is a minute later.</param>
     /// <param name="maxOutputChars">The ceiling of each stream the launcher keeps.</param>
     /// <param name="ct">The caller's cancel.</param>
+    /// <param name="workingDirectory">Where the command starts: a real folder inside the worktree, already checked by the caller; null is the worktree (E2).</param>
     /// <exception cref="InvalidOperationException">The admission is not for this job and network state.</exception>
     public async Task<BoundaryRun> RunAsync(BoundaryAdmission.Admitted admitted, BoundaryJob job, NetworkChoice network, string part, IReadOnlyList<string> command,
-        IReadOnlyDictionary<string, string?> extra, TimeSpan timeout, int maxOutputChars, CancellationToken ct = default)
+        IReadOnlyDictionary<string, string?> extra, TimeSpan timeout, int maxOutputChars, CancellationToken ct = default, string? workingDirectory = null)
     {
         if (admitted.JobId != job.JobId || !admitted.Records.TryGetValue(network.Mode, out var seen))
         {
@@ -144,7 +145,7 @@ public sealed class CheckBoundary(IProcessLauncher launcher, BoundaryHost host)
         var record = seen with { Network = network.Wire, NetworkReason = network.Reason, Properties = PropertiesFor(job, network.Mode, timeout + UnitControl.Backstop) };
         try
         {
-            var started = await StartAsync(job, unit, network.Mode, timeout, extra, command, ct, maxOutputChars);
+            var started = await StartAsync(job, unit, network.Mode, timeout, extra, command, ct, maxOutputChars, workingDirectory);
 
             var result = started.Problem.Length > 0 ? started.Result with { StdErr = started.Problem } : started.Result;
 
@@ -158,9 +159,9 @@ public sealed class CheckBoundary(IProcessLauncher launcher, BoundaryHost host)
     }
 
     private async Task<UnitStart> StartAsync(BoundaryJob job, string unit, CheckNetwork network, TimeSpan timeout, IReadOnlyDictionary<string, string?> extra,
-        IReadOnlyList<string> command, CancellationToken ct, int maxOutputChars = 1024 * 1024)
+        IReadOnlyList<string> command, CancellationToken ct, int maxOutputChars = 1024 * 1024, string? workingDirectory = null)
     {
-        var arguments = BoundaryUnit.Arguments(host, job, unit, network, timeout + UnitControl.Backstop, extra, command, Degrade);
+        var arguments = BoundaryUnit.Arguments(host, job, unit, network, timeout + UnitControl.Backstop, extra, command, Degrade, workingDirectory);
 
         return await _units.StartAsync(new ProcessRequest(host.SystemdRun, arguments, job.Tree.Root)
         {

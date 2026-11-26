@@ -1,6 +1,5 @@
 using System.ComponentModel;
 using System.Diagnostics;
-using System.Globalization;
 using CoaiMcp.Core.Toolchain;
 using CoaiMcp.Runners.Processes;
 
@@ -19,50 +18,57 @@ public sealed record CheckRequest(string Tree, string LogFolder, int Jobs)
 }
 
 /// <summary>
-/// Runs the build and then the test command of each project of a toolchain, in a tree, and writes down what each step did (server.md § 10, § 12).
+/// Runs the step plan of a toolchain in a tree — restore, build, typecheck and test of each project, in that order — and writes down what each step did (server.md § 10, § 12).
 /// </summary>
 /// <remarks>
 /// <para><b>A coder job runs inside an OS boundary or is refused.</b> A request that names a <see cref="BoundaryJob"/> goes through <see cref="CheckBoundary"/>: a preflight before the job, then each step in its own named <c>systemd-run --user</c> unit (the environment
-/// is set by <c>env -i</c> INSIDE the unit, so the minimal list below is the unbounded road's). A runner with no boundary refuses such a request: <see cref="CheckState.BoundaryRefused"/>. A request with no job is the road a tree that is not a coder's takes — the recorded run on a clean clone.</para>
+/// is set by <c>env -i</c> INSIDE the unit, so the minimal list below is the unbounded road's). A runner with no boundary refuses such a request: <see cref="CheckState.BoundaryRefused"/>. A request with no job is the road a tree that is not a coder's takes — the recorded run on a clean clone.
+/// <b>This is the one road: every step of a coder job, whatever its source, starts in <see cref="RunBoundedStepAsync"/>.</b></para>
 /// <para><b>Every process goes through <see cref="IProcessLauncher"/></b> — the one launcher, so the deadline and the kill of the WHOLE process tree on expiry are the tested ones. The argv is started with no
-/// shell: an argument with <c>;</c>, <c>$(…)</c> or a backtick reaches the program as text. The environment is the minimal list (<see cref="ProcessEnvironment.Minimal"/>) and a few switches that keep a build quiet
-/// and its nodes from lingering; none of this product's own variables, and no vendor key, reaches a build.</para>
-/// <para><b>Order and stop.</b> Projects in the file's order, each build then its test; the first step that does not pass ends the run, so a build that fails is never followed by its test (a test of a tree that
-/// does not build says nothing). <b>No command to run is never green</b>: a file whose projects name neither a build nor a test is <c>not_configured</c>.</para>
-/// <para><b>This runs the toolchain it is GIVEN.</b> Which file that is — the tree's, or for a coder job the one at the base commit — is decided before, by the caller; a coder job goes through
+/// shell: an argument with <c>;</c>, <c>$(…)</c> or a backtick reaches the program as text. The environment is the minimal list (<see cref="ProcessEnvironment.Minimal"/>) and the adapter's switches, a closed table of names with constant values; none of this product's own variables, and no vendor key, reaches a build.</para>
+/// <para><b>Order and stop.</b> Projects in the plan's order, each restore, build, typecheck, test; the first step that does not pass ends the run, so a build that fails is never followed by its test (a test of a tree that
+/// does not build says nothing). <b>No command to run is never green</b>: a plan with no build, typecheck or test step is <c>not_configured</c>, and a restore alone is not a check.</para>
+/// <para><b>The working folder.</b> A step of the file runs from the repository root, as before. A detected or defaulted step runs from its project folder, because npm and its tools read their configuration from the current folder; the folder must be the worktree or a REAL folder inside it (no link on
+/// the way, resolved by the product's one link resolver) or the step is refused before a unit is described.</para>
+/// <para><b>This runs the toolchain it is GIVEN.</b> Which file, or which manifests, that is — the tree's, or for a coder job the one at the base commit — is decided before, by the caller; a coder job goes through
 /// <see cref="ChecksAtBase"/>, never through a file the coder could have written.</para>
 /// </remarks>
 public sealed class CheckRunner(IProcessLauncher launcher, CheckBoundary? boundary = null)
 {
-    private static readonly IReadOnlyDictionary<string, string?> Quiet = new Dictionary<string, string?> { ["NO_COLOR"] = "1" };
+    private const string NothingToCheck = "no project of the toolchain file names a build or a test command, so nothing was run; checks that did not run are never green";
 
-    private static readonly IReadOnlyDictionary<string, string?> DotnetSwitches = new Dictionary<string, string?>
-    {
-        ["NO_COLOR"] = "1",
-        ["DOTNET_NOLOGO"] = "1",
-        ["DOTNET_CLI_TELEMETRY_OPTOUT"] = "1",
-        ["MSBUILDDISABLENODEREUSE"] = "1",
-    };
-
-    /// <summary>Runs the checks of <paramref name="toolchain"/> in <paramref name="request"/>'s tree.</summary>
+    /// <summary>Runs the checks of <paramref name="toolchain"/> (a toolchain FILE) in <paramref name="request"/>'s tree.</summary>
     public async Task<CheckResult> RunAsync(ToolchainRead toolchain, CheckRequest request, CancellationToken ct = default)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(request.Jobs, 1);
 
         return toolchain switch
         {
-            ToolchainRead.Configured configured => await RunStepsAsync(configured.Toolchain, request, ct),
+            ToolchainRead.Configured configured => await RunPlanAsync(StepPlan.OfFile(configured.Toolchain, request.Jobs), request, ct),
             ToolchainRead.Refused refused => new CheckResult(CheckState.ToolchainRefused, [], $"the toolchain file is refused, so nothing was run: {refused.Sentence}"),
             _ => new CheckResult(CheckState.NotConfigured, [], $"there is no {ToolchainTables.FilePath}, so nothing was run; checks that did not run are never green"),
         };
     }
 
-    private async Task<CheckResult> RunStepsAsync(RepoToolchain toolchain, CheckRequest request, CancellationToken ct)
+    /// <summary>Runs the checks of a RESOLVED toolchain (<see cref="ToolchainResolve"/>): the file's, the defaults of a folder, or the detected steps. <c>not_configured</c> and <c>toolchain_refused</c> plan no step.</summary>
+    public async Task<CheckResult> RunResolvedAsync(ToolchainResolution resolution, CheckRequest request, CancellationToken ct = default)
     {
-        var plan = Plan(toolchain);
-        if (plan.Count == 0)
+        ArgumentOutOfRangeException.ThrowIfLessThan(request.Jobs, 1);
+
+        return resolution switch
         {
-            return new CheckResult(CheckState.NotConfigured, [], "no project of the toolchain file names a build or a test command, so nothing was run; checks that did not run are never green");
+            ToolchainResolution.Resolved resolved => await RunPlanAsync(StepPlan.Of(resolved.Toolchain, ToolchainDefaults.Current, request.Jobs), request, ct),
+            ToolchainResolution.Refused refused => new CheckResult(CheckState.ToolchainRefused, [], $"the toolchain is refused, so nothing was run: {refused.Sentence}"),
+            ToolchainResolution.NotConfigured notConfigured => new CheckResult(CheckState.NotConfigured, [], notConfigured.Note),
+            _ => throw new InvalidOperationException("a resolution is resolved, refused or not configured"),
+        };
+    }
+
+    private async Task<CheckResult> RunPlanAsync(IReadOnlyList<PlannedStep> plan, CheckRequest request, CancellationToken ct)
+    {
+        if (!StepPlan.Checks(plan))
+        {
+            return new CheckResult(CheckState.NotConfigured, [], NothingToCheck);
         }
 
         Directory.CreateDirectory(request.LogFolder);
@@ -104,7 +110,7 @@ public sealed class CheckRunner(IProcessLauncher launcher, CheckBoundary? bounda
     /// <summary>
     /// The preflight, once before the job: a coder job (one whose request names a <see cref="BoundaryJob"/>) runs only inside the boundary, and a runner with none refuses it — there is no road for a coder job that skips the OS boundary.
     /// </summary>
-    private async Task<Gate> AdmitAsync(List<Planned> plan, CheckRequest request, CancellationToken ct)
+    private async Task<Gate> AdmitAsync(IReadOnlyList<PlannedStep> plan, CheckRequest request, CancellationToken ct)
     {
         if (request.Job is not { } job)
         {
@@ -116,7 +122,7 @@ public sealed class CheckRunner(IProcessLauncher launcher, CheckBoundary? bounda
             return new Gate.Closed(new CheckResult(CheckState.BoundaryRefused, [], "this check runner has no OS boundary, and a coder job is never run without one; nothing was run"));
         }
 
-        var admission = await boundary.AdmitAsync(job, [.. plan.Select(step => job.NetworkOf(step.Step).Mode).Distinct()], ct);
+        var admission = await boundary.AdmitAsync(job, [.. plan.Select(step => NetworkOf(step, job).Mode).Distinct()], ct);
 
         return admission switch
         {
@@ -126,29 +132,28 @@ public sealed class CheckRunner(IProcessLauncher launcher, CheckBoundary? bounda
         };
     }
 
-    private sealed record Planned(ToolchainProject Project, CheckStep Step, ToolchainCommand Command, TimeSpan Timeout);
+    /// <summary>The network state of a step: the table's for a detected or defaulted step, the job's own (E2: restore and build on the host, test with a loopback device only) for a step of the file. The reason travels in the step's record either way.</summary>
+    private static NetworkChoice NetworkOf(PlannedStep step, BoundaryJob job) =>
+        step.Network is { } own
+            ? own.Mode == DefaultNetwork.Host ? NetworkChoice.OnHost(own.Reason) : NetworkChoice.None(own.Reason)
+            : job.NetworkOf(step.Step);
 
-    /// <summary>The steps to run, in order: each project's build, then its test, when the file names one that runs something.</summary>
-    private static List<Planned> Plan(RepoToolchain toolchain) =>
-    [
-        .. toolchain.Projects.SelectMany(project => new[]
-        {
-            new Planned(project, CheckStep.Build, project.Build, toolchain.Timeouts.Build),
-            new Planned(project, CheckStep.Test, project.Test, toolchain.Timeouts.Test),
-        }).Where(step => step.Command.Runs),
-    ];
-
-    private async Task<StepRecord> RunStepAsync(Planned step, int number, CheckRequest request, CancellationToken ct)
+    private async Task<StepRecord> RunStepAsync(PlannedStep step, int number, CheckRequest request, CancellationToken ct)
     {
-        var argv = Argv(step.Command.Argv, request.Jobs);
-        var log = Path.Combine(request.LogFolder, $"{number:00}-{Slug(step.Project.Path)}-{step.Step.ToString().ToLowerInvariant()}.log");
+        var log = LogPath(step, number, request);
         var clock = Stopwatch.StartNew();
-        var launch = new ProcessRequest(Executable(argv[0], request.Tree), argv[1..], request.Tree)
+        var (folder, problem) = WorkingFolderOf(request.Tree, step.WorkingFolder);
+        if (problem.Length > 0)
+        {
+            return await RefusedStepAsync(step, log, problem, clock);
+        }
+
+        var launch = new ProcessRequest(Executable(step.Argv[0], request.Tree), [.. step.Argv.Skip(1)], folder)
         {
             Timeout = step.Timeout,
             InheritsEnvironment = false,
             Passthrough = ProcessEnvironment.Minimal,
-            Environment = step.Project.Adapter == "dotnet" ? DotnetSwitches : Quiet,
+            Environment = step.Switches,
             MaxOutputChars = CheckLimits.LogBytes,
         };
 
@@ -159,38 +164,42 @@ public sealed class CheckRunner(IProcessLauncher launcher, CheckBoundary? bounda
         }
         catch (Exception e) when (e is Win32Exception or InvalidOperationException or ArgumentException)
         {
-            // A step that cannot start is a failed step with its reason in the log, not a fault of the run: the file named a program this machine does not have.
+            // A step that cannot start is a failed step with its reason in the log, not a fault of the run: the plan named a program this machine does not have.
             var empty = new ProcessResult(StepRecord.NotStartedExitCode, string.Empty, string.Empty, TimedOut: false);
             await CheckLog.WriteAsync(log, empty, $"[coai: the process could not be started: {e.Message}]\n");
 
-            return new StepRecord(step.Project.Path, step.Step, argv, Started: false, StepRecord.NotStartedExitCode, TimedOut: false, clock.Elapsed, log, LogCut: false) { Adapter = step.Project.Adapter };
+            return Record(step, step.Argv, Started: false, StepRecord.NotStartedExitCode, TimedOut: false, clock.Elapsed, log, LogCut: false);
         }
 
         ct.ThrowIfCancellationRequested();
         var trailer = result.TimedOut ? $"\n[coai: the step ran over its timeout of {step.Timeout} and its whole process tree was killed]\n" : string.Empty;
         var cut = await CheckLog.WriteAsync(log, result, trailer);
 
-        return new StepRecord(step.Project.Path, step.Step, argv, Started: true, result.ExitCode, result.TimedOut, clock.Elapsed, log, cut) { Adapter = step.Project.Adapter };
+        return Record(step, step.Argv, Started: true, result.ExitCode, result.TimedOut, clock.Elapsed, log, cut);
     }
 
     /// <summary>
     /// One step of a coder job, in its own named unit. The log, the exit code and the timeout read as they do for an unbounded step; the record adds the boundary, its properties and the network state. A step whose unit could not be stopped
-    /// never passes, whatever it exited with: a process of it may still be running.
+    /// never passes, whatever it exited with: a process of it may still be running. <b>A step whose program is not in the unit</b> (no <c>node</c>, no <c>dotnet</c>) is a FAILED step whose log names the program (<c>env</c> says so and exits 127), never a skipped one.
     /// </summary>
-    private async Task<StepRecord> RunBoundedStepAsync(Planned step, int number, CheckRequest request, BoundaryAdmission.Admitted admitted, CancellationToken ct)
+    private async Task<StepRecord> RunBoundedStepAsync(PlannedStep step, int number, CheckRequest request, BoundaryAdmission.Admitted admitted, CancellationToken ct)
     {
         var job = request.Job!;
-        var argv = Argv(step.Command.Argv, request.Jobs);
-        var log = Path.Combine(request.LogFolder, $"{number:00}-{Slug(step.Project.Path)}-{step.Step.ToString().ToLowerInvariant()}.log");
+        var log = LogPath(step, number, request);
         var clock = Stopwatch.StartNew();
-        var network = job.NetworkOf(step.Step);
-        var started = await StartBoundedAsync(job, admitted, network, number, [Executable(argv[0], request.Tree), .. argv[1..]], step, ct);
+        var (folder, problem) = WorkingFolderOf(job.Tree.Root, step.WorkingFolder);
+        if (problem.Length > 0)
+        {
+            return await RefusedStepAsync(step, log, problem, clock);
+        }
+
+        var started = await StartBoundedAsync(job, admitted, NetworkOf(step, job), number, [Executable(step.Argv[0], job.Tree.Root), .. step.Argv.Skip(1)], step, folder, ct);
         if (started.Run is not { } run)
         {
             var empty = new ProcessResult(StepRecord.NotStartedExitCode, string.Empty, string.Empty, TimedOut: false);
             await CheckLog.WriteAsync(log, empty, $"[coai: the process could not be started: {started.Problem}]\n");
 
-            return new StepRecord(step.Project.Path, step.Step, argv, Started: false, StepRecord.NotStartedExitCode, TimedOut: false, clock.Elapsed, log, LogCut: false) { Adapter = step.Project.Adapter };
+            return Record(step, step.Argv, Started: false, StepRecord.NotStartedExitCode, TimedOut: false, clock.Elapsed, log, LogCut: false);
         }
 
         ct.ThrowIfCancellationRequested();
@@ -198,17 +207,27 @@ public sealed class CheckRunner(IProcessLauncher launcher, CheckBoundary? bounda
         var survived = !run.Gone;
         var exit = survived ? StepRecord.UnitSurvivedExitCode : run.Result.ExitCode;
 
-        return new StepRecord(step.Project.Path, step.Step, argv, Started: run.Result.ExitCode != StepRecord.NotStartedExitCode, exit, run.Result.TimedOut, clock.Elapsed, log, cut) { Boundary = run.Record, Adapter = step.Project.Adapter };
+        return Record(step, step.Argv, Started: run.Result.ExitCode != StepRecord.NotStartedExitCode, exit, run.Result.TimedOut, clock.Elapsed, log, cut) with { Boundary = run.Record };
+    }
+
+    private static StepRecord Record(PlannedStep step, IReadOnlyList<string> argv, bool Started, int exit, bool TimedOut, TimeSpan duration, string log, bool LogCut) =>
+        new(step.Project, step.Step, argv, Started, exit, TimedOut, duration, log, LogCut) { Adapter = step.Adapter, WorkingFolder = step.WorkingFolder };
+
+    private static async Task<StepRecord> RefusedStepAsync(PlannedStep step, string log, string problem, Stopwatch clock)
+    {
+        var empty = new ProcessResult(StepRecord.NotStartedExitCode, string.Empty, string.Empty, TimedOut: false);
+        await CheckLog.WriteAsync(log, empty, $"[coai: the step was refused before a unit was described: {problem}]\n");
+
+        return Record(step, step.Argv, Started: false, StepRecord.NotStartedExitCode, TimedOut: false, clock.Elapsed, log, LogCut: false);
     }
 
     private sealed record StartedStep(BoundaryRun? Run, string Problem);
 
-    private async Task<StartedStep> StartBoundedAsync(BoundaryJob job, BoundaryAdmission.Admitted admitted, NetworkChoice network, int number, IReadOnlyList<string> command, Planned step, CancellationToken ct)
+    private async Task<StartedStep> StartBoundedAsync(BoundaryJob job, BoundaryAdmission.Admitted admitted, NetworkChoice network, int number, IReadOnlyList<string> command, PlannedStep step, string workingFolder, CancellationToken ct)
     {
-        var extra = step.Project.Adapter == "dotnet" ? DotnetSwitches : Quiet;
         try
         {
-            return new StartedStep(await boundary!.RunAsync(admitted, job, network, $"s{number}", command, extra, step.Timeout, CheckLimits.LogBytes, ct), string.Empty);
+            return new StartedStep(await boundary!.RunAsync(admitted, job, network, $"s{number}", command, step.Switches, step.Timeout, CheckLimits.LogBytes, ct, workingFolder), string.Empty);
         }
         catch (ArgumentException e)
         {
@@ -217,13 +236,43 @@ public sealed class CheckRunner(IProcessLauncher launcher, CheckBoundary? bounda
         }
     }
 
-    private static string Trailer(BoundaryRun run, Planned step) =>
+    /// <summary>
+    /// The folder a step starts in, as a real path inside the tree: <c>.</c> is the tree; any other folder is a relative path with no <c>..</c>, resolved root-down by the product's one link resolver, which must find it at the very place it was spelled — a link anywhere on the way, or a folder that is a
+    /// file or is not there, is a problem (a sentence), and the step is refused before a unit is described.
+    /// </summary>
+    internal static (string Path, string Problem) WorkingFolderOf(string tree, string folder)
+    {
+        if (folder is "" or ".")
+        {
+            return (tree, string.Empty);
+        }
+
+        if (!Core.RepoPaths.IsRelative(folder) || folder.Split('/').Any(segment => segment == ".."))
+        {
+            return (string.Empty, $"the working folder '{Shown(folder)}' is not a relative folder inside the repository");
+        }
+
+        var root = Files.RealPath.Resolve(tree);
+        if (!root.Ok)
+        {
+            return (string.Empty, "the worktree could not be resolved to a real path");
+        }
+
+        var wanted = Path.Combine(root.Path, folder.Replace('/', Path.DirectorySeparatorChar));
+        var below = Files.RealPath.ResolveBelow(root.Path, wanted, StringComparison.Ordinal);
+        var real = below.Ok && string.Equals(Path.TrimEndingDirectorySeparator(below.Path), Path.TrimEndingDirectorySeparator(wanted), StringComparison.Ordinal) && Files.RealPath.Lstat(wanted).Kind == Files.EntryKind.Directory;
+
+        return real ? (wanted, string.Empty) : (string.Empty, $"the working folder '{Shown(folder)}' is not a real folder inside the worktree (a link on the way, a file, or not there)");
+    }
+
+    private static string Shown(string folder) => folder.Length > 120 ? folder[..120] + "..." : Core.Toolchain.PathSpelling.IsSafe(folder) ? folder : "a path with unusual characters";
+
+    private static string LogPath(PlannedStep step, int number, CheckRequest request) =>
+        Path.Combine(request.LogFolder, $"{number:00}-{Slug(step.Project)}-{step.Step.Wire()}.log");
+
+    private static string Trailer(BoundaryRun run, PlannedStep step) =>
         (run.Result.TimedOut ? $"\n[coai: the step ran over its timeout of {step.Timeout} and its unit {run.Unit} was stopped]\n" : string.Empty)
         + (run.Gone ? string.Empty : $"\n[coai: the unit {run.Unit} could not be stopped; a process of the step may still be running, so the step does not pass]\n");
-
-    /// <summary>The argv as it is started: <c>{jobs}</c> replaced inside every item, nothing else touched.</summary>
-    private static string[] Argv(IReadOnlyList<string> argv, int jobs) =>
-        [.. argv.Select(item => item.Replace("{jobs}", jobs.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal))];
 
     /// <summary>A program named with a folder is relative to the repository root, the way the file writes it; a bare name is looked up on PATH by the launcher.</summary>
     private static string Executable(string first, string tree) =>
@@ -239,10 +288,10 @@ public sealed class CheckRunner(IProcessLauncher launcher, CheckBoundary? bounda
 
     private static string Describe(StepRecord record)
     {
-        var what = $"the {record.Step.ToString().ToLowerInvariant()} step of {record.Project}";
+        var what = $"the {record.Step.Wire()} step of {Shown(record.Project)}";
         if (!record.Started)
         {
-            return $"{what} could not be started ({record.Argv[0]})";
+            return $"{what} could not be started ({Shown(record.Argv[0])})";
         }
 
         return record.ExitCode == StepRecord.UnitSurvivedExitCode ? $"{what} left a process running that could not be stopped"

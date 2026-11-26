@@ -150,16 +150,17 @@ internal static class BoundaryUnit
 
     /// <summary>The argv of <c>systemd-run</c>: the unit, its folder, every property, then <c>env -i</c> with the allow-list and the command.</summary>
     /// <param name="degrade">For a test only (a RED that must see the preflight refuse): rewrites the finished argument list. Production passes nothing.</param>
+    /// <param name="workingDirectory">The folder the command starts in: the worktree (the default) or a real folder inside it (E4 s3 t2). It changes no property of the unit: the worktree is bound whole.</param>
     /// <exception cref="ArgumentException">The program's name has an <c>=</c> (<c>env</c> would read it as an assignment), or the argv is empty.</exception>
     internal static IReadOnlyList<string> Arguments(BoundaryHost host, BoundaryJob job, string unit, CheckNetwork network, TimeSpan runtimeMax,
-        IReadOnlyDictionary<string, string?> extra, IReadOnlyList<string> command, Func<IReadOnlyList<string>, IReadOnlyList<string>>? degrade = null)
+        IReadOnlyDictionary<string, string?> extra, IReadOnlyList<string> command, Func<IReadOnlyList<string>, IReadOnlyList<string>>? degrade = null, string? workingDirectory = null)
     {
         if (command.Count == 0 || command[0].Contains('=', StringComparison.Ordinal) || command[0].StartsWith('-'))
         {
             throw new ArgumentException("the program to run in the unit is empty, starts with '-' or holds '='", nameof(command));
         }
 
-        return Wrap(unit, job.Tree.Root, [], Properties(host, job, network, runtimeMax),
+        return Wrap(unit, workingDirectory ?? job.Tree.Root, [], Properties(host, job, network, runtimeMax),
             ["/usr/bin/env", "-i", .. Environment(host, job, extra).Select(pair => $"{pair.Key}={pair.Value}"), .. command], degrade);
     }
 
