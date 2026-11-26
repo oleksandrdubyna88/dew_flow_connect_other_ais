@@ -240,7 +240,7 @@ internal sealed partial class ToolchainParse
             {
                 if (!allowed.Contains(name))
                 {
-                    Fault($"line {entry.Line}: '{key}' of {where} holds the placeholder {name}, which '{key}' may not hold (it may hold {string.Join(", ", allowed)})");
+                    Fault($"line {entry.Line}: '{key}' of {where} holds the placeholder {(name.Length > 24 ? "{...}" : name)}, which '{key}' may not hold (it may hold {string.Join(", ", allowed)})");
                 }
             }
 
@@ -267,12 +267,15 @@ internal sealed partial class ToolchainParse
         }
 
         var prefixes = new List<string>();
+        var number = 0;
         foreach (var text in ((YamlList)entry.Value).Items.Cast<YamlScalar>().Select(item => item.Text))
         {
+            number++;
             var canonical = RepoPaths.Canonical(text);
-            if (RepoPaths.WhyNotRelative(canonical) is { Length: > 0 } why)
+            if (RepoPaths.WhyNotRelative(canonical) is { Length: > 0 })
             {
-                Fault($"line {entry.Line}: 'testFiles' of {where} holds '{text}', which {why}; a prefix must name a folder inside the project");
+                // The refusal says which item and what is wrong, never the text of the file (E2 follow-up, verify M6).
+                Fault($"line {entry.Line}: item {number} of 'testFiles' of {where} is not a path inside the project (it is absolute, has a drive, or holds '..'); a prefix must name a folder inside the project");
 
                 continue;
             }

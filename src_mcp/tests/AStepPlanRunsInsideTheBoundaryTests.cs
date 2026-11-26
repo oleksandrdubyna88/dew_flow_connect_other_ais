@@ -217,7 +217,7 @@ public sealed class AStepPlanRunsInsideTheBoundaryTests
             var viaTheBoundary = bed.Boundary().PropertiesFor(bed.Job, network, timeout);
 
             viaTheBoundary.Should().Equal(e2, "the plan adds no bind, no writable path and no property: the list a node step and a dotnet step get is E2's list for that network state");
-            e2.Count(property => property.StartsWith("BindPaths=", StringComparison.Ordinal)).Should().Be(1 + bed.Job.CheckFolders.Count + 2, "the worktree, the job's check folders and /tmp and /var/tmp: no bind of a project folder was added");
+            e2.Count(property => property.StartsWith("BindPaths=", StringComparison.Ordinal)).Should().Be(1 + bed.Job.CheckFolders.Count + 2, "the worktree, the job's check folders and the two temp folders: no bind of a project folder was added");
         }
     }
 

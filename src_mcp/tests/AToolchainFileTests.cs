@@ -404,7 +404,7 @@ public sealed class AToolchainFileTests
     [InlineData("C:/x")]
     public void ATestFilesPrefixThatLeavesTheProject_IsRefused_NamingTheMember(string prefix)
     {
-        RefusedBy(OneProject($"    testFor:\n      - jest\n    testFiles:\n      - \"{prefix}\"\n")).Should().Contain("testFiles").And.Contain(prefix);
+        RefusedBy(OneProject($"    testFor:\n      - jest\n    testFiles:\n      - \"{prefix}\"\n")).Should().Contain("testFiles").And.Contain("item 1").And.NotContain(prefix);
     }
 
     [Theory]
