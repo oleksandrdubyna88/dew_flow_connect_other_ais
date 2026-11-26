@@ -46,6 +46,11 @@ public static partial class CheckDefinition
         foreach (var member in atBase)
         {
             var head = atHead.FirstOrDefault(candidate => candidate.Name == member.Name);
+            if (head is null && member.IgnoreWhenNew)
+            {
+                continue; // a project file the head removed: its own members go with it (a test project it removed is a lost step, refused before)
+            }
+
             var headValues = head?.Values ?? [];
             var same = member.AllowAdditions ? member.Values.All(value => headValues.Contains(value, StringComparer.Ordinal)) : member.Values.SequenceEqual(headValues, StringComparer.Ordinal);
             if (!same)

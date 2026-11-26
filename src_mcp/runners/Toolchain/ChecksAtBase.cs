@@ -15,8 +15,14 @@ namespace CoaiMcp.Runners.Toolchain;
 /// Reading from the main repository path leaves nothing of the worktree in the way of the one file that decides what runs (epoch 3 E2 s2 t4 d5).</para>
 /// <para>The comparison with the worktree reads text, with line endings made equal, so a Windows checkout that turned LF into CRLF is not reported as a change the coder made.</para>
 /// </remarks>
-public sealed class ChecksAtBase(GitHistory git, CheckRunner runner)
+public sealed class ChecksAtBase(GitHistory history, CheckRunner runner)
 {
+    /// <summary>The reads that decide the checks are the hardened ones (<see cref="GitHistory.Hardened"/>): no replace refs, no lazy fetch, no names that move git.</summary>
+    private readonly GitHistory git = history.ForChecks();
+
+    /// <summary>Reads a setting by name; the process environment unless a test hands in its own. Only <c>COAI_TOOLCHAIN_DETECT</c> is read.</summary>
+    public Func<string, string?> Environment { get; init; } = name => System.Environment.GetEnvironmentVariable(name);
+
     /// <summary>
     /// The checks of a coder job, the one road for it: the <c>.git</c> pointer of the worktree is compared with what coai wrote down BEFORE anything runs and again AFTER, the base toolchain is read from the MAIN repository
     /// (never through the worktree's pointer), and every step runs inside the OS boundary — this runner must have one, or the job is refused. A pointer that changed after the checks makes the run <see cref="CheckState.Failed"/> whatever the steps said.
@@ -45,9 +51,57 @@ public sealed class ChecksAtBase(GitHistory git, CheckRunner runner)
         }
 
         var change = Compare(atBase.File, tree.Read(ToolchainTables.FilePath, ToolchainTables.MaxBytes));
-        var result = await runner.RunAsync(ToolchainFile.Read(atBase.File), request, ct);
+        var file = ToolchainFile.Read(atBase.File);
+        var result = request.Job is { } job && file is not ToolchainRead.Refused
+            ? await RunDetectedAsync(file, job, baseSha, request, ct)
+            : await runner.RunAsync(file, request, ct);
 
         return result with { ToolchainChange = change, Note = result.Note + Reported(change, baseSha) };
+    }
+
+    /// <summary>
+    /// What the checks of a CODER job are (epoch 3 E4 s3 t3; SPEC §A): the file at the base wins; with none, or for a project that names no command, the manifests of the BASE commit and of the HEAD commit — the commit coai made, read from the MAIN repository's objects through the
+    /// hardened reads, never from the worktree: an untracked or ignored manifest in the worktree changes nothing — resolve into steps by <see cref="ToolchainResolve"/>. The manifests are read only when the answer needs them: a file that states every command needs neither.
+    /// </summary>
+    private async Task<CheckResult> RunDetectedAsync(ToolchainRead file, BoundaryJob job, string baseSha, CheckRequest request, CancellationToken ct)
+    {
+        var read = await ResolveAsync(file, job, baseSha, ct);
+        AffectedSelection? selection = null;
+        if (read.Resolution is ToolchainResolution.Resolved resolved && read.AtBase is not null && read.AtHead is not null)
+        {
+            // Level one of the selection (SPEC §E): a project is left out only when the diff is shown not to reach it; impact unknown runs everything.
+            var diff = await git.InCoderTreeAsync(job.Tree, ["diff", "--name-status", "-z", "-M", baseSha, read.HeadSha], ct);
+            selection = AffectedProjects.Select(resolved.Toolchain, diff.Ran && diff.Ok && !diff.Truncated ? AffectedProjects.ParseNameStatus(diff.Out) : null, read.AtBase, read.AtHead);
+        }
+
+        return await runner.RunResolvedAsync(read.Resolution, request, ct, selection);
+    }
+
+    private sealed record Read(ToolchainResolution Resolution, ManifestSet? AtBase, ManifestSet? AtHead, string HeadSha);
+
+    private async Task<Read> ResolveAsync(ToolchainRead file, BoundaryJob job, string baseSha, CancellationToken ct)
+    {
+        var setting = Environment(ToolchainResolve.DetectVariable);
+        var detect = ToolchainResolve.DetectOn(setting, []);
+        var needs = detect && file is not ToolchainRead.Refused && (file is not ToolchainRead.Configured configured || configured.Toolchain.Projects.Any(project => !project.StatesACommand));
+        ManifestRead atBase = new ManifestRead.Refused("the manifests of the base commit were not read");
+        ManifestRead atHead = new ManifestRead.Refused("the manifests of the head commit were not read");
+        var headSha = string.Empty;
+        if (needs)
+        {
+            var head = await git.InCoderTreeAsync(job.Tree, ["rev-parse", "HEAD"], ct);
+            headSha = head.Ran && head.Ok ? head.Out.Trim() : string.Empty;
+            if (!GitHistory.IsCommitish(headSha))
+            {
+                return new Read(new ToolchainResolution.Refused("the head commit of the worktree could not be read, so the checks of a repository with no commands in its file were not decided"), null, null, string.Empty);
+            }
+
+            var manifests = new ManifestsAtCommit(git);
+            atBase = await manifests.ReadAsync(job.Tree.MainCheckout, baseSha, ToolchainDefaults.Current, ct);
+            atHead = await manifests.ReadAsync(job.Tree.MainCheckout, headSha, ToolchainDefaults.Current, ct);
+        }
+
+        return new Read(ToolchainResolve.Resolve(file, () => atBase, () => atHead, setting, ToolchainDefaults.Current), atBase is ManifestRead.Found foundBase ? foundBase.Set : null, atHead is ManifestRead.Found foundHead ? foundHead.Set : null, headSha);
     }
 
     private sealed record BaseFile(WorkFile File, string Trouble);

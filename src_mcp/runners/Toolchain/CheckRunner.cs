@@ -51,13 +51,13 @@ public sealed class CheckRunner(IProcessLauncher launcher, CheckBoundary? bounda
     }
 
     /// <summary>Runs the checks of a RESOLVED toolchain (<see cref="ToolchainResolve"/>): the file's, the defaults of a folder, or the detected steps. <c>not_configured</c> and <c>toolchain_refused</c> plan no step.</summary>
-    public async Task<CheckResult> RunResolvedAsync(ToolchainResolution resolution, CheckRequest request, CancellationToken ct = default)
+    public async Task<CheckResult> RunResolvedAsync(ToolchainResolution resolution, CheckRequest request, CancellationToken ct = default, AffectedSelection? selection = null)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(request.Jobs, 1);
 
         return resolution switch
         {
-            ToolchainResolution.Resolved resolved => await RunPlanAsync(StepPlan.Of(resolved.Toolchain, ToolchainDefaults.Current, request.Jobs), request, ct),
+            ToolchainResolution.Resolved resolved => (await RunPlanAsync(StepPlan.Of(resolved.Toolchain, ToolchainDefaults.Current, request.Jobs, selection), request, ct)) with { Toolchain = resolved.Toolchain, Selection = selection },
             ToolchainResolution.Refused refused => new CheckResult(CheckState.ToolchainRefused, [], $"the toolchain is refused, so nothing was run: {refused.Sentence}"),
             ToolchainResolution.NotConfigured notConfigured => new CheckResult(CheckState.NotConfigured, [], notConfigured.Note),
             _ => throw new InvalidOperationException("a resolution is resolved, refused or not configured"),

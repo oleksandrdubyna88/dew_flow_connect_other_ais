@@ -81,6 +81,15 @@ public sealed class ADotnetDetectorTests
     }
 
     [Fact]
+    public void TwoProjectFilesInOneFolder_AndNoSolution_AreTwoUnits_NotOneOwningTheOther()
+    {
+        var projects = Detected(Detect(("App.csproj", Lib), ("Other.csproj", Lib), ("global.json", Sdk)));
+
+        projects.Select(project => project.Id).Should().Equal("App.csproj", "Other.csproj");
+        projects.Should().OnlyContain(project => project.Fact("kind") == "project");
+    }
+
+    [Fact]
     public void TwoSolutionFilesInOneFolder_AreARefusal_ThatNamesBoth()
     {
         var sentence = Refused(Detect(("A.sln", "x"), ("B.slnx", "x"), ("src/A.csproj", Lib)));

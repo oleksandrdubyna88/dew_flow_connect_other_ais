@@ -130,6 +130,12 @@ public sealed record CheckResult(CheckState State, IReadOnlyList<StepRecord> Ste
     /// <summary>What the run was bounded by. For a refused coder job this carries the preflight rows that said no; for a run that happened, each step's own record is the one to read.</summary>
     public BoundaryRecord Boundary { get; init; } = BoundaryRecord.None;
 
+    /// <summary>Where the checks came from and what they were (E4 s3 t3): the source, the projects with their facts and steps, the notes, and what differs between the base and the head. Null for a run that was given a toolchain FILE and no resolution (the recorded run on a clean clone).</summary>
+    public ResolvedToolchain? Toolchain { get; init; }
+
+    /// <summary>What level one of the selection decided for the round: which projects ran and what was left out, with the reason (E4 s3 t6). Null when no selection was made (a file that states every command, a run with no coder job).</summary>
+    public AffectedSelection? Selection { get; init; }
+
     /// <summary>Only a run that ran every step and saw every one pass.</summary>
     public bool Green => State == CheckState.Green;
 

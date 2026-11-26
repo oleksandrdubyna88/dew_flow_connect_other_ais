@@ -100,10 +100,10 @@ internal sealed class BoundaryBed : IAsyncDisposable
     public static string NewJobId() => "t4-" + Guid.NewGuid().ToString("N")[..12];
 
     /// <summary>The bed. With <paramref name="toolchain"/> the repository gets one more commit that holds <c>.coai/toolchain.yaml</c>, and that commit is the base of the worktree.</summary>
-    public static async Task<BoundaryBed> CreateAsync(string toolchain = "")
+    public static async Task<BoundaryBed> CreateAsync(string toolchain = "", IReadOnlyDictionary<string, string>? files = null)
     {
         var bed = await CoderTestBed.CreateAsync();
-        var baseSha = toolchain.Length == 0 ? bed.Shas[2] : await CommitToolchainAsync(bed, toolchain);
+        var baseSha = toolchain.Length == 0 && files is null ? bed.Shas[2] : await CommitFilesAsync(bed, toolchain, files);
         var started = await bed.Coder.StartAsync(bed.Repo.Path, CoderTestBed.JobId(1), baseSha);
         var tree = CoderTree.Open(started.Should().BeOfType<CoderWorktreeOutcome.Started>(started.ToString()).Subject.Path, bed.Repo.Path);
         var opened = tree.Should().BeOfType<CoderTreeOpening.Opened>(tree.ToString()).Subject.Tree;
@@ -115,10 +115,20 @@ internal sealed class BoundaryBed : IAsyncDisposable
     }
 
 
-    private static async Task<string> CommitToolchainAsync(CoderTestBed bed, string toolchain)
+    private static async Task<string> CommitFilesAsync(CoderTestBed bed, string toolchain, IReadOnlyDictionary<string, string>? files)
     {
-        Directory.CreateDirectory(Path.Combine(bed.Repo.Path, ".coai"));
-        await bed.Repo.WriteAsync(".coai/toolchain.yaml", toolchain);
+        if (toolchain.Length > 0)
+        {
+            Directory.CreateDirectory(Path.Combine(bed.Repo.Path, ".coai"));
+            await bed.Repo.WriteAsync(".coai/toolchain.yaml", toolchain);
+        }
+
+        foreach (var (name, text) in files ?? new Dictionary<string, string>())
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(Path.Combine(bed.Repo.Path, name))!);
+            await bed.Repo.WriteAsync(name, text);
+        }
+
         await bed.Repo.CommitAsync("c4 toolchain");
 
         return await bed.Repo.HeadAsync();

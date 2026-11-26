@@ -48,20 +48,25 @@ public static class StepPlan
     };
 
     /// <summary>The steps of <paramref name="toolchain"/>, in the order they run, with <c>{jobs}</c> replaced by <paramref name="jobs"/>.</summary>
-    public static IReadOnlyList<PlannedStep> Of(ResolvedToolchain toolchain, ToolchainDefaults table, int jobs)
+    public static IReadOnlyList<PlannedStep> Of(ResolvedToolchain toolchain, ToolchainDefaults table, int jobs, AffectedSelection? selection = null)
     {
         var timeouts = toolchain.File?.Timeouts ?? ToolchainTimeouts.Default;
         var skip = toolchain.File?.Skip ?? [];
         var plan = new List<PlannedStep>();
         foreach (var project in toolchain.Projects)
         {
+            if (selection is not null && !selection.Runs(project.Id))
+            {
+                continue;
+            }
+
             if (project.FileProject is { } file)
             {
                 plan.AddRange(FileSteps(file, timeouts, jobs));
             }
             else if (project.Detected is { } detected)
             {
-                plan.AddRange(DetectedSteps(project, detected, table, timeouts, skip, jobs));
+                plan.AddRange(DetectedSteps(project, detected, table, timeouts, skip, jobs).Where(step => selection is null || step.Step != CheckStep.Test || selection.RunsTest(project.Id, step.Subject)));
             }
         }
 

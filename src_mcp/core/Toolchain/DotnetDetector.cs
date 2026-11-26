@@ -140,7 +140,10 @@ public static class DotnetDetector
     private static List<Unit> Units(List<ManifestFile> solutions, List<ProjectFacts> projects)
     {
         var units = solutions.Select(solution => new Unit(solution.Path, ProjectGraph.Folder(solution.Path), IsSolution: true)).ToList();
-        foreach (var project in projects.Where(project => !units.Any(unit => ProjectGraph.Under(unit.Folder, project.Path)) && ProjectGraph.ReferencedBy(project.Path, projects) == 0))
+        var solutionUnits = units.ToList();
+
+        // Only a SOLUTION owns the folder it lies in: two project files in one folder are two units (a project unit added a moment ago must not own the next one).
+        foreach (var project in projects.Where(project => !solutionUnits.Any(unit => ProjectGraph.Under(unit.Folder, project.Path)) && ProjectGraph.ReferencedBy(project.Path, projects) == 0).ToList())
         {
             units.Add(new Unit(project.Path, ProjectGraph.Folder(project.Path), IsSolution: false));
         }

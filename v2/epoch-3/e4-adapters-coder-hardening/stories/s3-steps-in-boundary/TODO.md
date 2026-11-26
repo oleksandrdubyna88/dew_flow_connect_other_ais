@@ -25,3 +25,11 @@ Order of work (the coordinator's, 2026-11-26): the must-changes M1-M5 and S1 of 
 
 - A test project only the head has, inside a unit the base has, is not run by that unit (the unit's steps are the base's: S10 of the verify). It is not refused and it shows in `Differences`. Whether a new test project must get a test step is open for the owner of the plan.
 - `Differences` lists the facts that are not a definition; what the head adds is not named in the notes (S5 of the verify).
+
+## t3, t4, t6 — measured and open (2026-11-26)
+
+- **Item 11 of the verify stays open.** The detected steps run in the worktree and the detection reads the HEAD commit. Only the E2 `tree_changed` rule (worktree and HEAD equal after the checks) guards the gap; ignored files present before the checks are not compared. A proof that the tree equals the commit before each round is not built.
+- **A detection defect the t3 test found:** two project files in one folder with no solution made the first a unit that owned the second (a project unit added a moment ago counted as a folder owner). Fixed: only a solution owns its folder; `TwoProjectFilesInOneFolder_AndNoSolution_AreTwoUnits_NotOneOwningTheOther`.
+- **A compare defect the t6 test found:** a project file the head removed made its own members (`Targets, Imports and UsingTasks`) a "change"; the removal of a test project is refused as a lost step already, so a removed non-test project's own members are ignored.
+- **t6 stated limit:** a test of one .NET unit that reads a file of another unit at run time by a path built in code is in no manifest; a change of that file alone leaves the reading unit out. A node project is never left out for the same reason (S9 is measured with real node: a change in a shared package alone runs the app's tests through a `file:` dependency and through a workspace, and they go red).
+- **t6 level two** (`testFor`, selection of single test files) is s5.

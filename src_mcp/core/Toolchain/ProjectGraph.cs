@@ -169,6 +169,47 @@ public static class ProjectGraph
         return facts;
     }
 
+    /// <summary>
+    /// How many values of a project, <c>.props</c> or <c>.targets</c> text hold a path that LEAVES <paramref name="unitFolder"/>: an attribute or a leaf element whose value has a <c>..</c> segment that, taken from the file's own folder, ends outside the unit's folder, or that cannot be resolved (a property). A
+    /// <c>ProjectReference</c> is not counted here: its target is resolved and followed by the graph. A text that is not XML counts as one (fail closed). Used by the selection: a unit with such a value is never left out.
+    /// </summary>
+    public static int PathsLeaving(string text, string path, string unitFolder)
+    {
+        var document = Parse(text);
+        if (document?.Root is not { } root)
+        {
+            return 1;
+        }
+
+        var folder = Folder(path);
+        var leaving = 0;
+        foreach (var element in root.DescendantsAndSelf())
+        {
+            if (string.Equals(element.Name.LocalName, "ProjectReference", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var values = element.Attributes().Select(attribute => attribute.Value).Concat(element.HasElements ? [] : [element.Value]);
+            foreach (var value in values)
+            {
+                var normal = value.Replace('\\', '/');
+                if (!normal.Split('/').Contains("..", StringComparer.Ordinal))
+                {
+                    continue;
+                }
+
+                var (kind, resolved) = Resolve(folder, value);
+                if (kind != Resolution.Inside || !Under(unitFolder, resolved))
+                {
+                    leaving++;
+                }
+            }
+        }
+
+        return leaving;
+    }
+
     /// <summary>Whether a text is well-formed XML under the reader's rules (no DTD, no resolver): a definition file that is not is refused, never skipped.</summary>
     public static bool IsWellFormed(string text) => Parse(text) is not null;
 

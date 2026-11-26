@@ -15,6 +15,83 @@ internal sealed record CoderChecksReport(IReadOnlyList<CoderChecksRound> Rounds,
     /// <summary>The round that decides.</summary>
     public CoderChecksRound Last => Rounds[^1];
 
+    /// <summary>
+    /// <c>toolchain</c>: where the checks came from (<c>file</c>, <c>file+defaults</c> or <c>detected</c>), each project with its adapter, the facts the detector read and the steps planned (name, working folder, network where the table fixes it), the notes, and
+    /// <c>changedBetweenBaseAndHead</c>: what differs between the two commits for a detected or defaulted project. No value of the head tree is written: every sentence here was spelled by <see cref="PathSpelling"/> or states a count. Null when the round never reached the resolving.
+    /// </summary>
+    private static void WriteToolchain(Utf8JsonWriter json, ResolvedToolchain? toolchain, AffectedSelection? selection)
+    {
+        if (toolchain is null)
+        {
+            json.WriteNull("toolchain");
+
+            return;
+        }
+
+        var plan = StepPlan.Of(toolchain, ToolchainDefaults.Current, 1);
+        json.WriteStartObject("toolchain");
+        json.WriteString("source", toolchain.Source switch { ToolchainSource.File => "file", ToolchainSource.FileAndDefaults => "file+defaults", _ => "detected" });
+        json.WriteStartArray("projects");
+        foreach (var project in toolchain.Projects)
+        {
+            json.WriteStartObject();
+            json.WriteString("path", project.Id);
+            json.WriteString("adapter", project.FileProject?.Adapter ?? project.Detected?.Stack ?? string.Empty);
+            json.WriteString("origin", project.Origin);
+            json.WriteBoolean("definedByHead", project.DefinedByHead);
+            json.WriteStartObject("facts");
+            foreach (var (name, value) in project.Detected?.Facts ?? [])
+            {
+                json.WriteString(name, name is "projects" or "testProjects" ? PathSpelling.SpellFact(value) : value);
+            }
+
+            json.WriteEndObject();
+            json.WriteStartArray("steps");
+            foreach (var step in plan.Where(step => step.Project == project.Id || (project.Detected is not null && step.Project == project.Detected.Id)))
+            {
+                json.WriteStartObject();
+                json.WriteString("name", step.Step.Wire());
+                json.WriteString("workingFolder", step.WorkingFolder);
+                json.WriteString("network", step.Network is { } network ? (network.Mode == DefaultNetwork.Host ? "host" : "none") : "job");
+                json.WriteEndObject();
+            }
+
+            json.WriteEndArray();
+            json.WriteEndObject();
+        }
+
+        json.WriteEndArray();
+        json.WriteStartArray("notes");
+        foreach (var note in toolchain.Notes)
+        {
+            json.WriteStringValue(note);
+        }
+
+        json.WriteEndArray();
+        json.WriteStartArray("changedBetweenBaseAndHead");
+        foreach (var difference in toolchain.Differences)
+        {
+            json.WriteStringValue(difference);
+        }
+
+        json.WriteEndArray();
+        json.WriteStartObject("selection");
+        json.WriteBoolean("everything", selection is null || selection.Everything);
+        json.WriteString("why", selection?.Why ?? string.Empty);
+        json.WriteStartArray("leftOut");
+        foreach (var left in selection?.Left ?? [])
+        {
+            json.WriteStartObject();
+            json.WriteString("project", PathSpelling.Bare(left.Project));
+            json.WriteString("reason", left.Reason);
+            json.WriteEndObject();
+        }
+
+        json.WriteEndArray();
+        json.WriteEndObject();
+        json.WriteEndObject();
+    }
+
     /// <summary>Writes the fields of the envelope's checks half into the object being written.</summary>
     public void Write(Utf8JsonWriter json)
     {
@@ -32,6 +109,8 @@ internal sealed record CoderChecksReport(IReadOnlyList<CoderChecksRound> Rounds,
             json.WriteStartObject();
             json.WriteString("project", step.Project);
             json.WriteString("step", step.Step);
+            json.WriteString("network", step.Network);
+            json.WriteString("workingFolder", step.WorkingFolder);
             json.WriteStartArray("argv");
             foreach (var argument in step.Argv)
             {
@@ -46,6 +125,7 @@ internal sealed record CoderChecksReport(IReadOnlyList<CoderChecksRound> Rounds,
         }
 
         json.WriteEndArray();
+        WriteToolchain(json, last.Toolchain, last.Selection);
         json.WriteStartArray("rounds");
         foreach (var round in Rounds)
         {

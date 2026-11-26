@@ -8,10 +8,17 @@ namespace CoaiMcp.Server.RoleJobs;
 
 /// <summary>One step of one round of checks as the envelope's <c>checks</c> lists it (<c>server.md</c> § 10): what ran, how it ended, how long it took and where its log is.</summary>
 /// <param name="Project">The project of the toolchain file the step belongs to (<c>app</c>, <c>src_mcp</c>); there can be several projects, each with a build and a test.</param>
-/// <param name="Step">"build" or "test".</param>
+/// <param name="Step">"restore", "build", "typecheck" or "test".</param>
 /// <param name="Argv">The argument list as it was started: <c>{jobs}</c> replaced, no shell added by coai.</param>
 /// <param name="LogRef">The step's log, relative to the job folder and written with <c>/</c>.</param>
-internal sealed record CoderCheckStep(string Project, string Step, IReadOnlyList<string> Argv, int ExitCode, long DurationMs, string LogRef);
+internal sealed record CoderCheckStep(string Project, string Step, IReadOnlyList<string> Argv, int ExitCode, long DurationMs, string LogRef)
+{
+    /// <summary>The network state the step ran with (<c>host</c> or <c>none</c>), from the record of its unit (epoch 3 E4 s3 t4); empty for a step that never reached a unit.</summary>
+    public string Network { get; init; } = string.Empty;
+
+    /// <summary>The folder the step started in, relative to the repository root; <c>.</c> is the root.</summary>
+    public string WorkingFolder { get; init; } = ".";
+}
 
 /// <summary>
 /// One round of checks on one commit of a coder job — after turn 0 and after each fix turn. <see cref="State"/> is the wire word of the checks (<c>green</c>, <c>failed</c>, <c>not_configured</c>, <c>toolchain_refused</c>, <c>boundary_refused</c>) or
@@ -23,6 +30,12 @@ internal sealed record CoderCheckStep(string Project, string Step, IReadOnlyList
 /// <param name="Digest">What a failed step goes back to the coder as (<see cref="FailureDigest"/>); empty for every other state.</param>
 internal sealed record CoderChecksRound(int Turn, string HeadSha, string State, IReadOnlyList<CoderCheckStep> Steps, string Note, IReadOnlyList<DigestItem> Digest)
 {
+    /// <summary>Where the checks of the round came from (the file, the defaults of a folder, or the manifests of the base and the head), what they were and what differed between the base and the head; null when the round never reached the resolving (epoch 3 E4 s3 t4).</summary>
+    public ResolvedToolchain? Toolchain { get; init; }
+
+    /// <summary>What level one of the selection decided: the projects that ran and each one left out with its reason (E4 s3 t6); null when nothing was selected.</summary>
+    public AffectedSelection? Selection { get; init; }
+
     public const string TreeChanged = "tree_changed";
 
     /// <summary>Only a run that ran every step, saw every one pass, and left the worktree and HEAD where they were.</summary>
@@ -85,7 +98,7 @@ internal sealed class CoderChecks(IRoleRun run, GitHistory git, CoderOsLayer lay
             return Unverified(turn, head, moved, Steps(result));
         }
 
-        return new CoderChecksRound(turn, head, result.State.Wire(), Steps(result), result.Note, result.State == CheckState.Failed ? DigestOf(result) : []);
+        return new CoderChecksRound(turn, head, result.State.Wire(), Steps(result), result.Note, result.State == CheckState.Failed ? DigestOf(result) : []) { Toolchain = result.Toolchain, Selection = result.Selection };
     }
 
     /// <summary>
@@ -116,7 +129,7 @@ internal sealed class CoderChecks(IRoleRun run, GitHistory git, CoderOsLayer lay
     [
         .. result.Steps.Select(step => new CoderCheckStep(
             step.Project, step.Step.Wire(), step.Argv, step.ExitCode, (long)step.Duration.TotalMilliseconds,
-            Path.GetRelativePath(run.Folder, step.LogPath).Replace(Path.DirectorySeparatorChar, '/'))),
+            Path.GetRelativePath(run.Folder, step.LogPath).Replace(Path.DirectorySeparatorChar, '/')) { Network = step.Boundary.Network, WorkingFolder = step.WorkingFolder }),
     ];
 
     /// <summary>The digest of the first step that did not pass, read from its log — the machine output of the step, redacted and bounded.</summary>
