@@ -65,7 +65,7 @@ internal sealed class CoderFormat(IRoleRun run, GitHistory git, CoderOsLayer lay
         var steps = CoderChecks.StepsOf(run, ran.Steps);
         if (ran.State == CheckState.BoundaryRefused)
         {
-            return new Prepared(new FormatResult("failed", given.Count, string.Empty, "a unit of the formatter turn could not be stopped, so the job ends here"), false) { Steps = steps, EndsJob = ran.Note };
+            return new Prepared(new FormatResult("failed", given.Count, string.Empty, RefusalNote(ran)), false) { Steps = steps, EndsJob = ran.Note };
         }
 
         if (ran.State != CheckState.Green)
@@ -77,6 +77,12 @@ internal sealed class CoderFormat(IRoleRun run, GitHistory git, CoderOsLayer lay
 
         return (await VerifyAsync(head, given, ct)) with { Steps = steps };
     }
+
+    /// <summary>S10 of the s5 verify pass 2: "could not be stopped" only when a unit of the turn was left; a refused admission (the preflight) has its own sentence.</summary>
+    internal static string RefusalNote(CheckResult ran) =>
+        ran.Steps.Any(step => step.ExitCode == StepRecord.UnitSurvivedExitCode)
+            ? "a unit of the formatter turn could not be stopped, so the job ends here"
+            : "the boundary refused to start the formatter turn (see the job's reason), so the formatter did not run and the job ends here";
 
     private async Task<Prepared> VerifyAsync(string head, HashSet<string> given, CancellationToken ct)
     {

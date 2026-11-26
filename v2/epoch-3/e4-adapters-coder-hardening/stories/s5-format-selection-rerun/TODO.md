@@ -1,6 +1,6 @@
 # s5 - open items after the security verify (RESULTS_e4_s5_security_verify.md)
 
-Done in the fix commit: M1, M2, M3, M4, S1, S3, S4, S5, S8. What is left, by the verify's numbers:
+Done in the fix commits: M1, M2, M3, M4, M5, S1, S3, S4, S5, S8, S9, S10, S11, S12 (pass 2: the node note is in SPEC section E). What is left, by the verify's numbers:
 
 - **S2 - what the format commit may hold.** Say in the `format` note when the formatter's command or configuration is among the head's changed definitions; refuse a mode change (a ` M` entry whose only change is the file mode); run the M6 proof (clean, empty `status --ignored`, no nested `.git`) before the formatter turn as well, because it runs on a tree that may hold the coder's ignored files.
 - **S6 - the order of the records.** Cosmetic. After the fix a re-run's record follows its own first run; with several projects the order is by project, which the verify did not ask to change further.

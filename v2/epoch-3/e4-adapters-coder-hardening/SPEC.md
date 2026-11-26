@@ -293,6 +293,8 @@ of these files".
    (measured by s1) means "nothing selected", and the full command runs.
 5. After a full run has failed once in a job, the later rounds run the full command only.
 
+   **For node:** the stem rule (letters, digits and underscores) refuses the dot, so a file named `*.test.js` or `*.spec.ts` (stem `flaky.test`) never gets a selected or a narrowed run, whether `testFor` takes `{file}` or `{stem}`: the whole step runs. That is the rule working, not a fault. A node repository whose tests are named like that gets level two only after the rule is widened, which is a decision of its own.
+
 For this repository the file gets `testFiles` and `testFor` (story s5 t6): a red round then costs the build and one test class,
 not the 8 minutes of the suite.
 

@@ -108,7 +108,7 @@ public sealed class ChecksAtBase(GitHistory history, CheckRunner runner)
         var raw = await git.RawChangesAsync(job.Tree.MainCheckout, baseSha, headSha, FrozenDefinitions.MaxChars, ct);
         var changes = raw.Ran && raw.Ok && !raw.Truncated ? FrozenDefinitions.ParseRaw(raw.Out) : null;
         var file = ToolchainFile.Read(headFile.File);
-        request = request with { Facts = request.Facts with { ChangedPaths = changes is null ? [] : [.. changes.Where(change => change.Status is 'A' or 'M' or 'T' && !change.IsLinkOrSubmodule).Select(change => change.Path)], InHead = async (path, token) => (await git.HasPathAsync(job.Tree.MainCheckout, headSha, path, token)) is { Ran: true, Ok: true } } };
+        request = request with { Facts = request.Facts with { ChangedPaths = changes is null ? [] : [.. changes.Where(change => change.Status is 'A' or 'M' or 'T' && !change.IsLinkOrSubmodule).Select(change => change.Path)], InHead = async (path, token) => await git.EntryAtAsync(job.Tree.MainCheckout, headSha, path, token) is { Ran: true, Ok: true } shown && HeadEntry.IsRegularFile(shown.Out, path) } };
         var result = file is ToolchainRead.Refused
             ? await runner.RunAsync(file, request, ct)
             : await RunDetectedAsync(file, baseFile, job, baseSha, headSha, request, ct);

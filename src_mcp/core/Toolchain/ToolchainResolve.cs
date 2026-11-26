@@ -101,6 +101,16 @@ public static class ToolchainResolve
             foreach (var project in atBase.Projects)
             {
                 var head = atHead.Projects.FirstOrDefault(candidate => candidate.Path == project.Path);
+                if (head is not null && !string.Equals(project.Adapter, head.Adapter, StringComparison.Ordinal))
+                {
+                    changed.Add($"the worktree changed the adapter of {PathSpelling.Bare(project.Path)}");
+                }
+
+                if (head is not null && project.MemoryMb != head.MemoryMb)
+                {
+                    changed.Add($"the worktree changed memoryMb of {PathSpelling.Bare(project.Path)}");
+                }
+
                 if (head is not null && !project.TestFiles.SequenceEqual(head.TestFiles, StringComparer.Ordinal))
                 {
                     var line = $"the worktree changed testFiles of {PathSpelling.Bare(project.Path)}";
