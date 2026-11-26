@@ -1,0 +1,8 @@
+
+[stderr]
+global.json defines test runner to be Microsoft.Testing.Platform. All projects must use that test runner.
+The following test projects are using VSTest test runner:
+Scratch.Vs.csproj
+
+See https://aka.ms/dotnet-test/mtp for more information.
+Get projects properties with MSBuild didn't execute properly with exit code: 1.

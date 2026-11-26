@@ -1,0 +1,27 @@
+Test run for /work/c/coai-coder-m1/vstest/bin/Debug/net10.0/Scratch.Vs.dll (.NETCoreApp,Version=v10.0)
+VSTest version 18.0.2 (x64)
+
+Starting test execution, please wait...
+A total of 1 test files matched the specified pattern.
+  Failed Scratch.SampleTests.FailsOnTheValue [4 ms]
+  Error Message:
+   Assert.Equal() Failure: Values differ
+Expected: 3
+Actual:   2
+  Stack Trace:
+     at Scratch.SampleTests.FailsOnTheValue() in /work/c/coai-coder-m1/vstest/SampleTests.cs:line 11
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+  Failed Scratch.SampleTests.FailsByThrowing [< 1 ms]
+  Error Message:
+   System.InvalidOperationException : boom from the scratch test
+  Stack Trace:
+     at Scratch.SampleTests.FailsByThrowing() in /work/c/coai-coder-m1/vstest/SampleTests.cs:line 14
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+
+Failed!  - Failed:     2, Passed:     2, Skipped:     0, Total:     4, Duration: 37 ms - Scratch.Vs.dll (net10.0)
+
+[stderr]
+[xUnit.net 00:00:00.20]     Scratch.SampleTests.FailsOnTheValue [FAIL]
+[xUnit.net 00:00:00.21]     Scratch.SampleTests.FailsByThrowing [FAIL]

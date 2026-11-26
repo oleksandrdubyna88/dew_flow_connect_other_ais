@@ -1,0 +1,29 @@
+Running tests from /work/c/coai-coder-m1/mtp-global/bin/Debug/net10.0/Scratch.Mtp.dll (net10.0|x64)
+passed Scratch.OtherTests.AlsoPasses (18ms)
+  from /work/c/coai-coder-m1/mtp-global/bin/Debug/net10.0/Scratch.Mtp.dll (net10.0|x64)
+failed Scratch.SampleTests.FailsByThrowing (16ms)
+  from /work/c/coai-coder-m1/mtp-global/bin/Debug/net10.0/Scratch.Mtp.dll (net10.0|x64)
+  Xunit.MicrosoftTestingPlatform.XunitException: System.InvalidOperationException : boom from the scratch test
+    at Scratch.SampleTests.FailsByThrowing() in /work/c/coai-coder-m1/mtp-global/SampleTests.cs:14
+    at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+    at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+passed Scratch.SampleTests.PassesAlways (4ms)
+  from /work/c/coai-coder-m1/mtp-global/bin/Debug/net10.0/Scratch.Mtp.dll (net10.0|x64)
+failed Scratch.SampleTests.FailsOnTheValue (2ms)
+  from /work/c/coai-coder-m1/mtp-global/bin/Debug/net10.0/Scratch.Mtp.dll (net10.0|x64)
+  Assert.Equal() Failure: Values differ
+  Expected: 3
+  Actual:   2
+    at Scratch.SampleTests.FailsOnTheValue() in /work/c/coai-coder-m1/mtp-global/SampleTests.cs:11
+    at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+    at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+/work/c/coai-coder-m1/mtp-global/bin/Debug/net10.0/Scratch.Mtp.dll (net10.0|x64) failed with 2 error(s) (458ms)
+Exit code: 2
+
+Test run summary: Failed!
+  total: 4
+  failed: 2
+  succeeded: 2
+  skipped: 0
+  duration: 699ms
+Test run completed with non-success exit code: 2 (see: https://aka.ms/testingplatform/exitcodes)

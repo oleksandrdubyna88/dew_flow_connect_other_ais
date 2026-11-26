@@ -1,0 +1,51 @@
+Test run for /work/c/coai-coder-m1/vstest/bin/Debug/net10.0/Scratch.Vs.dll (.NETCoreApp,Version=v10.0)
+VSTest version 18.0.2 (x64)
+
+Starting test execution, please wait...
+A total of 1 test files matched the specified pattern.
+/work/c/coai-coder-m1/vstest/bin/Debug/net10.0/Scratch.Vs.dll
+[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.4+50e68bbb8b (64-bit .NET 10.0.14)
+[xUnit.net 00:00:00.07]   Discovering: Scratch.Vs
+[xUnit.net 00:00:00.11]   Discovered:  Scratch.Vs
+[xUnit.net 00:00:00.13]   Starting:    Scratch.Vs
+[xUnit.net 00:00:00.20]       Assert.Equal() Failure: Values differ
+[xUnit.net 00:00:00.20]       Expected: 3
+[xUnit.net 00:00:00.20]       Actual:   2
+[xUnit.net 00:00:00.20]       Stack Trace:
+[xUnit.net 00:00:00.20]         /work/c/coai-coder-m1/vstest/SampleTests.cs(11,0): at Scratch.SampleTests.FailsOnTheValue()
+[xUnit.net 00:00:00.20]            at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+[xUnit.net 00:00:00.20]            at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+[xUnit.net 00:00:00.20]       System.InvalidOperationException : boom from the scratch test
+[xUnit.net 00:00:00.20]       Stack Trace:
+[xUnit.net 00:00:00.20]         /work/c/coai-coder-m1/vstest/SampleTests.cs(14,0): at Scratch.SampleTests.FailsByThrowing()
+[xUnit.net 00:00:00.20]            at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+[xUnit.net 00:00:00.20]            at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+[xUnit.net 00:00:00.20]   Finished:    Scratch.Vs
+  Passed Scratch.OtherTests.AlsoPasses [4 ms]
+  Passed Scratch.SampleTests.PassesAlways [5 ms]
+  Failed Scratch.SampleTests.FailsOnTheValue [3 ms]
+  Error Message:
+   Assert.Equal() Failure: Values differ
+Expected: 3
+Actual:   2
+  Stack Trace:
+     at Scratch.SampleTests.FailsOnTheValue() in /work/c/coai-coder-m1/vstest/SampleTests.cs:line 11
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+  Failed Scratch.SampleTests.FailsByThrowing [< 1 ms]
+  Error Message:
+   System.InvalidOperationException : boom from the scratch test
+  Stack Trace:
+     at Scratch.SampleTests.FailsByThrowing() in /work/c/coai-coder-m1/vstest/SampleTests.cs:line 14
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+
+Total tests: 4
+     Passed: 2
+     Failed: 2
+ Total time: 0.7073 Seconds
+
+[stderr]
+[xUnit.net 00:00:00.19]     Scratch.SampleTests.FailsOnTheValue [FAIL]
+[xUnit.net 00:00:00.20]     Scratch.SampleTests.FailsByThrowing [FAIL]
+Test Run Failed.

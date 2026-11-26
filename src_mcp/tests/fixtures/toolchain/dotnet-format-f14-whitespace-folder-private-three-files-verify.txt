@@ -1,0 +1,5 @@
+
+[stderr]
+/work/c/coai-coder-m1/src_mcp/core/Toolchain/CheckResult.cs(5,1): error WHITESPACE: Fix whitespace formatting. Delete 1 characters. [.]
+/work/c/coai-coder-m1/src_mcp/core/Toolchain/MsBuildLines.cs(3,34): error WHITESPACE: Fix whitespace formatting. Replace 6 characters with '\n\n'. [.]
+/work/c/coai-coder-m1/src_mcp/core/Toolchain/ToolchainTables.cs(5,1): error WHITESPACE: Fix whitespace formatting. Delete 1 characters. [.]

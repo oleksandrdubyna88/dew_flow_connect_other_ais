@@ -1,0 +1,7 @@
+
+[stderr]
+[error] broken.js: SyntaxError: Unexpected token (1:7)
+[error] > 1 | const = ;
+[error]     |       ^
+[error]   2 | function (
+[error]   3 |

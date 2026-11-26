@@ -1,0 +1,25 @@
+
+> scratch-vitest@1.0.0 test
+> vitest run --reporter=verbose -t passes always
+
+
+ RUN  v5.1.2 /work/c/coai-coder-m1/vitest
+
+ ✓ sum.test.js > passes always 2ms
+ ↓ sum.test.js > fails on the value
+ ↓ sum.test.js > fails by throwing
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  1 passed | 2 skipped (3)
+   Start at  02:36:31
+   Duration  135ms (import 45%, transform 25%, worker 20%, tests 9%, environment 1%)
+
+
+[stderr]
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  empty.test.js [ empty.test.js ]
+Error: No test suite found in file /work/c/coai-coder-m1/vitest/empty.test.js
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+

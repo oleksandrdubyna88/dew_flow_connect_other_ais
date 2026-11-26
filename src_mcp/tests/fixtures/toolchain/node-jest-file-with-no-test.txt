@@ -1,0 +1,19 @@
+
+> scratch-jest@1.0.0 test
+> jest empty.test.js
+
+
+[stderr]
+FAIL ./empty.test.js
+  ● Test suite failed to run
+
+    Your test suite must contain at least one test.
+
+      at onResult (node_modules/@jest/core/build/index.js:1054:18)
+          at Array.map (<anonymous>)
+
+Test Suites: 1 failed, 1 total
+Tests:       0 total
+Snapshots:   0 total
+Time:        0.177 s
+Ran all test suites matching empty.test.js.

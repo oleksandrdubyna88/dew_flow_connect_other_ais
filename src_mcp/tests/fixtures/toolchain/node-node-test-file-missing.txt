@@ -1,0 +1,7 @@
+
+> scratch-nodetest@1.0.0 test
+> node --test nothere.test.js
+
+
+[stderr]
+Could not find 'nothere.test.js'

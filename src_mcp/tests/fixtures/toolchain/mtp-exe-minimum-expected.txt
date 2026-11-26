@@ -1,0 +1,12 @@
+
+Test run summary: Minimum expected tests policy violation, tests ran 18, minimum expected 1000 - /work/c/coai-coder-m1/src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.dll (net10.0|x64)
+  total: 18
+  failed: 0
+  succeeded: 18
+  skipped: 0
+  duration: 1s 921ms
+
+[stderr]
+coai tests: leftovers — removed 0, preserved 1, listed 0
+  preserved: /tmp/testsToDelete-u1000-coai-run-4noCHx — young
+run: no old coai-* leftovers in /tmp

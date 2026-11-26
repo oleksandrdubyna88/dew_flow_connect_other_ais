@@ -1,0 +1,12 @@
+
+Test run summary: Passed! - /work/c/coai-coder-m1/src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.dll (net10.0|x64)
+  total: 69
+  failed: 0
+  succeeded: 69
+  skipped: 0
+  duration: 3s 635ms
+
+[stderr]
+coai tests: leftovers — removed 0, preserved 1, listed 0
+  preserved: /tmp/testsToDelete-u1000-coai-run-zMDEXX — young
+run: no old coai-* leftovers in /tmp

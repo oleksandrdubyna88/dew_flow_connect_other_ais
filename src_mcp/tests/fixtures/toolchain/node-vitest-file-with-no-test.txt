@@ -1,0 +1,23 @@
+
+> scratch-vitest@1.0.0 test
+> vitest run empty.test.js
+
+
+ RUN  v5.1.2 /work/c/coai-coder-m1/vitest
+
+ ❯ empty.test.js (0 test)
+
+ Test Files  1 failed (1)
+      Tests  no tests
+   Start at  02:36:33
+   Duration  135ms (import 46%, transform 29%, worker 25%, environment 1%)
+
+
+[stderr]
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  empty.test.js [ empty.test.js ]
+Error: No test suite found in file /work/c/coai-coder-m1/vitest/empty.test.js
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+

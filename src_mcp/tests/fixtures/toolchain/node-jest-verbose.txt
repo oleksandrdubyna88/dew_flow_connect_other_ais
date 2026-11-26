@@ -1,0 +1,51 @@
+
+> scratch-jest@1.0.0 test
+> jest --verbose
+
+
+[stderr]
+FAIL ./sum.test.js
+  ✓ passes always (2 ms)
+  ✕ fails on the value (1 ms)
+  ✕ fails by throwing
+
+  ● fails on the value
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 3
+    Received: 2
+
+      1 | test('passes always', () => { expect(1 + 1).toBe(2); });
+    > 2 | test('fails on the value', () => { expect(1 + 1).toBe(3); });
+        |                                                  ^
+      3 | test('fails by throwing', () => { throw new Error('boom from the scratch test'); });
+      4 |
+
+      at Object.toBe (sum.test.js:2:50)
+
+  ● fails by throwing
+
+    boom from the scratch test
+
+      1 | test('passes always', () => { expect(1 + 1).toBe(2); });
+      2 | test('fails on the value', () => { expect(1 + 1).toBe(3); });
+    > 3 | test('fails by throwing', () => { throw new Error('boom from the scratch test'); });
+        |                                         ^
+      4 |
+
+      at Object.<anonymous> (sum.test.js:3:41)
+
+FAIL ./empty.test.js
+  ● Test suite failed to run
+
+    Your test suite must contain at least one test.
+
+      at onResult (node_modules/@jest/core/build/index.js:1054:18)
+          at Array.map (<anonymous>)
+
+Test Suites: 2 failed, 2 total
+Tests:       2 failed, 1 passed, 3 total
+Snapshots:   0 total
+Time:        0.295 s, estimated 1 s
+Ran all test suites.

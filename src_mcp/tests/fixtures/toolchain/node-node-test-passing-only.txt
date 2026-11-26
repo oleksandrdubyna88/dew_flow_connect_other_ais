@@ -1,0 +1,14 @@
+
+> scratch-nodetest@1.0.0 test
+> node --test --test-name-pattern passes always
+
+✔ empty.test.js (28.238006ms)
+✔ passes always (0.602734ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 2
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 68.414468

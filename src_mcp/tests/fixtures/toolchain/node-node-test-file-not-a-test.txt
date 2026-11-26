@@ -1,0 +1,13 @@
+
+> scratch-nodetest@1.0.0 test
+> node --test helper.js
+
+✔ helper.js (29.997081ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 37.597047

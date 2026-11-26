@@ -1,0 +1,3 @@
+  Determining projects to restore...
+/work/c/coai-coder-m1/badrestore/Scratch.Bad.csproj : error NU1101: Unable to find package Coai.Scratch.NoSuchPackage.Anywhere. No packages exist with this id in source(s): /usr/lib/dotnet/library-packs, nuget.org
+  Failed to restore /work/c/coai-coder-m1/badrestore/Scratch.Bad.csproj (in 441 ms).
