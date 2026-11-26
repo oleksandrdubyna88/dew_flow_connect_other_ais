@@ -275,6 +275,9 @@ export class DomDocument {
     return element;
   }
 
+  /** A new element, in no tree until a page appends it — what a page that BUILDS its nodes needs. */
+  createElement(tag: string): DomElement { return new DomElement(this, tag.toLowerCase()); }
+
   /** An id that is not in the page is NULL — never an invented stand-in. */
   getElementById(id: string): DomElement | null {
     return this.root.descendants().find((node) => node.id === id) ?? null;
