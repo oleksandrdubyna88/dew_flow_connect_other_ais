@@ -1,17 +1,20 @@
 # PLAN — E3 stories: WSL on this PC, and revision 2 of the script
 
-> Status: **plan only, nothing implemented yet, 2026-11-26.** The stories of epic E3 of
+> Status: **plan only, nothing implemented yet, 2026-11-26 — gate E3-G1 passed with its fixes applied (§ 11).**
+> The stories of epic E3 of
 > [PLAN_the_terminal_panel_shows_the_accounts_and_their_usage.md](PLAN_the_terminal_panel_shows_the_accounts_and_their_usage.md)
 > (its `## Epics` § *E3* and § *E4*, §§ 2, 4 and 5 of *The design*, *Security*, the *Test plan*, the *Definition of
-> Done* and the *Merge conditions*), read on the plan's branch at `f5f3362b` — epoch 4, one change (4.1); the copy
-> of the parent in this branch is older. Written on `feat/terminal-accounts-e3`, cut from the E2 branch at
+> Done* and the *Merge conditions*), written against the plan's branch at `f5f3362b` (epoch 4) and held by gate
+> E3-G1 against `50ac8f90` — **epoch 5, open, no change yet**: entry 4.2 (ONE real-window check at the end on the
+> combined build of E2 to E4, E4 allowed in E3's pull request, E6 to the next release, E5's gates once) and 4.3
+> (residual 9 accepted). The copy of the parent in this branch is older. Written on `feat/terminal-accounts-e3`, cut from the E2 branch at
 > `8407c6bc`, together with its two specs, both by Fable:
 > [the WSL road](PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E3_S1_spec.md) (E3.S1, the security
 > row) and [revision 2 of the script](PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E3_S2_spec.md)
 > (E3.S2, the cornerstone). **This document was written by Fable too, not by Opus as `subagent-models.md` asks
 > for a stories document: the lead's choice, for the owner's deadline (§ 10, N1).** A stories document keeps no
-> change ledger: a change to this epic is an entry in the parent. **§ 10 names what the owner said on
-> 2026-11-26 that the parent does not hold yet; the planner records it there, not here.** It takes up the todo
+> change ledger: a change to this epic is an entry in the parent. **What the owner said on 2026-11-26 is now in
+> the parent (entries 4.2 and 4.3, epoch 5); § 10 says how each of its notes stands.** It takes up the todo
 > file T46 ([PLAN_the_usage_mode_stays_under_the_30_s_ceiling.md](PLAN_the_usage_mode_stays_under_the_30_s_ceiling.md)):
 > the commit of E3.S2 that makes its tests green deletes that file and its README row.
 >
@@ -54,7 +57,8 @@ E2's § 3 holds, with these differences:
 - **Test ids** are `E3S<story>-T<n>` and `E3S<story>-H<n>`.
 - **No test and no agent starts `wsl.exe`.** In `ExtensionMode.Test` the WSL calls are the stub, as the ssh call
   is, until a scenario replaces them. The scripts are run by `sh -s` with false programs in a temporary `HOME`.
-- **The owner's rows are run once, at the end, on one VSIX** (§ 7, and § 10, N2).
+- **The owner's rows are run once, at the end, on one VSIX of the combined build of E2 to E4** (§ 7; the parent's
+  merge condition 5, entry 4.2). No pull request of E2 to E4 merges before it.
 
 ## 4. Shared contracts
 
@@ -63,7 +67,8 @@ E2's § 3 holds, with these differences:
   to the scope host.
 - **K2 — the WSL edge (S1 owns).** `runWslList`, `runWslUsers`, `runWslAccounts(place, mode, digest?)`, each
   never rejecting, and the pure `wslRound(seams)`: the order of the S1 spec's § W11 with the door before every
-  spawn. Its result: the places with their runs, and the scope host's own facts (the distros, which run, the
+  spawn — asked inside the edge's one spawn function, and again between a re-read and its `-d` call (gate
+  E3-G1, B2). Its result: the places with their runs, and the scope host's own facts (the distros, which run, the
   counts past a cap, a failure, the strikes).
 - **K3 — the script (S2 owns).** `ACCOUNTS_SCRIPT` of revision 2, `accountsDigest(stdout)`, the argv forms
   `<mode>` and `claude-usage <digest>`, the parser's arm `claude-only`, the states `unsafe` and `skipped
@@ -154,21 +159,22 @@ E2's S2, S3 and S4. Serves **R13**, **R16**, **R17**, **R9a**.
 | E3S3-T12 | The sentence *WSL on this PC is not read by this build* is in no source file; in a test run the WSL calls are the stub |
 | E3S3-H1 | Host scenario, the WSL seam replaced through the test door: one `Creds: wsl / s` terminal, two distros of which one is stopped, two users and root → the tab's model holds three places and the line of the stopped distro |
 
-- **Done when.** E3S3-T1…T12 green, T2, T3 and T8 seen RED with their break-its; E3S3-H1 green in CI's
-  real-editor job.
+- **Done when.** E3S3-T1…T12 green, T2, T3, T8 and T9 seen RED with their break-its (T9: the place's text drawn
+  as markup); E3S3-H1 green in CI's real-editor job.
 
 ### E3.S5 — The Claude usage, on (the parent's E4)
 
 `model: fable` (the S2 spec, § R2.9) · coder: the main session or sonnet (one constant) · review: opus. Depends
-on **S2 on main** (the parent's E4), and on W6 and W7 recorded with W7 passed — both are recorded, and W7 passed.
+on **S2 on main or in the same pull request** (the parent's E4, entry 4.2), and on W6 and W7 recorded with W7
+passed — both are recorded, and W7 passed.
 Serves **R3**, **R4**, **R2**, **R9b**.
 
 - **Files.** `src/remoteAccountsRound.ts` (`USAGE_POLICY`), its tests, the model's test for the sentence that
   leaves.
 - **Tests.** E3S5-T1…T3 of the S2 spec, § R2.9.
-- **Where it may merge.** In E3's second pull request, AFTER S2 has merged as its own (§ 6): then revision 2 is
-  on main when this constant merges, as the parent's E4 asks. In ONE pull request with S2 it would not be, and
-  that is a change of the parent (§ 10, N3).
+- **Where it may merge.** In the same pull request as S2, or a later one: the parent's E4 asks for revision 2
+  and the join "on main or in the same pull request" (entry 4.2). Its commit comes after S2's code in the
+  branch. Like every pull request of E2 to E4 it merges only after the one real-window check.
 - **Done when.** The tests are green and the pull request names W6 and W7 with their results.
 
 ### E3.S4 — The documents
@@ -194,29 +200,34 @@ merge condition 6.
 
 ## 6. Build order, and its gates
 
-1. **Gate E3-G1** — Opus reviews the two specs against the parent and this document, before any code; E3's
-   plan round (`review_plan`) reads the three documents. Both read the parent's text on root and on the login
-   session, which no round has read (the parent's *Re-review for epoch 4*).
+1. **Gate E3-G1** — Opus reviews the two specs against the parent and this document, before any code: **passed,
+   2026-11-26, with its fixes applied (§ 11).** E3's plan round (`review_plan`) reads the three documents before
+   any code. Both read the parent's text on root and on the login session, which no round had read (the
+   parent's *Re-review for epoch 4*).
 2. **E2's code is on the branch** (a merge of the E2 branch, or of main once E2 is merged). Suite green.
-3. **S2**, then its pull request — E3's first. It may merge on merge conditions 1 to 4 and 6 (the parent's E3).
+3. **S2**, then its pull request — E3's first. It is reviewed on merge conditions 1 to 4 and 6, and **merges only
+   after the one real-window check** (merge condition 5; the early merge of E3.S2 is gone, entry 4.2).
 4. **S1**, beside S2 or after it.
 5. **S3**, after S1 and S2.
-6. **S5**, after S2 is on main.
-7. **S4**, last. Then E3's second pull request: S1, S3, S5, S4.
+6. **S5**, after S2's code in the branch; in S2's pull request or the second one (entry 4.2).
+7. **S4**, last. Then E3's second pull request: S1, S3, S4, and S5 if it is not in the first.
 8. The code gate (`review_code`, fed the scope) and the own Opus review for each pull request.
+9. **The one real-window check** on a VSIX of the combined head of E2, E3 and E4 (§ 7); then the pull requests
+   merge.
 
-The order of the stories: **S2 → S1 → S3 → S5 → S4.** Two pull requests, so the cap of three open ones holds
-with E2's.
+The order of the stories: **S2 → S1 → S3 → S5 → S4.** Two pull requests at most, so the cap of three open ones
+holds with E2's; one is allowed too (entry 4.2).
 
 ## 7. The owner's rows, and which story serves each
 
-Run once, at the end, on one VSIX built from the head that holds E2, E3 and S5 (§ 10, N2).
+Run once, at the end, on one VSIX built from the head that holds E2, E3 and S5 (the parent's merge condition 5,
+entry 4.2). A row that fails is fixed and run again on the new combined head.
 
 | Row | What the owner runs (the parent's *E3* and *E4*) | Stories | How |
 |---|---|---|---|
 | R13 | Two WSL users and root, each signed in to a tool; a second running distro; a stopped one | S1, S3 | The tab; and H1 to H5 of the S1 spec, § W16 |
 | R16 | A known sample: one figure the owner knows from the tool itself | S2, S3, S5 | The tab against the tool |
-| R17 | *Not this host* on `wsl`: no `wsl.exe` call of this window in 20 minutes, also after a reload | S1, S3 | **The method:** every other VS Code window is closed and no terminal is opened in the 20 minutes. In an elevated PowerShell: `Register-CimIndicationEvent -Query "SELECT * FROM Win32_ProcessStartTrace WHERE ProcessName='wsl.exe'" -SourceIdentifier w`, and after 20 minutes `Get-Event -SourceIdentifier w`. Pass: no event whose parent process is a `Code.exe` |
+| R17 | *Not this host* on `wsl`: no `wsl.exe` call of this window in 20 minutes, also after a reload | S1, S3 | **The method:** every other VS Code window is closed and no terminal is opened in the 20 minutes. In an elevated PowerShell: `Register-CimIndicationEvent -Query "SELECT * FROM Win32_ProcessStartTrace WHERE ProcessName='wsl.exe'" -SourceIdentifier w`, and after 20 minutes `Get-Event -SourceIdentifier w`. **For "after a reload"**, the watch is started once the reloaded window has restored its terminals, so a restored terminal's own `wsl.exe` is not counted. Each event's `ParentProcessID` is named with `Get-Process -Id` while the window is open. Pass: no event whose parent process is a `Code.exe` |
 | R9a | The time of a read, 10 calls for each place, ssh and WSL | S1, S2, S3 | *Refresh now* ten times, a minute apart; the hover of each place's age says the time its read took. None at 30 s, the slowest under 20 s, the medians written down |
 | R3 | The numbers, on at least 3 places, against `/usage` there | S5, S2 | As the parent's row |
 | R4 | Two places of one account, 6 rounds | S5, S3 | As the parent's row |
@@ -252,54 +263,87 @@ Run once, at the end, on one VSIX built from the head that holds E2, E3 and S5 (
 
 ## 10. Conflicts with the parent, judgements, and open points
 
-**Not in the parent — the owner's words of 2026-11-26, as the lead passed them on.** Each changes a merge
-condition, the Definition of Done or the build order, so each is an entry of the parent's ledger, and **epoch 4
-already has one change (4.1): by `plan-change-control.md` the next entry is a full stop.** This document does
-not record them and does not edit the parent.
+**The owner's words of 2026-11-26 — now in the parent** (entries 4.2 and 4.3; epoch 5, approved by the owner,
+open, no change yet). Each note as it was written against epoch 4, and how it stands at `50ac8f90`:
 
-- **N2 — one VSIX check at the end.** The parent: the owner's rows of each of E2, E3 and E4 have a recorded
-  result on a VSIX built from that epic's head BEFORE it merges (merge condition 5; Q4; the Definition of Done).
-  This document lists the rows and when they are run (§ 7); whether a pull request may merge before them is the
-  parent's to say.
-- **N3 — E4's constant in E3's pull request.** The parent allows it only one way: E3.S2 merges first as its own
-  pull request, and the constant merges after it (§ 6). In ONE pull request with S2 it contradicts E4's
-  *Depends on* and merge condition "revision 2 of the script is on main".
-- **N4 — E6 in the next release.** The parent's merge conditions for the release allow a release without E6;
-  its *Build order* (steps 8 to 10) and its Definition of Done put E6 before the one release.
-- **N5 — the release within a day.** The parent's release conditions ask for E5's rows, with the gates R7 (two
-  hours) and R12, on the head that is tagged. Nothing of E3 changes that.
+- **N2 — one VSIX check at the end. Resolved by entry 4.2:** merge condition 5 is ONE real-window check on the
+  combined build of E2 to E4, and no pull request of the three merges before it (§ 6, § 7).
+- **N3 — E4's constant in E3's pull request. Resolved by entry 4.2:** E4 may be in E3's pull request; its
+  merge condition is revision 2 "on main or in the same pull request" (S5, § 6).
+- **N4 — E6 in the next release. Resolved by entry 4.2:** E6 and R18 left this release; this release shows the
+  install command with a copy button only. Nothing of E3 depended on E6.
+- **N5 — the release within a day. Resolved by entry 4.2:** E5's gates R7 and R12 run once, on the release
+  build of E2 to E4. Nothing of E3 changes that.
+- **N6 — the cornerstone ledger. Resolved:** the parent's line is `Cornerstones: 2 of 2 — E1.S2, E3.S2` (the
+  quota counted again for five epics).
 
-**Judgements of the specs, for gate E3-G1:**
+**Judgements of the specs, ruled by gate E3-G1:**
 
-- **N1.** This document and S3's section were written by Fable; the rule names Opus.
-- **N6 — the cornerstone ledger.** E3.S2 is marked `model: fable`, as the parent planned. By `subagent-models.md`
-  the parent's line becomes `Cornerstones: 2 of 3 — E1.S2, E3.S2` in the same commit; this branch does not edit
-  the parent, so the planner writes it on the plan's branch.
-- **N7 — the sums.** 17 s and 22 s for both modes; the parent says 16 s and 21 s for the usage mode (the S2
-  spec, § R2.14, 7).
-- **N8 — as UID 0 a system tool that is not closed stops the whole place** (`COAI-BAD unsafe`); the parent
-  words the rule for `claude` and `agy` (the S1 spec, J10).
-- **N9 — two strikes** end the WSL part of a round, and no call is tried twice (the S1 spec, J7 and J8). The
-  parent sets the ceiling of a call and no rule for a round of failing calls.
-- **N10 — one bad line of a users reply refuses the whole reply** (J5); the parent says such a line "gives no
-  place for it".
-- **N11 — `tookMs`** in the model and the hover (S3), so that R9a can be read without a log line.
-- **N12 — the running list with another exit code counts as "none running"**, until H2 is recorded (the S1
-  spec, § W4).
+- **N1.** This document and S3's section were written by Fable; the rule names Opus. **Stands as a deviation;**
+  the gate is the Opus reading of the whole document, and it found nothing in S3, S4 or S5 that needs Opus to
+  rewrite it.
+- **N7 — the sums.** 17 s and 22 s for both modes; the parent says 16 s and 21 s for the usage mode, not
+  counting the digest's second. **Accepted:** the parent's rule — at most the ceiling minus 2 s, no limit
+  shortened — holds, and the parent calls the limits under the ceiling within the plan as written (its § 5).
+  The planner corrects the two numbers in the parent's § 4, item 4, as wording.
+- **N8 — as UID 0 a system tool that is not closed stops the whole place** (`COAI-BAD unsafe`). **Accepted:**
+  the parent's rule is "starts nothing that another user can write"; a system tool has no row of its own, so
+  refusing the place is the only way to keep it.
+- **N9 — two strikes** end the WSL part of a round, and no call is tried twice. **Accepted:** a bound inside the
+  parent's ceiling ("the limits under the ceilings" are within the plan, its § 5); it calls less, never more.
+- **N10 — one bad line of a users reply refuses the whole reply.** **Accepted:** stricter than "gives no place
+  for it", and it still gives none.
+- **N11 — `tookMs`** in the model and the hover. **Accepted:** display only; it is how R9a is read.
+- **N12 — the running list with another exit code counts as "none running"**, until H2 is recorded.
+  **Accepted:** the direction is "no call", never "call".
 
 **Open:** H1 to H5 of the S1 spec; the real `jq`, a real UID 0 and a real Claude Code against revision 2 (the
 S2 spec, § R2.0).
 
-## 11. Definition of Done — epic E3
+## 11. Gate E3-G1 — the verdict
+
+> Judge: Opus, 2026-11-26, on `4d9aeefd`, against the parent at `50ac8f90` (epoch 5), W9
+> (`research/RESULTS_wsl_on_this_pc.md` on the plan's branch) and the code on `origin/main` at `401bbf0a`.
+> **Verdict: PASS with fixes — the two BLOCKING and six FIX findings are applied to the specs and this
+> document in the gate's commit.** No change of the parent: each fix brings a spec to the parent's own rule.
+
+Checked: (1) the door before every `wsl.exe` spawn; (2) as UID 0 nothing another user can write is started; the
+script's own `PATH`; (3) root only as itself, names by class before an argv; (4) a stopped distro never called;
+(5) no secret leaves a host, the join on the account's match, the leak tests; (6) the time table with the KILL
+seconds; (7) POSIX and the pins — both blocks parse in `dash` and `bash --posix`, and both pins matched their
+blocks before the gate's change; (8) the tests RED first; (9) the words.
+
+| # | Sort | Finding | What the gate changed |
+|---|---|---|---|
+| B1 | BLOCKING | As UID 0 the script called `stat` and `readlink` by name AFTER root's `~/.local/bin` went first on the `PATH` — in every later walk and in the Codex read — so a file of that folder ran as root unchecked, while the S1 spec, § W8, said they were "as the system folders hold them" | The S2 spec, § R2.3: both found on the six folders before the prepend and called by that path (`$st`, `$rl`); new pin `3159e39d…`, recomputed by `sha256sum` over the block; old and new text run by the judge with false programs in dash and bash — the same lines and starts. § R2.4 row 4; the S1 spec, § W8 |
+| B2 | BLOCKING | The door stood before the re-read only: `may` is async (E2.S1, X3), so a "no" saved during the re-read was followed by a `-d` call — against § W11 "before EVERY spawn" and T17's own "no further spawn" | The S1 spec, § W3 (the door inside the one spawn function), § W5 (door → re-read → door → spawn), § W11, T9 and T17 (the call before every spawn is a `yes`; a "no" during a re-read → no `-d` spawn), a break-it; K2 here |
+| F1 | FIX | Merge condition 2 asks every leak and "never" test to be seen RED; several had no break-it | Break-its and the DoD lists: S1 T2, T8, T15, T18, T26; S2 T3, T4, T10, T21, T23, T24; S3 T9 |
+| F2 | FIX | E3S2-T13 could pass without the usage step: a false `sha256sum` at its limit gives no digest, so the usage mode skips and measures 8 s, not 17 | T13: the false `sha256sum` answers the true digest just under 1 s, and the reply must hold the usage step's result |
+| F3 | FIX | The documents were written against epoch 4: S2's early merge, S5 only after S2 on main, the N-notes open | Status lines; § 3, § 6, § 7, S5, § 10 and § 12 here; the S2 spec, D12 and § R2.9 |
+| F4 | FIX | The parent's test fails on "the environment of a call names a `HOME`"; only `WSLENV` was taken out, and a Windows environment can hold `HOME` | The S1 spec, § W1, § W3 (`withoutEnv: ['WSLENV', 'HOME']`), T2, § W17 |
+| F5 | FIX | R17's watch "also after a reload" would count the `wsl.exe` of a terminal the reload restores | § 7, R17: the watch starts after the terminals are restored; the parent PID is named while the window is open |
+| F6 | FIX | The interpreter of a script-form tool (`#!/usr/bin/env node`) is started as root and its file is not walked; not named | The S1 spec, § W15, item 3 |
+| N-a | NOTE | The users script and the accounts script before its `PATH=` line start nothing only because `printf`, `[`, `read` and `cd` are builtins — true in dash, bash and busybox `ash`; a `/bin/sh` without them would search the inherited `PATH`, system folders first | Not changed |
+| N-b | NOTE | A `sha256sum` killed at 1 s gives `skipped account-changed`: the safe direction, a wrong reason word | Not changed |
+| N-c | NOTE | A PC with no distro: the list call likely exits non-zero, so S3 says "could not be read" where "no distro" is meant; not measured (H2 covers only "none running") | Not changed; H2 may correct § W4 |
+| N-d | NOTE | The `:path` sentence says "writable by another user" also for a walk that failed on a `stat` error or a 17th link | Not changed: the parent fixes the words |
+| N-e | NOTE | A passwd file whose last line has no LF loses that entry (`read` fails on it) | Not changed |
+| N-f | NOTE | The join compares the account KEY (email and organization); the script's digest adds the plan, so the two can differ only in the safe direction | Not changed |
+
+**E3.S2 and E3.S1 may be coded** once E3's plan round has read the three documents (§ 6, step 1) and E2's code
+is on the branch (step 2) — S2 first, S1 beside it.
+
+## 12. Definition of Done — epic E3
 
 - [ ] Gate E3-G1 passed, and E3's plan round read the three documents, before any code.
 - [ ] S2: the S2 spec's Definition of Done. S1: the S1 spec's.
 - [ ] S3: E3S3-T1…T12 and H1 green, with the RED observations in the pull request.
-- [ ] S5: the constant is `every-round`, merged after revision 2 was on main; or it stays `off` and the release
-      says why.
+- [ ] S5: the constant is `every-round`, merged with revision 2 on main or in the same pull request (entry 4.2);
+      or it stays `off` and the release says why.
 - [ ] S4: the documents say what the head does; `SECURITY.md` names the login session and root's place.
 - [ ] No test and no agent started `wsl.exe`; nothing was run on a real VM by a test.
 - [ ] The code gate and the own Opus review ran for each pull request, and every finding is resolved.
-- [ ] The owner's rows R13, R16, R17 and R9a — and R3, R4, R2 and R9b with S5 — have a recorded result, as the
-      parent's merge conditions say when § 10's N2 is settled.
+- [ ] The owner's rows R13, R16, R17 and R9a — and R3, R4, R2 and R9b with S5 — have a recorded result from the
+      ONE real-window check on the combined build of E2 to E4, before any of their pull requests merged
+      (merge condition 5, entry 4.2).
 - [ ] The todo file of T46 is gone; `plan-lifecycle.mjs` is clean.

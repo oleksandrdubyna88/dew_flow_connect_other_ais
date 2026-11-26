@@ -5,7 +5,8 @@
 > [PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E3.md](PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E3.md)
 > (parent [PLAN_the_terminal_panel_shows_the_accounts_and_their_usage.md](PLAN_the_terminal_panel_shows_the_accounts_and_their_usage.md):
 > § 2, § 4, *Security*, the test plan's row *Revision 2 of the script*, and E3 and E4 of its `## Epics`; read on the
-> plan's branch at `f5f3362b`). It changes the spec of revision 1,
+> plan's branch at `f5f3362b`, and held by gate E3-G1 against `50ac8f90`, epoch 5: entry 4.2 lets E4 be in E3's
+> pull request and merges nothing before the one real-window check). It changes the spec of revision 1,
 > [PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E1_S2_spec.md](PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E1_S2_spec.md):
 > what that spec says holds unless a line here changes it, and that file stays the record of revision 1. It keeps
 > no change ledger: a change is an entry in the parent. **The text of § R2.3 was run with false programs
@@ -52,7 +53,7 @@
 | D9 | The parser answers a new arm, `claude-only`, for the usage mode; a reply whose parts do not fit its mode is `unreadable shape` | "The parser reads a reply against the mode that was sent" |
 | D10 | **The round never replaces a place's reading by a usage reply: it joins** (§ R2.8). Usage counts for an account only when the second reply names the SAME account key as the first | § 2, *The round JOINS two replies* |
 | D11 | One pull request holds the text, the parser and the join | The parent's E3: "never two" |
-| D12 | `USAGE_POLICY` becomes `every-round` in its own commit, after this story (§ R2.9) | W6 and W7; the parent's E4 |
+| D12 | `USAGE_POLICY` becomes `every-round` in its own commit, after this story's code, in the same pull request or a later one (§ R2.9) | W6 and W7; the parent's E4, as entry 4.2 left it |
 
 ## R2.2 — The operands and the digest (`src/remoteAccountsScript.ts`, `src/remoteSsh.ts`)
 
@@ -71,10 +72,18 @@
 
 ## R2.3 — `ACCOUNTS_SCRIPT`, revision 2, exact (`src/remoteAccountsScript.ts`)
 
-`ACCOUNTS_SCRIPT` is the text below, byte for byte: **342 lines**, 11 348 bytes, each line ends with LF, ASCII
-only. It holds `${` 12 times, 69 backslashes and no backtick.
+`ACCOUNTS_SCRIPT` is the text below, byte for byte: **342 lines**, 11 379 bytes, each line ends with LF, ASCII
+only. It holds `${` 12 times, 70 backslashes and no backtick.
 
-Pinned sha256: `3e610213e3c631f8b9bf096a20abe2b395dd4cc340a29c7f3ab1be5e67aed05f`
+Pinned sha256: `3159e39df42ad88d3240c4f64b4098b54fb345828d9e8089eadb53ff8497e9b9`
+
+*Gate E3-G1 changed this text (finding B1; the pin above is its new sha256, by `sha256sum` over the block):* as
+UID 0, `stat` and `readlink` are found on the six system folders BEFORE root's `~/.local/bin` goes in front, and
+are called by that path from then on (`$st`, `$rl`) — in every walk and in the Codex read's `stat`. Before, they
+were called by name after the prepend, so a `stat` in root's own folder ran as root unchecked. The judge ran the
+old and the new text by `sh` (dash) and `bash` with false `claude` (behind a relative link), `agy` and `jq` in a
+temporary `HOME`, as a user and with the UID-0 prelude of the S1 spec, § W8: both modes, the digest fitting and
+not, root's folder closed and group-writable — the same lines and the same starts.
 
 The test A2-T2 of revision 1 holds three things to one another, and now reads THIS file: the sha256 of the
 constant, the pin line above, and the first `sh` block after the heading `## R2.3`. A later change of the text
@@ -162,7 +171,7 @@ coai_accounts() {
   coai_closed() {
     left=$1
     hops=0
-    own=$(stat -c '%u %a' -- /) || { unsafe=/; return 1; }
+    own=$("$st" -c '%u %a' -- /) || { unsafe=/; return 1; }
     case $own in
       '0 '*[2367]|'0 '*[2367]?) unsafe=/; return 1 ;;
       '0 '*) ;;
@@ -181,7 +190,7 @@ coai_accounts() {
         esac
         [ -n "$part" ] || continue
         q=$q/$part
-        own=$(stat -c '%u %a' -- "$q") || { unsafe=$q; return 1; }
+        own=$("$st" -c '%u %a' -- "$q") || { unsafe=$q; return 1; }
         case $own in
           '0 '*) ;;
           *) unsafe=$q; return 1 ;;
@@ -189,7 +198,7 @@ coai_accounts() {
         if [ -L "$q" ]; then
           hops=$((hops + 1))
           [ "$hops" -le 16 ] || { unsafe=$q; return 1; }
-          to=$(readlink -- "$q") || { unsafe=$q; return 1; }
+          to=$("$rl" -- "$q") || { unsafe=$q; return 1; }
           case $to in
             /*) left=$to$rest ;;
             *) left=${q%/*}/$to$rest ;;
@@ -329,8 +338,8 @@ coai_accounts() {
     fi
     three=$(LC_ALL=C timeout -k 1 1 ls -tr -- "$@" | tail -n 3)
     [ -n "$three" ] || { printf 'COAI-USAGE codex failed error\n'; return 0; }
-    if command -v stat >/dev/null; then
-      ftime=$(timeout -k 1 1 stat -c %Y -- "${three##*"$nl"}")
+    if command -v "$st" >/dev/null; then
+      ftime=$(timeout -k 1 1 "$st" -c %Y -- "${three##*"$nl"}")
       case $ftime in
         ''|*[!0-9]*) ftime=- ;;
       esac
@@ -388,10 +397,10 @@ coai_accounts() {
   esac
   unsafe=
   home_unsafe=
+  st=stat
   if [ "$uid" = 0 ]; then
-    for tool in stat readlink; do
-      command -v "$tool" >/dev/null || { printf 'COAI-BAD tool\n'; return 0; }
-    done
+    st=$(command -v stat) || { printf 'COAI-BAD tool\n'; return 0; }
+    rl=$(command -v readlink) || { printf 'COAI-BAD tool\n'; return 0; }
     if coai_closed "$HOME/.local/bin"; then
       PATH=$HOME/.local/bin:$PATH
     else
@@ -434,7 +443,7 @@ Every other line is revision 1's (its spec, § A2.3, explains each).
 | 1 | The operands | `1:no-claude-usage`, or `2:claude-usage` with `$2` of 64 characters of `0-9a-f`, kept as `want` |
 | 2 | `HOME` | `*:*` is `COAI-BAD home`, before the test for `/*` |
 | 3 | `PATH` | Set to the six system folders and exported. `id` must be there (`COAI-BAD tool`); `uid=$(id -u)` must be digits |
-| 4 | The home folder | Not UID 0: `$HOME/.local/bin` goes in front. UID 0: `stat` and `readlink` must be there, and the folder goes in front only when `coai_closed` passes it; else its path is kept in `home_unsafe` |
+| 4 | The home folder | Not UID 0: `$HOME/.local/bin` goes in front. UID 0: `stat` and `readlink` must be on the six folders, and their paths are kept (`st`, `rl`) and used from then on, so root's folder cannot put another `stat` or `readlink` in front of them; the folder goes in front only when `coai_closed` passes it; else its path is kept in `home_unsafe` |
 | 5 | The tools | `timeout tail ls sed grep`, and `sha256sum` in the usage mode, each through `coai_may`: missing → `COAI-BAD tool`; as UID 0 not closed → `COAI-BAD unsafe` and a `:path` line. `jq` the same: found, `missing <word>`, or `COAI-BAD unsafe` |
 | 6 | `coai_closed`, `coai_may`, `coai_path`, `coai_vendor` | New. The rule, the walk and what each answers: the S1 spec, § W8 |
 | 7 | `coai_claude`, `coai_agy` | Their first line is `coai_vendor <name> \|\| return 0`: `absent`, or as UID 0 `unsafe` with its `:path`, and no start |
@@ -546,8 +555,9 @@ Until E3.S3 a place is a host; the rules are written for a place.
   and the older ones were seen deleted. Both were measured with revision 1's usage command, which revision 2
   does not change.
 - **The change:** `USAGE_POLICY = { kind: 'every-round' }`, ONE constant. `hourly`, `on-press` and `off` stay as
-  rows of `DUE`. Its commit comes after this story's code and **merges only when revision 2 and the join are on
-  main** (the parent's E4: *Depends on*, and its merge condition). The stories document says how that is met.
+  rows of `DUE`. Its commit comes after this story's code and **merges only with revision 2 and the join — on
+  main, or in the same pull request** (the parent's E4: *Depends on*, and its merge condition, as entry 4.2 left
+  them), and like every pull request of E2 to E4 only after the one real-window check (merge condition 5).
 - **Tests:** E3S5-T1 the constant is `every-round`, and the test's comment names W6 and W7; E3S5-T2 with the
   constant, a round over three places of two accounts makes exactly two usage calls, each with the digest of its
   place's first reply; E3S5-T3 no call is `claude-usage` as a place's first call, and no row of the model says
@@ -600,7 +610,7 @@ reads the inherited `PATH`, so a test cannot put a program in front of a system 
 | E3S2-T10 | **No email in an argv**: over every argv the round's call seam builds for places whose account text holds `@`, no word holds `@` |
 | E3S2-T11 | The usage mode with `sha256sum` hidden by the prelude → `COAI-BAD tool`; the first mode there reads the three parts; `jq` hidden → `COAI-JQ missing <word>` |
 | E3S2-T12 | **T46, the sum**: `worstSeconds` of each mode is at most the ceiling minus 2 s; the number equals the table of § R2.5 (17) plus the connect time |
-| E3S2-T13 | **T46, the run** (real script, both modes started together): a false `claude --version` and a false `agy` that ignore TERM, every other step at its limit → each run ends inside its sum plus 1 s, and the end line is written |
+| E3S2-T13 | **T46, the run** (real script, both modes started together): a false `claude --version` and a false `agy` that ignore TERM, every other step at its limit → each run ends inside its sum plus 1 s, and the end line is written. **The usage-mode run must reach the usage step** (gate E3-G1, F2): its false `sha256sum` prints the TRUE digest just under its 1 s, and the test asserts the reply holds `COAI-USAGE claude read` or `failed timeout` — a digest killed at its limit would skip the usage step and the run would measure 8 s, not 17 |
 | E3S2-T14 | The grammar's four rows; a `path` of `-`, of a legal path, of one with a space or 201 characters (`value`); `unsafe` in the three places gives the three typed results |
 | E3S2-T15 | **The parser by mode**: a first-mode reply sent as `claude-usage` and a usage reply sent as `no-claude-usage` are `shape`; a usage reply with a Codex or an agy record is `shape`; a plain `skipped` in the usage mode is `shape`; `skipped account-changed` in the first mode is `shape` |
 | E3S2-T16 | `claude-only` for each legal usage reply; `read` is never answered for the usage mode |
@@ -633,6 +643,11 @@ Each is a PRODUCTION change, seen RED with its message, then restored; the pull 
 | `joined` does not compare the keys | E3S2-T20 |
 | `ACCOUNTS_KILL_SECONDS.agy` set to 0, or a reader limit raised by 12 | E3S2-T12 |
 | The pinned text with one byte changed | E3S2-T1 |
+| The `*:*)` row of the `HOME` check removed | E3S2-T3 |
+| The round's call seam given the first reply's `:email` value where the digest goes | E3S2-T10 |
+| `needsSecondCall` no longer reads the round's usage set | E3S2-T21 |
+| `coai_path`'s class test removed (the path printed as found) | E3S2-T23 |
+| One log line of a changed module given the run's stdout | E3S2-T24 |
 
 ## R2.13 — The brief: order, files, commands
 
@@ -669,7 +684,8 @@ ceiling, a `jq` program or a pattern of revision 1; a need to is reported, not m
 ## Definition of Done — E3.S2
 
 - [ ] The constant is the block of § R2.3 and E3S2-T1 is green with the pin of this file.
-- [ ] E3S2-T1…T24 are green; T2, T5, T7, T15, T17, T20 and T22 were seen RED by their break-its, with the message.
+- [ ] E3S2-T1…T24 are green; T2, T3, T4, T5, T7, T10, T15, T17, T20, T21, T22, T23 and T24 were seen RED by
+      their break-its, with the message — every leak test and every "never" test of the story (merge condition 2).
 - [ ] Revision 1's tests are green with the edits named in § R2.11 and no other.
 - [ ] The UID-0 runs of the S1 spec are green (E3S1-T20…T26).
 - [ ] No limit, ceiling, `jq` program or pattern of revision 1 changed.

@@ -5,12 +5,14 @@
 > [PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E3.md](PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E3.md)
 > (parent [PLAN_the_terminal_panel_shows_the_accounts_and_their_usage.md](PLAN_the_terminal_panel_shows_the_accounts_and_their_usage.md):
 > § 2, § 4, § 5, *Security*, residuals 12 and 13, decisions 21, 24 and 25, the test plan's row *The WSL road*; read
-> on the plan's branch at `f5f3362b`). It stands on W9 (`research/RESULTS_wsl_on_this_pc.md` on the plan's branch;
+> on the plan's branch at `f5f3362b`, and held by gate E3-G1 against `50ac8f90`, epoch 5, whose texts on root and
+> on the login session are those of epoch 4, shortened into the appendix, § K.40). It stands on W9 (`research/RESULTS_wsl_on_this_pc.md` on the plan's branch;
 > its letters (a) to (g) are cited as W9a…W9g). The script that every place runs is the
 > [E3.S2 spec](PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E3_S2_spec.md)'s; the door is the
 > [E2.S1 spec](PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E2_S1_spec.md)'s (§ P8). It keeps no
-> change ledger. **No plan round and no judge has read the parent's text on root or on the login session (the
-> parent's *Re-review for epoch 4*): this spec and E3's plan round are that reading.**
+> change ledger. **No plan round had read the parent's text on root or on the login session (the parent's
+> *Re-review for epoch 4*): this spec, gate E3-G1 (Opus, 2026-11-26, its verdict in the stories document, § 11)
+> and E3's plan round are that reading.**
 >
 > Scope: `src_vs_code` only. NEW pure `src/remotePlaces.ts` and `src/remoteUsersScript.ts`; NEW `src/remoteWsl.ts`
 > (the edge, Node only, beside `src/remoteSsh.ts`); ONE option of `src/processLauncher.ts` and
@@ -44,7 +46,7 @@ process as the caller; a real UID 0 with a real tool; which stream holds `wsl.ex
 | The same user | To reach this side through a reply | Bounded (30 s, 64 KiB), a closed vocabulary, never run, drawn as text |
 | Root of a distro | To have a system account or another user read as root | This side takes UID 0 only under the name `root`, a UID from 1000 to 59 999 else, by its own check of the reply (§ W6) |
 | A distro's name | To be read as an option or as two names | Its class before any argv; a list that does not decode is not read at all (§ W4) |
-| The environment of the window | To send a variable into a distro, or another `wsl.exe` | No `WSLENV` in the child (§ W3); `HOME` cannot cross (W9b); the path is not searched |
+| The environment of the window | To send a variable into a distro, or another `wsl.exe` | No `WSLENV` and no `HOME` in the child (§ W3); `HOME` cannot cross in any case (W9b); the path is not searched |
 
 Not prevented, named: the login session (§ W9); a user's own program started as that user by our timer, and
 interop from it; root's own programs as root.
@@ -74,8 +76,13 @@ interop from it; root's own programs as root.
 - **Not on Windows** (`seams.platform !== 'win32'`): the sentence S1 and no call of either runner. On Windows the
   scope host `wsl` is never given to `runAccounts` (ssh): the round's one switch sends it to this module.
 - **The spawn** goes through `capture` and so through `launch`, the one spawn site: `shell` false, the script (or
-  nothing, for a list call) on stdin, `{ cwd, maxStdoutBytes: 65 536, killTree: true, withoutEnv: ['WSLENV'] }`,
-  30 000 ms. `WSL_LIMITS` equals `ACCOUNTS_LIMITS`; a test holds the two equal.
+  nothing, for a list call) on stdin, `{ cwd, maxStdoutBytes: 65 536, killTree: true, withoutEnv: ['WSLENV', 'HOME'] }`,
+  30 000 ms. `WSL_LIMITS` equals `ACCOUNTS_LIMITS`; a test holds the two equal. `HOME` is taken out too (gate
+  E3-G1, F4): it would not cross (W9b), and the parent's test fails on an environment of a call that names a
+  `HOME` — which a Windows environment can hold whatever we do, unless we take it out. `wsl.exe` does not read it.
+- **The spawn is gated** (gate E3-G1, B2): the edge's one spawn function takes the door seam and asks it right
+  before `capture`; on any answer but `yes` it answers `refused` with no spawn. The three runners have no other
+  way to `capture`, so no `wsl.exe` starts without a `yes` asked for THAT spawn (§ W11).
 - **`withoutEnv`** is the one new option of `LaunchOptions` and `CaptureOptions`: names taken OUT of the copy of
   the inherited environment, compared without case (Windows keys are not case-sensitive, and a spread of
   `process.env` keeps the case it was written in). `childEnvironment(additions, inherited, without)` stays the
@@ -115,16 +122,19 @@ A distro that is in the list and not in the running set gets **no call of any ki
 
 ## W5 — The running list, again, right before every `-d` call
 
-Before the users call of a distro and before each accounts call of each of its users, in this order and with
-nothing awaited between the last two steps: the door (§ W11) → `--list --running --quiet` → the distro is in
-its names → the `-d` call is spawned.
+Before the users call of a distro and before each accounts call of each of its users, in this order: the door
+(§ W11) → `--list --running --quiet` → the distro is in its names → **the door again** → the `-d` call is
+spawned. Nothing but the door's own answer is awaited between the re-read's answer and the spawn. (Gate E3-G1,
+B2: the door is async — `may` reads the disk, E2.S1 X3 — so a door asked only before the re-read let a "no"
+saved during the re-read be followed by a `-d` call.)
 
 - The distro is not in it: no call, the line S5, and **no further call or re-read for that distro in this
   round**.
 - The re-read itself fails: as the running list of § W4.
 - So a round makes, for `wsl`: 2 list calls, and for each `-d` call one list call more (the parent's *Growth
-  surfaces*). A list call took about 0.3 s (W9g).
-- **What this does not close (residual 12):** a distro that stops between that list call and the spawn is
+  surfaces*), and asks the door once before each of these spawns. A list call took about 0.3 s (W9g).
+- **What this does not close (residual 12):** a distro that stops between that list call and the spawn (the
+  door's own read of the disk stands in that gap) is
   started by it, in 3 to 5 s, and stops again about 15 s after. And while a round reads a distro, its own calls
   keep the distro up; it stops about 15 s after the round's last call there.
 
@@ -257,15 +267,18 @@ asks of a key file.
 - **When the user is not root, nothing is checked**: a user's program runs as that user, which is named, not
   prevented (the parent's *Security*).
 - **The base, not checked by itself:** `/bin/sh`, which WSL or sshd starts before any line of ours, and `id`,
-  `stat` and `readlink` as the six system folders hold them — root's own folder is not on the `PATH` yet when
-  they are first used. This is residual 13.
+  `stat` and `readlink` as the six system folders hold them: they are found before root's own folder goes on
+  the `PATH`, and `stat` and `readlink` are called by the path found then (`$st`, `$rl`) in every later walk and
+  in the Codex read — so a file of root's folder never stands in for them (gate E3-G1, B1). This is residual 13.
 - A file's ACL was not tested; a write right it gives shows in the group digit, which the rule reads.
 
 **How a run that is not root stands for UID 0 in a test.** The test sends, BEFORE the pinned text, a prelude of
 two shell functions that shadow the programs: `id` prints `0`; `stat` answers the real owner and mode with the
 test's own UID written as `0`, answers `0 755` for the folders ABOVE the test's root (a runner's temporary
 folder is open to all), and leaves the owner as it is under a folder the test names `other`. The pinned text is
-unchanged and is what runs. Seen on 2026-11-26 in dash and bash: all closed → the three parts, `claude` and
+unchanged and is what runs. (The script keeps what `command -v stat` answered; for the prelude's function that is
+its name, so the walks call the function. This prelude is not combined with the `command` prelude of the S2
+spec, § R2.11, which would answer the real `stat`.) Seen on 2026-11-26 in dash and bash: all closed → the three parts, `claude` and
 `agy` started; the home folder group-writable → both `unsafe` with that folder, no start; a link whose target
 sits in a folder open to all → `unsafe` with that folder; a file of another owner behind an absolute link →
 `unsafe`; a `jq` writable by others → `COAI-BAD unsafe`. **What this does not show is a real UID 0**: row R13
@@ -317,7 +330,8 @@ users call, each accounts call — and again before each result is published. On
 among them**. The round's own checks stand beside it as for an ssh host: the generation, the Stop, and a live
 `Creds: wsl / …` terminal.
 
-The order, each step awaited:
+The door is asked inside the edge's one spawn function (§ W3), so this holds by construction and not by the
+order below alone; `wslRound` gets no `capture` of its own. The order, each step awaited:
 
 1. The door → the list. The door → the running list.
 2. For each distro of the first 16, in the list's order: not in the running set → S4, next distro.
@@ -361,14 +375,14 @@ first. T20 to T26 are tests of the S2 spec's text and land with it.
 | # | What must be shown |
 |---|---|
 | E3S1-T1 | The executable: `<SystemRoot>\System32\wsl.exe` and that folder as `cwd`; with no `SystemRoot`, `C:\Windows`; not there → S2 and no call |
-| E3S1-T2 | **The environment**: the map given to the spawn holds no `WSLENV` in any spelling of its case, and still holds `SystemRoot` and `PATH`; the edge adds no variable; `childEnvironment` with `without` is never an empty map |
+| E3S1-T2 | **The environment**: with `WSLENV`, `wslenv`, `HOME` and `Home` in the inherited map, the map given to the spawn holds neither name in any spelling of its case, and still holds `SystemRoot` and `PATH`; the edge adds no variable; `childEnvironment` with `without` is never an empty map |
 | E3S1-T3 | **The argv, word for word**: the two list calls, the users call, the accounts call in both modes |
 | E3S1-T4 | **A name that fails its class never reaches an argv**: a distro or a user with a leading `-`, a space, 100 characters, a letter outside ASCII, the empty text → the fixed refusal, which holds no part of the name; no spawn |
 | E3S1-T5 | **Root**: `-u root` with a mode word only for the place (distro, `root`, 0); `root` with UID 1000, another name with UID 0, UID 999 and UID 60 000 → refused; over 200 made-up places the `-u` word of every accounts argv is that place's user; `'--exec'` stands in one source file |
 | E3S1-T6 | The decoder: UTF-16LE as the launcher shows it, and UTF-8; CR LF, also after the last name; a UTF-8 BOM (dropped) and a UTF-16 one (`undecodable`); no output; an odd length, a U+0000 at an even place, a missing U+0000 → `undecodable`; a message line and a name with a space count in `ignored` |
 | E3S1-T7 | The running set is the names of BOTH answers; the running call with another exit code → empty; the list call with one → S3 and **no `-d` call** |
 | E3S1-T8 | **A distro that is not running gets no call**: no recorded argv holds `-d <its name>`; its line is S4 |
-| E3S1-T9 | **The re-read**: in the record, the spawn before every `-d` call is the running list; a distro that leaves the running list after the round began gets no call, S5, and no later re-read. Break-it: the re-read removed |
+| E3S1-T9 | **The re-read**: in the record, the spawn before every `-d` call is the running list, and between the two stands a door that answered `yes`; a distro that leaves the running list after the round began gets no call, S5, and no later re-read. Break-it: the re-read removed |
 | E3S1-T10 | The users script's pin: the constant, the pin line and the block of § W6 are one |
 | E3S1-T11 | **The users script's rules** (the pinned text with its two `/etc/passwd` words replaced by a file of the test, and the test asserts it replaced exactly two): users of 1000 and 59 999 and `root` with 0 are printed; UID 999, 60 000, `toor` with 0, `root` with 5, a name in capitals, a UID with a leading zero, a home that is missing, `nologin`, `false` are not — for root as for a user; 17 that count → 16 lines and `COAI-MORE 1`; an operand → `COAI-BAD operands` |
 | E3S1-T12 | The pinned text as it is, on the runner's own passwd, with a `PATH` that holds no program: framed, with `COAI-USER root 0` |
@@ -376,7 +390,7 @@ first. T20 to T26 are tests of the S2 spec's text and land with it.
 | E3S1-T14 | The caps: 17 distros → 16 and the count; 32 places over three distros and the count of the rest, root counted as a user |
 | E3S1-T15 | § W10, row by row, with the words; a marker text in stdout is in no sentence and in no log line |
 | E3S1-T16 | Two strikes: the third and later places get no call and say S10; the next round calls again |
-| E3S1-T17 | **The door**: for each of `no`, `no-permission`, `waiting`, `damaged`, `stopped` → **zero spawns, the list calls among them**; a "no" saved while a call runs → its result is dropped and no further spawn. Break-it: the door asked once for the round |
+| E3S1-T17 | **The door**: for each of `no`, `no-permission`, `waiting`, `damaged`, `stopped` → **zero spawns, the list calls among them**; in the record of seam calls, the call right before EVERY spawn is a door that answered `yes`; a "no" saved while a call runs → its result is dropped and no further spawn; **a "no" saved while a re-read runs → no `-d` spawn after it**. Break-its: the door asked once for the round; the second door of § W5 removed |
 | E3S1-T18 | Not on Windows: S1 and zero spawns of either runner; on Windows the ssh runner records no call for `wsl` |
 | E3S1-T19 | The key and the label; two users of a distro are two keys; `wslPlaceOk`'s table |
 | E3S1-T20 | **As UID 0, all closed** (real script, the prelude of § W8): the three parts, `claude` and `agy` each record a start |
@@ -401,8 +415,13 @@ first. T20 to T26 are tests of the S2 spec's text and land with it.
 | The re-read removed | E3S1-T9 |
 | `usersOf` skips a bad line and keeps the rest | E3S1-T13 |
 | The door asked once for the round | E3S1-T17 |
+| The second door of § W5 removed (the door only before the re-read) | E3S1-T17 |
+| The running-set test removed before the users call | E3S1-T8 |
+| S9 given the last line of stdout in place of stderr's | E3S1-T15 |
+| The platform test removed (the WSL edge runs off Windows) | E3S1-T18 |
 | In the script: `coai_closed` always answers 0 | E3S1-T21…T25 |
 | In the script: the group digit not tested | E3S1-T21 |
+| In the script: revision 1's `PATH` line (the inherited `PATH` searched) | E3S1-T26 |
 
 **Not closed, named** (the parent's residuals 12 and 13, in this spec's detail):
 
@@ -410,7 +429,8 @@ first. T20 to T26 are tests of the S2 spec's text and land with it.
 2. The base of the check: `/bin/sh`, `id`, `stat`, `readlink` (§ W8). A distro whose system folders are open to
    another user is not safe to read as root, and this check cannot say so.
 3. What a started program starts itself, and what it reads, is its own: `claude` and `agy` of root run with full
-   rights every round.
+   rights every round. That includes the interpreter of a tool that is a script (`#!/usr/bin/env node` of an npm
+   install): it is found on the script's own `PATH`, whose folders are root's, but its file is not walked.
 4. Between the walk and the start, a chain that is root's and closed can be changed by root only.
 5. **The login session** is outside the check and outside the kill (§ W9).
 6. On a distro where root is no place (its shell is `nologin`), the users call still runs as root and opens
@@ -441,15 +461,17 @@ three builders, `runWslList`, `runWslUsers`, `runWslAccounts`, the outcomes of �
 **The coder must not:** call `wsl.exe` in a test or by hand; add an argument, a variable or a retry; quote or
 join argv words; read a distro's name from anything but the list; touch the script texts.
 
-**The Opus reviewer checks:** every spawn has the door before it; the three builders are the only argv makers;
-no `HOME`, no `WSLENV`, no `WSL_UTF8` anywhere in the edge; § W4's table and § W10's table row by row against
+**The Opus reviewer checks:** every spawn has the door before it, asked inside the one spawn function; the three
+builders are the only argv makers; no `HOME`, `WSLENV` or `WSL_UTF8` is set anywhere in the edge, and `WSLENV`
+and `HOME` are taken out; § W4's table and § W10's table row by row against
 the code; the two pins; that no sentence or log line can hold stdout; that T20 to T26 run the pinned text and
 not a copy.
 
 ## Definition of Done — E3.S1
 
-- [ ] E3S1-T1…T19 green; T4, T5, T7, T9, T13 and T17 seen RED by their break-its, with the message.
-- [ ] E3S1-T20…T26 green on the text of the S2 spec; T21 seen RED by its break-it.
+- [ ] E3S1-T1…T19 green; T2, T4, T5, T7, T8, T9, T13, T15, T17 and T18 seen RED by their break-its, with the
+      message — every leak test and every "never" test of the story (merge condition 2).
+- [ ] E3S1-T20…T26 green on the text of the S2 spec; T21…T26 seen RED by their break-its.
 - [ ] The users script is the block of § W6 and its pin holds.
 - [ ] No test and no agent started `wsl.exe`; H1 to H5 are the owner's, at the one check.
 - [ ] `SECURITY.md` and the help say § W9 and § W8 (story E3.S4).
