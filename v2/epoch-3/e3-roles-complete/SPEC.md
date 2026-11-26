@@ -1,10 +1,11 @@
 # Spec — epoch 3, E3 "Roles complete: scout, important/judge, codex + agy rows, review_plan(featureFolder)"
 
 > Status: **s1 to s3 are built (s3 t6 is open) and s4 is measured and judged; s5 to s8 are plan only, 2026-11-26.** Plan gate:
-> `proceed`, 2026-11-25; its 5 accepted findings are section J. After the gate the plan changed (section K): the security
-> judgement of s4 t6, the coder comparison of E2 and the owner's decisions 39 and 40. Second plan round: `proceed`, 2026-11-26;
-> its 2 accepted findings are section L. Scope: the server half (`src_mcp`, `shared/`, `.coai/toolchain.yaml`). Written by the
-> planner
+> `proceed`, 2026-11-25 (section J); the changes after it (section K); second plan round: `proceed`, 2026-11-26 (section L).
+> **The owner's decisions of 2026-11-26 (section M) are plan changes: the parent plan is stopped for re-review
+> ([PLAN.md](../../PLAN.md), `## Plan changes`), and epoch 3 is revised and reviewed whole.** Sections J to M are in
+> [SPEC_CHANGES.md](SPEC_CHANGES.md): a spec file may hold 64 KiB (B item 5). Scope: the server half (`src_mcp`, `shared/`,
+> `.coai/toolchain.yaml`). Written by the planner
 > (Fable) from `v2/` and the code at `feat/v2-ep3-e2-coder` `0e8e8941`, read-only. Parent plan: [PLAN.md](../../PLAN.md);
 > architecture: [server.md](../../architecture/server.md) §2, §8, §10, §19, §20, §23. Stories and tasks: the YAML tree under
 > `stories/` (8 stories, 44 tasks, no task above complexity 6). Two cornerstones: **s3** (what a plan round over a folder
@@ -124,10 +125,16 @@ space → error before the line check; never `verified: true`.
 3. **Pack in topological order.** `src_mcp/core/Work/WorkPack.cs`, pure. Order: `feature.yaml`; the feature's `plan` file; the
    ancestors of the scope (`epoch.yaml`, `epic.yaml`, the epic's `spec` file); then each story after the stories it depends on,
    and in a story each task after the tasks it depends on. Ties go by the number in the id. One line (node and title) for each node
-   outside the scope that a scope node depends on. The same commit gives the same bytes.
+   outside the scope that a scope node depends on, **in the pack text of EVERY scope: an epoch, an epic and a story** (the
+   owner, 2026-11-26). The same commit gives the same bytes. Until then the code wrote the line for a story scope only
+   (`src_mcp/core/Work/WorkPack.cs:108`), so the text id of an epoch or epic pack that has an outside dependency moves
+   once. No approval id moves: the `D` lines were in it since s3 t4, and a coder's binding compares the approval id, never
+   the text id (`src_mcp/src/Server/RoleJobs/CoderPlanBinding.cs:209`).
 4. **What the reviewers see.** A heading, then the source line: `(packed by the server from <scope> at commit <sha>, approval <id>,
    N files, M bytes; validate_work: valid, limits <source>)`, then a line **Not sent**: the `architecture` files of
-   `feature.yaml` with their sizes, the free `*.md` files beside the nodes, the nodes outside the scope (a count). Then one section
+   `feature.yaml` with their sizes, the free `*.md` files beside the nodes, the nodes outside the scope (a count). Then, for
+   every scope that has one, the line **Depends on, outside the scope**: each node with its title, in the words of the `D`
+   lines of the approval, so what the approval id covers is what the reviewers read. Then one section
    per file: `## <repository-relative path>` and the file in a fence. The fence is one backtick longer than the longest run in the
    file, so a file cannot end its own section.
 5. **Size limits.** A YAML file: 64 KiB (`StrictYamlReader.cs:22`). A `plan` or `spec` file: 64 KiB. The folder: 2 000 entries.
@@ -159,7 +166,7 @@ space → error before the line check; never `verified: true`.
 Scenarios: **P1** valid → reviewers, the pack in order, the same bytes twice. **P2** invalid → refused, zero launches, no round
 row. **P3** two inputs at once; `expectedCommit` not the tip. **P4** the working tree guard: a scope file, and each file of the packed context outside the scope. **P5** a pack over 256 KiB. **P6**
 scope by `workItem`; a `workItem` that names no node of the folder. **P7** order vectors (ties, a story that depends on a story of
-another epic, a dependency outside the scope). **P8** a link, a submodule. **P9** the binding: a task inside and outside the scope; a changed scope file; changed context (`feature.yaml`, the plan file, an
+another epic, a dependency outside the scope, and the line of the outside dependencies in the text of an epoch, an epic and a story scope). **P8** a link, a submodule. **P9** the binding: a task inside and outside the scope; a changed scope file; changed context (`feature.yaml`, the plan file, an
 ancestor, the title of an outside dependency); a new RESULTS file and a node nobody in the scope depends on do not break it. **P10** the old reader. **P11** a slow git inside the 45 s deadline of `PlanInputs`. **P12** a device cap of 3 with
 4 epics → refused, source `device`.
 
@@ -261,8 +268,8 @@ is an agent with one tool plus a hook that also checks the path (`AntigravityRea
 | U13 | is there a property of a user unit that limits the network to the vendor's hosts | free |
 
 Each paid measure uses the vendor's smallest model (the vendor-routing rule: never a Claude model on codex or agy), in scratch
-folders, with a home in the scratch folder. Caps: resume tasks 6 calls each, row tasks 16 calls each; every call and its spend are
-written down (tokens where the CLI names no cost).
+folders, with a home in the scratch folder. Caps of s4 (spent): resume tasks 6 calls each, row tasks 16 calls each; every call and
+its spend are written down (tokens where the CLI names no cost). The caps of the open measures and proofs are in section H.
 
 ### C5. The security judgement point (s4 t6)
 
@@ -395,7 +402,7 @@ ran in. The rule (addendum 1 of the judgement, G14):
    `turn`). Another value, or no init line, ends the job `coder-boundary` before anything of the turn is committed.
 4. When the init line does not tell the modes apart, it is not evidence. The mode is then a property of class `release` (id
    AG-M4: the measured effect, fresh and resumed), the stderr check AG-M2 stays, and for a job row B9 rests on the agent file
-   and the guard alone. That is accepted risk A9, and it goes to the owner with the others.
+   and the guard alone. That is accepted risk A9; the owner accepted it with the others on 2026-11-26 (section H).
 
 No launch is passed on the flag alone.
 
@@ -409,12 +416,14 @@ or nobody does, and the coder must be told which of the two happened. coai never
    shell; the reader's refusal rule for argv text holds), `perFile` (optional: a block list that is appended once for EACH entry
    of the task's `files`; an item may hold `{file}`) and `timeoutSeconds` (1 to 300; 60 when absent). `version` stays 1. A
    repository whose instruction files order a command declares it here. With no key, coai runs nothing and says so.
-2. **Read at the base commit**, as the checks are: a job cannot change the step that instructs it.
+2. **Read at the base commit**: the step runs before any model, so the worktree IS the base and a job cannot change the
+   step that instructs it. The checks AFTER a turn are E4's: they run the head's own definitions (section G).
 3. **Run by coai, once for a job, before any model is launched**, in a check unit of E2 (`CheckBoundary`): the worktree at the
    base commit, the job's own home, no credential, no network, the property list of a test step. The tree and HEAD are
    compared before and after it (the rule of the checks). After s7 t5 the unit does not see the coder folder.
 4. **The output** is its standard output: UTF-8, at most 64 KiB, exit code 0. Standard error goes to the step log. The text is
-   kept in the job folder and used again for a later attempt of the same job (a failover starts a new session).
+   kept in the job folder and used again for a later attempt of the same job (a failover starts a new session). The limit
+   stays 64 KiB (the owner, 2026-11-26): it is not raised and no output is cut to fit it.
 5. **A declared step that cannot run refuses the job.** A non-zero exit, a run past its time, more than 64 KiB, bytes that are
    not UTF-8, a changed tree, a unit that cannot start: the job ends with the stop `instructions-failed` before any model is
    launched. It is a coder's own stop: no failover, never green. The envelope names the argv, the exit code, the size and the
@@ -429,10 +438,22 @@ or nobody does, and the coder must be told which of the two happened. coai never
 7. **With no step declared**, a codex and an agy coder get the block too, and it says: nothing was run, this repository
    declares no `instructions` step. Their prompt bullet (C7 item 4) points at the block in both cases, so it is true in both.
 8. **The envelope** gets `instructions {declared, argv, exitCode, bytes, sha256, ms}`. `declared: false` is in the envelope of
-   every job that ran with no step, so an orchestrator sees that a coder worked without the repository's own command.
-9. **This repository.** Its `AGENTS.md` orders the rule resolver. Its `.coai/toolchain.yaml` declares the resolver's `read` for
-   the files of the task. The size of that output is not known: s7 t3 measures it on three past tasks first. When one is over
-   64 KiB the step is NOT declared with a cut text; the task result says so and the lead decides.
+   every job that ran with no step, so an orchestrator sees that a coder worked without the repository's own command. A job
+   whose step printed a secret-shaped text has one more member there, `secrets` (item 10).
+9. **This repository** (measured by s7 t3 d5; the owner, 2026-11-26). Its `AGENTS.md` orders the rule resolver. The
+   resolver's payload for the files of three past tasks is 334 362 bytes each, and the resolver prints at most 32 KiB in
+   one `read`. The limit stays, so `.coai/toolchain.yaml` of this repository declares NO `instructions` step and says why
+   in a comment; a test holds it; a coder here is told that nothing was run. The cure is a short form of the resolver's
+   output, taught to the resolver later, outside E3 (section G).
+10. **A secret-shaped text in the output stops nothing** (the owner, 2026-11-26: «секреты в выводе — не останавливают
+    ничего»; the whole sentence is in `SPEC_CHANGES.md`, section M). coai searches the output with the redactor's classes
+    (`Redaction.FirstSecretClass`, the one road). On a hit the job goes on, and the output is kept and reaches the prompt
+    as it was: nothing is cut or replaced. coai records the finding in three places: a notice `instructions-secret` whose
+    subject is the job; the member `secrets [{class, line}]` of `instructions` in the envelope, written only when there is
+    a finding; one log line. Each names the class of the secret and the line of the output, and none holds the value or a
+    part of it. This replaces must-change M1 of the security verify of s7 t3, which ended such a job
+    `instructions-failed`. What to do about a finding is the person's decision (risk 12 of section H). **The UI tab is
+    epoch 4 `e4-local-pages`** (its `doneWhen`): a tab of the extension's notifications for the secret findings of jobs.
 
 **What the step is not.** It is not a check of the coder's work: the build and the tests after the turn are that. It is not a
 boundary. Its output is text of the repository at the base commit, as `AGENTS.md` is, and it reaches the vendor of the model.
@@ -440,10 +461,12 @@ boundary. Its output is text of the repository at the base commit, as `AGENTS.md
 Scenarios: **V20** a declared step: its output is in the turn-0 prompt that each vendor's CLI was sent, claude's too, and in
 the envelope by its sha256. **V21** each failure of item 5 ends `instructions-failed` with zero model launches. **V22** no step
 declared: the claude prompt is byte for byte today's; a codex and an agy prompt hold the block that says nothing was run; the
-envelope says `declared: false`.
+envelope says `declared: false`. **V23** a secret-shaped text on line 2 of the output: the job ends green, the turn-0 prompt
+holds the output as it was, one notice `instructions-secret` and the envelope name the class and line 2, and no part of the
+value is in the notice, the envelope, the job's record or the log; with no such text there is no notice and no `secrets`.
 
-Tasks: s7 t3 (the key, the run, the refusal, the envelope, this repository's file), s7 t2 d5 and d6 (the block), s5 t4 d4 and
-s6 t3 d6 (the bullet), s8 t2 d2 and s8 t4 d4 (the proof: the effect, not only "not refused").
+Tasks: s7 t3 (the key, the run, the refusal, the envelope, this repository's file; d6 the secret finding), s7 t2 d5 and d6
+(the block), s5 t4 d4 and s6 t3 d6 (the bullet), s8 t2 d2 and s8 t4 d4 (the proof: the effect, not only "not refused").
 
 ## D. Rows and the failover order
 
@@ -461,13 +484,32 @@ the coder's own stops never fail over. A read-only role restarts from turn 0. A 
 | ba | fable → opus | no change |
 | coder | the band model, then sonnet | the band model, then sonnet → opus → codex `terra` → agy `gemini-4-argon-medium` (each other vendor only with its row AND a shipped write launch) |
 
-The owner accepted the right column for scout and coder on 2026-11-25 (decision 35). Not answered: which measured model takes which
-role when codex or agy is the main AI.
+The owner accepted the right column for scout and coder on 2026-11-25 (decision 35).
 
-**The codex and agy main-AI rows** are empty today ("no measured model list"). s4 t1 measures the lists; s7 t4 fills the rows with
-measured names only. Which model takes which role is the owner's word. Seen on 2026-11-25, not yet a record: `agy models` of 1.5.16
-prints ids (27 names; `gemini-4-argon-medium` and `gemini-3.8-flash-low` are among them; it also lists Claude models, which the
-vendor-routing rule never uses there). s4 t1 writes the record.
+**The codex and agy main-AI rows: both are filled** (the owner, 2026-11-26: all three AIs are full ones; the words are in
+`SPEC_CHANGES.md`, section M). So claude, codex and agy each ship as a coder, a reviewer and a consultant, and each can be
+the main AI. The reviewer and the consultant of all three exist since before v2 (`src_mcp/runners/Reviewers/ClaudeRuntime.cs`,
+`CodexRuntime` in `ReviewerRuntime.cs:587`, `AntigravityRuntime.cs`; `src_mcp/runners/Consultation/ClaudeConsultant.cs`,
+`CodexConsultant.cs`, `AntigravityConsultant.cs`). E3 adds what was missing: the coder of codex and of agy (s5, s6) and the
+two main-AI rows (s7 t4 d4), from the lists that s4 t1 measured (`RESULTS_model_lists.md`). Nothing waits.
+
+The owner's word names no model. The names below are the planner's proposal of 2026-11-26 for the whole review of epoch 3;
+a person's `COAI_ROLES_MODELS` and `COAI_ROLES_BANDS` go over them. The rule: a row starts with its own vendor's model and
+fails over to the other two vendors, as the claude row does; an entry of another vendor applies only with that vendor's
+row (`whenVendorRow`); a coder entry only while the table of coder boundaries ships its vendor; every name is in
+`RESULTS_model_lists.md`, and a name new to `shared/role-model-names.json` is added there.
+
+| Role | Main AI codex | Main AI agy |
+|---|---|---|
+| orchestrator | `astra` | `gemini-4-argon-high` |
+| coder | `terra` → `astra` → claude `sonnet` → agy `gemini-4-argon-medium` | `gemini-4-argon-medium` → `gemini-4-argon-high` → claude `sonnet` → codex `terra` |
+| scout | `terra` → claude `sonnet` | `gemini-3.8-flash-medium` → `gemini-4-argon-medium` → claude `sonnet` |
+| judge and important tasks (`important`) | `astra` → claude `fable` | `gemini-4-argon-high` → claude `fable` → codex `astra` |
+| ba | `astra` → claude `fable` | `gemini-4-argon-high` → claude `fable` |
+| bands 0–2, 3–6, 7–10 | `gpt-6-luna`, `terra`, `astra` | `gemini-3.8-flash-low`, `gemini-4-argon-medium`, `gemini-4-argon-high` |
+
+Why these names, and why agy's Neon, Carbon, Hydrogen and Orchestrator names are not used: `SPEC_CHANGES.md`, section M.
+`agy models` also lists Claude models, which the vendor-routing rule never runs there.
 
 Every switch is one log line and one `role-model-switched` notice that names the vendor the repository text now goes to (E1).
 
@@ -498,6 +540,7 @@ Every switch is one log line and one `role-model-switched` notice that names the
 | the sign-in copy of a job (judgement S3) | one small file per job, in the job's coder home | deleted when the job ends, and by the E2 sweep after a kill | the same sweep |
 | the agy guard's decision records (G4) | one line per tool call, in the job's coder folder | with the job folder | a record that cannot be written is a deny |
 | the pack text kept with a session | 256 KiB at most per plan round | the session's own retention | nothing is written before a round exists |
+| the `instructions-secret` notice (C9 item 10) | one record for a job with a finding | not a new surface: the notice ledger that holds `role-model-switched` (E1), by its rule | — |
 | `shared/` schemas and vectors, `role-stops` fixtures | static files | — | — |
 
 ## G. Not in E3, and the boundaries with the other epics
@@ -513,6 +556,9 @@ Every switch is one log line and one `role-model-switched` notice that names the
 | A unit with no network and coai's forwarder with the vendor's hosts (judgement G11) | E4 (`doneWhen` line 8 of its `epic.yaml` on `feat/v2-ep3-e4-plan`); its story is written after s6 t7 d6 | s6 t7 d6 measures agy behind a proxy; nothing else |
 | What claude does with a file that a check planted in the coder's home (judgement, section 4 point 3) | a follow-up for E2 | s7 t5 closes the hole for every vendor and writes the follow-up as a todo (d5) |
 | A status that coai writes into `task.yaml` | E5 / epoch 4 E5 | it would change the approval id of a scope; that epic decides how |
+| What a coder may change of its own checks (E4 SPEC section A4, scenarios D12 and D13; the owner, 2026-11-26) | E4: the checks run the head's OWN definitions; nothing the head changed is refused; every difference from the base is REPORTED (`definitionsChanged`, the changed definition files, the tests changed or deleted); the restore step takes packages from the internet itself, with no proxy and no address list | none: E3 builds no gate on a changed definition and no network limit for a restore. E3 agrees with it in C9 item 2, in risk 10 and in C6 (the seam changes neither the fix loop nor the check boundary) |
+| A short form of the rule resolver's output, so that this repository can declare its instruction step inside 64 KiB (C9 item 9; the owner, 2026-11-26) | a follow-up outside epoch 3: the resolver is `tools/rules.mjs` of the conventions repository (mounted at `.agents/conventions`), so the short form is a plan there. Here the rest is a data edit (`.coai/toolchain.yaml`, the test of s7 t3 d5) | none: E3 keeps the limit and declares no step for this repository |
+| The tab of the extension's notifications for the secret findings of jobs (C9 item 10) | epoch 4 `e4-local-pages` (extension half; its `doneWhen`). Epoch 3 has no extension epic; its 5 epics and E3's 8 stories are the device limits | s7 t3 d6 writes what the tab reads: the notice `instructions-secret` |
 
 Also not in E3: a pool of codex or agy credentials; `cons`, `consask` and reviewers on the pool; a coder on native Windows or macOS;
 `review_feature(featureFolder)` (server.md §8 names it; no epic's `doneWhen` holds it); a document written by the judge; attachments;
@@ -537,8 +583,10 @@ Risks:
    cost of "only a measured release"; the route goes on to the next vendor.
 8. A change of `feature.yaml` or of the plan file after an approval refuses every coder start under that approval (B7). The cure
    is a new plan round.
-9. **The accepted risks of the judgement** (its section 7; the owner confirms the agy list before an agy release enters the
-   table, G13). agy: A1 nothing of the OS stops a process inside the unit from reading the sign-in copy — with G10 an access
+9. **The accepted risks of the judgement** (its section 7). **The owner accepted all of them on 2026-11-26: agy A1 to A9 and
+   codex C1 to C4.** So G13 is met for the list as it is written here: an agy release enters the table on the addendum of
+   s6 t7 with no further word of the owner. Only a risk that an addendum ADDS, or one it makes wider than this text, goes
+   to the owner, and it alone. agy: A1 nothing of the OS stops a process inside the unit from reading the sign-in copy — with G10 an access
    token of at most one hour, without it the owner's Google refresh token; A2 the agy process has the whole network and the
    host's loopback; A3 the tool list cannot be asked before a job; A4 agy is open on "exit 0, no output", which coai's handler
    never answers; A5 "a refresh does not rotate the token" is three observations; A6 the cost of the release pin; A7 rule text
@@ -549,9 +597,15 @@ Risks:
 10. The prompt line of C7 tells a model not to run a command that the repository's own instructions order. coai runs that
     command only when the repository declares it (C9). A repository that orders a command in prose and declares no step gets
     a coder that worked without it: the prompt says so to the model, the envelope says `declared: false`, and the checks of
-    coai and the code gate are what catch the difference.
+    coai and the code gate are what catch the difference. Since the owner's decision of 2026-11-26 on E4 (section G) a
+    green check means that the head's OWN definitions passed: a coder of any vendor may have changed the tests or the
+    commands that run them, and the envelope says when (`definitionsChanged`, E4).
 11. The output of the instruction step is paid for in every job (up to 64 KiB of prompt), and it is repository text sent to
     the vendor of the model, as the rest of the prompt is.
+12. **A secret in the output of the instruction step reaches the vendor of the model** (C9 item 10; the owner's decision of
+    2026-11-26). coai does not stop the job and does not cut the text; it tells the person the class and the line, and the
+    person decides, also whether to rotate what was printed. Until the tab of epoch 4 `e4-local-pages` is built, the
+    notice is one row among the other notices of the extension.
 
 Questions for the owner:
 
@@ -574,24 +628,34 @@ Questions for the owner:
   from happening in a job (its section 9).
 - Question 2 — decision 39: agy IS allowed as a coder. The judgement ships agy with its must-change list instead of refusing it,
   and line 2 of `doneWhen` stays for both vendors.
-- Question 3 — decision 35: the scout and coder failover lists of section D are accepted. The main-AI rows of codex and agy are
-  not answered.
+- Question 3 — decision 35: the scout and coder failover lists of section D are accepted. The main-AI rows of codex and agy:
+  answered on 2026-11-26, yes, both (below, and section D).
 - Question 4 — done: `PLAN.md` counts 12 cornerstone stories since `baf9930c`.
-- Question 5 — the calls of s4 are spent and written down in the two results files. The list holds NO answer for the new caps
-  of s5 t6 (8 paid calls) and s6 t7 (12 paid turns), nor for the caps of s8 t3 and s8 t4.
+- Question 5 — the calls of s4 are spent and written down in the two results files. The caps of the open tasks: answered on
+  2026-11-26 (below).
 - **Decision 40** (2026-11-25, «да, (а)»): the coder prompt has a version for each vendor — its own tool names, and a line that
   commands which the repository's instruction files order first are not run in the job, because coai runs the checks. The claude
   text stays exactly as it is today. Section C7.
 
-Still the owner's: the accepted risks of agy before its release enters the table (risk 9; s6 t7 d8); the caps above; the main-AI
-rows of codex and agy.
+**The owner's decisions of 2026-11-26** (each is a plan change; the owner's words and the ledger entries are in
+`SPEC_CHANGES.md`, section M):
+
+- **Caps.** s8 t3 and s8 t4 together: at most 30 USD. s5 t6: at most 30 codex calls. s6 t7: at most 30 agy turns. They
+  replace 8 calls (s5 t6), 12 turns (s6 t7), 4 calls and 0.10 USD (s8 t3), 2 runs for a vendor and 0.50 USD (s8 t4). Every
+  call and its spend is still written down, and a paid task still stops from the ledger.
+- **Accepted:** the risks agy A1 to A9 and codex C1 to C4 (risk 9). **Three full vendors:** claude, codex and agy each ship
+  as coder, reviewer and consultant; the codex and agy main-AI rows: yes, both (section D).
+- The instruction step (C9 items 4, 9 and 10), the pack (B item 3) and a coder's checks in E4 (section G).
+
+Nothing here waits for the owner now. What can still come to the owner: a vendor an addendum refuses (C5), a risk an
+addendum adds (risk 9), the spend of measuring a NEW agy release again (s6 t7 d1).
 
 ## I. Build order, test plan, Definition of Done
 
 Build order: the story order of section G; in a story the `dependsOn` of its tasks. Measure tasks come before the code that
 depends on them, and the judgement comes before any codex or agy launch code.
 
-Test plan: every scenario S1 to S12, P1 to P12 and V1 to V22 has a test that carries its number in its name, or the task result says
+Test plan: every scenario S1 to S12, P1 to P12 and V1 to V23 has a test that carries its number in its name, or the task result says
 which test covers it. FakeCli is the only double; the units, git, the detached runner and stdio are real. Structural scans have a
 companion that proves they match something. The whole MCP suite runs through the MTP executable, never `dotnet test`.
 
@@ -604,84 +668,20 @@ Definition of Done:
 - [ ] For each vendor the judgement shipped: a coder job fixes a red check in the SAME session of turn 0, on a measured release,
       inside a boundary whose rows B1 to B15 were measured and whose relied-on properties the preflight probes before each job. For a vendor it refused: the refusal is in the product and in the results, and the owner
       decided line 2.
-- [ ] The codex and agy rows of `shared/role-defaults.json` hold measured names only.
+- [ ] The pack text of every scope that has an outside dependency names it, an epoch and an epic scope included; no approval
+      id moved for it.
+- [ ] The codex and agy main-AI rows of `shared/role-defaults.json` are both filled, with measured names only.
 - [ ] Each shipped vendor's coder gets its own prompt: its own tool names and the one added line; the claude prompt file is byte
       for byte what it was.
 - [ ] A command that a repository declares as its instruction step is run by coai before turn 0, and its output is in the
       prompt of every vendor's coder; a declared step that cannot run refuses the job; with no step the prompt says that
       nothing was run. On a repository whose instruction file orders a command and declares it, a real job of each shipped
       vendor is not refused and its commit follows a rule that only the step's output holds.
+- [ ] A secret-shaped text in the output of the step stops nothing: the job goes on with the output as it was, and the notice
+      `instructions-secret` and the envelope name the class and the line and never the value.
 - [ ] The mode of an agy turn is read from its stream or named as measured for the release; no launch is passed on the flag.
-- [ ] The epic acceptance passes on the real binary; the paid proofs are inside their caps and written down.
+- [ ] The epic acceptance passes on the real binary; the paid proofs and the two open measures are inside the owner's caps
+      of 2026-11-26 (section H) and written down.
 - [ ] `validate_work` accepts the `v2` folder; `plan-lifecycle.mjs` is clean; ARCHITECTURE.md, README.md and server.md say what was
       built and what was not.
 
-## J. Epic plan gate (proceed, 2026-11-25) — accepted changes
-
-The gate read `EPIC_BUNDLE.md` at `db3a0d8e`. All 5 findings were accepted.
-
-1. **Only measured releases for the codex and agy boundary** (s5 t1, s6 t1, s7 t1). The write capability accepts an exact list of
-   measured releases, not a floor. Section C2 says how a release is added: measure, judgement, one commit, a test that holds the
-   table to its evidence.
-2. **The preflight probes every property the verdict relies on** (s5 t3, s6 t4, s4 t6). The judgement lists the properties with
-   ids; the preflight has one row per id inside the exact launch unit before each job; a wrong answer refuses the job. For agy this
-   is more than the answers of the hook: the sign-in files, what is hidden, the network limit.
-3. **The approval covers the reviewed context outside the scope** (s3 t4; B7, B8). The approval id holds every packed file and
-   every outside-dependency line. A changed ancestor, plan file, `feature.yaml` or dependency title refuses a coder start.
-4. **A refused vendor never blocks the other** (C5). The seam moved out of the codex story into s7; s5 and s6 depend on s4 and s7
-   only; the judgement commit removes a refused vendor's story; the failover test and the acceptance run per combination.
-5. **A blank evidence text is an error** (s1 t1 to t3; S12). It is refused before the line check and can never be verified.
-
-Parent plan, corrected in the same change: `epic.yaml` of E3 gets `e2-coder-one-task` in `dependsOn` and `spec: SPEC.md` (the pack
-of section B reads the `spec` file; E1 has the same line); E4's `doneWhen` says that the resume is built by E2 and E3;
-`feature.yaml` `cornerstones` gets s3 and s4 of this epic. `v2/_gen/v2-spec.json` holds the same three edits.
-
-## K. After the plan gate (2026-11-25) — what changed, for the next plan round
-
-The gate of section J read the plan at `db3a0d8e`; its findings were folded in at `8d2cc1d5`. Four causes changed the plan since.
-The bundle (`EPIC_BUNDLE.md`) holds the plan as it is now.
-
-1. **The security judgement of s4 t6** (`v2/spikes/RESULTS_codex_agy_write_boundary_judgement.md`, `d8f57ec7`): codex `ship`, agy
-   `ship` with a must-change list and accepted risks. Four tasks were added (s5 t6, s6 t7, s7 t5, s7 t6) and one moved (the agy
-   boundary scenarios: s6 t6 → s8 t6): 43 tasks; s5, s6, s7 and s8 hold 6 each, the device limit. The sentences its section 10
-   left for this round are folded in: the header, C2 items 1, 3 and 4 (the classes of the ids), C6 (what the guard denies, the
-   guard folder as the working directory, hidden and not read-only), section F (the program store, the sign-in copy, the guard's
-   records), section G (the forwarder is E4's; the follow-up for E2), risk 9 of section H.
-2. **The owner's decision 39**: agy is allowed as a coder. It is why the judgement ships agy; `doneWhen` line 2 is not narrowed.
-3. **The coder comparison of E2** (`RESULTS_coder_comparison.md`): codex refused the shipped prompt twice; agy's init line named
-   another mode than the argv; codex wrote null members. Sections C7 and C8; scenarios V17 to V19; addendum 1 of the judgement
-   (ids AG-M3 and AG-M4, accepted risk A9); tasks s5 t2 d2, s6 t3 d1, s6 t4 d4, s6 t5 d3, s6 t7 d8 and d9, s7 t1 d3, s8 t4 d4.
-4. **The owner's decision 40** (2026-11-25, «да, (а)»): a coder prompt for each vendor; the claude text unchanged. Section C7;
-   tasks s7 t1 d1, s7 t2 d5, s5 t4 d4, s6 t3 d6, s8 t2 d2, s8 t4 d4.
-
-No task was added or removed by causes 3 and 4: every story of s5 to s8 is at the device limit of 6 tasks, so the new work is
-dod items of existing tasks. No complexity number changed.
-
-For the lead: each cause is a change of an approved plan. Whether the parent plan's change count stops the plan is the lead's
-decision (the judgement, section 10 item 2). In E4's plan the forwarder line and the owner's answers of decision 38 are on
-`feat/v2-ep3-e4-plan`.
-
-## L. Second plan round (proceed, 2026-11-26) — accepted changes
-
-The round (coai session `26308fe5`) read `EPIC_BUNDLE.md` at `6ec9a211`. Both findings were accepted. No new round follows.
-
-1. **C7 and s8 t4 told a coder that coai runs required commands, and nothing made coai run them** (major, security). Now:
-   section C9, the instruction step. A repository declares the command in `.coai/toolchain.yaml`; coai runs it before turn 0 in
-   a check unit at the base commit and appends its output to the prompt of every vendor's coder, claude's too; a declared step
-   that cannot run refuses the job (`instructions-failed`); the prompt bullet of codex and agy points at the block and is
-   true with and without a step (C7 item 4). The claude prompt FILE and its sha test do not change; what a claude coder is
-   sent on a repository that declares a step does (C9 item 6). The proof checks the effect: s8 t4 d4 needs a commit that
-   follows a rule only the step's output holds, and s7 t3 d3 tests every failure with zero model launches. Scenarios V20 to
-   V22.
-2. **B and s3 t5 let a changed context file outside the scope pass in silence** (major, reliability). The plan text said "under
-   the scope". Now B item 6 says every file of the pack, the context too; P4 names both. The code of s3 t5 already takes its
-   list from the pack (`WorkingTreeGuard.Differing`); what was missing is a test of the context and a sentence that names it:
-   the new task s3 t6.
-
-Tasks. One added: s3 t6 (44 tasks). In s7, which holds the device limit of 6: the rows of `shared/role-defaults.json` (the old
-t3) moved into t4 (`t4-coder-route-by-vendor`, d4 and d5, complexity 6), and t3 is now `t3-instruction-step` (complexity 5). t2
-depends on the new t3 and has a d6. Changed text: s5 t4 d4, s6 t3 d6, s7 t2 d5, s8 t2 d2, s8 t4 d4.
-
-For the lead: the bullet of the vendor prompts no longer holds the words of decision 40 "(coai runs the checks)". The owner's
-intent is kept (a coder of codex or agy does not refuse because of such a command), and the line now says what coai ran. Whether
-this repository's own file declares the resolver depends on the size s7 t3 measures. Both findings are plan changes.

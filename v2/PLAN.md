@@ -3,6 +3,26 @@
 > Status: **plan, nothing built, 2026-11-22.** Branch `feat/v2-plan`. Built with the v2 work method itself: a feature
 > folder → epochs (≤ 5 epics each, MVP first) → epics → stories → tasks, each node with a YAML file. Stories and tasks
 > are written for an epic when it starts (now: epoch 1). The split was re-decided by Fable on 2026-11-22: 5 epochs, MVP epics with measurable pass criteria, 10 cornerstone stories (feature.yaml `cornerstones`; 12 since 2026-11-25, when the E3 plan gate added E3 s3 and s4).
+> **Stopped for re-review, 2026-11-26** (the ledger below): the owner ordered epoch 3 revised and reviewed whole.
+
+## Plan changes
+
+> Epoch 1 · approved 2026-11-22 · by reviewers · state: stopped
+
+- 1.1 · 2026-11-25 · owner · contract, approach — decision 40: the coder prompt has a version for each vendor, the claude text unchanged (epoch 3 E3 SPEC C7)
+- 1.2 · 2026-11-26 · owner · dod — the paid caps of epoch 3 E3: s8 t3 and s8 t4 together at most 30 USD, s5 t6 at most 30 codex calls, s6 t7 at most 30 agy turns; they replace 8 calls, 12 turns, 0.10 USD and 0.50 USD
+- 1.3 · 2026-11-26 · owner · scope, contract — the risks agy A1 to A9 and codex C1 to C4 are accepted; claude, codex and agy each ship as coder, reviewer and consultant, so the codex and agy main-AI rows of E3 s7 t4 are both filled
+- 1.4 · 2026-11-26 · owner · scope — the instruction step of E3 s7 t3 keeps its 64 KiB limit; a short form of the rule resolver's output is a follow-up outside epoch 3
+- 1.5 · 2026-11-26 · owner · contract, epics, dod — a secret in the output of the instruction step stops nothing: the job goes on and a notice `instructions-secret` names the class and the line, never the value; its tab in the extension's notifications is a new doneWhen line of epoch 4 e4-local-pages
+- 1.6 · 2026-11-26 · owner · contract — WorkPack renders an outside dependency in the pack text for every scope, epoch and epic included; whole-epic text ids move, approval ids stay
+- 1.7 · 2026-11-26 · owner · contract, approach — a coder's checks (epoch 3 E4, A4, D12, D13): the head's own definitions run, nothing the head changed is refused, every difference from the base is reported; restore takes packages from the internet; E3's text agrees
+  (The second entry stopped the plan. The owner on counting these and reviewing epoch 3 whole, 2026-11-26: «да, пересматриваем».)
+  (Epoch 1 is dated at the plan gate of the whole plan: round 2, `good_enough`, 2026-11-22, commit c24e5141. The ledger was
+  opened on 2026-11-26 with these seven entries. Changes before that day are not entries: they are in the SPEC files of the
+  epics and in their deviations. For epoch 3 E3 they are sections J, K and L of
+  [SPEC_CHANGES.md](epoch-3/e3-roles-complete/SPEC_CHANGES.md): the judgement of s4 t6, the coder comparison and the two
+  findings of the second plan round are named there as plan changes. Whether they become entries is the lead's decision.)
+  (What each entry changed in E3: section M of the same file. The re-review record for epoch 2 is written by the re-review.)
 
 ## Goal
 

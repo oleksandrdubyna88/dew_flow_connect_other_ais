@@ -12,4 +12,4 @@ dod:
   - id: d1
     item: "one real scout job and one real judge job with haiku (a scratch data folder sets the scout list and the important list to haiku) on a scratch clone of this repository: the file holds the job id, route, attempts, repair turns, the counts of verified evidence and the cost from the ledger"
   - id: d2
-    item: "4 paid calls at most and 0.10 USD in total; a second run of a role only after a recorded change; nobody edits the clone while a job runs"
+    item: "the owner's cap of 2026-11-26: this task and t4 together spend at most 30 USD (it replaces 4 calls and 0.10 USD here); the file holds the spend of this task and what is left of the 30 USD for t4, and the task stops from the ledger before the sum passes the cap; a second run of a role only after a recorded change; nobody edits the clone while a job runs"

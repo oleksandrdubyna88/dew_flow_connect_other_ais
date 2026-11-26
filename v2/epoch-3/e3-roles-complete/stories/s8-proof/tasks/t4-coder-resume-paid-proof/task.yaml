@@ -13,7 +13,7 @@ dod:
   - id: d1
     item: "for each vendor the table ships with a measured release: one real coder job with the smallest model of that vendor, on the measured release, on a fixture repository with its own toolchain file and a planted red check; the file holds the job id, the release and the sha256 of the program, the session id of turn 0 and of the fix turn (equal, read from the own stream of the CLI), fixTurns, green, the properties of the unit, the preflight rows by id, the answer of the turn check of each turn and the spend"
   - id: d2
-    item: "2 paid runs per vendor at most and 0.50 USD in total (the count of tokens where the CLI names no cost); the real sign-in file has the same bytes and modification time before and after, and the job's sign-in copy is gone after the job"
+    item: "the owner's cap of 2026-11-26: t3 and this task together spend at most 30 USD (it replaces 2 runs for a vendor and 0.50 USD here); the task starts from what t3 left, writes down every run and its spend (the count of tokens where the CLI names no cost) and stops from the ledger before the sum passes the cap; a second run of a vendor only after a recorded change; the real sign-in file has the same bytes and modification time before and after, and the job's sign-in copy is gone after the job"
   - id: d3
     item: "a vendor the table refuses, or ships with no measured release, is written as not run, with the reason, and is not a missing proof; with both so the task is done when the file says so"
   - id: d4
