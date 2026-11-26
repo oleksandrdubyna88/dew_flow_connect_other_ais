@@ -111,7 +111,8 @@ public sealed class AAgyCoderPreflightTests
         rowIds.Should().Equal(preIds, "an id with no row and a row with no id both fail");
         AgyCoderPreflight.CheckRows.Values.Should().OnlyContain(item => BoundaryPreflight.Items.Contains(item), "K1 and K2 are rows of the CHECK preflight, and they exist there");
         AgyCoderPreflight.Items.Should().OnlyHaveUniqueItems();
-        AgyCoderPreflight.RowIds.Keys.Should().Equal(AgyCoderPreflight.Items);
+        AgyCoderPreflight.Items.Should().Equal([.. AgyCoderPreflight.RowIds.Keys, .. AgyCoderPreflight.ExtraItems]);
+        AgyCoderPreflight.ExtraItems.Should().Equal("keys-folder-hidden", "sign-in-not-in-unit", "other-vendor-folder-hidden");
     }
 
     [Fact]
@@ -147,10 +148,31 @@ public sealed class AAgyCoderPreflightTests
             bed.Inner.UseJobsFolderWithAnotherJob();
         }
 
+        BoundaryHost? host = null;
+        if (item == "other-vendor-folder-hidden")
+        {
+            bed.Inner.UseJobsFolderWithAnotherJob();
+        }
+
+        if (item == "keys-folder-hidden")
+        {
+            // The pool's folder where the unit would see it unless the property hides it: inside the worktree, which every unit binds.
+            var keys = Path.Combine(bed.Worktree, ".keys-probe");
+            Directory.CreateDirectory(keys);
+            await File.WriteAllTextAsync(Path.Combine(keys, "key.txt"), "made-up-key-text\n");
+            bed.Inner.UseKeys(keys);
+        }
+
+        if (item == "sign-in-not-in-unit")
+        {
+            // A home that is NOT under a hidden folder (inside the worktree): the person's claude sign-in file lies there unless the property hides it.
+            host = bed.Host with { RealHome = StandInHome(bed) };
+        }
+
         var launches = bed.Launcher.Requests.Count;
         var program = item == "program-cannot-be-written" ? RoleJobWorld.FakeCli : "/bin/sh";
 
-        var outcome = await RunAsync(bed, vendor, Degrade(item, bed), program);
+        var outcome = await RunAsync(bed, vendor, Degrade(item, bed), program, host);
 
         var refused = outcome.Should().BeOfType<CoderTurnOutcome.Refused>($"the preflight must see it: {outcome}").Subject;
         // The sentence names the FIRST row that said no; the row of this item is among those that did (dropping the handler's folder fails both rows of the guard that ask it).
@@ -169,6 +191,40 @@ public sealed class AAgyCoderPreflightTests
         }
     }
 
+    /// <summary>A stand-in for the person's home inside the worktree, with a claude sign-in file and an agy one in it (made up).</summary>
+    private static string StandInHome(CoderBed bed)
+    {
+        var home = Path.Combine(bed.Worktree, "person-home");
+        Directory.CreateDirectory(Path.Combine(home, ".claude"));
+        Directory.CreateDirectory(Path.Combine(home, ".gemini", "antigravity-cli"));
+        File.WriteAllText(Path.Combine(home, ".claude", ".credentials.json"), CoderBed.SignInLine + "\n");
+        File.WriteAllText(Path.Combine(home, AgyCoderUnit.SignInRelative), AgyCoderBed.SignInFile(DateTime.UtcNow.AddHours(2)));
+
+        return home;
+    }
+
+    [Fact]
+    public async Task M12_TheKeysAndTheOtherVendorRows_Hold_WhenTheKeyFolderIsNamedAndHidden()
+    {
+        var (bed, vendor) = await BedAsync();
+        await using var _ = bed;
+        var keys = Path.Combine(bed.Worktree, ".keys-probe");
+        Directory.CreateDirectory(keys);
+        await File.WriteAllTextAsync(Path.Combine(keys, "key.txt"), "made-up-key-text\n");
+        bed.Inner.UseKeys(keys);
+        bed.Inner.UseJobsFolderWithAnotherJob();
+
+        var outcome = await RunAsync(bed, vendor);
+
+        var rows = outcome.Should().BeOfType<CoderTurnOutcome.Finished>(outcome is CoderTurnOutcome.Refused refused ? refused.Sentence : string.Empty).Subject.Run.Record.Preflight;
+        foreach (var item in AgyCoderPreflight.ExtraItems)
+        {
+            rows.Single(row => row.Item == item).Held.Should().BeTrue(item);
+        }
+
+        rows.Single(row => row.Item == "keys-folder-hidden").Detail.Should().Contain("cannot be read", "the row looked at a key folder that IS named, not at none");
+    }
+
     private static Func<IReadOnlyList<string>, IReadOnlyList<string>> Degrade(string item, CoderBed bed) => arguments =>
     {
         var job = bed.Job;
@@ -184,9 +240,11 @@ public sealed class AAgyCoderPreflightTests
             "windows-exe" => Drop(arguments, "InaccessiblePaths=-/run/WSL"),
             "no-sockets-no-interop" => Drop(arguments, "TemporaryFileSystem=/mnt"),
             "home-is-the-jobs" => Replace(arguments, $"HOME={AgyCoderUnit.HomeFolder(job)}", $"HOME={bed.RealHome}"),
-            "tmp-is-the-jobs" => Drop(arguments, $"BindPaths={job.CoderTempFolder}:{BoundaryUnit.UnitTemp}"),
+            "tmp-is-the-jobs" => Drop(arguments, $"BindPaths={job.CoderTempOf("agy")}:{BoundaryUnit.UnitTemp}"),
             "environment-is-the-allow-list" => Insert(arguments, "/usr/bin/env", "EXTRA_NAME=1"),
-            "other-job-folder-hidden-from-the-coder" => Replace(arguments, $"TemporaryFileSystem={job.JobCover}:ro", $"BindReadOnlyPaths={job.JobCover}"),
+            "other-job-folder-hidden-from-the-coder" or "other-vendor-folder-hidden" => Replace(arguments, $"TemporaryFileSystem={job.JobCover}:ro", $"BindReadOnlyPaths={job.JobCover}"),
+            "keys-folder-hidden" => Drop(arguments, $"InaccessiblePaths=-{job.KeysFolder}"),
+            "sign-in-not-in-unit" => Drop(arguments, $"InaccessiblePaths=-{BoundaryJob.RealOrSpelled(Path.Combine(StandInHome(bed), ".claude", ".credentials.json"))}"),
             "program-cannot-be-written" => Drop(arguments, $"BindReadOnlyPaths={Path.GetDirectoryName(RoleJobWorld.FakeCli)}"),
             "cwd-is-the-guard-folder" => Replace(arguments, guard, bed.Worktree),
             "guard-folder-readonly" => Drop(arguments, $"BindReadOnlyPaths={guard}"),

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using CoaiMcp.Runners.Consultation;
+using CoaiMcp.Runners.Processes;
 using CoaiMcp.Runners.Reviewers;
 using CoaiMcp.Runners.Toolchain;
 using Xunit;
@@ -61,7 +62,7 @@ internal sealed class AgyCoderBed
         new Dictionary<string, object?> { ["tool"] = tool, ["path"] = path, ["content"] = content, ["target"] = target, ["replacement"] = replacement, ["skipHook"] = skipHook, ["noEvent"] = noEvent, ["hookTwice"] = hookTwice };
 
     /// <summary>One launch of the fake as agy: its tools, the report it answers with and what it says on stderr.</summary>
-    internal static IReadOnlyDictionary<string, object?> Launch(IReadOnlyList<IReadOnlyDictionary<string, object?>>? tools = null, string? answer = null, string conversation = "", string stderr = "", int exit = 0, int tokensIn = 100, int tokensOut = 10, int sleepMs = 0, string denied = "", IReadOnlyList<string>? reads = null, IReadOnlyList<string>? tries = null)
+    internal static IReadOnlyDictionary<string, object?> Launch(IReadOnlyList<IReadOnlyDictionary<string, object?>>? tools = null, string? answer = null, string conversation = "", string stderr = "", int exit = 0, int tokensIn = 100, int tokensOut = 10, int sleepMs = 0, int holdMs = 0, string denied = "", IReadOnlyList<string>? reads = null, IReadOnlyList<string>? tries = null)
     {
         var entry = new Dictionary<string, object?>
         {
@@ -72,6 +73,11 @@ internal sealed class AgyCoderBed
             ["exit"] = exit,
             ["sleepMs"] = sleepMs,
         };
+        if (holdMs > 0)
+        {
+            entry["agyHoldMs"] = holdMs;
+        }
+
         if (conversation.Length > 0)
         {
             entry["agyConversation"] = conversation;
@@ -115,4 +121,54 @@ internal sealed class AgyCoderBed
 
         return rig;
     }
+}
+
+/// <summary>The bed of a unit test: a job, a stand-in home with a made-up agy sign-in, the agy vendor with FakeCli as the hook handler, and the road of the turns.</summary>
+internal sealed class AgyUnit : IAsyncDisposable
+{
+    private AgyUnit(CoderBed bed, AgyCoderVendor vendor, CoderTurns turns)
+    {
+        Bed = bed;
+        Vendor = vendor;
+        Turns = turns;
+    }
+
+    public CoderBed Bed { get; }
+
+    public AgyCoderVendor Vendor { get; }
+
+    public CoderTurns Turns { get; }
+
+    public SignInJobs SignIns { get; } = new();
+
+    public string Real => Path.Combine(Bed.RealHome, AgyCoderUnit.SignInRelative);
+
+    public string Guard => AgyCoderUnit.GuardFolder(Bed.Job);
+
+    public static async Task<AgyUnit> CreateAsync(DateTime? realExpiry = null, Func<IReadOnlyList<string>, IReadOnlyList<string>>? degrade = null, AgyCoderVendor? vendor = null)
+    {
+        Assert.SkipUnless(SystemdUser.Works(out var why), why);
+        var bed = await CoderBed.CreateAsync();
+        var chosen = vendor ?? AgyCoderBed.Vendor();
+        var unit = new AgyUnit(bed, chosen, new CoderTurns(new CoderBoundary(bed.Launcher, bed.Host) { Vendor = chosen, Degrade = degrade }, bed.Evidence));
+        unit.WriteSignIn(realExpiry ?? DateTime.UtcNow.AddHours(2));
+
+        return unit;
+    }
+
+    public void WriteSignIn(DateTime expires, string access = AgyCoderBed.Access)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(Real)!);
+        File.WriteAllText(Real, AgyCoderBed.SignInFile(expires, access));
+    }
+
+    /// <summary>One launch of <paramref name="script"/> as the program, in the agy coder's unit: the sign-in copy, the guard folder and the preflight as the road makes them.</summary>
+    public async Task<CoderTurnOutcome> RunAsync(string script, string part = "c1", ProcessRequest? asked = null)
+    {
+        var request = (asked ?? Bed.Shell(script)) with { WorkingDirectory = Guard };
+
+        return await Turns.RunAsync(Bed.Job, request, part, Vendor, TestContext.Current.CancellationToken, SignIns);
+    }
+
+    public ValueTask DisposeAsync() => Bed.DisposeAsync();
 }

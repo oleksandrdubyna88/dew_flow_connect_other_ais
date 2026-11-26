@@ -166,7 +166,7 @@ internal sealed partial class RoleModelLauncher(Func<string, string?> settings, 
             : stop;
         var handle = scrubbed.Launch.Process is { } process ? runtime.ReadHandle(process) : string.Empty;
         var job = Layer!.Job;
-        var inHome = secret is not null && HoldsTheKey(secret, vendor.Home(job).Home, job.CoderTempFolder, job.CoderVarTempFolder);
+        var inHome = secret is not null && HoldsTheKey(secret, vendor.Home(job).Home, job.CoderTempOf(vendor.Id), job.CoderVarTempOf(vendor.Id));
 
         return new RoleLaunched(stop is { Started: false } ? null : scrubbed.Launch, null, runtime, WithoutCredential(invocation), handle, stop, KeyId: keyId, KeyExposed: scrubbed.OwnFound || inHome) { ExposedIds = scrubbed.OtherIds };
     }

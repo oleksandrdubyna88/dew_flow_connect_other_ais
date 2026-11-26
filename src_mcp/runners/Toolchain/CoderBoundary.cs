@@ -156,7 +156,7 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
                 scratch = job.RefreshFolder;
                 state.Refreshes++;
                 var unit = BoundaryUnit.UnitName(job, $"refresh{state.Refreshes}");
-                var refreshed = await new SignInRefresh(launcher, host).RunAsync(job, state.RealFile, scratch, recipe.RealRelativePath.Length > 0 ? recipe.RealRelativePath : recipe.RelativePath, program, recipe.RefreshArgv, [new("PATH", BoundaryHost.SystemPath), new("HOME", scratch), new("LANG", "C.UTF-8"), new("TERM", "dumb"), new("NO_COLOR", "1")], unit, Degrade, ct);
+                var refreshed = await new SignInRefresh(launcher, host).RunAsync(job, state.RealFile, scratch, recipe.RealRelativePath.Length > 0 ? recipe.RealRelativePath : recipe.RelativePath, program, recipe.RefreshArgv, [new("PATH", BoundaryHost.SystemPath), new("HOME", scratch), new("LANG", "C.UTF-8"), new("TERM", "dumb"), new("NO_COLOR", "1")], unit, Degrade, ct, recipe.ExpiryIsJwt ? string.Empty : recipe.ExpiryField);
                 if (refreshed is SignInRefreshResult.Failed failed)
                 {
                     return failed.Sentence;
@@ -198,7 +198,7 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
             return Refuse($"The coder was not launched: {program.Problem}.", []);
         }
 
-        var prepared = BoundaryFolders.Prepare(host, job, Vendor.Home(job).Folders, job.CoderTempFolder, job.CoderVarTempFolder);
+        var prepared = BoundaryFolders.Prepare(host, job, Vendor.Home(job).Folders, job.CoderTempOf(Vendor.Id), job.CoderVarTempOf(Vendor.Id));
         if (prepared.Sentence.Length > 0)
         {
             return Refuse(prepared.Sentence, []);
@@ -206,7 +206,7 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
 
         if (job.JobRootOnDiskProblem() is { Length: > 0 } linked)
         {
-            BoundaryFolders.Tidy(job, prepared.Copy, job.CoderTempFolder, job.CoderVarTempFolder);
+            BoundaryFolders.Tidy(job, prepared.Copy, job.CoderTempOf(Vendor.Id), job.CoderVarTempOf(Vendor.Id));
 
             return Refuse(linked, []);
         }
@@ -217,7 +217,7 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
         }
         finally
         {
-            BoundaryFolders.Tidy(job, prepared.Copy, job.CoderTempFolder, job.CoderVarTempFolder);
+            BoundaryFolders.Tidy(job, prepared.Copy, job.CoderTempOf(Vendor.Id), job.CoderVarTempOf(Vendor.Id));
         }
     }
 

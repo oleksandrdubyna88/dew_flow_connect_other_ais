@@ -113,56 +113,6 @@ public sealed class AAgyCoderLaunchTests
 
     // ---------- d2, d3, d4: the unit, on a real unit ----------
 
-    /// <summary>The bed of a unit test: a job, a stand-in home with a made-up agy sign-in, the agy vendor with FakeCli as the hook handler, and the road of the turns.</summary>
-    private sealed class Unit : IAsyncDisposable
-    {
-        private Unit(CoderBed bed, AgyCoderVendor vendor, CoderTurns turns)
-        {
-            Bed = bed;
-            Vendor = vendor;
-            Turns = turns;
-        }
-
-        public CoderBed Bed { get; }
-
-        public AgyCoderVendor Vendor { get; }
-
-        public CoderTurns Turns { get; }
-
-        public SignInJobs SignIns { get; } = new();
-
-        public string Real => Path.Combine(Bed.RealHome, AgyCoderUnit.SignInRelative);
-
-        public string Guard => AgyCoderUnit.GuardFolder(Bed.Job);
-
-        public static async Task<Unit> CreateAsync(DateTime? realExpiry = null, Func<IReadOnlyList<string>, IReadOnlyList<string>>? degrade = null, AgyCoderVendor? vendor = null)
-        {
-            Assert.SkipUnless(SystemdUser.Works(out var why), why);
-            var bed = await CoderBed.CreateAsync();
-            var chosen = vendor ?? AgyCoderBed.Vendor();
-            var unit = new Unit(bed, chosen, new CoderTurns(new CoderBoundary(bed.Launcher, bed.Host) { Vendor = chosen, Degrade = degrade }, bed.Evidence));
-            unit.WriteSignIn(realExpiry ?? DateTime.UtcNow.AddHours(2));
-
-            return unit;
-        }
-
-        public void WriteSignIn(DateTime expires, string access = AgyCoderBed.Access)
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(Real)!);
-            File.WriteAllText(Real, AgyCoderBed.SignInFile(expires, access));
-        }
-
-        /// <summary>One launch of <paramref name="script"/> as the program, in the agy coder's unit: the sign-in copy, the guard folder and the preflight as the road makes them.</summary>
-        public async Task<CoderTurnOutcome> RunAsync(string script, string part = "c1", ProcessRequest? asked = null)
-        {
-            var request = (asked ?? Bed.Shell(script)) with { WorkingDirectory = Guard };
-
-            return await Turns.RunAsync(Bed.Job, request, part, Vendor, TestContext.Current.CancellationToken, SignIns);
-        }
-
-        public ValueTask DisposeAsync() => Bed.DisposeAsync();
-    }
-
     private static string Out(CoderTurnOutcome outcome) =>
         outcome.Should().BeOfType<CoderTurnOutcome.Finished>(outcome is CoderTurnOutcome.Refused refused ? refused.Sentence : outcome.ToString()).Subject.Run.Result.StdOut;
 
@@ -172,7 +122,7 @@ public sealed class AAgyCoderLaunchTests
     [Fact]
     public async Task D2_TheUnitStartsInTheGuardFolder_TheGuardFolderIsReadOnly_TheMainCheckoutAndTheCoderRootAreHidden_ThatIsWhatTheOsShows()
     {
-        await using var unit = await Unit.CreateAsync();
+        await using var unit = await AgyUnit.CreateAsync();
         var bed = unit.Bed;
         var mainFile = Directory.EnumerateFiles(bed.Main).Select(Path.GetFileName).First(name => !name!.StartsWith('.'))!;
 
@@ -202,7 +152,7 @@ public sealed class AAgyCoderLaunchTests
     [Fact]
     public async Task D2_ALaunchWhoseFolderIsTheWorktree_IsRefusedBeforeAnythingStarts()
     {
-        await using var unit = await Unit.CreateAsync();
+        await using var unit = await AgyUnit.CreateAsync();
 
         var outcome = await unit.Turns.RunAsync(unit.Bed.Job, unit.Bed.Shell("echo started"), "c1", unit.Vendor, TestContext.Current.CancellationToken, unit.SignIns);
 
@@ -253,7 +203,7 @@ public sealed class AAgyCoderLaunchTests
     [Fact]
     public async Task D3_TheHomeHoldsTheJobsSignInCopy_TheAccessTokenOnly_Mode0600_AndNoOtherSignInFile()
     {
-        await using var unit = await Unit.CreateAsync();
+        await using var unit = await AgyUnit.CreateAsync();
         var home = AgyCoderUnit.HomeFolder(unit.Bed.Job);
         var file = AgyCoderUnit.SignInFile(unit.Bed.Job);
 
@@ -280,7 +230,7 @@ public sealed class AAgyCoderLaunchTests
     [Fact]
     public async Task D3_AFreshCopyIsMadeForEveryTurn()
     {
-        await using var unit = await Unit.CreateAsync();
+        await using var unit = await AgyUnit.CreateAsync();
         var file = AgyCoderUnit.SignInFile(unit.Bed.Job);
         _ = Out(await unit.RunAsync("true"));
         File.WriteAllText(unit.Real, AgyCoderBed.SignInFile(DateTime.UtcNow.AddHours(2), "made-up-agy-access-token-two"));
@@ -294,7 +244,7 @@ public sealed class AAgyCoderLaunchTests
     public async Task D3_ALaunchThatCannotHaveTheMargin_IsRefusedAndNeverStartedOnLess()
     {
         // The access token ends in three minutes and a turn may take a minute: the real file has no margin, so a refresh would be tried — and the program here cannot refresh — and the launch is refused.
-        await using var unit = await Unit.CreateAsync(realExpiry: DateTime.UtcNow.AddMinutes(3));
+        await using var unit = await AgyUnit.CreateAsync(realExpiry: DateTime.UtcNow.AddMinutes(3));
 
         var outcome = await unit.RunAsync("echo started");
 
@@ -324,9 +274,56 @@ public sealed class AAgyCoderLaunchTests
     }
 
     [Fact]
+    public async Task M14_ARealTokenThatIsNotExpired_IsRefreshedThroughAScratchCopyMadeStale_TheRealFileIsNeverTouched()
+    {
+        // Three minutes left: less than the unit's end and the margin (a minute of turn, a minute of backstop, five of margin). agy refreshes only a token that is EXPIRED (measured), so coai makes the token of its OWN scratch copy stale before the unit runs.
+        await using var unit = await AgyUnit.CreateAsync(realExpiry: DateTime.UtcNow.AddMinutes(3));
+        unit.Bed.Inner.UseJobsFolderWithAnotherJob();
+        var realBytes = File.ReadAllBytes(unit.Real);
+        var realTime = File.GetLastWriteTimeUtc(unit.Real);
+
+        var outcome = await unit.RunAsync("unused", asked: unit.Bed.Request(RoleJobWorld.FakeCli, "emit", "started"));
+
+        outcome.Should().BeOfType<CoderTurnOutcome.Finished>(outcome is CoderTurnOutcome.Refused refused ? refused.Sentence : string.Empty);
+        var copy = File.ReadAllText(AgyCoderUnit.SignInFile(unit.Bed.Job));
+        copy.Should().Contain("made-up-agy-access-token-refreshed", "the coder's copy was cut from the file the refresh unit rewrote").And.NotContain("refresh_token");
+        File.ReadAllBytes(unit.Real).Should().Equal(realBytes, "the real file is read, never written");
+        File.GetLastWriteTimeUtc(unit.Real).Should().Be(realTime);
+        unit.SignIns.All().Single().Refreshes.Should().Be(1, "the refresh is counted");
+        Directory.Exists(unit.Bed.Job.RefreshFolder).Should().BeFalse("the scratch copy, with the full file in it, is deleted before the coder starts");
+    }
+
+    [Fact]
+    public async Task M14_ARealTokenWithTheMarginInIt_NeedsNoRefresh_AndNoneIsRun()
+    {
+        await using var unit = await AgyUnit.CreateAsync(realExpiry: DateTime.UtcNow.AddMinutes(58));
+        unit.Bed.Inner.UseJobsFolderWithAnotherJob();
+
+        var outcome = await unit.RunAsync("unused", asked: unit.Bed.Request(RoleJobWorld.FakeCli, "emit", "started"));
+
+        outcome.Should().BeOfType<CoderTurnOutcome.Finished>(outcome is CoderTurnOutcome.Refused refused ? refused.Sentence : string.Empty);
+        unit.SignIns.All().Single().Refreshes.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task M14_TheEnvelopeOfAJob_CountsTheRefreshes()
+    {
+        await using var rig = await AgyCoderBed.RigAsync(expires: DateTime.UtcNow.AddMinutes(3));
+        rig.SaysEntries(AgyCoderBed.Model, AgyCoderBed.Launch([AgyCoderBed.Writes(CoderRig.Green)], conversation: AgyCoderBed.Conversation));
+        var job = rig.NewJob(route: [$"agy/{AgyCoderBed.Model}"]);
+
+        var (_, ended) = await rig.RunAsync(job);
+
+        ended.State.Should().Be(RoleJobStates.Succeeded, ended.Reason);
+        var record = rig.Envelope(job).GetProperty("signIn").EnumerateArray().Single(item => item.GetProperty("vendor").GetString() == "agy");
+        record.GetProperty("refreshes").GetInt32().Should().Be(1);
+        record.GetProperty("changed").GetBoolean().Should().BeFalse("the real file is the same file");
+    }
+
+    [Fact]
     public async Task D3_AnExpiredSignIn_IsRefusedBeforeAnyStart_NeverALoginPromptOnTheChannelOfThePrompt()
     {
-        await using var unit = await Unit.CreateAsync(realExpiry: DateTime.UtcNow.AddHours(-2));
+        await using var unit = await AgyUnit.CreateAsync(realExpiry: DateTime.UtcNow.AddHours(-2));
 
         var outcome = await unit.RunAsync("cat > /dev/null; echo started");
 
@@ -340,7 +337,7 @@ public sealed class AAgyCoderLaunchTests
         Environment.SetEnvironmentVariable("COAI_AGY_CANARY", "canary-value-of-the-parent");
         try
         {
-            await using var unit = await Unit.CreateAsync();
+            await using var unit = await AgyUnit.CreateAsync();
             var allowed = AgyCoderBed.Vendor().Environment(unit.Bed.Host, unit.Bed.Job).Select(pair => pair.Key).Order(StringComparer.Ordinal).ToList();
 
             var stdout = Out(await unit.RunAsync("""env | sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' | grep -vxE 'PWD|OLDPWD|SHLVL|_' | sort | tr '\n' ' '; echo; env | grep -c canary; true"""));

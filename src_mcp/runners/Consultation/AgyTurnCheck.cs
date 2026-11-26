@@ -48,10 +48,10 @@ internal static partial class AgyTurnCheck
             return new CoderTurnVerdict.Boundary(sign);
         }
 
-        // A launch that did not end cleanly (an exit that is not 0, a deadline, a cancel) has a CUT stream and is a crash by its own road: the attempt ends, the worktree goes back to the last coai commit, and nothing of it is committed. Only a stream that ended is tied to the guard.
+        // A launch that did not end cleanly (an exit that is not 0, a deadline, a cancel) has a CUT stream: nothing says the counts are equal or that every event ended. What ONE side alone proves still ends the job (pass 5, M11) — a boundary wins over the crash that follows.
         if (process.ExitCode != 0 || process.TimedOut || process.Cancelled)
         {
-            return new CoderTurnVerdict.Fine();
+            return Cut(Events(lines), records) is { Length: > 0 } alone ? new CoderTurnVerdict.Boundary(alone) : new CoderTurnVerdict.Fine();
         }
 
         if (Session(process, lines, expectedSession) is { Length: > 0 } lost)
@@ -79,6 +79,45 @@ internal static partial class AgyTurnCheck
         return lines.Any(line => Result(line) is { } result && result.TryGetProperty("denied_actions", out var denied) && denied.ValueKind == JsonValueKind.Array && denied.GetArrayLength() > 0)
             ? "the result of the agy turn names denied actions, which means the agent file or the guard did not hold and only the mode stopped a command (AG-M2); nothing of this turn was committed"
             : string.Empty;
+    }
+
+    // ---------- a cut stream ----------
+
+    /// <summary>What a cut stream shows by one side alone: a <c>DONE</c> event of a tool outside the three, a <c>DONE</c> event with no record or with a record that is not <c>allow</c>, and records that cannot be read beside a <c>DONE</c> event. An event that did not end, and a record with no event, are what a cut explains.</summary>
+    private static string Cut(List<ToolEvent> events, string? records)
+    {
+        var done = events.Where(item => item.State == "DONE").ToList();
+        if (done.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        if (done.FirstOrDefault(item => !Tools.Contains(item.Tool, StringComparer.Ordinal)) is { } foreign)
+        {
+            return $"the cut agy turn has a DONE tool event (step {foreign.Step.ToString(CultureInfo.InvariantCulture)}) for a tool outside read_file, write_file and edit_file, so the coder's boundary did not hold (G15, AG-A2); nothing of this turn was committed";
+        }
+
+        var written = records is null ? null : Parse(records);
+        if (written is null)
+        {
+            return "the guard's records of the cut agy turn could not be read beside a DONE tool event, so nothing shows the hook decided it (G15); nothing of this turn was committed";
+        }
+
+        foreach (var item in done)
+        {
+            var same = written.Where(record => record.Step == item.Step && record.Conversation == item.Conversation && record.Tool == item.Tool).ToList();
+            if (same.Count == 0)
+            {
+                return $"the cut agy turn has a DONE tool event (step {item.Step.ToString(CultureInfo.InvariantCulture)}, {item.Tool}) with no record of the guard: the hook was not called for it, or the handler did not answer (G15); nothing of this turn was committed";
+            }
+
+            if (same.Any(record => record.Decision != "allow"))
+            {
+                return $"the agy tool event of step {item.Step.ToString(CultureInfo.InvariantCulture)} ended DONE although the guard's decision was not allow (G15); nothing of this turn was committed";
+            }
+        }
+
+        return string.Empty;
     }
 
     // ---------- the session ----------

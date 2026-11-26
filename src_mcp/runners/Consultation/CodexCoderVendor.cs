@@ -137,7 +137,7 @@ internal sealed class CodexCoderVendor : ICoderVendor
             $"TemporaryFileSystem={job.JobCover}:ro",
             $"BindPaths={job.CoderVendorFolder(VendorId)}",
             $"TemporaryFileSystem={BoundaryUnit.UnitTemp}",
-            $"BindPaths={job.CoderVarTempFolder}:{BoundaryUnit.UnitVarTemp}",
+            $"BindPaths={job.CoderVarTempOf(VendorId)}:{BoundaryUnit.UnitVarTemp}",
             .. BoundaryUnit.KeysHidden(job),
             .. BoundaryUnit.SignInHidden(host),
             .. program.BindFolder.Length > 0 ? [$"BindReadOnlyPaths={program.BindFolder}"] : Array.Empty<string>(),
@@ -165,7 +165,7 @@ internal sealed class CodexCoderVendor : ICoderVendor
     ];
 
     public CoderHomeLayout Home(BoundaryJob job) =>
-        new(job.CoderHomeOf(VendorId), Path.Combine(CodexHome(job), "auth.json"), [job.CoderHomeOf(VendorId), CodexHome(job), job.CoderTempFolder, job.CoderVarTempFolder]);
+        new(job.CoderHomeOf(VendorId), Path.Combine(CodexHome(job), "auth.json"), [job.CoderHomeOf(VendorId), CodexHome(job), job.CoderTempOf(VendorId), job.CoderVarTempOf(VendorId)]);
 
     public CoderProgram Program(string executable, string path, BoundaryJob job) => CoderProgram.Resolve(executable, path, job);
 

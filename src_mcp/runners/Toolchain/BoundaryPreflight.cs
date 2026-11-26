@@ -141,7 +141,7 @@ internal static class BoundaryPreflight
         """;
 
     /// <summary>A check unit holds no key material: the key folder and the keys file (the pool's, at their real paths) cannot be read from it. Not named: nothing to hide.</summary>
-    private const string CheckKeysRow = """
+    internal const string CheckKeysRow = """
         if [ -z "$keylist" ]; then row keys-folder-hidden ok "no key folder or keys file is named for this job, so there is none to hide"
         else
           seen=
@@ -153,7 +153,7 @@ internal static class BoundaryPreflight
         """;
 
     /// <summary>The person's sign-in file, at its real path, is not readable from a check unit.</summary>
-    private const string CheckSignInRow = """
+    internal const string CheckSignInRow = """
         if [ -r "$rh/.claude/.credentials.json" ]; then row sign-in-not-in-unit bad "the person's sign-in file is visible inside the check's unit"
         else row sign-in-not-in-unit ok "the person's sign-in file is not in the check's unit"; fi
         """;

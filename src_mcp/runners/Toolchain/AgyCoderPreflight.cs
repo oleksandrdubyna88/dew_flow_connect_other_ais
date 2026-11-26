@@ -43,8 +43,14 @@ internal static class AgyCoderPreflight
         ["guard-files-are-the-expected-bytes"] = "AG-G3",
     };
 
+    /// <summary>
+    /// The rows that are no id of the table, and that every other-vendor launch asked of the claude coder's preflight (pass 5, M12): the claude key pool cannot be read and the person's claude sign-in file is not there (the shared fragments of the check preflight), and the folder of another vendor of the job
+    /// is not there (SPEC E7: a unit holds only its own vendor's folder). Their properties are in the unit; these rows observe them.
+    /// </summary>
+    internal static IReadOnlyList<string> ExtraItems { get; } = [BoundaryPreflight.KeysHidden, BoundaryPreflight.SignInAbsent, "other-vendor-folder-hidden"];
+
     /// <summary>The rows, in the order the script asks them.</summary>
-    internal static IReadOnlyList<string> Items => [.. RowIds.Keys];
+    internal static IReadOnlyList<string> Items => [.. RowIds.Keys, .. ExtraItems];
 
     /// <summary>The ids of the CHECK preflight that the table lists as <c>pre</c> and that this one does not ask (the check unit has them): K1 and K2, with the row each is.</summary>
     internal static readonly IReadOnlyDictionary<string, string> CheckRows = new Dictionary<string, string>(StringComparer.Ordinal)
@@ -58,7 +64,7 @@ internal static class AgyCoderPreflight
         "not proved by the preflight, measured on the release named beside the installed one: that agy calls the hook for every tool (AG-G4), that the agent file limits its tools (AG-A1), that a hook or an agent in the worktree does not run (AG-B2) and what mode a turn ran in (AG-M4)";
 
     private const string Header = """
-        root=$8; guard=$9; shift 9; prog=$1; other=$2; deadline=$3; shaagent=$4; shahooks=$5; shash=$6; shacmd=$7; shaguard=$8; envnames=$9
+        root=$8; guard=$9; shift 9; prog=$1; other=$2; deadline=$3; shaagent=$4; shahooks=$5; shash=$6; shacmd=$7; shaguard=$8; envnames=$9; shift 9; keylist=$1; vendordirs=$2; shift 2
         """;
 
     private const string MainHiddenRow = """
@@ -119,13 +125,22 @@ internal static class AgyCoderPreflight
         """;
 
     private const string CopyRow = """
-        if grep -q 'refresh' "$cred" 2>/dev/null; then row sign-in-copy-has-no-refresh-token-and-the-margin bad "the sign-in copy holds a refresh token"
+        if grep -q 'refresh_token' "$cred" 2>/dev/null; then row sign-in-copy-has-no-refresh-token-and-the-margin bad "the sign-in copy holds a refresh token"
         else
           exp=$(sed -n 's/.*"expiry" *: *"\([^"]*\)".*/\1/p' "$cred" 2>/dev/null | head -n 1)
           at=$(date -d "$exp" +%s 2>/dev/null)
           if [ -z "$at" ]; then row sign-in-copy-has-no-refresh-token-and-the-margin bad "the expiry of the sign-in copy cannot be read"
           elif [ "$at" -lt "$deadline" ]; then row sign-in-copy-has-no-refresh-token-and-the-margin bad "the access token of the copy ends before the unit's end and its margin"
           else row sign-in-copy-has-no-refresh-token-and-the-margin ok "the copy holds no refresh token and its access token outlives the unit by the margin"; fi
+        fi
+        """;
+
+    private const string VendorsRow = """
+        if [ -z "$vendordirs" ]; then row other-vendor-folder-hidden bad "no folder of another vendor of the job was named, so nothing was observed"
+        else
+          seen=
+          for d in $vendordirs; do if [ -e "$d" ] || ls -A "$d" >/dev/null 2>&1; then seen="$seen $d;"; fi; done
+          if [ -z "$seen" ]; then row other-vendor-folder-hidden ok "the folders of the other vendors of the job cannot be seen from inside the unit"; else row other-vendor-folder-hidden bad "a folder of another vendor of the job is visible inside the unit:$seen"; fi
         fi
         """;
 
@@ -171,8 +186,8 @@ internal static class AgyCoderPreflight
 
     private static string Script(BoundaryJob job) =>
         BoundaryPreflight.Join(BoundaryPreflight.Header, Header, BoundaryPreflight.WorktreeRow, MainHiddenRow, RootHiddenRow, BoundaryPreflight.GitRow, BoundaryPreflight.ManagerRow, BoundaryPreflight.ExeRow, BoundaryPreflight.SocketsRow,
-            BoundaryPreflight.HomeRow, BoundaryPreflight.TempRow, EnvironmentRow, OtherJobRow, ProgramRow, CwdRow, GuardReadOnlyRow, SignInRow, CopyRow, GuardRows,
-            job.Mounts.Count == 0 ? string.Empty : BoundaryPreflight.SubmodulesRow(9));
+            BoundaryPreflight.HomeRow, BoundaryPreflight.TempRow, EnvironmentRow, OtherJobRow, ProgramRow, CwdRow, GuardReadOnlyRow, SignInRow, CopyRow, BoundaryPreflight.CheckKeysRow, BoundaryPreflight.CheckSignInRow, VendorsRow, GuardRows,
+            job.Mounts.Count == 0 ? string.Empty : BoundaryPreflight.SubmodulesRow(0));
 
     /// <summary>Where the stand-in for another job's folder is made: beside the job folder, in the folder that holds the job folders, with a canary in it. Empty when it could not be made.</summary>
     internal static string PlantOtherJob(BoundaryJob job)
@@ -197,9 +212,43 @@ internal static class AgyCoderPreflight
         }
     }
 
-    /// <summary>Removes the stand-in and what a probe may have left in the worktree.</summary>
-    internal static void Tidy(BoundaryJob job, string other)
+    /// <summary>The folders of the other vendors of the job, each made when it is not there (and a canary in it), so that "not visible from inside" is an observation and not an absent folder; with the ones that were made here, which are removed after.</summary>
+    internal static (IReadOnlyList<string> Folders, IReadOnlyList<string> Made) PlantOtherVendors(BoundaryJob job)
     {
+        var folders = CoderVendors.Shipped.Implemented.Select(vendor => vendor.Id).Distinct(StringComparer.Ordinal).Where(id => id != AgyCoderVendor.VendorId).Select(job.CoderVendorFolder).ToList();
+        var made = new List<string>();
+        foreach (var folder in folders)
+        {
+            try
+            {
+                if (RealPath.Lstat(folder).Kind == EntryKind.Missing)
+                {
+                    Directory.CreateDirectory(folder);
+                    File.WriteAllText(Path.Combine(folder, "canary.txt"), "another vendor's file\n");
+                    made.Add(folder);
+                }
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                // A folder that cannot be made is not named to the row: the row then says nothing was observed.
+                return ([], made);
+            }
+        }
+
+        return (folders, made);
+    }
+
+    /// <summary>Removes the stand-in and what a probe may have left in the worktree.</summary>
+    internal static void Tidy(BoundaryJob job, string other, IReadOnlyList<string> madeVendorFolders)
+    {
+        foreach (var folder in madeVendorFolders)
+        {
+            if (RealPath.Lstat(folder).Kind == EntryKind.Directory)
+            {
+                GitScratch.DeleteEvenIfReadOnly(folder);
+            }
+        }
+
         foreach (var name in new[] { ".coai-preflight-file-link", ".coai-preflight-folder-link", ".coai-preflight-allowed.txt" })
         {
             var path = Path.Combine(job.Tree.Root, name);
@@ -216,7 +265,7 @@ internal static class AgyCoderPreflight
     }
 
     /// <summary>The preflight command of the agy coder's unit for <paramref name="job"/>: the script and the arguments it reads (the places, the stand-in, the deadline the sign-in copy must outlive, the hashes of the guard's files, the allow-list names).</summary>
-    internal static IReadOnlyList<string> Command(BoundaryHost host, BoundaryJob job, CoderProgram program, string windowsCopy, string other, HookHandler handler, TimeSpan runtimeMax, DateTime nowUtc)
+    internal static IReadOnlyList<string> Command(BoundaryHost host, BoundaryJob job, CoderProgram program, string windowsCopy, string other, IReadOnlyList<string> vendorFolders, HookHandler handler, TimeSpan runtimeMax, DateTime nowUtc)
     {
         var files = AntigravityCoderGuard.Files(handler, job.Tree.Root, AgyCoderUnit.RecordsFile(job)).ToDictionary(file => file.Path, file => file.Content, StringComparer.Ordinal);
         string Sha(string relative) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(files[Path.Combine(".agents", relative)])));
@@ -227,6 +276,8 @@ internal static class AgyCoderPreflight
             program.Real, other, new DateTimeOffset(nowUtc + runtimeMax + TimeSpan.FromMinutes(5)).ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture),
             Sha(Path.Combine("agents", AntigravityCoderGuard.AgentName + ".md")), Sha("hooks.json"), Sha("coai-hook.sh"), Sha("coai-hook.cmd"), Sha(AntigravityCoderGuard.GuardFile),
             string.Join(' ', AgyCoderUnit.Environment(job).Select(pair => pair.Key)),
+            string.Join(' ', new[] { job.KeysFolder, job.KeysFile }.Where(path => path.Length > 0)),
+            string.Join(' ', vendorFolders),
             .. job.Mounts.SelectMany(mount => new[] { mount.Target, mount.Source }),
         ];
     }

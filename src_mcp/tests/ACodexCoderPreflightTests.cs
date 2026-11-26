@@ -126,7 +126,7 @@ public sealed class ACodexCoderPreflightTests
             case "home-is-the-jobs":
                 return Unit(arguments => UnitArguments.Replace(arguments, $"HOME={job.CoderHomeOf("codex")}", $"HOME={bed.Coder.RealHome}"));
             case "tmp-is-the-jobs":
-                return Unit(arguments => Drop(arguments, $"BindPaths={job.CoderVarTempFolder}:{BoundaryUnit.UnitVarTemp}"));
+                return Unit(arguments => Drop(arguments, $"BindPaths={job.CoderVarTempOf("codex")}:{BoundaryUnit.UnitVarTemp}"));
             case "sign-in-not-in-unit":
                 var signIn = Path.Combine(bed.Coder.Host.ResolvedHome, ".claude", ".credentials.json");
 

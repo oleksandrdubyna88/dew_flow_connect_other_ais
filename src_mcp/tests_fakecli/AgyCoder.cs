@@ -48,6 +48,15 @@ internal static class AgyCoder
             Tool(call, conversation, step, cwd, addDir, output);
         }
 
+        if (int.TryParse(steer("AGY_HOLD_MS"), out var hold) && hold > 0)
+        {
+            // A turn that goes on after its events: what it printed so far is on stdout when the deadline kills it.
+            Console.Out.Write(output.ToString());
+            Console.Out.Flush();
+            output.Clear();
+            Thread.Sleep(hold);
+        }
+
         step += 1;
         tokensIn += int.TryParse(steer("AGY_TOKENS_IN"), out var asked) ? asked : 100;
         tokensOut += int.TryParse(steer("AGY_TOKENS_OUT"), out var made) ? made : 10;
@@ -76,6 +85,29 @@ internal static class AgyCoder
         }
 
         return int.TryParse(steer("EXIT"), out var exit) ? exit : 0;
+    }
+
+    /// <summary>
+    /// <c>models</c> as agy 1.5.18 does it (<c>RESULTS_agy_coder.md</c> 10.5): with a token that is EXPIRED it refreshes — a new access token and a new expiry in the file, the refresh token kept — and with a token that is not expired it changes nothing. Exit 0.
+    /// </summary>
+    internal static int Models()
+    {
+        var file = Path.Combine(Environment.GetEnvironmentVariable("HOME") ?? ".", ".gemini", "antigravity-cli", "antigravity-oauth-token");
+        if (JsonNode.Parse(File.ReadAllText(file)) is not JsonObject root || root["token"] is not JsonObject token)
+        {
+            Console.Error.WriteLine("Error: Please sign in to view available models.");
+
+            return 1;
+        }
+
+        if (DateTime.TryParse(token["expiry"]?.GetValue<string>(), System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal, out var expiry) && expiry <= DateTime.UtcNow)
+        {
+            token["access_token"] = "made-up-agy-access-token-refreshed";
+            token["expiry"] = DateTime.UtcNow.AddMinutes(59).ToString("O");
+            File.WriteAllText(file, root.ToJsonString());
+        }
+
+        return 0;
     }
 
     private static void Tool(JsonObject call, string conversation, int step, string cwd, string addDir, StringBuilder output)

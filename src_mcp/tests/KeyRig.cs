@@ -30,18 +30,22 @@ internal static class KeyRig
     internal static KeyRow Row(string dataDir, string id) => Rows(dataDir).Single(row => row.Id == id);
 
     /// <summary>The sidecar files of the launches recorded in <paramref name="folder"/> with the extension <paramref name="extension"/>, in the order the launches were made.</summary>
-    private static IEnumerable<FileInfo> Sidecars(string folder, string extension) =>
-        Directory.Exists(Path.Combine(folder, "sidecars"))
-            ? new DirectoryInfo(Path.Combine(folder, "sidecars")).EnumerateFiles("*" + extension).OrderBy(file => file.CreationTimeUtc).ThenBy(file => file.LastWriteTimeUtc)
-            : [];
+    private static IEnumerable<FileInfo> Sidecars(string folder, string extension) => Sidecars([folder], extension);
+
+    /// <summary>The same over the record folders of several vendors of one job, in the order the launches were made across them.</summary>
+    private static IEnumerable<FileInfo> Sidecars(IEnumerable<string> folders, string extension) =>
+        folders.Where(folder => Directory.Exists(Path.Combine(folder, "sidecars"))).SelectMany(folder => new DirectoryInfo(Path.Combine(folder, "sidecars")).EnumerateFiles("*" + extension)).OrderBy(file => file.CreationTimeUtc).ThenBy(file => file.LastWriteTimeUtc);
 
     /// <summary>The id of the key each recorded launch in <paramref name="folder"/> was started with, in the order they were made (empty for a launch that had none).</summary>
     internal static IReadOnlyList<string> KeyIdsOf(string folder) =>
         [.. Sidecars(folder, ".keyid").Select(file => File.ReadAllText(file.FullName).Trim())];
 
     /// <summary>The variable NAMES each recorded launch had, in the order they were made.</summary>
-    internal static IReadOnlyList<IReadOnlyList<string>> EnvNamesOf(string folder) =>
-        [.. Sidecars(folder, ".envnames").Select(file => (IReadOnlyList<string>)File.ReadAllLines(file.FullName))];
+    internal static IReadOnlyList<IReadOnlyList<string>> EnvNamesOf(string folder) => EnvNamesOf([folder]);
+
+    /// <summary>The variable names of every launch of a job that ran on several vendors, from the record folder of each.</summary>
+    internal static IReadOnlyList<IReadOnlyList<string>> EnvNamesOf(IEnumerable<string> folders) =>
+        [.. Sidecars(folders, ".envnames").Select(file => (IReadOnlyList<string>)File.ReadAllLines(file.FullName))];
 
     /// <summary>The home values (<c>HOME</c>, <c>CLAUDE_CONFIG_DIR</c>, the <c>XDG_*</c> names) each recorded launch had, as name to value.</summary>
     internal static IReadOnlyList<IReadOnlyDictionary<string, string>> HomesOf(string folder) =>

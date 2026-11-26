@@ -261,16 +261,23 @@ internal sealed class CoderRig : IAsyncDisposable
     /// <summary>The folder of one job's own files — the coder's home, temp folders and caches — where the layer makes them.</summary>
     internal string JobFolder(RoleJobRecord job) => Path.Combine(_jobs.Path, job.JobId);
 
-    /// <summary>What the coder's unit sees as <c>/tmp</c>: the job's own temp folder.</summary>
-    internal string JobTemp(RoleJobRecord job) => Path.Combine(JobFolder(job), "coder", "tmp");
+    /// <summary>The vendors a rig stages its fake for: each has its own <c>/tmp</c> (pass 5, M13).</summary>
+    internal static readonly string[] StagedVendors = ["claude", "codex", "agy"];
+
+    /// <summary>What <paramref name="vendor"/>'s coder unit sees as <c>/tmp</c>: that vendor's own temp folder of the job (claude's unless said).</summary>
+    internal string JobTemp(RoleJobRecord job, string vendor = "claude") => Path.Combine(JobFolder(job), "coder", vendor, "tmp");
+
+    /// <summary>The record folders of the launches of the job, one for each vendor that ran (the fake records inside its own unit's <c>/tmp</c>).</summary>
+    internal IReadOnlyList<string> LaunchFolders(RoleJobRecord job) =>
+        [.. StagedVendors.Select(vendor => Path.Combine(JobTemp(job, vendor), "launches")).Where(Directory.Exists)];
 
     /// <summary>
-    /// True for a scenario whose coder is codex (epoch 3 E3 s5 t4): its unit covers <c>/tmp</c> with a tmpfs of its own and binds the job's <c>vartmp</c> folder at <c>/var/tmp</c>, so the fake's map and record folder are staged THERE, not in the temp folder claude's unit sees as <c>/tmp</c>.
+    /// True for a scenario whose coder is codex (epoch 3 E3 s5 t4): its unit covers <c>/tmp</c> with a tmpfs of its own and binds the codex <c>vartmp</c> folder of the job at <c>/var/tmp</c>, so the fake's map and record folder are staged THERE, not in the temp folder a vendor's unit sees as <c>/tmp</c>.
     /// </summary>
     internal bool CodexUnit { get; set; }
 
     /// <summary>The folder of the job the fake's map and launch records are staged in, as the host sees it.</summary>
-    internal string Scratch(RoleJobRecord job) => CodexUnit ? Path.Combine(JobFolder(job), "coder", "vartmp") : JobTemp(job);
+    internal string Scratch(RoleJobRecord job) => CodexUnit ? Path.Combine(JobFolder(job), "coder", "codex", "vartmp") : JobTemp(job);
 
     private string UnitScratch => CodexUnit ? BoundaryUnit.UnitVarTemp : BoundaryUnit.UnitTemp;
 
@@ -292,11 +299,14 @@ internal sealed class CoderRig : IAsyncDisposable
     /// </summary>
     internal void Stage(RoleJobRecord job)
     {
-        var temp = Scratch(job);
-        Directory.CreateDirectory(Path.Combine(temp, "launches"));
-        if (File.Exists(_inner.MapFile))
+        foreach (var vendor in CodexUnit ? new[] { "codex" } : StagedVendors)
         {
-            File.Copy(_inner.MapFile, Path.Combine(temp, "model-map.json"), overwrite: true);
+            var temp = CodexUnit ? Scratch(job) : JobTemp(job, vendor);
+            Directory.CreateDirectory(Path.Combine(temp, "launches"));
+            if (File.Exists(_inner.MapFile))
+            {
+                File.Copy(_inner.MapFile, Path.Combine(temp, "model-map.json"), overwrite: true);
+            }
         }
 
         Steer($"{UnitScratch}/model-map.json", $"{UnitScratch}/launches");
@@ -305,7 +315,10 @@ internal sealed class CoderRig : IAsyncDisposable
 
     /// <summary>The argv of every launch of the coder of <paramref name="job"/> — recorded inside its unit, read from the job's temp folder; empty when the job never launched a coder.</summary>
     internal IReadOnlyList<string[]> Launches(RoleJobRecord job) =>
-        Directory.Exists(LaunchFolder(job)) ? RoleFailoverRig.LaunchesIn(LaunchFolder(job)) : [];
+    [
+        .. (CodexUnit ? new[] { LaunchFolder(job) } : (IEnumerable<string>)LaunchFolders(job)).Where(Directory.Exists).SelectMany(folder => new DirectoryInfo(folder).EnumerateFiles("*.argv")).OrderBy(file => file.CreationTimeUtc).ThenBy(file => file.LastWriteTimeUtc)
+            .Select(file => LaunchRecords.Read(file.FullName).Split('\0')),
+    ];
 
     internal async Task<(int Exit, RoleJobRecord Job)> RunAsync(RoleJobRecord job, Action<string>? boundary = null, TimeProvider? clock = null)
     {
