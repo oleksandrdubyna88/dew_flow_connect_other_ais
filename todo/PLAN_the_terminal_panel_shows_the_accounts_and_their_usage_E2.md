@@ -8,7 +8,8 @@
 > (#1051). **The owner approved epoch 3 on 2026-11-26**; the planner records that approval in the parent on another
 > branch, and the E2 text this document works from does not change with it. A stories document keeps no change ledger:
 > a change to this epic is an entry in the parent. **No code of E2.S1 is written before its security spec** (Fable,
-> `PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E2_S1_spec.md`, not written yet) **and the Opus review of
+> [PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E2_S1_spec.md](PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E2_S1_spec.md),
+> written 2026-11-26, not reviewed yet) **and the Opus review of
 > that spec** (gate E2-G1, § 6). This document names what that spec must settle (§ 5, E2.S1, and § 10); it does not
 > settle it. It also takes up the two todo files T8 and T9, which say they are closed by this document: their findings
 > are scenarios of E2.S1 here, and the commit of E2.S1 that makes them green deletes both files and their rows.
