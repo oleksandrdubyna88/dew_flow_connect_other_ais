@@ -18,6 +18,12 @@ internal sealed class UnitControl(IProcessLauncher launcher, BoundaryHost host)
 {
     private static readonly TimeSpan StopBudget = TimeSpan.FromSeconds(20);
 
+    /// <summary>
+    /// <c>TimeoutStopSec</c> of every unit of this family, in seconds: how long the manager waits after the stop signal before it sends <c>SIGKILL</c> to what is left of the unit. It is BELOW <see cref="StopBudget"/>, the time coai waits for a stop, with a margin of ten seconds —
+    /// the manager's own default is 90, so a process that ignores the stop signal would otherwise outlive coai's wait by more than a minute (the security verify, M7). <c>SendSIGKILL=yes</c> and <c>KillMode=control-group</c> are the defaults and are not set.
+    /// </summary>
+    internal const int UnitStopSeconds = 10;
+
     /// <summary>How long past the step's own deadline systemd lets the unit live if nobody stops it.</summary>
     internal static readonly TimeSpan Backstop = TimeSpan.FromMinutes(1);
 

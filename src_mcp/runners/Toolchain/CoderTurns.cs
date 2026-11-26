@@ -86,6 +86,12 @@ public sealed class CoderTurns(CoderBoundary boundary, FilesystemInvariant invar
 
     private static CoderTurnOutcome Classify(BoundaryRun run, CoderMainEvidence evidence)
     {
+        // A unit that is still there decides first, for every exit and every result: what the process said is not trusted, and a next attempt would start beside a live writer.
+        if (!run.Gone)
+        {
+            return new CoderTurnOutcome.UnitNotStopped(run, $"The coder's unit {run.Unit} could not be stopped, so its result is not trusted and the job stops here: a process of it may still be running with the worktree and the coder's home writable.", evidence);
+        }
+
         var lines = StoppedLines(run.Result.StdErr);
         if (lines.Count > 0)
         {
@@ -102,9 +108,7 @@ public sealed class CoderTurns(CoderBoundary boundary, FilesystemInvariant invar
 
         return why.Length > 0
             ? new CoderTurnOutcome.Failed(run, why, evidence)
-            : !run.Gone
-                ? new CoderTurnOutcome.Failed(run, $"the coder's unit {run.Unit} could not be stopped; its result is not trusted", evidence)
-                : new CoderTurnOutcome.Finished(run, evidence);
+            : new CoderTurnOutcome.Finished(run, evidence);
     }
 
     /// <summary>The lines of the coder's stderr that carry the OS's refusal of a write, each cut to a bounded length and at most a few of them — each names the path it was refused for.</summary>

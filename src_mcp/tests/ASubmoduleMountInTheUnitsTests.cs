@@ -54,7 +54,7 @@ public sealed class ASubmoduleMountInTheUnitsTests
         "NoNewPrivileges=yes", "PrivateUsers=yes", "RestrictSUIDSGID=yes", "LockPersonality=yes", "ProtectKernelTunables=yes", "ProtectControlGroups=yes", "Nice=10", "LimitCORE=0",
     ];
 
-    private static readonly string[] E2Limits = ["RuntimeMaxSec=300", "MemoryMax=2000M", "MemorySwapMax=0"];
+    private static readonly string[] E2Limits = ["RuntimeMaxSec=300", "TimeoutStopSec=10", "MemoryMax=2000M", "MemorySwapMax=0"];
 
     /// <summary>What a check unit has of the job folder since the coder's folder was taken out of it: an empty read-only tmpfs over it, and the folders the checks use bound on top — the one change to the list E2 recorded.</summary>
     private static readonly string[] JobView =

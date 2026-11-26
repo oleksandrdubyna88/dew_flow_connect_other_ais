@@ -216,6 +216,11 @@ if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor" || minimal is
         CoaiMcp.FakeCli.CoderVerbs.TryWrite(tryWriteFiles);
     }
 
+    // A coder whose process ignores the stop signal (model map `ignoreTerm`): the unit stays until the manager's own kill lands (epoch 3 E2, the security verify's M7).
+    System.Runtime.InteropServices.PosixSignalRegistration? ignoredTerm = steering.Get("IGNORE_TERM") == "true"
+        ? System.Runtime.InteropServices.PosixSignalRegistration.Create(System.Runtime.InteropServices.PosixSignal.SIGTERM, context => context.Cancel = true)
+        : null;
+
     // A vendor that takes its time. It exists for the health probe's timeout arm: a CLI that
     // never answers `--version` must be reported as silent rather than as whatever exit code the
     // kill produced, and that cannot be tested by a stand-in which always answers at once.
@@ -223,6 +228,8 @@ if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor" || minimal is
     {
         Thread.Sleep(napMs);
     }
+
+    GC.KeepAlive(ignoredTerm);
 
     var stderrText = steering.Get("STDERR");
     if (stderrText is { Length: > 0 })

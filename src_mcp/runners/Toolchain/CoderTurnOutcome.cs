@@ -41,7 +41,7 @@ public abstract record CoderTurnOutcome
     /// <summary>The coder process ended with exit 0 inside its unit, the unit is gone, and the OS refused nothing the coder said.</summary>
     public sealed record Finished(BoundaryRun Run, CoderMainEvidence Evidence) : CoderTurnOutcome;
 
-    /// <summary>The coder did not finish: a non-zero exit, the deadline, a cancel, or a unit that could not be stopped.</summary>
+    /// <summary>The coder did not finish: a non-zero exit, the deadline or a cancel.</summary>
     public sealed record Failed(BoundaryRun Run, string Sentence, CoderMainEvidence Evidence) : CoderTurnOutcome;
 
     /// <summary>
@@ -49,6 +49,12 @@ public abstract record CoderTurnOutcome
     /// Never green, whatever the exit code: a coder that was stopped from writing did not do what it set out to do.
     /// </summary>
     public sealed record WriteStopped(BoundaryRun Run, IReadOnlyList<string> Lines, string Sentence, CoderMainEvidence Evidence) : CoderTurnOutcome;
+
+    /// <summary>
+    /// The coder's unit could NOT be stopped (<see cref="BoundaryRun.Gone"/> is false), whatever the process's own result was — an exit 0, a crash, a deadline, a cancel: a process of it may still be alive with the worktree and the coder's home writable.
+    /// This is never a model that crashed, so there is no next attempt and no failover: the job ends (the security verify, M7).
+    /// </summary>
+    public sealed record UnitNotStopped(BoundaryRun Run, string Sentence, CoderMainEvidence Evidence) : CoderTurnOutcome;
 
     /// <summary>The launch was refused BEFORE any process of the coder started: no boundary here, a preflight row that said no, a launch for another worktree. <paramref name="Record"/> carries the rows.</summary>
     public sealed record Refused(string Sentence, BoundaryRecord Record) : CoderTurnOutcome;
@@ -59,6 +65,7 @@ public abstract record CoderTurnOutcome
         Finished finished => finished.Run.Record,
         Failed failed => failed.Run.Record,
         WriteStopped stopped => stopped.Run.Record,
+        UnitNotStopped notStopped => notStopped.Run.Record,
         Refused refused => refused.Record,
         _ => null,
     };

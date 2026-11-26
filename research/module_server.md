@@ -8687,6 +8687,8 @@ A coder job on this repository could not be green: the whole suite was red insid
 
 **The check units' records, and the keys of a toolchain file (2026-11-26, the code checkpoint over the E2 follow-ups).** `CoderChecks` writes `unit-s<n>.json` the moment step n has ended (`CheckRequest.StepFinished`, before the next step starts), so a cancel or a hang in a later step keeps the records of the steps that ran; the number is `StepRecord.Number`, assigned where the step is planned, not read back from a log's file name; a record that cannot be written is one warning line in the runner's log (the part, no content) and not a fault of the checks; and the toolchain parser never spells a key a person typed, whatever its shape — only its line and its length, beside the list of the legal keys.
 
+**A coder unit that could not be stopped ends the job (2026-11-26, the security verify's M7).** `CoderTurns.Classify` asks `!run.Gone` first, for every exit and result, and answers `CoderTurnOutcome.UnitNotStopped`; `CoderOsLayer.StopOf` makes it a `coder-boundary` stop of kind `unit-not-stopped`, so there is no next attempt and no failover beside a unit that may still be writing. Every unit of the family also carries `TimeoutStopSec=10` (`UnitControl.UnitStopSeconds`, below coai's 20 s stop wait), so the manager's own kill lands in time and the case is rare; `SendSIGKILL=yes` and `KillMode=control-group` are systemd's defaults and are not set.
+
 ## The steps of a resolved toolchain run in the check boundary (2026-11-26, epoch 3 E4 s3 — `v2/epoch-3/e4-adapters-coder-hardening/SPEC.md` §§ A4, B, E)
 
 **Built and wired for a coder job** (`ChecksAtBase.RunCoderJobAsync`); a run with no coder job still reads the file only, as in E2.

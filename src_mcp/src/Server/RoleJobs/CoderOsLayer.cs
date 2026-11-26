@@ -78,6 +78,7 @@ internal sealed class CoderOsLayer(BoundaryJob job, CoderTurns turns, IProcessLa
     {
         CoderTurnOutcome.WriteStopped stopped => new CoderOsStop("write-stopped", stopped.Sentence, Started: true),
         CoderTurnOutcome.Refused refused => new CoderOsStop("boundary-refused", refused.Sentence, Started: false),
+        CoderTurnOutcome.UnitNotStopped notStopped => new CoderOsStop("unit-not-stopped", notStopped.Sentence, Started: true),
         _ => null,
     };
 
@@ -88,6 +89,7 @@ internal sealed class CoderOsLayer(BoundaryJob job, CoderTurns turns, IProcessLa
             CoderTurnOutcome.Finished finished => finished.Evidence,
             CoderTurnOutcome.Failed failed => failed.Evidence,
             CoderTurnOutcome.WriteStopped stopped => stopped.Evidence,
+            CoderTurnOutcome.UnitNotStopped notStopped => notStopped.Evidence,
             _ => null,
         };
         if (seen is not null)
@@ -150,13 +152,10 @@ internal sealed class CoderTurnLauncher(CoderOsLayer layer, string recordTo = ""
         {
             CoderTurnOutcome.Finished finished => finished.Run.Result,
             CoderTurnOutcome.WriteStopped stopped => stopped.Run.Result,
-            CoderTurnOutcome.Failed failed => Failure(failed),
+            CoderTurnOutcome.UnitNotStopped notStopped => notStopped.Run.Result,
+            CoderTurnOutcome.Failed failed => failed.Run.Result,
             CoderTurnOutcome.Refused refused => new ProcessResult(-1, string.Empty, refused.Sentence, TimedOut: false),
             _ => new ProcessResult(-1, string.Empty, "the coder launch ended in a way coai does not know", TimedOut: false),
         };
     }
-
-    /// <summary>A failed turn keeps the process's own result — its exit, its deadline, its cancel — except where the process said exit 0 and the layer did not trust it (a unit that would not stop): that is a failed launch, never an answer.</summary>
-    private static ProcessResult Failure(CoderTurnOutcome.Failed failed) =>
-        failed.Run.Result is { ExitCode: 0, TimedOut: false, Cancelled: false } ? new ProcessResult(1, string.Empty, failed.Sentence, TimedOut: false) : failed.Run.Result;
 }
