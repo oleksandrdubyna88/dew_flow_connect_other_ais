@@ -15,7 +15,7 @@
 > for a stories document: the lead's choice, for the owner's deadline (§ 10, N1).** A stories document keeps no
 > change ledger: a change to this epic is an entry in the parent. **What the owner said on 2026-11-26 is now in
 > the parent (entries 4.2 and 4.3, epoch 5); § 10 says how each of its notes stands.** It takes up the todo
-> file T46 ([PLAN_the_usage_mode_stays_under_the_30_s_ceiling.md](PLAN_the_usage_mode_stays_under_the_30_s_ceiling.md)):
+> file T46 (PLAN_the_usage_mode_stays_under_the_30_s_ceiling.md (a deleted todo file)):
 > the commit of E3.S2 that makes its tests green deletes that file and its README row.
 >
 > Scope: `src_vs_code` only, plus `SECURITY.md`, `research/` and the help. Five stories: S2 the script, its
