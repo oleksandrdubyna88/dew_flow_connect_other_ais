@@ -117,6 +117,7 @@ internal static class BoundaryUnit
     internal static IReadOnlyList<string> Limits(BoundaryJob job, TimeSpan runtimeMax) =>
     [
         $"RuntimeMaxSec={Math.Max(1, (long)Math.Ceiling(runtimeMax.TotalSeconds)).ToString(CultureInfo.InvariantCulture)}",
+        $"TimeoutStopSec={UnitControl.UnitStopSeconds.ToString(CultureInfo.InvariantCulture)}",
         .. DetachedLauncher.MemoryProperties(job.MemoryMegabytes),
     ];
 
