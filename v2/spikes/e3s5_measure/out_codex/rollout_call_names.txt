@@ -1,0 +1,10 @@
+01a217a5-bb1e-7c03-b13e-7f8ac095c541 calls {"collaboration.spawn_agent":2,"collaboration.wait_agent":2} SubAgentActivity started,completed,started,completed
+01a217a5-de2b-7632-9c97-07af2715778a calls {"collaboration.spawn_agent":1,"exec":7,"collaboration.send_message":1} SubAgentActivity interacted
+01a217a7-3f1f-7c93-9329-2cc0e69a1f8f calls {"collaboration.spawn_agent":2,"collaboration.wait_agent":1,"exec":8}
+01a217a8-2794-7661-b566-7b12af2cc733 calls {"exec":1}
+01a217a8-5400-7291-9ee4-5acd18035f31 calls {"exec":18}
+01a217a9-2c25-7642-8f8c-359d0318d68c calls {"exec":1}
+01a217af-01a0-77b3-bef4-3590359be574 calls {"collaboration.spawn_agent":1} SubAgentActivity started
+01a217af-0f53-7310-a2e4-641468fecbb1 calls {}
+01a217af-bf24-7111-9232-7c5363d25131 calls {"exec":1}
+01a217b0-3271-72f2-af42-5627aa4832f6 calls {"exec":10}

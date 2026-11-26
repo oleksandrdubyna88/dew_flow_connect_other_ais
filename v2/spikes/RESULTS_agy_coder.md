@@ -159,3 +159,31 @@ Cumulative `result.usage` per invocation (input / output): 1: 16562/182; 2: 1047
 - REAL `~/.gemini/antigravity-cli/antigravity-oauth-token`: sha256-12 `5baaf501abf6`, 569 B, mtime 2026-11-25T12:03:49.863Z **before and after**; `~/.gemini/jetski-standalone-oauth-token` `fa2956aeb9a8` unchanged; the whole manifest of `~/.gemini`, `~/.config/antigravity` and `~/.cache/antigravity` (every path, size and mtime) is **identical before and after**. No agy command was run against the real home.
 - A real-home file `coai_e3s4_b5_canary*.txt` never appeared.
 - **Cleanup:** the scratch copies of the sign-in (`copies/agy/hm`, `hm2`) and the fixture folder are deleted at the end of the task (stated in the task report).
+
+## 9. agy 1.5.18 - the measure of s6 t7 STOPPED at d1 (2026-11-26, epoch 3 E3 s6 t7)
+
+Task: `v2/epoch-3/e3-roles-complete/stories/s6-agy-coder/tasks/t7-agy-open-rows-measure`. Facts only; no judgement.
+
+**d1 does not hold, so the task stopped before any model turn.** d1 says: the installed release is read with a scratch home; when it is not the release of this file the task stops and reports, because the rows of s4 t5 must be measured again on the new release first (about 22 paid turns; the spend is the owner's word). What was read, on 2026-11-26 at about 11:45 UTC:
+
+| What | Value |
+|---|---|
+| installed `~/.local/bin/agy` | `agy --version` -> **`1.5.18`**; 280593096 bytes; file modified 2026-11-26 08:42:19 +0100 (the CLI updated itself this morning, as it did on 2026-11-25 from 1.5.16 to 1.5.17); sha256 `7c96ad8c944c1a8d195ca34d2041a3d74d5166c96662b52183b748a3c455d52f` |
+| the measured release of sections 0 to 8 | `1.5.17` |
+| the previous program is still on disk | `~/.local/bin/agy.1795678933361502734.old` (278438600 bytes, modified 2026-11-25 13:03): `--version` -> **`1.5.17`**; sha256 `f3f384bd2c15a74a036ebc3b0a2f48695cc6e56523ba0f9524fb6e4c4adb3baa`. The `.old` name is the CLI's own update leftover and may be removed by it at any time; the judgement's G9 (a store of coai's own with the measured program) is what would keep it. This file does not say whether rows should be measured on it: that is the owner's word. |
+
+How it was read: `agy --version` ran inside the E2-style unit of section 3 (`unit.sh`, the program folder bound read-only so that an update of itself could not replace the program), `HOME` and `.gemini` empty scratch folders, `env -i`, **no sign-in copy was made for agy and no model turn was taken**. The scratch `.gemini` held no file afterwards.
+
+| Item | State |
+|---|---|
+| d1 installed release read; sha256 recorded | done: **not 1.5.17 (it is 1.5.18)**, sha256 above |
+| d2 B13 on a resumed turn and after late files | **not measured** (stopped at d1) |
+| d3 guard folder read-only; the stream beside the hook; the mode named; the fall-back line fixture; the multi-edit hook name | **not measured** (stopped at d1) |
+| d4 G10 sign-in copy without a refresh token | **not measured** (stopped at d1); fixtures `agy-copy-expired.json` and `agy-mode-fallback.json` not recorded |
+| d5 G9 the program from a read-only copy | **not measured** (stopped at d1) |
+| d6 G11 agy behind a proxy in a unit with no network | **not measured** (stopped at d1) |
+| d9 G14 the `permission_mode` of the init line for no `--mode`, `plan`, `accept-edits`, `auto`; AG-M3 or AG-M4 | **not measured** (stopped at d1; the model-free half would be a measure of 1.5.18, not of the release this file judges) |
+| d7 turns, real files, copies | **0 turns of the owner's 30 used** (the cap was 30 turns). The real `~/.gemini/antigravity-cli/antigravity-oauth-token`: same bytes (sha256 compared, never printed: **equal**), same size 571 and modification time `2026-11-26 08:42:12.437683327 +0100` before and after; the manifest of the real `~/.gemini`, `~/.config/antigravity` and `~/.cache/antigravity` is **identical** before and after. No agy command ran with the real home or any sign-in. |
+| d8 the section with the release and the lines holds / does not hold | this section; the addendum and the table entry wait for the owner's word on the re-measure |
+
+Cost of going on, from the numbers of section 7: the rows of s4 t5 and t4 took 22 turns on 1.5.17 and the new d2 to d9 add up to the task's 12 turns, so about 34 turns for one release; the owner's cap for this run was 30. Which release to measure (1.5.18 as installed, or 1.5.17 from the `.old` file under G9) and whether to spend that is the owner's word.

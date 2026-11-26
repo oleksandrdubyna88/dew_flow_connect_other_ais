@@ -1,0 +1,1 @@
+This is a sandbox test. Use the spawn_agent tool exactly once to start a child agent that prints the word hello. If you have no spawn_agent tool, say exactly "NO SPAWN_AGENT TOOL" and then list the names of the tools you do have, one line.

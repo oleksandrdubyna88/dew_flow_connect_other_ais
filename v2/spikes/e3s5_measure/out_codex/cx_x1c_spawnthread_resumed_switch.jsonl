@@ -1,0 +1,4 @@
+{"type":"thread.started","thread_id":"01a217a5-bb1e-7c03-b13e-7f8ac095c541"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"NO SPAWN_AGENT TOOL"}}
+{"type":"turn.completed","usage":{"input_tokens":80395,"cached_input_tokens":61824,"cache_write_input_tokens":0,"output_tokens":1587,"reasoning_output_tokens":84}}

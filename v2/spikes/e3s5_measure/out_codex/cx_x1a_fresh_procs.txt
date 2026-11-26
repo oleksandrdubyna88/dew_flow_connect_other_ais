@@ -1,0 +1,5 @@
+179415 325 codex mnt:[4026532292] pid:[4026532217] user:[4026532219] :: codex exec --json -m gpt-6-luna -c model_reasoning_effort=lo
+179685 179415 codex-linux-san mnt:[4026532292]   :: 
+181264 179415 codex-linux-san mnt:[4026532292] pid:[4026532217] user:[4026532219] :: /home/<user>/coai-e3s5/fx/x1/c/home/.codex/tmp/arg0-linux/code
+181265 179415     :: 
+182195 179415 codex-code-mode mnt:[4026532292] pid:[4026532217] user:[4026532219] :: /home/<user>/.codex/packages/standalone/releases/0.171.0-x86_6
