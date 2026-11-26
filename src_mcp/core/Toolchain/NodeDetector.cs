@@ -48,12 +48,12 @@ public static class NodeDetector
                 }
             }
 
-            var workspaceRoots = parsed.Where(item => item.Root.TryGetProperty("workspaces", out var workspaces) && workspaces.ValueKind is JsonValueKind.Array or JsonValueKind.Object).Select(item => ProjectGraph.Folder(item.File.Path)).ToList();
+            var workspaceRoots = parsed.Select(item => (Folder: ProjectGraph.Folder(item.File.Path), Patterns: WorkspacePatterns(item.Root))).Where(item => item.Patterns is not null).Select(item => (item.Folder, Patterns: item.Patterns!)).ToList();
             var projects = new List<DetectedProject>();
             foreach (var (file, root, _) in parsed)
             {
                 var folder = ProjectGraph.Folder(file.Path);
-                if (workspaceRoots.Any(workspace => workspace != folder && ProjectGraph.Under(workspace, file.Path)))
+                if (workspaceRoots.Any(workspace => workspace.Folder != folder && IsMember(workspace.Folder, workspace.Patterns, folder)))
                 {
                     continue;
                 }
@@ -76,6 +76,67 @@ public static class NodeDetector
                 item.Document.Dispose();
             }
         }
+    }
+
+    /// <summary>The patterns of <c>workspaces</c> (an array of texts, or an object with a <c>packages</c> array), or null when the manifest declares none. A root that declares an empty list is still a workspace root.</summary>
+    private static List<string>? WorkspacePatterns(JsonElement root)
+    {
+        if (!root.TryGetProperty("workspaces", out var workspaces))
+        {
+            return null;
+        }
+
+        var list = workspaces.ValueKind == JsonValueKind.Object && workspaces.TryGetProperty("packages", out var packages) ? packages : workspaces;
+        if (workspaces.ValueKind is not (JsonValueKind.Array or JsonValueKind.Object))
+        {
+            return null;
+        }
+
+        return list.ValueKind == JsonValueKind.Array ? [.. list.EnumerateArray().Where(item => item.ValueKind == JsonValueKind.String).Select(item => item.GetString()!)] : [];
+    }
+
+    /// <summary>Whether the package at <paramref name="folder"/> is a member of the workspace rooted at <paramref name="rootFolder"/>: it matches a pattern and no negated pattern (<c>!x</c>). A package under the root that no pattern names is NOT a member: it is a project of its own, so a coder cannot hide one by adding a workspace root above it.</summary>
+    internal static bool IsMember(string rootFolder, IReadOnlyList<string> patterns, string folder)
+    {
+        if (!ProjectGraph.Under(rootFolder, folder + "/x"))
+        {
+            return false;
+        }
+
+        var relative = rootFolder.Length == 0 ? folder : folder[(rootFolder.Length + 1)..];
+        var segments = relative.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        var included = false;
+        foreach (var raw in patterns)
+        {
+            var negated = raw.StartsWith('!');
+            var pattern = (negated ? raw[1..] : raw).Trim().Replace('\\', '/');
+            while (pattern.StartsWith("./", StringComparison.Ordinal))
+            {
+                pattern = pattern[2..];
+            }
+
+            if (GlobMatches(pattern.TrimEnd('/').Split('/', StringSplitOptions.RemoveEmptyEntries), 0, segments, 0))
+            {
+                included = !negated;
+            }
+        }
+
+        return included;
+    }
+
+    private static bool GlobMatches(string[] pattern, int p, string[] path, int s)
+    {
+        if (p == pattern.Length)
+        {
+            return s == path.Length;
+        }
+
+        if (pattern[p] == "**")
+        {
+            return Enumerable.Range(s, path.Length - s + 1).Any(next => GlobMatches(pattern, p + 1, path, next));
+        }
+
+        return s < path.Length && ManifestSearch.Matches(pattern[p], path[s]) && GlobMatches(pattern, p + 1, path, s + 1);
     }
 
     private sealed record Planned(DetectedProject? Project, string Refusal);
@@ -149,7 +210,7 @@ public static class NodeDetector
         {
             new("packageManager", "npm"),
             new("lock", locks[0]),
-            new("workspaces", root.TryGetProperty("workspaces", out var workspaces) && workspaces.ValueKind is JsonValueKind.Array or JsonValueKind.Object ? "true" : "false"),
+            new("workspaces", WorkspacePatterns(root) is null ? "false" : "true"),
             new("build", hasBuild ? "script" : "none"),
             new("typecheck", hasTypecheckScript ? "script" : typecheck ? "tsc" : "none"),
             new("test", hasTest ? "script" : scripts.ContainsKey("test") ? "placeholder" : "none"),

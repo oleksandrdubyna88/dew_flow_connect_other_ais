@@ -57,6 +57,41 @@ public sealed class ANodeDetectorTests
     }
 
     [Fact]
+    public void APackageUnderAWorkspaceRoot_ThatNoPatternNames_IsAProjectOfItsOwn_NotHiddenByTheRoot()
+    {
+        var root = Json("\"test\": \"jest\"", "\"jest\": \"1\"", ", \"workspaces\": [\"packages/*\"]");
+
+        var projects = Detected(Detect(("package.json", root), ("package-lock.json", "{}"), ("packages/a/package.json", Json("\"build\": \"x\"")), ("tools/package.json", Json("\"build\": \"y\"")), ("tools/package-lock.json", "{}")));
+
+        projects.Select(project => project.Id).Should().Equal("package.json", "tools/package.json");
+    }
+
+    [Theory]
+    [InlineData("packages/*", "packages/a", true)]
+    [InlineData("packages/*", "packages/a/b", false)]
+    [InlineData("packages/**", "packages/a/b", true)]
+    [InlineData("packages/**", "packages", true)]
+    [InlineData("./packages/*/", "packages/a", true)]
+    [InlineData("apps/web", "apps/web", true)]
+    [InlineData("apps/web", "apps/webx", false)]
+    [InlineData("pkg-*", "pkg-core", true)]
+    [InlineData("pkg-*", "core", false)]
+    [InlineData("tools", "tools/x", false)]
+    public void AWorkspacePattern_NamesAFolderOrAGlobOfFolders(string pattern, string folder, bool member)
+    {
+        NodeDetector.IsMember(string.Empty, [pattern], folder).Should().Be(member);
+    }
+
+    [Fact]
+    public void ANegatedPattern_TakesAMemberOut_AndASubfolderRootCountsFromItsOwnFolder()
+    {
+        NodeDetector.IsMember(string.Empty, ["packages/*", "!packages/legacy"], "packages/legacy").Should().BeFalse();
+        NodeDetector.IsMember(string.Empty, ["packages/*", "!packages/legacy"], "packages/new").Should().BeTrue();
+        NodeDetector.IsMember("web", ["packages/*"], "web/packages/a").Should().BeTrue();
+        NodeDetector.IsMember("web", ["packages/*"], "other/packages/a").Should().BeFalse();
+    }
+
+    [Fact]
     public void AWorkspacesObjectForm_IsAWorkspaceRootToo()
     {
         var root = Json("\"test\": \"jest\"", "\"jest\": \"1\"", ", \"workspaces\": { \"packages\": [\"p/*\"] }");
