@@ -9,9 +9,11 @@
 > branch, and the E2 text this document works from does not change with it. A stories document keeps no change ledger:
 > a change to this epic is an entry in the parent. **No code of E2.S1 is written before its security spec** (Fable,
 > [PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E2_S1_spec.md](PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E2_S1_spec.md),
-> written 2026-11-26, not reviewed yet) **and the Opus review of
-> that spec** (gate E2-G1, § 6). This document names what that spec must settle (§ 5, E2.S1, and § 10); it does not
-> settle it. It also takes up the two todo files T8 and T9, which say they are closed by this document: their findings
+> written 2026-11-26) **and the Opus review of
+> that spec** (gate E2-G1, § 6). **Gate E2-G1 ran on 2026-11-26: pass after fixes** — the spec settles every item of
+> § 5, E2.S1, and its rows X1–X12 are in §§ 4, 5, 9 and 10 below; one BLOCKING and seven FIX changes to the spec's
+> text (§ 6, *Gate E2-G1*) are made by its author before any S1 code. The parent's text A1–A8 that the spec names is
+> taken as the owner decided (entries 3.1 and 3.2 of the parent, applied on another branch). It also takes up the two todo files T8 and T9, which say they are closed by this document: their findings
 > are scenarios of E2.S1 here, and the commit of E2.S1 that makes them green deletes both files and their rows.
 >
 > Scope: `src_vs_code` only, plus `SECURITY.md`, `research/` and the help. Five stories, as the parent cuts them:
@@ -87,6 +89,8 @@ Paths under `src_vs_code/` unless they start with `research/`, `todo/`, `.github
 | The cut's tests and scenarios | `src/test/remoteAccountsCut.test.ts` (CUT-T1…T3), `src/test/remoteHostsCut.test.ts` (CUT-H1…H3, CUT-D2…D5); `src/test/host/terminalAccountsScenario.ts`, `terminalHostsScenario.ts:140-148` (A1-H2), `scenarios.ts:995` |
 | Host modules excluded from coverage | `.github/workflows/sonarcloud.yml:274`; `src/test/sonarExclusions.test.ts` |
 | The documents | `SECURITY.md:171` (*The extension's outward ssh calls*); `research/module_extension.md:13993` (E1's section) |
+| **Found at gate E2-G1** — readers of what S1 retires that are not S1's files | `ALLOW_NEW_HOSTS_KEY`: `src/remoteAccountsHost.ts:4`, `:379` (`SETTING`, in the two notices S4 deletes) (X6). W10: `src/remoteAccountsRows.ts:391` `ignoredRows` (X7). `Admission`: `src/remoteAccountsRound.ts:57`, `:173`, `:310`, `:364-376`; `src/remoteAccountsRows.ts:302-334` `ADMISSION_SAID` (X5). The key's text `coai.terminalAccountsAllowNewHosts`: the five help files (`helpContent.ts:260`, `:621`, `:625` and their four translations), which `helpCoverage.test.ts:882`, `:931`, `:945`, `:961-965` require until S5 |
+| **Found at gate E2-G1** — tests that call the keeper's retired doors | `keeper.admit` / `keeper.consent`: `src/test/remoteHosts.test.ts` (102 calls), `remoteHostsReview.test.ts` (14), `remoteAccountsState.test.ts:34`, `:115`, `:128`, `:207` (the round's seams), `remoteRead.test.ts` (13), `remoteHostsCut.test.ts` (deleted), `test/host/terminalHostsScenario.ts:111-150`; the setting's wiring asserts `remoteHostsWiring.test.ts:73-75`, `:83`; `modelKeys.test.ts:67-68`; `modelKeysAreReadOnce.test.ts:50` |
 
 ## 3. Conventions every story follows
 
@@ -118,28 +122,45 @@ E1's § 3 holds, with these differences:
 ## 4. Shared contracts
 
 The names are the contract between the stories; the S1 spec may rename a member, and then this section changes in the
-same commit.
+same commit. **Gate E2-G1 (2026-11-26) wrote the S1 spec's names and rules in here** (its rows X1–X12, marked).
 
-- **C1 — the permission (S1 owns; the S1 spec fixes it).**
-  - In `refused.json`, a record of the side: `grant: { utc, stamp }`. Written only by the file's one writer, under its
-    claim, by a person's *Allow*.
-  - **A withdrawal is a file of its own**, `withdrawn-<stamp>.json` beside `refused.json` in `terminal-hosts/`, made by
-    an exclusive create, as a marker is made. No writer of `refused.json` ever renames over one, and the sweep of
-    beside-files never removes one.
-  - **The stamp rule.** The permission is in force only when the grant's stamp is HIGHER than the stamp of every
-    withdrawal: every withdrawal file of the folder, a withdrawal this window holds unsaved, and the newest withdrawal
-    stamp copied into the state row of `globalState`. A withdrawal file that cannot be read counts as a withdrawal with
-    the highest stamp. An *Allow* writes the grant with a stamp one above the highest withdrawal it reads; a
-    grant-write whose stamp is not above the highest withdrawal is refused. The stamp is a whole number that only
-    grows. An *Allow* removes every withdrawal file but the newest; past 8 files, a withdrawal first removes the oldest.
-  - **The copy.** The newest withdrawal stamp is copied into the state row at once on the press, before the file is
-    asked, and is copied into the folder at every read, as a "no" row is.
+- **C1 — the permission (S1 owns; the S1 spec, §§ P3–P7, fixes it).**
+  - In `refused.json`, a record of the side: `grant: { utc, stamp }`, a stamp being a whole number from 1 to 10¹².
+    Written only by the file's one writer, under its claim, by a person's *Allow*. **A malformed `grant` is no grant,
+    not a damaged file**, and is kept through writes as it is; `regain` writes no grant; a `mend` drops it (spec J5,
+    § P3). ONE reader, `grantOf`, in the NEW pure `src/remotePermission.ts` (spec J9).
+  - **A withdrawal is a file of its own**, `withdrawn-<stamp>.json` beside `refused.json` in `terminal-hosts/`
+    (`^withdrawn-([1-9][0-9]{0,12})\.json$`, text `{ "v": 1, "stamp", "utc" }`, read cap 256 bytes), made by an
+    exclusive create with no claim, as a marker is made. **A name with the prefix that fits nothing else is an
+    unreadable withdrawal.** No writer of `refused.json` ever renames over one, and the sweep of beside-files never
+    removes one. There is no marker kind for a withdrawal (spec J2).
+  - **The stamp rule** (`inForce`, ONE pure function). The permission is in force only when the grant's stamp is
+    HIGHER than the stamp of every withdrawal: every withdrawal file of the folder, a withdrawal this window holds
+    unsaved, and the withdrawal stamp copied into the state row of `globalState`. A withdrawal file that cannot be
+    read, a copy that is not a stamp, and more than 16 withdrawal names in the folder (X12) each count against the
+    grant. An *Allow* writes the grant one above its floor (the readable withdrawals, the copy, the file's own grant);
+    the merger refuses a grant-write whose stamp is not above the floor. **A withdrawal takes one above the highest
+    stamp it sees** (the parent's A6).
+  - **An *Allow*** (X1, spec § P6 and J1): removes the withdrawal files it cannot read and the ones below the floor,
+    and leaves ONE readable file, the floor `withdrawn-<grant − 1>.json`, which it makes when it is not there. It
+    goes above only the withdrawals that were there when it began; one that appears later ends it as *not given*
+    (W16). It never takes the lock over; past a lock that hangs, *Save now* frees it (spec J3).
+  - **Pruning** (X11): past 8 files, a withdrawal first removes the LOWEST readable stamp — never the highest, never a
+    file that cannot be read; when nothing may go, no file is made and the unreadable ones already withdraw.
+  - **The copy** (X2): the state row's `withdrawnStamp`. Written at once on the *Withdraw* press, before the file is
+    asked; **copied in** (a file in this side's folder) at every read when it is above the folder; **copied out**
+    (raised) at every read when the folder is above it; replaced only by a person's *Allow* when it is not a stamp.
+    **The copy crosses sides on purpose** (K5): a withdrawal stops every side that sees it; a grant is never copied,
+    so an *Allow* on one side allows nothing on another.
   - A withdrawal the disk did not take is held by its window and is in the copy at once; while it waits the door
-    answers `waiting` in every window of the side.
-- **C2 — the one door (S1 owns).** ONE function of the keeper, asked by the round before every call and before every
-  result, and by the session road before EVERY spawn. Its answers: `yes`; `no` (the host is refused); `no-permission`;
-  `waiting` (a refusal, a Stop or a withdrawal is not saved yet on this side); `damaged` (the list or the file cannot
-  be read); and, for the round only, `stopped`. The table of the parent's § 3:
+    answers `waiting` for every host that is not refused (X10), in this window and in every window of the side that
+    has seen the copy.
+- **C2 — the one door (S1 owns).** ONE function of the keeper (X3): **`HostKeeper.may(who: 'round' | 'session', host):
+  Promise<DoorAnswer>`**, bound as `sessions.may`; `admit`, `consent`, `admitHost` and `askHost` are gone. Asked by the
+  round before every call and before every result, and by the session road before EVERY spawn. Its answers, and
+  **the first that holds is the answer** (spec § P8): `no` (the host is refused); `damaged` (the list, the file or
+  the folder cannot be read); `waiting` (a refusal, a Stop or a withdrawal is not saved yet on this side);
+  `no-permission`; and, for the round only, `stopped`; else `yes`. The table of the parent's § 3:
 
   | Who asks | `yes` only when |
   |---|---|
@@ -147,13 +168,17 @@ same commit.
   | The session read of a press | the folder can be read, AND nothing waits unsaved, AND the permission is in force, AND the host is not refused |
 
   A per-host "yes" row — a person's or `how: 'auto'` — is never an answer. The door never asks a person.
-- **C3 — the question (S1 owns the function and its words; S3 and S1's road call it).** `askPermission()`: ONE modal
-  through `notifyAndAsk`, code `read-accounts-permission`, buttons *Allow reading* and *Not now*; it returns what was
-  kept. Called by: the first press of the icon without a permission (S3), *Allow reading…* in the tab (S3), the first
-  row of *CoAI: hosts read over ssh* (S1), and a press of a chat door while there is no permission (S1) — that press
-  reads nothing. `withdraw()`: a person's press, narrows at once. `permission()`: `{ given: utc } | 'none' | 'waiting'`,
-  read from the disk, for the tab. The state row remembers that the icon's question was asked; a row that is lost
-  asks once more.
+- **C3 — the question (S1 owns the function and its words; S3 and S1's road call it).** (X4, spec § P10.)
+  **`sessions.askPermission(): Promise<PermissionAsked>`** (`'given' | 'not-now' | { kind: 'not-kept', said }`): ONE
+  modal through `notifyAndAsk`, code `read-accounts-permission`, buttons *Allow reading* and *Not now* (W14); no modal
+  when the permission is in force; *Not now* writes nothing. Called by: *Allow reading…* in the tab (S3), the first
+  row of *CoAI: hosts read over ssh* (S1), and the first door of a chat-door press while there is no permission
+  (S1) — that press reads nothing. **`sessions.askPermissionFirst()`** for the icon's press (S3): it asks only when
+  the state row holds no `askedUtc` and the permission is not in force, and writes `askedUtc` BEFORE the modal; a
+  row that is lost asks once more. **`sessions.withdraw(): Promise<Withdrew>`**: a person's press, narrows at once.
+  **`sessions.permission(): Promise<Permission>`**, `{ given: utc } | 'none' | 'waiting'`, from a fresh read of the
+  disk, for the tab — a file that cannot be read is `'none'`, and each host's door says `damaged`. An *Allow* that was
+  not kept says W16, and for `unwritten` raises the notice `accounts-permission-not-kept` with *Save now* (spec J4).
 - **C4 — the model (S2 owns).** `tableModel(input): TableModel` and `blockOf(model, scopeHost)`, pure,
   JSON-serialisable, deterministic. Every time in it is an absolute instant (ms since the epoch), never an age. Every
   text that came from a VM, a distro or a terminal's name went through `forList` (and so `plainValue`) once. A host
@@ -164,10 +189,14 @@ same commit.
 - **C5 — the page and its messages (S3 owns).** Page → host, closed names only: `ready`, `refresh`, `stop`, `start`,
   `allow`, `withdraw`, `save-now`, `refuse <scope host>`, `read-again <scope host>`, `copy-install <place>`. Host → page:
   `model` (the whole), `block` (one scope host's part). The host checks every name and every argument against its own
-  model and drops what it does not know. `allow` and `read-again` only raise S1's modal questions; `refuse`, `stop`,
-  `withdraw` narrow at once. The clipboard is written by the host with `INSTALL_JQ[word]` of that place, nothing else.
+  model and drops what it does not know. `allow` and `read-again` only raise S1's modal questions (`allow` →
+  `sessions.askPermission()`; `read-again` → the change question of that host, whose *Read this host again* is the
+  one button that lifts a refusal); `refuse`, `stop`, `withdraw` (→ `sessions.withdraw()`) narrow at once. The
+  clipboard is written by the host with `INSTALL_JQ[word]` of that place, nothing else.
 - **C6 — the round (S4 owns).** No timer and no call while the permission is not in force; the first round at once
-  when it is given; then E1's rhythm. `landed(scopeHost)` after each place, so the panel posts that block.
+  when it is given; then E1's rhythm. The door is `sessions.may('round', host)` (X3), whose `no-permission` ends the
+  round and whose `waiting` and `damaged` skip every host. `landed(scopeHost)` after each place, so the panel posts
+  that block.
 
 ## 5. Stories
 
@@ -182,7 +211,8 @@ then of the code). Depends on nothing in this epic; S3 and S4 depend on it. Serv
 
 **Why Fable.** It is authorisation: who is contacted with the person's keys, and what keeps a "no" and a withdrawal.
 
-- **Scope.** `src/remoteRefusals.ts` (the grant record; the stamp rule; the grant-write that refuses a low stamp;
+- **Scope.** NEW pure `src/remotePermission.ts` (the stamp rule `inForce`, `grantOf`, the withdrawal file's grammar
+  and parser, the door's and the question's types, `permissionAsker`; spec J9); `src/remoteRefusals.ts` (the grant record; the stamp rule; the grant-write that refuses a low stamp;
   `regain` carrying the grant unchanged); `src/remoteRefusalsDisk.ts` (the withdrawal files: exclusive create, list,
   read, remove; their prefix named by the host half; the sweep never touches them); `src/remoteKeeper.ts` (the one
   door of C2; `waiting`; `allow`, `withdraw`, `permission`; the copy of the withdrawal stamp; `allowNew` and `automatic`
@@ -200,33 +230,60 @@ then of the code). Depends on nothing in this epic; S3 and S4 depend on it. Serv
   arm of `APPLY` (`remoteHosts.ts:290`, `:314`), the eviction of automatic rows in `fitted` (`:254`), `AutomaticAllow`,
   **`AUTOMATIC_ALLOW`** and `autoCounts` (`:143-153`), `consentOf`'s `allowNew` and `automatic` parameters (`:127`), the
   `yesOf` rule for an automatic row (`:160`); the keeper's `allowNew` and `automatic` seams, `decide`'s automatic branch,
-  `automatic` and `afterAuto` (`remoteKeeper.ts:24-27`, `:368-394`), `Admission`'s `not-asked`, `full` (for a new
-  host), `read.how` and `allowedNow`; `waitingConsent`'s `damaged` (`:405`, T8); the per-host question `askQuestion`
+  `automatic` and `afterAuto` (`remoteKeeper.ts:24-27`, `:368-394`), the keeper's `admit` and `consent` (the door is
+  `may`), `Admission`'s `not-asked`, `full` (for a new
+  host), `read.how` and `allowedNow` (**not by S1**: the first exception below); `waitingConsent`'s `damaged` (`:405`, T8); the per-host question `askQuestion`
   with its code `read-remote-session` and its *Read* button (`remoteSessionHost.ts:54-66`), `askHostOf` (`:243`), the
   road's `ask` seam and `asked` door (`remoteRead.ts:281`, `:313`, `:330`); `allowsNewHosts` and `ignoredLayer` of
   `RemoteSessions` (`:119-120`, `:320-321`); W2 `ASKED_DETAIL`, `KEY`, `forgetSaid`'s "allowed again by itself",
   `rowDescription`'s automatic arms, `emptyOn`, W7's sentence on the setting, W10 `ignoredWorkspace`/`ignoredFolder`
-  (`remoteHostsSaid.ts:19-104`); the setting `coai.terminalAccountsAllowNewHosts` (`package.json:637-641`),
+  (`remoteHostsSaid.ts:19-104`; W10 **by S2**, the third exception below); the setting `coai.terminalAccountsAllowNewHosts` (`package.json:637-641`),
   `ALLOW_NEW_HOSTS_KEY`, its place in `SAFETY_KEYS`, `allowNewHostsFrom` and `ignoredLayerOf` (`modelKeys.ts:27`, `:41`,
-  `:157`, `:160` — no other caller), `allowsNewHosts` and `ignoredLayerFor` (`sideConfig.ts:69-73`), its
+  `:157`, `:160`), `allowsNewHosts` and `ignoredLayerFor` (`sideConfig.ts:69-73`), its
   `NEVER_TRANSFERRED` row (`configTransfer.ts:43`: an old export that holds it is then refused *unknown to this build*,
   `:263`), its `SETTING_ALIAS` (`helpCoverage.test.ts:472`). Tests deleted with what they hold:
   `terminalAccountsSetting.test.ts`; the automatic-row and eviction cases of `remoteHosts.test.ts`; `CUT-H1…H3` and
-  `CUT-D2…D5` of `remoteHostsCut.test.ts`, **each assertion carried into E2S1-T10 or T18 before the file goes**; A1-H2
+  `CUT-D1…D5` of `remoteHostsCut.test.ts` (CUT-D1, the session road on an automatic row for both purposes, too: X8),
+  **each assertion carried into E2S1-T10 or T18 before the file goes**; A1-H2
   (`terminalHostsScenario.ts:140-148`, `scenarios.ts:995`).
+- **Three exceptions to *Removed*, with the bridge** (gate E2-G1; the spec's X5–X7 and § P17, *The bridge*). They are
+  read by code that is S2's, S3's or S4's, so S1 leaves them, each with a doc line naming the story that deletes it,
+  and the compile stays green with S1 alone:
+  - **`Admission` is not deleted by S1** (X5): the round (`remoteAccountsRound.ts:57`, `:173`, `:310`, `:364-376`) and
+    the rows (`remoteAccountsRows.ts:302-334`) read its kinds. S1 adds the pure `admissionOf(answer: DoorAnswer):
+    Admission` beside it, and `remoteAccountsHost.ts:140`'s second arm becomes
+    `this.sessions.may('round', host).then(admissionOf)` (its first arm, the cut's lock, is untouched). S4 deletes the
+    type, `admissionOf` and that line; S2 deletes `ADMISSION_SAID`.
+  - **The setting's key stays in ONE line of `remoteAccountsHost.ts`** (X6): `ALLOW_NEW_HOSTS_KEY` is imported there
+    (`:4`) for `SETTING` (`:379`), the text of the two notices S4 deletes; S1 drops the import and writes the string
+    literal there. The key's text also stays in the five help files until S5 rewrites them (gate E2-G1, F1).
+  - **W10 stays** (X7): `ignoredWorkspace` and `ignoredFolder` are read by `remoteAccountsRows.ts:391` (`ignoredRows`);
+    S2 deletes them with the row.
+  - The other bridge lines: `remoteAccountsHost.ts:342-343` become `ignored: undefined`, `allowNew: false`, and `:445`
+    becomes `ask: (host) => sessions.changeHost(host)` — S3 deletes both with the QuickPick. **While
+    `ACCOUNTS_READING` is `off` no build executes the bridge**; S1 does not touch that constant.
+  - **The tests that call the retired doors move with S1** (gate E2-G1, F3): `keeper.admit`/`keeper.consent` become
+    `keeper.may(…)` (and `may('round', h).then(admissionOf)` where a test hands the round its seams,
+    `remoteAccountsState.test.ts`), and every fixture whose assertion expects a host to be read gives the permission
+    first through the keeper's `allow()`. Each E1 test whose expectation changed is named in the pull request.
 - **Kept.** The refusals file, its lock that is never taken over by age, `gen`, `by`, the read-back, the markers, the
   copy-in of "no" rows, `saveWaiting` and the torn cure (E1.S1 as built); `claimFile`; the list's parser, which still
   KNOWS a "yes" row and `how: 'auto'` so a list that holds one is not damaged; `commit` and `commitKey`; *Not this
   host*, *Forget* and the change question for a refusal; the Stop, which stops the round and not the session read.
 - **T8 and T9, taken up.** `waiting` is an answer of its own and the session door and the tab say: *A “Not this
-  host”, a stop or a withdrawal is not saved yet on this side, so nothing was read. Choose “Save now”.* The road asks
+  host”, a stop or a withdrawal is not saved yet on this side, so nothing was read. Choose “Save now” — the first row
+  of CoAI: hosts read over ssh.* (W12, with gate E2-G1's F7.) The road asks
   the door before EVERY spawn of a press (`readOnce`), and a later spawn never asks a person: any answer but `yes`
   stops it with that answer's sentence. The two todo files
   ([PLAN_a_waiting_marker_has_its_own_door_sentence.md](PLAN_a_waiting_marker_has_its_own_door_sentence.md),
   [PLAN_a_press_rereads_the_consent_before_each_spawn.md](PLAN_a_press_rereads_the_consent_before_each_spawn.md))
   and their rows in `todo/README.md` are deleted in the commit that turns E2S1-T12 and T13 green.
-- **What the spec must settle** (it may add; each is open until it does — the full list with the conflicts found in
-  the code is § 10):
+- **What the spec must settle** — **all twelve settled** by the spec's § P2 (gate E2-G1): 1 → `may` and the order of
+  § P8; 2 → a malformed grant is no grant (J5); 3 → § P4; 4 → an *Allow* removes what it cannot read, after the floor
+  file (§ P6); 5 → steps 0–11 of § P6, pruning with no lock (§ P7); 6 → the copy crosses sides and only narrows
+  (§ P5; the parent's A1–A3); 7 → no marker kind (J2); 8 → `regain` writes no grant; 9 → W1–W18 (§ P12); 10 → three
+  choices, each only where it does something, no `mend` "yes" (§ P10, J6); 11 → § P13; 12 → residuals 1–19 (§ P14).
+  The list as it was asked (the conflicts found in the code are § 10):
   1. The door's exact signature and closed answer set (C2), and what each caller does with each answer.
   2. The grant's JSON and its parse: a malformed `grant` — damage of the whole file, or no grant?
   3. The withdrawal file: the name grammar (digits, padding, a name with the prefix that fits no grammar), its content,
@@ -246,33 +303,39 @@ then of the code). Depends on nothing in this epic; S3 and S4 depend on it. Serv
       (*Not this host*, *Read this host again*, *Forget*?), and what a `mend` "yes" over a damaged list means now.
   11. The test door: how a scenario sets and restores the grant and the withdrawal files (raw writes in test mode only).
   12. The residuals, renumbered with the parent's 9–12 and the file's eight.
-- **Scenarios the spec must contain at least** (it may split or add; it keeps these ids or maps them).
+- **Scenarios the spec must contain at least** (it may split or add; it keeps these ids or maps them). The spec keeps
+  T1–T18 and H1 and adds **T19** (K4: a withdrawal file that cannot be read, and an *Allow* that removes it), **T20**
+  (a withdrawal wins over generated histories, and the invariant I1), **T21** (a copy that is not a stamp; the top of
+  the count), **T22** (*Save now* frees a hanging lock when nothing waits, J3) and **T23** (the list after the "yes":
+  `how: 'auto'` rows go at the next write; the cap) — its § P15 is the full table, its § P16 the break-its R1–R30.
 
 | # | What must be shown (RED first) |
 |---|---|
 | E2S1-T1 | The grant record: parsed when whole; a file without one has no permission; a malformed one as the spec decides. **A write by E1's writer keeps a `grant` it does not know** (RED: a writer that rebuilds the object from its known keys) |
 | E2S1-T2 | The stamp rule, as a table: no grant; grant 1, no withdrawal → in force; grant 1, withdrawal 1 → not; grant 2, withdrawal 1 → in force; a withdrawal only in the state row's copy → not; a withdrawal file that cannot be read → not |
-| E2S1-T3 | *Allow* writes the stamp one above the highest withdrawal, leaves exactly one withdrawal file, and is read back; a grant-write whose stamp is not above the newest withdrawal is refused and reported as not given |
-| E2S1-T4 | *Withdraw* makes `withdrawn-<stamp>.json` by an exclusive create; no path of the writer of `refused.json` renames over it and the sweep never removes it (over the disk seam's recorded calls); past 8 files the oldest goes first |
+| E2S1-T3 | *Allow* writes the stamp one above its floor, leaves exactly one withdrawal file (the floor, one below the grant: X1), and is read back; a grant-write whose stamp is not above the newest withdrawal is refused and reported as not given |
+| E2S1-T4 | *Withdraw* makes `withdrawn-<stamp>.json` by an exclusive create; no path of the writer of `refused.json` renames over it and the sweep never removes it (over the disk seam's recorded calls); past 8 files the LOWEST readable stamp goes first, never the highest and never a file that cannot be read (X11) |
 | E2S1-T5 | **The stale lock holder (the plan round's finding 1).** Withdraw; close the window that saw it; a former holder renames its stale `refused.json`, which holds the grant, over the new one; reload → still withdrawn, **zero calls of either door** |
 | E2S1-T6 | **The stale window.** A withdraws; A is disposed; stale B writes the WHOLE `globalState` object (the copy gone); both are built again as after a reload → no call. The same for an *Allow* given after the withdrawal: B's stale write does not take it back |
-| E2S1-T7 | A withdrawal the disk did not take: the copy is written BEFORE the file is asked; the door answers `waiting` for every host in every window of the side, on both doors; *Save now* lands it. An *Allow* the file did not take changes nothing and is told |
+| E2S1-T7 | A withdrawal the disk did not take: the copy is written BEFORE the file is asked; the door answers `waiting` for every host that is not refused (a refused host answers `no` first: X10) in every window of the side that has seen the copy, on both doors; *Save now* lands it. An *Allow* the file did not take changes nothing and is told |
 | E2S1-T8 | The copy: a window that has not read the folder refuses at once from the state row; the next read copies the stamp into the folder; the copy only grows |
 | E2S1-T9 | **The one door**, every cell of C2's table for both callers; a companion scan finds no second reader of the grant or the withdrawal files and no caller of a retired door. The Stop stops the round and not the session read |
-| E2S1-T10 | **A per-host "yes" allows nothing (the plan round's finding 0).** A person's "yes" for h, an automatic row for g, no permission: a press of *take* or *add* on h asks the ONE question and **runs nothing**; *Not now* → nothing; *Allow* → nothing in that press; the next press reads. After a withdrawal: a press runs nothing. The list's bytes are the same after 100 presses (never written again). Carries CUT-H1, H2, D2–D5 |
+| E2S1-T10 | **A per-host "yes" allows nothing (the plan round's finding 0).** A person's "yes" for h, an automatic row for g, no permission: a press of *take* or *add* on h asks the ONE question and **runs nothing**; *Not now* → nothing; *Allow* → nothing in that press; the next press reads. After a withdrawal: a press runs nothing. The list's bytes are the same after 100 presses (never written again). Carries CUT-H1, H2, D1 (both purposes: X8), D2–D5 |
 | E2S1-T11 | **The upgrade**, row by row: a person's "yes" (0.87.0) not honoured; an automatic "yes" (2.0.901) no answer; a "no" in the file or as a row a refusal; the Stop stays and an *Allow* does not start a stopped round; the setting in a settings file not read. A list holding a "yes" row or a `how: 'auto'` row is not damaged |
 | E2S1-T12 | **T8.** A held refusal for h, a press on g → the `waiting` sentence, never W6; a held withdrawal → the same; a damaged list → W6, as today |
 | E2S1-T13 | **T9.** A "no" saved during the first spawn of a press → no second spawn; a withdrawal saved then → no second spawn; the answer still `yes` → the fallbacks run (S3-T13's companions stay green); a later spawn never calls the ask seam (a fake ask that throws) |
 | E2S1-T14 | The question: raised by the icon's first press and not by its second; a lost state row asks once more; **a tick never asks** (the ask seam throws from a tick); its code, title, detail and two buttons are the spec's words; `read-remote-session` is in no source file and not in `notification-sites.json` |
-| E2S1-T15 | The hosts list: the first row is the permission (*Allow reading…* or *Withdraw the permission*, with its time); a host's choices are the spec's three; no *Read* button for a host |
-| E2S1-T16 | The sides: a permission of one side is not one of another (as the spec settles K5) |
-| E2S1-T17 | The setting is gone: not in the manifest; `SAFETY_KEYS` is `['kimiAllowNetworkSignIn']`; not in `NEVER_TRANSFERRED`, and an imported file that holds it is refused *unknown to this build*; no source reads it (the key-read scan of `modelKeysAreReadOnce.test.ts`); a user layer holding `true` writes no row and allows no host |
+| E2S1-T15 | The hosts list: the first row is the permission, in its four states (*Allow reading…*; *Withdraw the permission*, with its time; *Save now*; the damage row: W18); a host's choices are the spec's three, **each offered only where it does something** (§ P10's table); no *Read* button for a host; no change can carry `answer: 'yes'` |
+| E2S1-T16 | The sides (K5, as the spec settles it): a grant of one side is not one of another and is never copied; a withdrawal on one side stops another side at its next read, which copies it into its own folder; an *Allow* on one side does not give the other back |
+| E2S1-T17 | The setting is gone: not in the manifest; `SAFETY_KEYS` is `['kimiAllowNetworkSignIn']`; not in `NEVER_TRANSFERRED`, and an imported file that holds it is refused *unknown to this build*; no source reads it (the key-read scan of `modelKeysAreReadOnce.test.ts`); a user layer holding `true` writes no row and allows no host. The key's text is in `src/` only in the ONE bridge line of `remoteAccountsHost.ts` (X6, removed by E2S4-T9) and in the five help files (removed by E2S5-T2) |
 | E2S1-T18 | Retired code is gone and stays gone: no `kind: 'auto'` change can be built (a type test), no `AUTOMATIC_ALLOW` or `autoCounts` exists, and the parser still reads `how: 'auto'` |
 | E2S1-H1 | Host scenario (CI's real-editor job): through the real `globalState` and the real folder — no permission → the door answers `no-permission`; an *Allow* through the keeper; a withdrawal → a `withdrawn-*.json` on the disk and the door answers `no-permission`; everything restored in a `finally` |
 
-- **Done when.** The spec is written and reviewed by Opus (E2-G1) BEFORE any S1 code; E2S1-T1…T18 green, each break-it
-  seen red; E2S1-H1 green in CI's `extension · a real editor` job, read from that job; the replaced E1 tests named in
-  the pull request; `npm run compile` exit 0; the suite and lint green.
+- **Done when.** The spec is written and reviewed by Opus (E2-G1) BEFORE any S1 code, and the gate's BLOCKING and FIX
+  changes (§ 6) are in the spec; E2S1-T1…T23 green, each break-it of the spec's § P16 seen red with its message;
+  E2S1-H1 green in CI's `extension · a real editor` job, read from that job; the replaced E1 tests named in
+  the pull request; `notification-sites.json` regenerated, **180 sites after S1** (179 − `read-remote-session` +
+  `read-accounts-permission` + `accounts-permission-not-kept`: X9); `npm run compile` exit 0; the suite and lint green.
 
 ### E2.S2 — The table's model (pure)
 
@@ -287,9 +350,17 @@ but C1's `permission()` shape; may start with S1's spec. S3 and S4 depend on it.
 - **Removed.** From `remoteAccountsRows.ts`: `Row`, `HostPress`, `AccountsView`, `accountsRows` and the cut's
   `ROWS_OF[reading]` (`:426`), the QuickPick labels (`HOSTS_LABEL`, separators), `ChooseSeams`, `choose`,
   `copyDecisionFor` (its rule moves to the panel's message check), `noticesDue`, `NoticeSeams`, `tellAfterRound`
-  (`:453-537`). Their tests in `remoteAccountsRows.test.ts` and `remoteAccountsList.test.ts` go, **but for the cases
-  that hold a word, a dash or the `jq` table, which are rewritten against the model**.
-- **Input.** The window's memory (E1's `HostMemory` for each host), the standings, the Stop, the permission (C3), the
+  (`:453-537`); **from S1's bridge** (gate E2-G1): `ADMISSION_SAID` and the rules over it (`:302-334`, X5), and
+  `ignoredRows` (`:390-391`) with the W10 words `ignoredWorkspace`/`ignoredFolder` of `remoteHostsSaid.ts` (X7), and
+  the view's `ignored` and `allowNew` fields. Their tests in `remoteAccountsRows.test.ts` and `remoteAccountsList.test.ts` go, **but for the cases
+  that hold a word, a dash or the `jq` table, which are rewritten against the model**. **When each goes** (gate
+  E2-G1): `remoteAccountsHost.ts` (S3's file) imports `AccountsView`, `ChooseSeams`, `NoticeSeams`, `Row`,
+  `accountsRows`, `choose`, `copyDecisionFor` and `tellAfterRound` (`:13`), so S2 lands its model beside them and
+  these, with everything only they use (`ADMISSION_SAID`, `ignoredRows`, W10), are deleted in the commit of S3 (the
+  QuickPick) or S4 (the notices: `NoticeSeams`, `tellAfterRound`) that deletes their last caller — each story lands
+  with the compile green, as S1's bridge does.
+- **Input.** The window's memory (E1's `HostMemory` for each host), the standings, the Stop, the permission (C3:
+  `sessions.permission()`, `{ given } | 'none' | 'waiting'`; a host whose door says `damaged` carries W11), the
   live scope hosts, the round's state (running: host and index; ended: end instant, read and asked counts), and
   whether the window runs on Windows (for the `wsl` sentence).
 - **The rules** (the parent's § 1): a block for each scope host of the live terminals, in code-unit order; the heading
@@ -320,8 +391,8 @@ but C1's `permission()` shape; may start with S1's spec. S3 and S4 depend on it.
 | E2S2-T12 | `wsl` in E2: no rows, the sentence for each platform |
 | E2S2-T13 | The model survives `JSON.parse(JSON.stringify(m))` unchanged; `blockOf(m, h)` equals the block in `m`; the same input gives the same model |
 
-- **Done when.** E2S2-T1…T13 green with their break-its; the reduced `remoteAccountsRows.ts` has no export the model
-  does not use; compile, suite and lint green.
+- **Done when.** E2S2-T1…T13 green with their break-its; compile, suite and lint green at S2's own commit; **after S3
+  and S4**, the reduced `remoteAccountsRows.ts` has no export the model does not use.
 
 ### E2.S3 — The tab
 
@@ -351,7 +422,10 @@ S2 (the model) and, for its wiring, S1 (C3). Its page half may start once S2's t
 - **Removed.** The QuickPick: `AccountsList`, `openList`, `shownList`, `ListItem`, `BUTTON`, `ITEM_OF`, `itemOf`,
   `shownOf`, `chooseSeamsOf` (`remoteAccountsHost.ts:418-544`); `ShownItem`, `noteShown`, `view`, `ViewExtra` and the
   test door's `lastItems` (`:33-72`) — the door gets `lastModel()` instead. Their scenario in `terminalAccountsScenario.ts`
-  is rewritten (E2S3-H1).
+  is rewritten (E2S3-H1). With them go S1's two bridge lines of the list (`:342-343` `ignored`/`allowNew`, `:445` `ask`).
+- **S1's calls it wires** (gate E2-G1, X4): the icon's command calls `sessions.askPermissionFirst()`; the page's
+  `allow` calls `sessions.askPermission()` and `withdraw` calls `sessions.withdraw()`; an *Allow* that was not kept
+  shows S1's W16 (X1: also *withdrawn while it was being saved*) and the tab's `waiting` state says W12.
 
 | # | What must be shown (RED first) |
 |---|---|
@@ -366,7 +440,7 @@ S2 (the model) and, for its wiring, S1 (C3). Its page half may start once S2's t
 | E2S3-T9 | The message check: each closed name with a known argument → its command; an unknown name, a host not in the model, a place with no manager word → nothing; `copy-install` hands the copier exactly `INSTALL_JQ[word]` |
 | E2S3-T10 | `allow` and `read-again` change nothing by themselves: with a fake question that answers Escape, no grant is written and no refusal lifted; `refuse`, `stop` and `withdraw` act at once |
 | E2S3-T11 | The panel's wiring: one panel; a second open reveals it; the census of `textControls.test.ts` holds nine hosts; `onDidDispose`; the find bar (`panelsAreSearchable.test.ts` finds it) |
-| E2S3-T12 | The icon's first press without a permission opens the tab AND asks the one question once; the second press only reveals |
+| E2S3-T12 | The icon's first press without a permission opens the tab AND asks the one question once (`askPermissionFirst`); the second press only reveals |
 | E2S3-T13 | The door census still allows `coai.terminalAccounts` by name (E1's K1 allow-list) |
 | E2S3-H1 | Host scenario: the icon opens the tab; a second press shows the same tab; with the call replaced through the test door and the permission given through the keeper, two terminals of two hosts are one call each, and `lastModel()` holds both blocks |
 
@@ -382,7 +456,11 @@ S2 (the model) and, for its wiring, S1 (C3). Its page half may start once S2's t
   ones too, with E1's rhythm; a withdrawal stops it at once.
 - **Files.** `src/remoteAccountsRound.ts`, `src/remoteAccountsHost.ts`, `notification-sites.json`, the tests and
   `terminalAccountsScenario.ts`.
-- **What changes.** The round asks C2's door (`who: 'round'`) where it asked `admit`; `armFor` and `timerFor` arm only
+- **What changes.** The round asks C2's door, `sessions.may('round', host)` (X3), where it asked `admit`, and takes
+  its answers as they are: **S4 deletes S1's bridge** — the type `Admission`, `admissionOf` and the line
+  `remoteAccountsHost.ts:140` (X5) — and the line `SETTING` (`:379`) with the two notices (X6). The state row's
+  `withdrawnStamp` and `askedUtc` are S1's (`permissionRowOf`, its three `StateChange`s); S4 adds the notice's time
+  beside them. `armFor` and `timerFor` arm only
   when the permission is in force; an *Allow* starts a round at once (unless one runs or the round is stopped); after
   that, 30 s after activation when a `Creds:` terminal of a host that is not refused is open, and 10 minutes after the
   end of each round. A withdrawal bumps the generation, clears the timer and the memory at once. The scope host `wsl`
@@ -416,13 +494,14 @@ S2 (the model) and, for its wiring, S1 (C3). Its page half may start once S2's t
 | E2S4-T6 | Activation with the permission in force and an eligible terminal: the first round 30 s later; without it, no timer |
 | E2S4-T7 | Each place's result posts its block (`landed(host)`), not the whole model, while the round runs; the summary at the end counts the round's places |
 | E2S4-T8 | The one notice: shown once when a `Creds:` terminal is first seen without the permission; never again (its time in the row); not shown with the permission; its button opens the tab and writes no grant |
-| E2S4-T9 | Retired: `ACCOUNTS_READING`, `READING_OFF_SAID`, `allowedNow` and the two notice codes are in no source file and not in `notification-sites.json`; a state row holding `toldUtc` and `lastAutoNoticeUtc` is read, not damaged, and is not written with them again |
+| E2S4-T9 | Retired: `ACCOUNTS_READING`, `READING_OFF_SAID`, `allowedNow`, `Admission`, `admissionOf` and the two notice codes are in no source file and not in `notification-sites.json`; E2S1-T17's allowance of the bridge line of `remoteAccountsHost.ts` is removed (X6); a state row holding `toldUtc` and `lastAutoNoticeUtc` is read, not damaged, and is not written with them again |
 | E2S4-T10 | E1's round tests stay green unchanged but for the door's name: the order, the account first, one usage read per account, `USAGE_POLICY` `off`, a result in flight never outlives a Stop, a refusal or a *Forget* |
 | E2S4-H1 | Host scenario, the cut's scenario rewritten: before the permission no call, through the real keeper; after an *Allow* through the keeper, with the call replaced, one call for each of two hosts |
 
 - **Done when.** E2S4-T1…T10 green, T1, T2 and T5 seen RED with their break-its; E2S4-H1 green in CI's real-editor job;
-  `PLACES_THIS_SPEAKS` moved with a dated comment (−2 for the two notices, −1 for `read-remote-session` in S1, +1 for
-  `read-accounts-permission` in S1, +1 for `accounts-can-be-shown`, and S1's own words as its spec settles them).
+  `PLACES_THIS_SPEAKS` moved with a dated comment: S1 leaves 180 (X9: −1 `read-remote-session`, +1
+  `read-accounts-permission`, +1 `accounts-permission-not-kept`); S4 moves it to 179 (−2 for the two notices, +1 for
+  `accounts-can-be-shown`).
 
 ### E2.S5 — The documents
 
@@ -434,8 +513,10 @@ describes what they built). Serves merge condition 6 and the owner's reading of 
   *"not in this build"* sentences out; the setting out); `src/test/helpCoverage.test.ts` (the words it looks for);
   `SECURITY.md` *The extension's outward ssh calls* (`:171`): *"No host is contacted before the person's one
   permission"* in place of *"A host is contacted unless the person refused it"*, where the permission is kept, what it
-  covers, the withdrawal file and why a stale writer cannot undo it, the tab and its CSP, the residuals of the S1
-  spec; `research/module_extension.md` (a section for E2 after `:13993`), `research/module_tests.md`,
+  covers, the withdrawal file and why a stale writer cannot undo it (the writer "claims, writes and reads back", never
+  "cannot be lost"), that a withdrawal reaches every side through its copy and a grant only its own (X2), that a
+  thing that cannot be read counts as withdrawn, the read caps (16 withdrawal names, 256 bytes each: X12), the tab
+  and its CSP, the residuals 1–19 of the S1 spec (§ P14); `research/module_extension.md` (a section for E2 after `:13993`), `research/module_tests.md`,
   `research/architecture.md`; the boundary sentence in
   [research/PLAN_the_chat_opens_from_a_terminal.md](../research/PLAN_the_chat_opens_from_a_terminal.md) (its per-host
   consent is replaced: the parent's *Boundaries*, Q1); § 12 of this document filled from the code as built.
@@ -445,7 +526,7 @@ describes what they built). Serves merge condition 6 and the owner's reading of 
 | # | What must be shown (RED first) |
 |---|---|
 | E2S5-T1 | The help census green: the command's title in the English help; no `SETTING_ALIAS` for the retired key; every article in five languages |
-| E2S5-T2 | No help text in any language, and no line of `SECURITY.md`, names `coai.terminalAccountsAllowNewHosts`, says a host is allowed by itself, or keeps the cut's *"not in this build"* sentence (a scan; break-it: one sentence put back) |
+| E2S5-T2 | No help text in any language, and no line of `SECURITY.md`, names `coai.terminalAccountsAllowNewHosts`, says a host is allowed by itself, or keeps the cut's *"not in this build"* sentence (a scan; break-it: one sentence put back); E2S1-T17's allowance of the five help files is removed, and `helpCoverage.test.ts:882`, `:931`, `:945`, `:961-965` no longer ask for the key |
 | E2S5-T3 | The help's remote paragraph says the one permission, that it covers the hosts opened later, and how to withdraw it, in five languages (the test of `helpCoverage.test.ts:931-965` rewritten for the new words) |
 
 - **Done when.** E2S5-T1…T3 green; the documents say what the head does (merge condition 6); `plan-lifecycle.mjs` clean.
@@ -457,7 +538,107 @@ describes what they built). Serves merge condition 6 and the owner's reading of 
    a new kind of call) is recorded in the parent's ledger by the caller and approved BEFORE S1's code. The coder never
    adds one.
 3. **Gate E2-G1** — Opus reviews the S1 spec against the parent and against this document; any change to C1–C3 goes
-   into § 4 and into the briefs of S3 and S4 in the same commit, before they are coded.
+   into § 4 and into the briefs of S3 and S4 in the same commit, before they are coded. **Verdict, 2026-11-26: pass
+   after fixes** (below). The rows X1–X12 are in §§ 4, 5, 9 and 10; S1's code starts when the spec's author has made
+   B1 and F1–F7 in the spec and the caller has checked them against this list.
+
+### Gate E2-G1 — the review of the S1 spec (Opus, 2026-11-26)
+
+Read: the spec at `6c9179ad`; the parent in this worktree (its A1–A8 taken as the owner decided, entries 3.1 and 3.2);
+the code on `origin/main` at `401bbf0a`. Every symbol of § 5, E2.S1, *Removed* was searched in `src/` and `shell/`;
+X5–X8 hold, and two more readers were found (F1, F3). Nothing was compiled or run.
+
+**What holds.** All twelve items are settled (§ 5, E2.S1). The door's one order (§ P8) has an action and a sentence for
+each answer and each caller. The grant lives only in the locked file, and nothing in `globalState` can give it (M1,
+M4). The stamp rule with the floor file (J1, I1, I2) makes a stale lock holder's rename lose to any later withdrawal
+on its side (M3; T5, T20). A torn or hostile file narrows (M5, M6). The upgrade starts with no permission (M7, T11).
+K5's reading only narrows across sides. **J3 is safe**: `free()` is E1's `take: 'person'` claim, by the same press
+(`saveWaiting`); a former holder's stale rename after it cannot undo a withdrawal (I2) and can only lose a grant or
+bring back a refusal (E1's residual 5b). The bridge (§ P17) keeps the production compile green with S1 alone, and is
+dead code while `ACCOUNTS_READING` is `off` (`remoteAccountsHost.ts:140`).
+
+**BLOCKING — changed in the spec before any S1 code.**
+
+- **B1. An *Allow* whose window dies after its write outlives a later withdrawal** (M2 is a lock holder that died; V13
+  is the copy's lag between windows). § P5 says *"every part of the floor can be seen by any window that withdraws"*;
+  the copy cannot (V13). A withdrawal of another window that had not seen the copy yet, made between steps 3 and 5 of
+  § P6, takes a stamp below the grant, and its read-back (§ P7, step 9) runs before step 8 and ends. Only step 10 of
+  the *Allow* then catches it — and step 10 does not run when that window closes, reloads or crashes after step 8,
+  nor is it said what step 10 does when its listing fails. The permission is then in force after the person's last
+  *Withdraw*. Spec change: § P5, *What a stamp is taken from*, the sentence *"Nothing that only one window knows is in
+  it: every part of the floor can be seen by any window that withdraws, so a withdrawal that is made while an Allow
+  runs is never below that Allow's grant."* → *"The copy is in the floor, and another window may not have seen it yet
+  (V13): a withdrawal made while an Allow runs can be below that Allow's grant. Step 10 of § P6 and step 9 of § P7
+  hold it, and step 9 does not need the Allow's window to live."* § P7, step 9, add: *"A claim is held (its note read
+  without a claim): the read-back is not final. It reads back again when the claim is released or its owner is shown
+  gone (E1's test, never by age), at most `WITHDRAW_ROUNDS` times; a grant at or above its stamp then → again from 4.
+  Until it is final, `pending` stays."* § P6, step 10, add: *"A listing or a read that fails: as a new name — the
+  Allow makes `withdrawn-<the grant's stamp>.json`, and answers `withdrawn` (`unsaved` when that fails)."* T20's
+  generator gains the *Allow*'s window dying between steps 8 and 10 (its claim's owner gone) with a withdrawal of a
+  window that had not seen the copy, and a step-10 listing that fails. Break-it **R31**: *step 9 of § P7 ignores a
+  held claim* → T20 red, *an Allow that died after its write outlived a later withdrawal*.
+
+**FIX — small, in the spec, before S1's code.**
+
+- **F1. T17's scan cannot pass at S1.** The key's text `coai.terminalAccountsAllowNewHosts` is in the five help files
+  (`helpContent.ts:260`, `:621`, `:625` and the translations), and `helpCoverage.test.ts:882`, `:931`, `:945`,
+  `:961-965` REQUIRE it there until S5. § P15, T17: *"the key's text is in `src/` in the ONE bridge line and nowhere
+  else (X6)"* → *"… in the ONE bridge line (X6) and in the five help files, which S5 rewrites (E2S5-T2 removes this
+  allowance), and nowhere else"*; § P11's table row for the setting: *"the key is in no source"* → *"no source reads
+  the key"*.
+- **F2. The withdrawal prefix is named once, but the pure parser needs it.** § P4 names `WITHDRAWN_PREFIX` once in
+  `remoteSessionHost.ts` (T9's scan), while `withdrawalName(stamp)` and `withdrawalOf(name, text)` in the pure
+  `remotePermission.ts` must spell `withdrawn-`. § P4: `withdrawalName(prefix: string, stamp: number)`,
+  `withdrawalOf(prefix: string, name: string, text: string | undefined)`, the grammar built from the handed-in prefix
+  (as E1's markers take `DiskNames.markerPrefix`).
+- **F3. E1's tests cannot stay "unchanged but for the door's name".** With no grant, `may` answers `no-permission`
+  where dozens of E1 assertions expect a read (`remoteHosts.test.ts`, 102 door calls; `remoteHostsReview.test.ts`, 14;
+  `remoteAccountsState.test.ts:34`, `:115`, `:128`, `:207` hand the round `keeper.admit`). § P15, last paragraph:
+  *"E1's tests of the file, the lock, the markers, the copy-in and `regain` stay green and unchanged but for the
+  door's name"* → *"… stay green: `keeper.admit`/`keeper.consent` become `keeper.may(…)` (`may('round', h).then(
+  admissionOf)` where a test hands the round its seams), and a fixture whose assertion expects a host to be read
+  gives the permission first through the keeper's `allow()`. Each test whose expectation changed is named in the
+  pull request."* The replaced list gains `remoteHostsWiring.test.ts:73-75` and `:83`, `modelKeys.test.ts:67-68` and
+  `modelKeysAreReadOnce.test.ts:50`. § P17's bridge table gains the row *`remoteAccountsState.test.ts`: the round's
+  `admit` seam → `may('round', h).then(admissionOf)` — S4, with the round*.
+- **F4. An *Allow* that answers `kept` leaves a held withdrawal standing.** § P10 tells the person *given* for
+  `kept`, but § P6's keeper drops a held withdrawal on `given` only, and the next read lands it above the grant.
+  § P6, *Then the keeper, on `given`: it drops a withdrawal it held unsaved; …* → *"on `given` or `kept`: it first
+  drops a withdrawal it held unsaved (the person's later word, in the order of this window's queue); on `given`, the
+  row's `{ floor, utc }` …; it answers `given` only when its own `inForce`, with `held` false after that drop, over a
+  fresh read …"*. T7 gains the cell: a withdrawal held, the copy erased by a stale write, *Allow* → `kept`, the door
+  says `yes`.
+- **F5. "What was there when the *Allow* began" is taken when the queue reaches it, not at the press.** A *Withdraw*
+  pressed in another window after the *Allow*'s press, whose file lands before step 0, loses. § P6, step 0, add:
+  *"Step 3 also counts as new a readable withdrawal whose `utc` is later than the Allow's `utc` (taken at the press),
+  whatever listing it was in."* T19 gains that cell.
+- **F6. The floor-before-removal order has no break-it.** § P16 gains **R32**: *an Allow removes the unreadable files
+  before it makes the floor file* → T19 red, *the old grant was in force between a removal and the floor*.
+- **F7. W12 does not say where *Save now* is.** § P12, W12: *"… so nothing was read. Choose “Save now”."* → *"… so
+  nothing was read. Choose “Save now” — the first row of CoAI: hosts read over ssh."* (this document's § 5, E2.S1,
+  *T8 and T9, taken up*, follows it).
+
+**NOTE — no change needed before code; each is for the spec's author or the caller to weigh.**
+
+- N1. The restart at `STAMP_MAX` removes every withdrawal file, so after it a stale `refused.json` with an older,
+  higher grant beats a later withdrawal (I1 and I2 do not hold across it); only a hand-made file reaches it — name it
+  in residual 7 or 17.
+- N2. An *Allow* whose floor is its side's own old grant raises the copy and can withdraw another side with no
+  *Withdraw* press; a withdrawal held in another window of the side lands after an *Allow* and takes it back
+  silently. Both narrow and cost one press; neither is in § P14's table.
+- N3. `low` should stay out of `Committed` (`commit` cannot send a `grant`), or every exhaustive table over
+  `Committed` grows.
+- N4. `withdraw({ utc, atLeast })` takes one ABOVE `atLeast` (§ P7, step 5): the name says the opposite; `above` reads
+  truer.
+- N5. Reading a lock's note without a claim (B1) is a read of the disk seam, not a new kind of call or a change of the
+  lock's rule (§ 6, step 2).
+- N6. W14 is long (about 150 words) and names reads E2 does not do (WSL, the usage: J10, residual 19); the owner
+  should know that before R14.
+- N7. The parent's entries 3.1 and 3.2 "with no stop": `plan-lifecycle.mjs` is red when the current epoch holds two
+  entries and is not `stopped` (`plan-change-control.md`, *The check*). The planner's commit records it as one cause
+  (the spec's own reading, A1–A6) or records the stop.
+- N8. A withdrawal file is written under 100 bytes; 256 is the READ cap (§ 9's "under 200" stays true).
+- N9. Every "RED first" of the spec is read from the code, not observed (its status says so); the coder observes each.
 4. **S1 and S2**, in parallel — Sonnet; Opus reviews; Sonnet fixes. Their files are disjoint: S2
    touches `remoteAccountsRows.ts` and a new module, S1 the consent files. S1 lands first.
 5. **S3** — the page half may start after S2 lands; its wiring after S1.
@@ -488,8 +669,8 @@ How the owner counts logins (the VMs' ssh logs) is the parent's; nothing in this
 |---|---|
 | The permission — the acceptance of entry 2.3 | E2S4-T1, T2, T5; E2S1-T14; E2S3-T12 |
 | Every door (finding 0) | E2S1-T9, T10 |
-| Withdrawal and its races (finding 1) | E2S1-T2…T8; E2S4-T3, T4 |
-| The upgrade | E2S1-T11 |
+| Withdrawal and its races (finding 1) | E2S1-T2…T8, T19…T22; E2S4-T3, T4 |
+| The upgrade | E2S1-T11, T23 |
 | The session door, T8, T9 | E2S1-T9, T12, T13 |
 | The table's model | E2S2-T1…T13 |
 | The page, by running it | E2S3-T1…T10 |
@@ -504,9 +685,11 @@ is read and written in the pull request, and a red scenario blocks the merge as 
 ## 9. Growth and security
 
 - **Growth** (the parent's *Growth surfaces*, made concrete): the grant — one key in `refused.json`, under 100 bytes;
-  the withdrawal files — under 200 bytes each, one left after each *Allow*, at most 8 before a withdrawal removes the
-  oldest; a withdrawal interrupted is the file or no file (exclusive create); a file that cannot be read is a
-  withdrawal until an *Allow* deals with it (§ 10, K4). The state row gains the withdrawal stamp's copy, the
+  the withdrawal files — under 200 bytes each (written under 100; read at most 256), one left after each *Allow* (the
+  floor), at most 8 before a withdrawal removes the lowest readable stamp; a withdrawal interrupted is the file or no
+  file (exclusive create); a file that cannot be read is a withdrawal until a person's *Allow* removes it (§ 10, K4);
+  a listing reads at most 16 files, and more names with the prefix count as one unreadable withdrawal, which an
+  *Allow* removes, 1024 names in a press (X12). The state row gains the withdrawal stamp's copy, the
   question's time and the notice's time, and loses two fields: under 150 bytes. `coai.terminalHosts` is never written
   by anything automatic; a person's answers only. The tab: one panel per window and one 15 s interval of its page,
   gone with the tab. The memory: as E1, dropped also at a withdrawal.
@@ -533,11 +716,11 @@ is read and written in the pull request, and a red scenario blocks the merge as 
 
 | # | The parent says | The code says | What happens |
 |---|---|---|---|
-| K1 | The setting leaves `src/sideConfig.ts` and `SAFETY_KEYS` | `ignoredLayerOf`, `allowNewHostsFrom` and `ALLOW_NEW_HOSTS_KEY` live in `modelKeys.ts` (`:27`, `:157`, `:160`) with no other caller | S1 removes them with `terminalAccountsSetting.test.ts` |
+| K1 | The setting leaves `src/sideConfig.ts` and `SAFETY_KEYS` | `ignoredLayerOf`, `allowNewHostsFrom` and `ALLOW_NEW_HOSTS_KEY` live in `modelKeys.ts` (`:27`, `:157`, `:160`); **`ALLOW_NEW_HOSTS_KEY` has one more caller, `remoteAccountsHost.ts:4`/`:379`** (X6, found by the spec), and the key's text is in the five help files (gate E2-G1, F1) | S1 removes them with `terminalAccountsSetting.test.ts`; the one line of `remoteAccountsHost.ts` holds the literal until S4; the help until S5 |
 | K2 | "A new page with its panel" | The text-controls census holds the eight panel hosts exactly (`textControls.test.ts:131-134`) | S3 adds the ninth in its commit |
-| K3 | The hosts list "stays as it is … the three choices for one host", and loses its *Read* | The change question offers *Read*, *Not this host*, *Forget* (W3), and `mend` writes a person's "yes" over a damaged list | **For the spec** (item 10): the three choices and what a `mend` "yes" means now |
-| K4 | An unreadable withdrawal file counts as the highest stamp; an *Allow* writes one above the highest and removes all but the newest | Then the unreadable file is the newest, it is kept, and no grant is ever above it | **For the spec** (item 4): e.g. an *Allow* — a person's press — removes the files it cannot read before it writes, under the claim |
-| K5 | The copy of the withdrawal stamp is in `globalState` and copied into the folder at every read; residual 10: a withdrawal on one side leaves another side's permission standing | `globalState` is the profile's: E1's "no" copies reach every side and are copied in there (the E1 stories, § 10, open point 10) | **For the spec** (item 6): a withdrawal reaches every side, or the copy names its side |
+| K3 | The hosts list "stays as it is … the three choices for one host", and loses its *Read* | The change question offers *Read*, *Not this host*, *Forget* (W3), and `mend` writes a person's "yes" over a damaged list | **For the spec** (item 10): the three choices and what a `mend` "yes" means now. **Settled** (spec § P10, J6): each choice only where it does something; no *Read*; no `mend` "yes" — over damage *Not this host* or *Read this host again* (`mend` with `forget`) |
+| K4 | An unreadable withdrawal file counts as the highest stamp; an *Allow* writes one above the highest and removes all but the newest | Then the unreadable file is the newest, it is kept, and no grant is ever above it | **For the spec** (item 4): e.g. an *Allow* — a person's press — removes the files it cannot read before it writes, under the claim. **Settled** (spec § P6, J1; the parent's A4, A5, entry 3.1): the floor file first, then the unreadable files go, then the grant |
+| K5 | The copy of the withdrawal stamp is in `globalState` and copied into the folder at every read; residual 10: a withdrawal on one side leaves another side's permission standing | `globalState` is the profile's: E1's "no" copies reach every side and are copied in there (the E1 stories, § 10, open point 10) | **For the spec** (item 6): a withdrawal reaches every side, or the copy names its side. **Settled** (spec § P5; the parent's A1–A3, entry 3.2): a withdrawal reaches every side that sees its copy; a grant is of its own side and never copied |
 | K6 | The state row "remembers that it was asked" and holds the copy of the Stop | `accountsStateOf` checks only its three known fields and lets others pass (`remoteAccountsRound.ts:590-601`) | New fields are added to the check; the two retired ones stay readable (E2S4-T9) |
 | K7 | Retire `NEVER_TRANSFERRED`'s row | An import refuses an undeclared key as *unknown to this build* (`configTransfer.ts:263`) | Safe to remove; E2S1-T17 holds the refusal |
 
