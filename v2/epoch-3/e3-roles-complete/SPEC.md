@@ -300,7 +300,7 @@ launches of a refused vendor.
 - The fix loop, the commits, the checks and their boundary do not change (`CoderFixLoop`, `CheckBoundary`).
 
 **The must-changes of the judgement's addenda 2 and 3** (sections 13 and 14 of the judgement file at commit `d0dca16d` on
-`feat/v2-ep3-e3-measure`; that branch is not merged into this one yet). A vendor is launchable only when its list is built
+`feat/v2-ep3-e3-measure`; that branch is merged into this one as `a9187e76`). A vendor is launchable only when its list is built
 and green (C2 item 1). The owner named four of them; the rest are the lists 13.11 and 14.8.
 
 - codex. The argv is the set of 13.4 on EVERY turn: the set CX1 and `-c agents.enabled=false` (s5 t2 d1). **Before every

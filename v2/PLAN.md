@@ -46,8 +46,8 @@
 - 1.16 · 2026-11-26 · owner · merge-conditions, contract, dod, build-order — codex and agy become launchable coders only after the must-changes of the judgements are built and green: G15 (the guard's record matched to the stream by conversation, step index and tool), the exact stream-item rule of CX-T4, the environments.toml refusal, and a refresh before the launch so that an expired copy never reaches a start (A11); not before
 - 1.17 · 2026-11-26 · owner · contract — the property and behaviour checks stay: an unknown item type of the stream, a flag the help does not declare, the preflight rows, the turn checks; one of them may stop a job after a CLI updated itself; that is accepted as protection and is not a version gate (it settles what 1.8 left open)
   (Entries 1.15 to 1.17 are the owner's answer to the addenda of the judgement: sections 13 and 14 of
-  v2/spikes/RESULTS_codex_agy_write_boundary_judgement.md at commit d0dca16d on the branch feat/v2-ep3-e3-measure, which is
-  not merged into this branch yet. The planner has the answer from the lead, not in the owner's own words. What they changed
+  v2/spikes/RESULTS_codex_agy_write_boundary_judgement.md at commit d0dca16d on the branch feat/v2-ep3-e3-measure, which was
+  not merged into this branch on that day (it is since, as a9187e76). The planner has the answer from the lead, not in the owner's own words. What they changed
   in E3, and how the lists 13.11 and 14.8 map on the task files: section O of
   [SPEC_CHANGES.md](epoch-3/e3-roles-complete/SPEC_CHANGES.md). The plan stays stopped.)
 

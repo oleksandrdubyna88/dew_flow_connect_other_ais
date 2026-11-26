@@ -355,7 +355,7 @@ the answers of 2026-11-25 (H-Q).
 
 The measures s5 t6 and s6 t7 are done, and the judge wrote two addenda: sections 13 (codex-cli 0.171.0) and 14 (agy 1.5.18) of
 `v2/spikes/RESULTS_codex_agy_write_boundary_judgement.md`, at commit `d0dca16d` on `feat/v2-ep3-e3-measure`. That branch is
-not merged into this one yet, so the plan cites the commit. The owner answered the same day. The planner has the answer
+not merged into this one when the answer was folded in, so the plan cited the commit; it is merged since, as `a9187e76`. The owner answered the same day. The planner has the answer
 from the lead, not in the owner's own words. The plan stays stopped.
 
 | Entry | The owner's answer | Where it is in E3 |
