@@ -44,65 +44,67 @@ public sealed class ChecksAtBase(GitHistory history, CheckRunner runner)
     /// <summary>Runs the checks of the job whose worktree is <paramref name="request"/>'s tree, with the toolchain of <paramref name="baseSha"/>. <paramref name="tree"/> reads the worktree's files.</summary>
     public async Task<CheckResult> RunAsync(IWorkFolder tree, string baseSha, CheckRequest request, CancellationToken ct = default)
     {
-        var atBase = await ReadAtBaseAsync(request.Job?.Tree.MainCheckout ?? request.Tree, baseSha, ct);
+        var atBase = await ReadFileAtAsync(request.Job?.Tree.MainCheckout ?? request.Tree, baseSha, ct);
         if (atBase.Trouble.Length > 0)
         {
             return new CheckResult(CheckState.ToolchainRefused, [], atBase.Trouble);
         }
 
-        var change = Compare(atBase.File, tree.Read(ToolchainTables.FilePath, ToolchainTables.MaxBytes));
-        var file = ToolchainFile.Read(atBase.File);
-        var headSha = string.Empty;
-        TestFileCounts? headTests = null;
-        if (request.Job is { } coderJob)
+        var baseFile = ToolchainFile.Read(atBase.File);
+        if (request.Job is not { } job)
         {
-            // The interim gate (INTERIM, the owner decides): the whole tree of the head against the base, before ANY step, for detected and stated commands alike.
-            var gate = await FrozenGateAsync(coderJob, baseSha, ct);
-            if (gate.Refusal.Length > 0)
-            {
-                return new CheckResult(CheckState.ToolchainRefused, [], gate.Refusal) with { ToolchainChange = change, RefusedPaths = gate.Paths, HeadTests = gate.Tests };
-            }
+            var change = Compare(atBase.File, tree.Read(ToolchainTables.FilePath, ToolchainTables.MaxBytes));
+            var result = await runner.RunAsync(baseFile, request, ct);
 
-            headSha = gate.HeadSha;
-            headTests = gate.Tests;
+            return result with { ToolchainChange = change, Note = result.Note + Reported(change, baseSha, headRuns: false) };
         }
 
-        var result = request.Job is { } job && file is not ToolchainRead.Refused
-            ? await RunDetectedAsync(file, job, baseSha, headSha, request, ct)
-            : await runner.RunAsync(file, request, ct);
-
-        return result with { HeadTests = headTests, ToolchainChange = change, Note = result.Note + Reported(change, baseSha) };
+        return await RunCoderJobCoreAsync(job, baseSha, atBase.File, baseFile, request, ct);
     }
 
-    private sealed record Gate(string Refusal, string HeadSha, IReadOnlyList<string> Paths, TestFileCounts? Tests);
-
     /// <summary>
-    /// The head commit of the worktree (read through the hardened coder-tree door, <c>--no-replace-objects</c>) and the verdict of <see cref="FrozenDefinitions"/> on what it changed against the base, read from the MAIN repository's objects. An unreadable head or listing refuses: no partial list decides.
+    /// The checks of a coder job run the HEAD's definitions (owner decision 2026-11-26, which replaced the interim gate "frozen build definitions": nothing the head changes is refused). The head commit, its toolchain file and what it changed against the base are read from the MAIN repository through
+    /// the hardened reads; the difference is REPORTED (<see cref="CheckResult.ChangedFiles"/>, <see cref="CheckResult.HeadTests"/>, the resolved toolchain's changes) and never judged here. A head that cannot be read, or whose toolchain file does not parse, is a refusal because nothing can be run.
     /// </summary>
-    private async Task<Gate> FrozenGateAsync(BoundaryJob job, string baseSha, CancellationToken ct)
+    private async Task<CheckResult> RunCoderJobCoreAsync(BoundaryJob job, string baseSha, WorkFile baseFileText, ToolchainRead baseFile, CheckRequest request, CancellationToken ct)
     {
         var head = await git.InCoderTreeAsync(job.Tree, ["--no-replace-objects", "rev-parse", "HEAD"], ct);
         var headSha = head.Ran && head.Ok ? head.Out.Trim() : string.Empty;
         if (!GitHistory.IsCommitish(headSha))
         {
-            return new Gate("the head commit of the worktree could not be read, so whether it changed a frozen build definition is not known and nothing was run (interim rule: the owner decides)", string.Empty, [], null);
+            return new CheckResult(CheckState.ToolchainRefused, [], "the head commit of the worktree could not be read, so nothing was run");
         }
 
+        var headFile = await ReadFileAtAsync(job.Tree.MainCheckout, headSha, ct);
+        if (headFile.Trouble.Length > 0)
+        {
+            return new CheckResult(CheckState.ToolchainRefused, [], headFile.Trouble);
+        }
+
+        var change = Compare(baseFileText, headFile.File);
         var raw = await git.RawChangesAsync(job.Tree.MainCheckout, baseSha, headSha, FrozenDefinitions.MaxChars, ct);
-        var changes = raw.Ran && raw.Ok ? FrozenDefinitions.ParseRaw(raw.Out) : null;
+        var changes = raw.Ran && raw.Ok && !raw.Truncated ? FrozenDefinitions.ParseRaw(raw.Out) : null;
+        var file = ToolchainFile.Read(headFile.File);
+        var result = file is ToolchainRead.Refused
+            ? await runner.RunAsync(file, request, ct)
+            : await RunDetectedAsync(file, baseFile, job, baseSha, headSha, request, ct);
 
-        var refusal = FrozenDefinitions.Refusal(changes, raw.Truncated, ToolchainDefaults.Current);
-
-        return new Gate(refusal, headSha, refusal.Length > 0 && changes is not null ? [.. FrozenDefinitions.RefusedPaths(changes, ToolchainDefaults.Current).Take(200).Select(path => PathSpelling.Spell(path))] : [], changes is null ? null : FrozenDefinitions.TestFiles(changes));
+        return result with
+        {
+            ToolchainChange = change,
+            ChangedFiles = changes is null ? null : FrozenDefinitions.Classify(changes, ToolchainDefaults.Current),
+            HeadTests = changes is null ? null : FrozenDefinitions.TestFiles(changes),
+            Note = result.Note + Reported(change, baseSha, headRuns: true),
+        };
     }
 
     /// <summary>
     /// What the checks of a CODER job are (epoch 3 E4 s3 t3; SPEC §A): the file at the base wins; with none, or for a project that names no command, the manifests of the BASE commit and of the HEAD commit — the commit coai made, read from the MAIN repository's objects through the
     /// hardened reads, never from the worktree: an untracked or ignored manifest in the worktree changes nothing — resolve into steps by <see cref="ToolchainResolve"/>. The manifests are read only when the answer needs them: a file that states every command needs neither.
     /// </summary>
-    private async Task<CheckResult> RunDetectedAsync(ToolchainRead file, BoundaryJob job, string baseSha, string headSha, CheckRequest request, CancellationToken ct)
+    private async Task<CheckResult> RunDetectedAsync(ToolchainRead file, ToolchainRead baseFile, BoundaryJob job, string baseSha, string headSha, CheckRequest request, CancellationToken ct)
     {
-        var read = await ResolveAsync(file, job, baseSha, headSha, ct);
+        var read = await ResolveAsync(file, baseFile, job, baseSha, headSha, ct);
         AffectedSelection? selection = null;
         if (read.Resolution is ToolchainResolution.Resolved resolved && read.AtBase is not null && read.AtHead is not null)
         {
@@ -116,7 +118,7 @@ public sealed class ChecksAtBase(GitHistory history, CheckRunner runner)
 
     private sealed record Read(ToolchainResolution Resolution, ManifestSet? AtBase, ManifestSet? AtHead, string HeadSha);
 
-    private async Task<Read> ResolveAsync(ToolchainRead file, BoundaryJob job, string baseSha, string headSha, CancellationToken ct)
+    private async Task<Read> ResolveAsync(ToolchainRead file, ToolchainRead baseFile, BoundaryJob job, string baseSha, string headSha, CancellationToken ct)
     {
         var setting = Environment(ToolchainResolve.DetectVariable);
         var detect = ToolchainResolve.DetectOn(setting, []);
@@ -130,12 +132,12 @@ public sealed class ChecksAtBase(GitHistory history, CheckRunner runner)
             atHead = await manifests.ReadAsync(job.Tree.MainCheckout, headSha, ToolchainDefaults.Current, ct);
         }
 
-        return new Read(ToolchainResolve.Resolve(file, () => atBase, () => atHead, setting, ToolchainDefaults.Current), atBase is ManifestRead.Found foundBase ? foundBase.Set : null, atHead is ManifestRead.Found foundHead ? foundHead.Set : null, headSha);
+        return new Read(ToolchainResolve.Resolve(file, () => atBase, () => atHead, setting, ToolchainDefaults.Current, baseFile), atBase is ManifestRead.Found foundBase ? foundBase.Set : null, atHead is ManifestRead.Found foundHead ? foundHead.Set : null, headSha);
     }
 
     private sealed record BaseFile(WorkFile File, string Trouble);
 
-    private async Task<BaseFile> ReadAtBaseAsync(string repository, string baseSha, CancellationToken ct)
+    private async Task<BaseFile> ReadFileAtAsync(string repository, string baseSha, CancellationToken ct)
     {
         var commit = await git.HasCommitAsync(repository, baseSha, ct);
         if (!commit.Ran || !commit.Ok)
@@ -161,7 +163,7 @@ public sealed class ChecksAtBase(GitHistory history, CheckRunner runner)
             : new BaseFile(shown.Truncated ? new WorkFile.TooLarge(shown.Out.Length) : new WorkFile.Text(shown.Out), string.Empty);
     }
 
-    private static BaseFile Unreadable(string trouble) => new(new WorkFile.Missing(), $"the toolchain at the base was not read, so nothing was run: {trouble}");
+    private static BaseFile Unreadable(string trouble) => new(new WorkFile.Missing(), $"the toolchain file was not read, so nothing was run: {trouble}");
 
     /// <summary>What the worktree did to the file, comparing the text with line endings made equal.</summary>
     private static ToolchainChange Compare(WorkFile atBase, WorkFile inTree) => (atBase, inTree) switch
@@ -175,9 +177,11 @@ public sealed class ChecksAtBase(GitHistory history, CheckRunner runner)
 
     private static bool Same(string before, string after) => before.ReplaceLineEndings("\n") == after.ReplaceLineEndings("\n");
 
-    private static string Reported(ToolchainChange change, string baseSha) => change == ToolchainChange.Unchanged
+    private static string Reported(ToolchainChange change, string baseSha, bool headRuns) => change == ToolchainChange.Unchanged
         ? string.Empty
-        : $" The worktree {Verb(change)} {ToolchainTables.FilePath}; this job ran the file at base {baseSha[..Math.Min(8, baseSha.Length)]} and the change did not run.";
+        : headRuns
+            ? $" The head {Verb(change)} {ToolchainTables.FilePath}; this job ran the head's file (owner decision 2026-11-26)."
+            : $" The worktree {Verb(change)} {ToolchainTables.FilePath}; this job ran the file at base {baseSha[..Math.Min(8, baseSha.Length)]} and the change did not run.";
 
     private static string Verb(ToolchainChange change) => change switch
     {

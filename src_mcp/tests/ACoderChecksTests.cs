@@ -242,7 +242,7 @@ public sealed class ACoderChecksTests
     }
 
     [Fact]
-    public async Task D3_AToolchainTheCoderEdited_IsRefusedByTheFrozenGate_NothingRuns_TheBaseFileIsTheOneThatDecides()
+    public async Task D3_AToolchainTheCoderEdited_IsTheOneThatRuns_AndTheEnvelopeSaysTheTestCommandChanged()
     {
         await using var rig = await CoderRig.CreateAsync();
         var skipEverything = ToolchainFixture.Shell("exit 0", "exit 0");
@@ -252,9 +252,13 @@ public sealed class ACoderChecksTests
 
         var (_, ended) = await rig.RunAsync(job);
 
-        (ended.State, ended.Stop).Should().Be((RoleJobStates.Failed, "toolchain-refused"), "the coder's own toolchain file would have passed; since pass 2 of the security verify the head cannot change a frozen build definition at all (interim, the owner decides)");
+        ended.State.Should().Be(RoleJobStates.Succeeded, "since the owner's decision of 2026-11-26 the head's own toolchain file is the file that runs: its test command passes, and that is the accepted risk — the envelope says so: " + ended.Reason);
         var envelope = rig.Envelope(job);
-        envelope.GetProperty("checksNote").GetString().Should().Contain("frozen build definition");
-        StepsOf(envelope).Should().BeEmpty();
+        envelope.GetProperty("green").GetBoolean().Should().BeTrue();
+        envelope.GetProperty("definitionsChanged").GetBoolean().Should().BeTrue();
+        envelope.GetProperty("definitionSummary").GetString().Should().Contain("the toolchain file was changed").And.Contain("the base's tests may have been changed");
+        envelope.GetProperty("toolchain").GetProperty("changedTestCommands").EnumerateArray().Select(line => line.GetString()).Should().Contain("the worktree changed the test command of app");
+        envelope.GetProperty("checksNote").GetString().Should().Contain("ran the head's file");
+        StepsOf(envelope).Should().Equal("build:0", "test:0");
     }
 }

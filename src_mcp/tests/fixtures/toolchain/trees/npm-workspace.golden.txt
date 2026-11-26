@@ -48,7 +48,26 @@ project tools/package.json [node] origin detected definedByHead True folder tool
   step build network None cwd tools subject tools/package.json: npm run build
 
 == head: removes-the-test-script
-toolchain_refused: the worktree removed test of package.json; a step the base commit had is never lost at the head, so nothing was run. Land the change in a commit of its own, or name the commands in .coai/toolchain.yaml
+resolved: source Detected
+project package.json [node] origin detected definedByHead False folder . testsNone False
+  fact packageManager = npm
+  fact lock = package-lock.json
+  fact workspaces = true
+  fact build = script
+  fact typecheck = none
+  fact test = none
+  fact runner = none
+  fact tsconfig = false
+  fact prettier = false
+  fact unchecked = false
+  fact memberScripts = packages/b:test
+  step restore network Host cwd . subject package.json: npm ci --ignore-scripts
+  step build network None cwd . subject package.json: npm run build
+  step test network None cwd . subject packages/b/package.json: npm test --workspace=./packages/b
+difference: package.json: test was 'script' at the base and is 'none' at the head
+difference: package.json: runner was 'node-test' at the base and is 'none' at the head
+lost: the worktree removed test of package.json
+changed: the worktree changed scripts.test of package.json
 
 == head: adds-a-cargo-toml
 toolchain_refused: 'packages/a/Cargo.toml' is a rust manifest at the head commit; rust is a known stack with no adapter yet, so a repository that holds one is not checked by guessing; name the commands in .coai/toolchain.yaml

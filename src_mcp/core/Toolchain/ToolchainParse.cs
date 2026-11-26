@@ -234,14 +234,14 @@ internal sealed partial class ToolchainParse
             "testFor" => new[] { "{jobs}", "{file}", "{stem}" },
             _ => new[] { "{jobs}" },
         };
+        var position = 0;
         foreach (var item in argv)
         {
-            foreach (var name in PlaceholderShape().Matches(item).Select(match => match.Value).Distinct(StringComparer.Ordinal))
+            position++;
+            if (PlaceholderShape().Matches(item).Any(match => !allowed.Contains(match.Value)))
             {
-                if (!allowed.Contains(name))
-                {
-                    Fault($"line {entry.Line}: '{key}' of {where} holds the placeholder {(name.Length > 24 ? "{...}" : name)}, which '{key}' may not hold (it may hold {string.Join(", ", allowed)})");
-                }
+                // A typed placeholder is never spelled back (it may be a name somebody pasted a secret into): the item's position and what the key may hold.
+                Fault($"line {entry.Line}: item {position.ToString(CultureInfo.InvariantCulture)} of '{key}' of {where} holds a placeholder that '{key}' may not hold (it may hold {string.Join(", ", allowed)})");
             }
 
             if (key == "format" && item.Contains("{file}", StringComparison.Ordinal) && item != "{file}")

@@ -370,7 +370,15 @@ public sealed class AToolchainFileTests
     {
         var lines = $"    {key}:\n      - tool\n      - \"{placeholder}\"\n" + (key == "testFor" ? "    testFiles:\n      - t\n" : string.Empty);
 
-        RefusedBy(OneProject(lines)).Should().Contain(member).And.Contain(named);
+        RefusedBy(OneProject(lines)).Should().Contain(member).And.Contain("item 2").And.Contain("{jobs}").And.NotContain(named, "a typed placeholder is never spelled back");
+    }
+
+    [Fact]
+    public void AnInvalidPlaceholder_IsNeverRepeated_TheItemPositionAndTheAllowedOnesAreGiven()
+    {
+        var sentence = RefusedBy(OneProject("    build:\n      - tool\n      - \"--token={MySecretToken}\"\n"));
+
+        sentence.Should().NotContain("MySecretToken").And.Contain("item 2").And.Contain("'build'").And.Contain("{jobs}");
     }
 
     [Fact]

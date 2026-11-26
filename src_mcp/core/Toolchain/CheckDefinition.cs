@@ -34,8 +34,6 @@ public sealed record DefinitionMember(string Name, IReadOnlyList<string> Values,
 /// </remarks>
 public static partial class CheckDefinition
 {
-    private const string Cure = "name the commands in " + ToolchainTables.FilePath;
-
     private static readonly string[] NodeConfigMembers = ["workspaces", "overrides", "resolutions", "packageManager", "jest", "vitest", "prettier", "config", "mocha", "ava", "babel"];
 
     private static readonly string[] WatchedPackages = ["typescript", "prettier", "jest", "vitest", "ts-jest", "ts-node", "mocha", "ava"];
@@ -70,12 +68,6 @@ public static partial class CheckDefinition
 
         return changed;
     }
-
-    /// <summary>The refusal for a changed definition: it names the member and the project and the cure; empty when nothing changed. Member names carry only spelled paths (<see cref="PathSpelling"/>); no value of the head is in it.</summary>
-    public static string Refusal(string projectId, IReadOnlyList<string> changed) =>
-        changed.Count == 0
-            ? string.Empty
-            : $"the worktree changed {changed[0]} of {PathSpelling.Bare(projectId)}{(changed.Count > 1 ? $" (and {changed.Count - 1} more: {string.Join(", ", changed.Skip(1).Take(PathSpelling.MaxListed))})" : string.Empty)}; what a detected check runs is decided by the base commit, so a job cannot change what it is checked with, and nothing was run. Land the change in a commit of its own (it is then in the base of the next job), or {Cure}";
 
     // ---- node ----
 

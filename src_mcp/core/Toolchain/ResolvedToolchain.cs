@@ -34,7 +34,25 @@ public sealed record ResolvedToolchain(
     IReadOnlyList<ResolvedProject> Projects,
     RepoToolchain? File,
     IReadOnlyList<string> Notes,
-    IReadOnlyList<string> Differences);
+    IReadOnlyList<string> Differences)
+{
+    /// <summary>What the head changed in the definitions of the checks against the base (owner decision 2026-11-26: reported, never refused; the head's own definitions run).</summary>
+    public DefinitionChanges Changes { get; init; } = DefinitionChanges.None;
+}
+
+/// <summary>
+/// What the head did to the check definitions, as lines for the envelope and the job's record (owner decision 2026-11-26, which replaced the interim gate: nothing the head changes is refused; the head's own definitions run and every difference is reported).
+/// </summary>
+/// <param name="LostSteps">Steps (project and step) the base had and the head has not: a lost test step is the first thing a person looks at.</param>
+/// <param name="ChangedDefinitions">The members of a project's definition that differ (a script, a test project of a solution, a runner, a props or targets file, a configuration file…), one line each, spelled.</param>
+/// <param name="ChangedTestCommands">The subset of <paramref name="ChangedDefinitions"/> that is about running tests: a test script, a runner, a test project, a test fact.</param>
+public sealed record DefinitionChanges(IReadOnlyList<string> LostSteps, IReadOnlyList<string> ChangedDefinitions, IReadOnlyList<string> ChangedTestCommands)
+{
+    public static DefinitionChanges None { get; } = new([], [], []);
+
+    /// <summary>Whether anything was lost or changed.</summary>
+    public bool Any => LostSteps.Count + ChangedDefinitions.Count > 0;
+}
 
 /// <summary>What resolving gave: checks, nothing to check, or a refusal. Neither of the last two is ever green, and no step is planned for either.</summary>
 public abstract record ToolchainResolution

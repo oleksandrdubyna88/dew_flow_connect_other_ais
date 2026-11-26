@@ -1,3 +1,4 @@
+using CoaiMcp.Core.Toolchain;
 using CoaiMcp.Server.RoleJobs;
 using FluentAssertions;
 using Xunit;
@@ -5,12 +6,12 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// Epoch 3 E4 s3, pass 2 of the security verify (M6-M14), the INTERIM decision for the owner ("frozen build definitions"): a coder job's checks are refused, before any step, when the head changed ANY build definition file of the table in
-/// <c>shared/toolchains.json</c> (a project, props, targets, solution, lock file, package.json, tsconfig, runner configuration, <c>.coai/toolchain.yaml</c>, <c>.gitattributes</c>, <c>.gitmodules</c>) or any symlink or submodule — for detected and for stated commands. Each case is one
-/// exploit the verify MEASURED; its line says which. The real coder rig: real git, the real check boundary, a coder that writes files and nothing else. M6: the worktree is proven equal to the commit, ignored files included, before each round.
+/// What the head changed in the definitions of the checks is REPORTED, never refused (owner decision 2026-11-26, which replaced the interim gate "frozen build definitions" of E4 s3 passes 2 and 3): the head's own definitions run — a project or a test project the coder adds is restored, built and tested —
+/// and the envelope says <c>definitionsChanged</c>, the one-line summary, the counts, the steps the base had and the head lost, the changed test commands and the test files modified or deleted; the job's record lists the files. Each case of <c>Exploits</c> is a change the security verify MEASURED
+/// as a way to a green check without the base's tests: the report shows it, so the person can see it. The real coder rig: real git, the real check boundary. The tree is proven equal to the commit before each round (M6), a step's home and temp are emptied (M16), and a check unit that cannot be stopped ends the job (S17).
 /// </summary>
 [Collection("fakecli-env")]
-public sealed class AFrozenBuildDefinitionsTests
+public sealed class AHeadsChangesAreReportedTests
 {
     private const string Library = "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net10.0</TargetFramework><EnableDefaultCompileItems>false</EnableDefaultCompileItems></PropertyGroup></Project>";
 
@@ -88,43 +89,99 @@ public sealed class AFrozenBuildDefinitionsTests
 
     [Theory]
     [MemberData(nameof(Exploits))]
-    public async Task EveryMeasuredExploit_IsRefusedBeforeAnyStep_WhatTheHeadChangedIsAFrozenDefinition(string exploit, bool node, string path, string text)
+    public void EveryMeasuredExploit_IsShownByTheReport_AsAChangedDefinitionOrConfigurationFile(string exploit, bool node, string path, string text)
     {
-        await using var rig = await CoderRig.CreateAsync(toolchain: string.Empty, extra: node ? NodeBase() : DotnetBase());
-        rig.Says("sonnet", new CoderRig.Launch(new Dictionary<string, string> { [path] = text, [CoderRig.StateFile] = CoderRig.Green + "\n" }, CoderRig.Report()));
-        var job = rig.NewJob();
+        _ = (node, text);
+        var changes = FrozenDefinitions.ParseRaw($":100644 100644 {new string('1', 40)} {new string('2', 40)} M\0{path}\0")!;
 
-        var (_, ended) = await rig.RunAsync(job);
+        var classified = FrozenDefinitions.Classify(changes, ToolchainDefaults.Current);
 
-        (ended.State, ended.Stop).Should().Be((RoleJobStates.Failed, "toolchain-refused"), exploit + ": " + ended.Reason);
-        ended.Reason.Should().Contain("frozen build definition").And.NotContain(path.Split('/')[^1], "the sentence names a count, never a path of the head");
-        rig.Envelope(job).GetProperty("checks").GetArrayLength().Should().Be(0, "no step ran");
+        classified.Paths.Should().Equal([path], exploit + ": a head that does this is not refused, and the report names the file");
+        DefinitionReport.Of(DefinitionChanges.None, classified, ToolchainChange.Unchanged, null).Changed.Should().BeTrue();
     }
 
     [Fact]
-    public async Task AStatedToolchain_IsFrozenToo_AHeadThatAddsAProjectFileIsRefusedBeforeAnyStep()
-    {
-        await using var rig = await CoderRig.CreateAsync();
-        rig.Says("sonnet", new CoderRig.Launch(new Dictionary<string, string> { ["x/Foo.csproj"] = Library, [CoderRig.StateFile] = CoderRig.Green + "\n" }, CoderRig.Report()));
-        var job = rig.NewJob();
-
-        var (_, ended) = await rig.RunAsync(job);
-
-        (ended.State, ended.Stop).Should().Be((RoleJobStates.Failed, "toolchain-refused"), ended.Reason);
-        rig.Envelope(job).GetProperty("checks").GetArrayLength().Should().Be(0);
-    }
-
-    [Fact]
-    public async Task AHeadThatChangesNothingFrozen_RunsItsChecks_AsBefore()
+    public async Task AHeadThatChangesAProjectProperty_IsNotRefused_ItsOwnDefinitionsRun_AndTheReportSaysWhatChanged()
     {
         await using var rig = await CoderRig.CreateAsync(toolchain: string.Empty, extra: DotnetBase());
-        rig.Says("sonnet", new CoderRig.Launch(new Dictionary<string, string> { ["Class1.cs"] = "public class Class1 { public int X; }\n", ["notes/readme.md"] = "x\n", ["tests/FooTests.cs"] = "public class FooTests { }\n", ["src/web/app.ts"] = "export {};\n" }, CoderRig.Report()));
+        var edited = Library.Replace("</Project>", "<PropertyGroup><TestingPlatformCommandLineArguments>--ignore-exit-code 2</TestingPlatformCommandLineArguments></PropertyGroup></Project>");
+        rig.Says("sonnet", new CoderRig.Launch(new Dictionary<string, string> { ["App.csproj"] = edited, [CoderRig.StateFile] = CoderRig.Green + "\n" }, CoderRig.Report()));
         var job = rig.NewJob();
 
         var (_, ended) = await rig.RunAsync(job);
 
         ended.Stop.Should().NotBe("toolchain-refused", ended.Reason);
-        rig.Envelope(job).GetProperty("checks").GetArrayLength().Should().BeGreaterThan(0);
+        var envelope = rig.Envelope(job);
+        envelope.GetProperty("checks").GetArrayLength().Should().BeGreaterThan(0, "the head's definitions ran");
+        envelope.GetProperty("definitionsChanged").GetBoolean().Should().BeTrue();
+        envelope.GetProperty("definitionSummary").GetString().Should().Contain("1 definition or configuration file(s)").And.Contain("the base's tests may have been changed");
+        envelope.GetProperty("toolchain").GetProperty("changedDefinitionFiles").GetInt32().Should().Be(1);
+        File.ReadAllText(Path.Combine(rig.World.Store.FolderOf(job.JobId)!.Location, "checks", "round-0", "changed-definitions.txt")).Should().Contain("file: 'App.csproj'");
+    }
+
+    [Fact]
+    public async Task AProjectTheCoderAdds_IsRestoredBuiltAndTested_AndMarkedDefinedByHead()
+    {
+        await using var rig = await CoderRig.CreateAsync(toolchain: string.Empty, extra: DotnetBase());
+        rig.Says("sonnet", new CoderRig.Launch(new Dictionary<string, string> { ["Other.csproj"] = Library, ["Class2.cs"] = "public class Class2 { }\n", [CoderRig.StateFile] = CoderRig.Green + "\n" }, CoderRig.Report()));
+        var job = rig.NewJob();
+
+        var (_, ended) = await rig.RunAsync(job);
+
+        ended.Stop.Should().NotBe("toolchain-refused", ended.Reason);
+        var envelope = rig.Envelope(job);
+        envelope.GetProperty("checks").EnumerateArray().Select(step => step.GetProperty("project").GetString()).Should().Contain("Other.csproj", "a project the coder added is part of the head's definitions");
+        envelope.GetProperty("toolchain").GetProperty("projects").EnumerateArray().Single(project => project.GetProperty("path").GetString() == "Other.csproj").GetProperty("definedByHead").GetBoolean().Should().BeTrue();
+        envelope.GetProperty("definitionsChanged").GetBoolean().Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task ATestCommandTheHeadChangesInTheToolchainFile_IsReported_AndTheHeadsFileRuns()
+    {
+        await using var rig = await CoderRig.CreateAsync();
+        var changed = ToolchainFixture.Shell("echo built", "echo head-test-ran");
+        rig.Says("sonnet", new CoderRig.Launch(new Dictionary<string, string> { [".coai/toolchain.yaml"] = changed, [CoderRig.StateFile] = CoderRig.Green + "\n" }, CoderRig.Report()));
+        var job = rig.NewJob();
+
+        var (_, ended) = await rig.RunAsync(job);
+
+        ended.State.Should().Be(RoleJobStates.Succeeded, ended.Reason);
+        var envelope = rig.Envelope(job);
+        envelope.GetProperty("toolchain").GetProperty("changedTestCommands").EnumerateArray().Select(line => line.GetString()).Should().Contain(line => line!.Contains("the test command"));
+        envelope.GetProperty("definitionsChanged").GetBoolean().Should().BeTrue();
+        File.ReadAllText(Path.Combine(rig.World.Store.FolderOf(job.JobId)!.Location, envelope.GetProperty("checks").EnumerateArray().First(step => step.GetProperty("step").GetString() == "test").GetProperty("logRef").GetString()!)).Should().Contain("head-test-ran");
+    }
+
+    [Fact]
+    public async Task AStepTheBaseHadAndTheHeadLost_IsReportedAsLost_NotRefused()
+    {
+        await using var rig = await CoderRig.CreateAsync();
+        var withoutTest = "version: 1\nprojects:\n  - path: \"app\"\n    adapter: node\n    build:\n      - \"/bin/sh\"\n      - \"-c\"\n      - \"echo built\"\n";
+        rig.Says("sonnet", new CoderRig.Launch(new Dictionary<string, string> { [".coai/toolchain.yaml"] = withoutTest, [CoderRig.StateFile] = CoderRig.Green + "\n" }, CoderRig.Report()));
+        var job = rig.NewJob();
+
+        var (_, ended) = await rig.RunAsync(job);
+
+        ended.State.Should().Be(RoleJobStates.Succeeded, ended.Reason);
+        var toolchain = rig.Envelope(job).GetProperty("toolchain");
+        toolchain.GetProperty("lostSteps").EnumerateArray().Select(line => line.GetString()).Should().Contain("the worktree removed test of app");
+        toolchain.GetProperty("definitionsChanged").GetBoolean().Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task AHeadThatChangesNothingButSource_ReportsNothingChanged()
+    {
+        await using var rig = await CoderRig.CreateAsync(toolchain: string.Empty, extra: DotnetBase());
+        rig.Says("sonnet", new CoderRig.Launch(new Dictionary<string, string> { ["Class1.cs"] = "public class Class1 { public int X; }\n", ["notes/readme.md"] = "x\n", ["src/web/app.ts"] = "export {};\n" }, CoderRig.Report()));
+        var job = rig.NewJob();
+
+        var (_, ended) = await rig.RunAsync(job);
+
+        ended.Stop.Should().NotBe("toolchain-refused", ended.Reason);
+        var envelope = rig.Envelope(job);
+        envelope.GetProperty("checks").GetArrayLength().Should().BeGreaterThan(0);
+        envelope.GetProperty("definitionsChanged").GetBoolean().Should().BeFalse();
+        envelope.GetProperty("definitionSummary").GetString().Should().BeEmpty();
     }
 
     // ---- M6: the tree equals the commit, ignored files included, before each round ----
@@ -154,22 +211,6 @@ public sealed class AFrozenBuildDefinitionsTests
         var (_, ended) = await rig.RunAsync(job);
 
         ended.State.Should().Be(RoleJobStates.Succeeded, ended.Reason);
-    }
-
-    // ---- the envelope says it ----
-
-    [Fact]
-    public async Task ARefusedHead_SaysInTheEnvelopeThatTheChangeIsAnInterimRule()
-    {
-        await using var rig = await CoderRig.CreateAsync(toolchain: string.Empty, extra: DotnetBase());
-        rig.Says("sonnet", new CoderRig.Launch(new Dictionary<string, string> { ["App.csproj"] = Library + "\n", [CoderRig.StateFile] = CoderRig.Green + "\n" }, CoderRig.Report()));
-        var job = rig.NewJob();
-
-        var (_, ended) = await rig.RunAsync(job);
-
-        ended.Reason.Should().Contain("by hand");
-        var round = rig.Envelope(job).GetProperty("rounds").EnumerateArray().First();
-        round.GetProperty("state").GetString().Should().Be("toolchain_refused");
     }
 
     // ---- M13: the selection is information only, every detected unit runs ----
@@ -283,10 +324,10 @@ public sealed class AFrozenBuildDefinitionsTests
         rig.Envelope(job).GetProperty("green").GetBoolean().Should().BeFalse();
     }
 
-    // ---- S24: a person can tell which file to move to its own commit ----
+    // ---- S24: a person can tell which files the head changed ----
 
     [Fact]
-    public async Task S24_TheRefusedPathsAreInTheJobsRecord_NotInTheSentence()
+    public async Task S24_TheChangedDefinitionPathsAreInTheJobsRecord_NotInTheSentence()
     {
         await using var rig = await CoderRig.CreateAsync(toolchain: string.Empty, extra: DotnetBase());
         rig.Says("sonnet", new CoderRig.Launch(new Dictionary<string, string> { ["tests/T.csproj.user"] = "<Project />\n", [CoderRig.StateFile] = CoderRig.Green + "\n" }, CoderRig.Report()));
@@ -295,7 +336,7 @@ public sealed class AFrozenBuildDefinitionsTests
         var (_, ended) = await rig.RunAsync(job);
 
         ended.Reason.Should().NotContain("T.csproj.user");
-        File.ReadAllText(Path.Combine(rig.World.Store.FolderOf(job.JobId)!.Location, "checks", "round-0", "refused-paths.txt")).Should().Contain("tests/T.csproj.user");
+        File.ReadAllText(Path.Combine(rig.World.Store.FolderOf(job.JobId)!.Location, "checks", "round-0", "changed-definitions.txt")).Should().Contain("tests/T.csproj.user");
     }
 
     // ---- S21: the envelope counts the tests the head changed or deleted ----
@@ -315,4 +356,5 @@ public sealed class AFrozenBuildDefinitionsTests
         var tests = rig.Envelope(job).GetProperty("headTestFiles");
         (tests.GetProperty("modified").GetInt32(), tests.GetProperty("added").GetInt32(), tests.GetProperty("deleted").GetInt32()).Should().Be((1, 1, 0));
     }
+
 }

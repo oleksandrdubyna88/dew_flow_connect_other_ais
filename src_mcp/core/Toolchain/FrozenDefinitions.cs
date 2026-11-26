@@ -16,24 +16,26 @@ public sealed record RawTreeChange(string OldMode, string NewMode, string OldId,
     public bool IsLinkOrSubmodule => OldMode is "120000" or "160000" || NewMode is "120000" or "160000";
 }
 
-/// <summary>
-/// <b>Frozen build definitions — the interim gate (E4 s3, pass 2 of the security verify; INTERIM, the owner decides).</b> A coder's head is refused, before any step and for detected and stated commands alike, when relative to the base it added, deleted, modified or changed the mode of a path whose file name is on the
-/// frozen list of <c>shared/toolchains.json</c> (<see cref="ToolchainDefaults.Frozen"/>), or of any symlink or submodule anywhere. The compare is of the WHOLE tree of the two commits — paths, modes and ids from <c>git diff-tree</c> in the main repository through the hardened reads —, not of the facts a
-/// reader happened to extract, so a new property, a second JSON key, a new import, a lock file's address or a file outside the unit's folder cannot get past it by being something a list of names did not know (M7-M12 of the verify).
-/// </summary>
-/// <remarks>
-/// <para>The sentence says counts and never a path, a name or a value of the head: the head is untrusted text. What this blocks, by design: a coder cannot add a package or a test project, or change a build file; such a head is refused and a person can take it in by hand. A script or helper file that a frozen
-/// definition invokes (<c>scripts/test.sh</c>) is not frozen, and the base's own tests can be edited by the head: the owner's question.</para>
-/// <para>This file names no frozen file: the list is data (<c>shared/toolchains.json</c>), and a scan test holds the code to it.</para>
-/// </remarks>
 /// <summary>How many test files a head modified, added and deleted.</summary>
 public sealed record TestFileCounts(int Modified, int Added, int Deleted);
 
+/// <summary>What a head changed that is not a plain source file: the count of definition and configuration files, the count of symlinks and submodules, and every such path (raw).</summary>
+public sealed record ChangedFiles(int Definitions, int Links, IReadOnlyList<string> Paths)
+{
+    public int Total => Definitions + Links;
+}
+
+/// <summary>
+/// <b>The classifier of the report "what the head changed in the definitions of the checks"</b> (owner decision 2026-11-26, which replaced the interim gate "frozen build definitions" of E4 s3 passes 2 and 3: nothing the head changes is REFUSED any more). The lists of
+/// <c>shared/toolchains.json</c> (<see cref="ToolchainDefaults.Frozen"/>, the allowed source extensions and the configuration-name pattern) only decide which changed paths the envelope and the job's record call a definition or configuration file; a symlink or a submodule is counted apart. The comparison
+/// is of the WHOLE tree of the two commits — paths and modes from <c>git diff-tree</c> in the main repository through the hardened reads — so a new property, a second JSON key, a lock file's address or a file outside the unit's folder is reported whatever a reader happened to extract.
+/// </summary>
+/// <remarks>This file names no file: the list is data, and a scan test holds the code to it.</remarks>
 public static class FrozenDefinitions
 {
     /// <summary>
-    /// <b>The allow list (pass 3, M15).</b> Whether a head may change this path: its extension (the last one, without case) is in <see cref="ToolchainDefaults.AllowedSourceExtensions"/>, its base name does not match <see cref="ToolchainDefaults.ConfigNamePattern"/>, and it is not a name of the frozen lists.
-    /// A name with no extension, a dot file, a trailing dot or space, a config-shaped name — each is refused. A regular expression that does not answer in time refuses too.
+    /// <b>The classifier's allow list (pass 3, M15).</b> Whether this path is a plain source file — one a coder edits as a matter of course, and the report does not call a definition or configuration file: its extension (the last one, without case) is in <see cref="ToolchainDefaults.AllowedSourceExtensions"/>, its base name does not match <see cref="ToolchainDefaults.ConfigNamePattern"/>, and it is not a name of the frozen lists.
+    /// A name with no extension, a dot file, a trailing dot or space, a config-shaped name — each is NOT plain source. A regular expression that does not answer in time refuses too.
     /// </summary>
     public static bool IsAllowedChange(string path, ToolchainDefaults table)
     {
@@ -53,10 +55,6 @@ public static class FrozenDefinitions
             return false;
         }
     }
-
-    /// <summary>The paths of a head that are not allowed changes, in the listing's order: what the job's record names so that a person can tell what to move to a commit of its own.</summary>
-    public static IReadOnlyList<string> RefusedPaths(IReadOnlyList<RawTreeChange> changes, ToolchainDefaults table) =>
-        [.. changes.Where(change => change.IsLinkOrSubmodule || !IsAllowedChange(change.Path, table)).Select(change => change.Path)];
 
     /// <summary>
     /// How many test files the head modified, added and deleted (S21 of pass 3): a file whose name or whose folder reads as a test (<c>tests/</c>, <c>__tests__</c>, <c>spec/</c>, <c>*.test.*</c>, <c>*.spec.*</c>, <c>*Tests.*</c>, <c>*Test.*</c>), counted by the listing's status. The gate lets the head edit tests; this makes it visible.
@@ -125,22 +123,12 @@ public static class FrozenDefinitions
         return false;
     }
 
-    /// <summary>The sentence that refuses a head, or empty when nothing frozen and no link or submodule changed. <paramref name="changes"/> null (unreadable) or <paramref name="cut"/> (too long) is refused too: a partial list decides nothing.</summary>
-    public static string Refusal(IReadOnlyList<RawTreeChange>? changes, bool cut, ToolchainDefaults table)
+    /// <summary>The changed paths a report calls a definition or configuration file (not a plain source file of the allowed kinds), and the symlinks and submodules, counted apart.</summary>
+    public static ChangedFiles Classify(IReadOnlyList<RawTreeChange> changes, ToolchainDefaults table)
     {
-        if (changes is null || cut)
-        {
-            return "the changes of the head against the base could not be read completely, so whether it changed a frozen build definition is not known and nothing was run (interim rule: the owner decides)";
-        }
+        var links = changes.Where(change => change.IsLinkOrSubmodule).ToList();
+        var definitions = changes.Where(change => !change.IsLinkOrSubmodule && !IsAllowedChange(change.Path, table)).ToList();
 
-        var links = changes.Count(change => change.IsLinkOrSubmodule);
-        var frozen = changes.Count(change => !change.IsLinkOrSubmodule && !IsAllowedChange(change.Path, table));
-        if (links + frozen == 0)
-        {
-            return string.Empty;
-        }
-
-        return $"the head changed {frozen.ToString(CultureInfo.InvariantCulture)} frozen build definition path(s) and {links.ToString(CultureInfo.InvariantCulture)} symlink or submodule path(s) against the base (a path counts as a build definition unless it is a source file of the allowed kinds with a name that is not a configuration's); what the checks build and test is decided by the base commit, "
-            + "so a job cannot add or change a project, a package, a lock file, a runner configuration or a link, and nothing was run. This is an interim rule (the owner decides): land such a change in a commit of its own, or take it in by hand.";
+        return new ChangedFiles(definitions.Count, links.Count, [.. changes.Where(change => change.IsLinkOrSubmodule || !IsAllowedChange(change.Path, table)).Select(change => change.Path)]);
     }
 }

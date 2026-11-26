@@ -58,6 +58,10 @@ public sealed class AToolchainIsResolvedTests
 
     private static ResolvedToolchain Resolved(ToolchainResolution resolution) => resolution.Should().BeOfType<ToolchainResolution.Resolved>(resolution.ToString()).Subject.Toolchain;
 
+    /// <summary>The lines the head's changes are reported as; the resolution must be a run of the head's definitions (owner decision 2026-11-26).</summary>
+    private static string Reported(ToolchainResolution resolution) =>
+        string.Join("; ", Resolved(resolution).Changes.LostSteps.Concat(Resolved(resolution).Changes.ChangedDefinitions));
+
     private static string Refused(ToolchainResolution resolution) => resolution.Should().BeOfType<ToolchainResolution.Refused>(resolution.ToString()).Subject.Sentence;
 
     // ---- d1: the file wins ----
@@ -149,26 +153,27 @@ public sealed class AToolchainIsResolvedTests
     }
 
     [Fact]
-    public void AStepTheBaseHadAndTheHeadHasNot_IsRefused_WithTheSentenceOfTheSpec()
+    public void AStepTheBaseHadAndTheHeadHasNot_IsReportedAsLost_AndTheHeadsOwnStepsRun()
     {
         var noTest = new[] { ("package.json", Package("\"build\": \"tsc\"")), ("package-lock.json", "{}") };
-        var sentence = Refused(Resolve(NoFile, Tree(Node, noTest)));
+        var resolution = Resolve(NoFile, Tree(Node, noTest));
 
-        sentence.Should().StartWith("the worktree removed test of package.json");
+        Reported(resolution).Should().StartWith("the worktree removed test of package.json");
+        Resolved(resolution).Projects.Single().Detected!.Steps.Select(step => step.Name).Should().Equal("restore", "build");
     }
 
     [Fact]
-    public void ATestScriptReplacedByNothing_ALockFileRemoved_ATestProjectRemoved_AreAllRefusals()
+    public void ATestScriptReplacedByNothing_AndATestProjectRemoved_AreReported_ALockFileRemoved_CannotBeRunAndIsARefusal()
     {
-        Refused(Resolve(NoFile, Tree(Node, [("package.json", Package("\"build\": \"x\"")), ("package-lock.json", "{}")]))).Should().Contain("removed test");
+        Reported(Resolve(NoFile, Tree(Node, [("package.json", Package("\"build\": \"x\"")), ("package-lock.json", "{}")]))).Should().Contain("removed test");
         Refused(Resolve(NoFile, Tree(Node, [("package.json", Package())]))).Should().Contain("at the head").And.Contain("no lock file");
-        Refused(Resolve(NoFile, Tree(Solution, Solution.Where(file => file.Item1 != "tests/T.csproj")))).Should().Contain("removed test (tests/T.csproj) of App.slnx");
+        Reported(Resolve(NoFile, Tree(Solution, Solution.Where(file => file.Item1 != "tests/T.csproj")))).Should().Contain("removed test (tests/T.csproj) of App.slnx");
     }
 
     [Fact]
-    public void AWholeProjectRemovedAtTheHead_IsRefused()
+    public void AWholeProjectRemovedAtTheHead_IsReportedAsLost()
     {
-        Refused(Resolve(NoFile, Tree(Node, [("Other.csproj", LibProject)]))).Should().Contain("removed");
+        Reported(Resolve(NoFile, Tree(Node, [("Other.csproj", LibProject)]))).Should().Contain("removed");
     }
 
     [Fact]
@@ -182,11 +187,11 @@ public sealed class AToolchainIsResolvedTests
     }
 
     [Fact]
-    public void AScriptAddedAtTheHead_IsAChangeOfTheDefinition_AndIsRefused()
+    public void AScriptAddedAtTheHead_IsAChangeOfTheDefinition_AndIsReported()
     {
         var head = new[] { ("package.json", Package("\"test\": \"jest\", \"build\": \"tsc\"")), ("package-lock.json", "{}") };
 
-        Refused(Resolve(NoFile, Tree(Node, head))).Should().Contain("the worktree changed scripts.build of package.json");
+        Reported(Resolve(NoFile, Tree(Node, head))).Should().Contain("the worktree changed scripts.build of package.json");
     }
 
     // ---- d3: known and not built; nothing found ----

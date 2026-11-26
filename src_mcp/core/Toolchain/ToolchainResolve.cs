@@ -24,17 +24,62 @@ public static class ToolchainResolve
     /// <param name="atBase">Reads the manifests of the base commit.</param>
     /// <param name="atHead">Reads the manifests of the head commit.</param>
     /// <param name="detectSetting">The value of <see cref="DetectVariable"/>, or null.</param>
-    public static ToolchainResolution Resolve(ToolchainRead file, Func<ManifestRead> atBase, Func<ManifestRead> atHead, string? detectSetting, ToolchainDefaults table)
+    public static ToolchainResolution Resolve(ToolchainRead file, Func<ManifestRead> atBase, Func<ManifestRead> atHead, string? detectSetting, ToolchainDefaults table, ToolchainRead? baseFile = null)
     {
         var notes = new List<string>();
         var detect = DetectOn(detectSetting, notes);
-
-        return file switch
+        var resolution = file switch
         {
             ToolchainRead.Refused refused => new ToolchainResolution.Refused(refused.Sentence),
             ToolchainRead.Configured configured => FromFile(configured.Toolchain, atBase, atHead, table, notes, detect),
             _ => detect ? FromManifests(atBase, atHead, table, notes) : new ToolchainResolution.NotConfigured($"there is no {ToolchainTables.FilePath}, and detection is off ({DetectVariable}=off), so nothing was run; checks that did not run are never green"),
         };
+
+        // The file the head holds is the file that runs (owner decision 2026-11-26); what the head did to the BASE's file is reported.
+        return resolution is ToolchainResolution.Resolved resolved && baseFile is ToolchainRead.Configured baseConfigured
+            ? new ToolchainResolution.Resolved(resolved.Toolchain with { Changes = Combine(resolved.Toolchain.Changes, FileChanges(baseConfigured.Toolchain, file is ToolchainRead.Configured headConfigured ? headConfigured.Toolchain : null)) })
+            : resolution;
+    }
+
+    private static DefinitionChanges Combine(DefinitionChanges first, DefinitionChanges second) =>
+        new([.. first.LostSteps, .. second.LostSteps], [.. first.ChangedDefinitions, .. second.ChangedDefinitions], [.. first.ChangedTestCommands, .. second.ChangedTestCommands]);
+
+    /// <summary>
+    /// What the head did to the commands the base's toolchain file STATES: a project, build, test, restore or format command the base named and the head does not (a lost step), and one that differs (a changed command, reported as a changed test command when it is the test).
+    /// A head that removed the file is every stated command lost. Spelled paths; the argv is never repeated.
+    /// </summary>
+    private static DefinitionChanges FileChanges(RepoToolchain atBase, RepoToolchain? atHead)
+    {
+        var lost = new List<string>();
+        var changed = new List<string>();
+        var tests = new List<string>();
+        foreach (var project in atBase.Projects)
+        {
+            var head = atHead?.Projects.FirstOrDefault(candidate => candidate.Path == project.Path);
+            foreach (var (name, before, after) in new[] { ("build", project.Build, head?.Build), ("test", project.Test, head?.Test), ("restore", project.Restore, head?.Restore), ("format", project.Format, head?.Format), ("testFor", project.TestFor, head?.TestFor) })
+            {
+                if (!before.Runs)
+                {
+                    continue;
+                }
+
+                if (after is null || !after.Runs)
+                {
+                    lost.Add($"the worktree removed {name} of {PathSpelling.Bare(project.Path)}");
+                }
+                else if (!before.Argv.SequenceEqual(after.Argv, StringComparer.Ordinal))
+                {
+                    var line = $"the worktree changed the {name} command of {PathSpelling.Bare(project.Path)}";
+                    changed.Add(line);
+                    if (name is "test" or "testFor")
+                    {
+                        tests.Add(line);
+                    }
+                }
+            }
+        }
+
+        return new DefinitionChanges(lost, changed, tests);
     }
 
     /// <summary>The setting as a switch: <c>off</c> is off; <c>on</c>, nothing, and anything else is on — the last with a note, because a typo must not turn detection off silently.</summary>
@@ -86,6 +131,7 @@ public static class ToolchainResolve
         notes.AddRange(baseSet.Notes);
         var projects = new List<ResolvedProject>();
         var differences = new List<string>();
+        var changes = new DefinitionChanges([], [], []);
         foreach (var project in file.Projects)
         {
             if (Stated(project) || !detect)
@@ -121,26 +167,17 @@ public static class ToolchainResolve
 
             var headProjects = ((Detection.Detected)headDetected).Projects;
             var merged = Merge(baseProjects, headProjects, differences);
-            if (merged.Refusal.Length > 0)
-            {
-                return new ToolchainResolution.Refused(merged.Refusal);
-            }
-
             if (projects.Count + merged.Projects.Count > ManifestLimits.MaxProjects)
             {
                 return new ToolchainResolution.Refused($"the projects of {ToolchainTables.FilePath} and their defaults are more than the limit of {ManifestLimits.MaxProjects.ToString(CultureInfo.InvariantCulture)}");
             }
 
-            if (Frozen(baseProjects, headProjects, baseSet, headSet) is { Length: > 0 } changedDefinition)
-            {
-                return new ToolchainResolution.Refused(changedDefinition);
-            }
-
+            changes = Combine(changes, ChangesOf(merged, baseProjects, headProjects, baseSet, headSet));
             projects.AddRange(merged.Projects.Select(item => new ResolvedProject(item.Detected.Id, "defaults", item.DefinedByHead, null, item.Detected)));
             notes.AddRange(baseProjects.SelectMany(item => item.Notes));
         }
 
-        return new ToolchainResolution.Resolved(new ResolvedToolchain(ToolchainSource.FileAndDefaults, projects, file, notes, differences));
+        return new ToolchainResolution.Resolved(new ResolvedToolchain(ToolchainSource.FileAndDefaults, projects, file, notes, differences) { Changes = changes });
     }
 
     /// <summary>The manifests a project folder owns, plus the definition and presence files of its ancestors (a root <c>global.json</c> or <c>.editorconfig</c> counts for a folder below it).</summary>
@@ -202,29 +239,19 @@ public static class ToolchainResolve
         var baseProjects = ((Detection.Detected)baseDetected).Projects;
         var headProjects = ((Detection.Detected)headDetected).Projects;
         var merged = Merge(baseProjects, headProjects, differences);
-        if (merged.Refusal.Length > 0)
-        {
-            return new ToolchainResolution.Refused(merged.Refusal);
-        }
-
         if (merged.Projects.Count > ManifestLimits.MaxProjects)
         {
             return new ToolchainResolution.Refused($"{merged.Projects.Count.ToString(CultureInfo.InvariantCulture)} projects were found in all (the head added some), over the limit of {ManifestLimits.MaxProjects.ToString(CultureInfo.InvariantCulture)}; {Cure}");
         }
 
-        if (Frozen(baseProjects, headProjects, baseSet, headSet) is { Length: > 0 } changedDefinition)
-        {
-            return new ToolchainResolution.Refused(changedDefinition);
-        }
-
         if (merged.Projects.All(item => item.Detected.Steps.Count == 0))
         {
-            return new ToolchainResolution.NotConfigured($"every project found is unchecked (no build, typecheck or test step: {PathSpelling.SpellMany(merged.Projects.Select(item => item.Detected.Id))}), so nothing was run; checks that did not run are never green");
+            return new ToolchainResolution.NotConfigured($"every project found is unchecked (no build, typecheck or test step: {PathSpelling.SpellMany(merged.Projects.Select(item => item.Detected.Id))}), so nothing was run; checks that did not run are never green{(merged.Lost.Count > 0 ? ". The head lost steps the base had: " + string.Join("; ", merged.Lost.Take(10)) : string.Empty)}");
         }
 
         notes.AddRange(baseProjects.SelectMany(item => item.Notes));
 
-        return new ToolchainResolution.Resolved(new ResolvedToolchain(ToolchainSource.Detected, [.. merged.Projects.Select(item => new ResolvedProject(item.Detected.Id, "detected", item.DefinedByHead, null, item.Detected))], null, notes, differences));
+        return new ToolchainResolution.Resolved(new ResolvedToolchain(ToolchainSource.Detected, [.. merged.Projects.Select(item => new ResolvedProject(item.Detected.Id, "detected", item.DefinedByHead, null, item.Detected))], null, notes, differences) { Changes = ChangesOf(merged, baseProjects, headProjects, baseSet, headSet) });
     }
 
     private static ManifestFile? Unbuilt(ManifestSet set, ToolchainDefaults table) =>
@@ -255,64 +282,51 @@ public static class ToolchainResolve
 
     private sealed record MergedProject(DetectedProject Detected, bool DefinedByHead);
 
-    private sealed record Merged(IReadOnlyList<MergedProject> Projects, string Refusal);
+    private sealed record Merged(IReadOnlyList<MergedProject> Projects, IReadOnlyList<string> Lost);
 
     /// <summary>
-    /// The base's projects (their definition is the base's own), plus the projects only the head has (marked), and the refusal for a step the base had and the head has not. A difference of a fact is listed and is not judged here.
+    /// The projects that RUN: the head's (owner decision 2026-11-26 — the head's own definitions run, so a package or a test project the coder added is restored, built and tested), each marked <c>DefinedByHead</c> when the base had no project of that id. What the base had and the head
+    /// has not — a step, or a whole project the head removed — is not refused: it is LISTED (<see cref="Merged.Lost"/>), because a lost test step is what a person must see. A difference of a fact is listed too.
     /// </summary>
     private static Merged Merge(IReadOnlyList<DetectedProject> atBase, IReadOnlyList<DetectedProject> atHead, List<string> differences)
     {
-        var merged = new List<MergedProject>();
+        var lost = new List<string>();
         foreach (var project in atBase)
         {
             var head = atHead.FirstOrDefault(candidate => candidate.Id == project.Id);
-            foreach (var step in project.Steps)
-            {
-                if (head is null || !head.Steps.Any(candidate => candidate.Name == step.Name && candidate.Subject == step.Subject))
-                {
-                    var label = step.Name == "test" && step.Subject != project.Id ? $"test ({PathSpelling.Bare(step.Subject)})" : step.Name;
-
-                    return new Merged([], $"the worktree removed {label} of {PathSpelling.Bare(project.Id)}; a step the base commit had is never lost at the head, so nothing was run. Land the change in a commit of its own, or {Cure}");
-                }
-            }
-
+            lost.AddRange(project.Steps.Where(step => head is null || !head.Steps.Any(candidate => candidate.Name == step.Name && candidate.Subject == step.Subject))
+                .Select(step => $"the worktree removed {(step.Name == "test" && step.Subject != project.Id ? $"test ({PathSpelling.Bare(step.Subject)})" : step.Name)} of {PathSpelling.Bare(project.Id)}"));
             if (head is not null)
             {
                 differences.AddRange(Differences(project, head));
             }
-
-            merged.Add(new MergedProject(project, false));
         }
 
-        merged.AddRange(atHead.Where(project => atBase.All(candidate => candidate.Id != project.Id)).Select(project => new MergedProject(project, true)));
+        var merged = atHead.Select(project => new MergedProject(project, atBase.All(candidate => candidate.Id != project.Id))).OrderBy(item => item.Detected.Id, StringComparer.Ordinal).ToList();
 
-        return new Merged([.. merged.OrderBy(item => item.Detected.Id, StringComparer.Ordinal)], string.Empty);
+        return new Merged(merged, lost);
     }
 
     /// <summary>A fact value for a sentence: the value of a short word fact as it is, a list of paths spelled and capped.</summary>
     private static string Shown(string name, string value) => name is "projects" or "testProjects" ? PathSpelling.SpellFact(value) : $"'{(value.Length > 40 ? value[..40] + "..." : value)}'";
 
     /// <summary>
-    /// <b>A detected check cannot be changed by the job it checks</b> (SPEC §A4, decision 11): for every project the base has, the check definition (<see cref="CheckDefinition"/>) at the head must be the base's. The first project whose definition differs gives the refusal, which names the member and the cure; empty when every definition is the same. A project only the head has is not compared.
+    /// <b>What the head did to the check definitions, reported and never refused</b> (owner decision 2026-11-26, which replaced SPEC §A4's decision 11): for every project the base has, the check definition (<see cref="CheckDefinition"/>) at the head is compared with the base's, and each difference is a line of
+    /// <see cref="DefinitionChanges"/> beside the steps the head lost. The head's own definitions are what runs.
     /// </summary>
-    private static string Frozen(IReadOnlyList<DetectedProject> atBase, IReadOnlyList<DetectedProject> atHead, ManifestSet baseSet, ManifestSet headSet)
+    private static DefinitionChanges ChangesOf(Merged merged, IReadOnlyList<DetectedProject> atBase, IReadOnlyList<DetectedProject> atHead, ManifestSet baseSet, ManifestSet headSet)
     {
+        var changed = new List<string>();
         foreach (var project in atBase)
         {
             var head = atHead.FirstOrDefault(candidate => candidate.Id == project.Id);
-            if (head is null)
+            if (head is not null)
             {
-                continue;
-            }
-
-            var changed = CheckDefinition.Changed(CheckDefinition.Of(project, baseSet), CheckDefinition.Of(head, headSet));
-            if (changed.Count > 0)
-            {
-                return CheckDefinition.Refusal(project.Id, changed);
+                changed.AddRange(CheckDefinition.Changed(CheckDefinition.Of(project, baseSet), CheckDefinition.Of(head, headSet)).Select(member => $"the worktree changed {member} of {PathSpelling.Bare(project.Id)}"));
             }
         }
 
-        return string.Empty;
+        return new DefinitionChanges(merged.Lost, changed, [.. changed.Where(line => line.Contains("test", StringComparison.OrdinalIgnoreCase) || line.Contains("runner", StringComparison.OrdinalIgnoreCase))]);
     }
 
     private static IEnumerable<string> Differences(DetectedProject baseProject, DetectedProject head)

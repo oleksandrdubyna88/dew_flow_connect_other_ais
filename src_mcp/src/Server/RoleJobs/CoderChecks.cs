@@ -39,6 +39,12 @@ internal sealed record CoderChecksRound(int Turn, string HeadSha, string State, 
     /// <summary>How many test files the head modified, added and deleted (S21 of pass 3): the gate lets a head edit tests, so the envelope says how many it touched.</summary>
     public TestFileCounts? HeadTests { get; init; }
 
+    /// <summary>What the head did to the definitions of the checks: the flag and the one line (owner decision 2026-11-26).</summary>
+    public DefinitionReport Definitions { get; init; } = DefinitionReport.None;
+
+    /// <summary>The definition and configuration files, symlinks and submodules the head changed, for the job's record.</summary>
+    public ChangedFiles? ChangedFiles { get; init; }
+
     public const string TreeChanged = "tree_changed";
 
     /// <summary>Only a run that ran every step, saw every one pass, and left the worktree and HEAD where they were.</summary>
@@ -100,7 +106,7 @@ internal sealed class CoderChecks(IRoleRun run, GitHistory git, CoderOsLayer lay
         var result = await new ChecksAtBase(git, new CheckRunner(layer.Launcher, layer.ChecksBoundary()))
             .RunCoderJobAsync(new DiskWorkFolder(tree.Root), baseSha, layer.Job, logs, Jobs, ct, step => RecordStep(logs, step));
         RecordRefusal(result, logs);
-        RecordRefusedPaths(result, logs);
+        RecordDefinitions(result, logs);
         ct.ThrowIfCancellationRequested();
         var after = await StateAsync(ct);
         if (Moved(before, after) is { Length: > 0 } moved)
@@ -108,7 +114,7 @@ internal sealed class CoderChecks(IRoleRun run, GitHistory git, CoderOsLayer lay
             return Unverified(turn, head, moved, Steps(result));
         }
 
-        return new CoderChecksRound(turn, head, result.State.Wire(), Steps(result), result.Note, result.State == CheckState.Failed ? DigestOf(result) : []) { Toolchain = result.Toolchain, Selection = result.Selection, HeadTests = result.HeadTests };
+        return new CoderChecksRound(turn, head, result.State.Wire(), Steps(result), result.Note, result.State == CheckState.Failed ? DigestOf(result) : []) { Toolchain = result.Toolchain, Selection = result.Selection, HeadTests = result.HeadTests, Definitions = DefinitionReport.Of(result.Toolchain?.Changes, result.ChangedFiles, result.ToolchainChange, result.HeadTests), ChangedFiles = result.ChangedFiles };
     }
 
     /// <summary>
@@ -127,10 +133,14 @@ internal sealed class CoderChecks(IRoleRun run, GitHistory git, CoderOsLayer lay
         Record(logs, part, CoderUnitRecord.CheckUnitName(layer.Job, part), step.Boundary, step.Started, $"{step.Project} {step.Step.Wire()}");
     }
 
-    /// <summary>S24 of pass 3: the paths the gate refused go into the job's record (<c>refused-paths.txt</c> beside the round's logs, spelled by <see cref="PathSpelling"/>), not into the sentence the model reads.</summary>
-    private void RecordRefusedPaths(CheckResult result, string logs)
+    /// <summary>
+    /// What the head changed in the definitions of the checks goes into the job's record (<c>changed-definitions.txt</c> beside the round's logs): the definition and configuration files, symlinks and submodules (spelled by <see cref="PathSpelling"/>, at most 200), the steps the base had and the head lost, and the changed
+    /// definition members. The sentence the model reads names none of it (owner decision 2026-11-26: reported, never refused).
+    /// </summary>
+    private void RecordDefinitions(CheckResult result, string logs)
     {
-        if (result.RefusedPaths.Count == 0)
+        var changes = result.Toolchain?.Changes ?? DefinitionChanges.None;
+        if (result.ChangedFiles is not { Total: > 0 } && !changes.Any)
         {
             return;
         }
@@ -138,11 +148,16 @@ internal sealed class CoderChecks(IRoleRun run, GitHistory git, CoderOsLayer lay
         try
         {
             Directory.CreateDirectory(logs);
-            File.WriteAllLines(Path.Combine(logs, "refused-paths.txt"), result.RefusedPaths);
+            var lines = new List<string>();
+            lines.AddRange(DefinitionReport.Of(changes, result.ChangedFiles, result.ToolchainChange, result.HeadTests).Summary.Split('\n'));
+            lines.AddRange((result.ChangedFiles?.Paths ?? []).Take(200).Select(path => "file: " + PathSpelling.Spell(path)));
+            lines.AddRange(changes.LostSteps.Select(line => "lost: " + line));
+            lines.AddRange(changes.ChangedDefinitions.Select(line => "changed: " + line));
+            File.WriteAllLines(Path.Combine(logs, "changed-definitions.txt"), lines);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            run.Log.Warning("role job {JobId}: the refused paths of the checks could not be written", run.Request.JobId);
+            run.Log.Warning("role job {JobId}: the record of the changed definitions could not be written", run.Request.JobId);
         }
     }
 

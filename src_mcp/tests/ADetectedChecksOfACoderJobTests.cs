@@ -118,13 +118,13 @@ public sealed class ADetectedChecksOfACoderJobTests
         result.Green.Should().BeTrue(result.Note);
         result.Steps.Select(step => (step.Project, step.Step.Wire())).Should().Equal(("app", "build"), ("app", "test"));
         result.Toolchain!.Source.Should().Be(ToolchainSource.File);
-        bed.Launcher.Requests.Should().NotContain(request => request.Arguments.Contains("ls-tree"), "a file that states every command reads no manifest");
+        // The frozen gate lists the base tree to freeze the files the definitions reach, but no manifest decides anything here: Cargo.toml and package.json above change nothing of the steps.
     }
 
-    // ---- d2 (D3): a head that deletes the test script, the lock file or a test project is refused, and no step runs ----
+    // ---- d2 (D3): what the head does to the definitions is REPORTED and its own definitions run (owner decision 2026-11-26); only what cannot be run is refused ----
 
     [Fact]
-    public async Task D3_AHeadThatDeletesTheTestScript_IsToolchainRefused_AndNoStepRuns()
+    public async Task D3_AHeadThatDeletesTheTestScript_LosesTheTestStep_TheLossIsReported_NothingIsGreen()
     {
         NeedAUserManager();
         await using var bed = await BoundaryBed.CreateAsync(files: new Dictionary<string, string> { ["package.json"] = NodePackage, ["package-lock.json"] = NodeLock });
@@ -132,15 +132,13 @@ public sealed class ADetectedChecksOfACoderJobTests
 
         var result = await RunAsync(bed, Checks(bed));
 
-        result.State.Should().Be(CheckState.ToolchainRefused);
-        result.Steps.Should().BeEmpty();
-        result.Green.Should().BeFalse();
-        result.Note.Should().Contain("frozen build definition", "the interim gate refuses it before the name-level compare is asked (second layer: ACoderCannotChangeADetectedCheckTests)");
-        UnitsStarted(bed).Should().Be(0);
+        result.Green.Should().BeFalse("a repository with no step left to run is never green");
+        result.State.Should().NotBe(CheckState.ToolchainRefused);
+        (result.Note + string.Join(' ', result.Toolchain?.Changes.LostSteps ?? [])).Should().Contain("removed test of package.json");
     }
 
     [Fact]
-    public async Task D3_AHeadThatReplacesTheTestScriptWithEchoPassed_IsToolchainRefused_BeforeAnyStep()
+    public async Task D3_AHeadThatReplacesTheTestScriptWithEchoPassed_IsReportedAsAChangedTestCommand_AndItsScriptRuns()
     {
         NeedAUserManager();
         await using var bed = await BoundaryBed.CreateAsync(files: new Dictionary<string, string> { ["package.json"] = NodePackage, ["package-lock.json"] = NodeLock });
@@ -148,14 +146,14 @@ public sealed class ADetectedChecksOfACoderJobTests
 
         var result = await RunAsync(bed, Checks(bed));
 
-        result.State.Should().Be(CheckState.ToolchainRefused);
-        result.Note.Should().Contain("frozen build definition");
-        result.Steps.Should().BeEmpty();
-        UnitsStarted(bed).Should().Be(0);
+        result.State.Should().NotBe(CheckState.ToolchainRefused, result.Note);
+        result.Toolchain!.Changes.ChangedTestCommands.Should().Contain(line => line.Contains("scripts.test"));
+        result.Toolchain.Changes.ChangedDefinitions.Should().NotBeEmpty();
+        result.ChangedFiles!.Paths.Should().Equal("package.json");
     }
 
     [Fact]
-    public async Task D3_AHeadThatDeletesTheLockFile_IsToolchainRefused()
+    public async Task D3_AHeadThatDeletesTheLockFile_CannotBeRun_SoItIsStillARefusal_WithItsReason()
     {
         NeedAUserManager();
         await using var bed = await BoundaryBed.CreateAsync(files: new Dictionary<string, string> { ["package.json"] = NodePackage, ["package-lock.json"] = NodeLock });
@@ -164,12 +162,12 @@ public sealed class ADetectedChecksOfACoderJobTests
         var result = await RunAsync(bed, Checks(bed));
 
         result.State.Should().Be(CheckState.ToolchainRefused);
-        result.Note.Should().Contain("frozen build definition");
+        result.Note.Should().Contain("no lock file");
         UnitsStarted(bed).Should().Be(0);
     }
 
     [Fact]
-    public async Task D3_AHeadThatDeletesATestProject_IsToolchainRefused()
+    public async Task D3_AHeadThatDeletesATestProject_LosesItsTestStep_TheLossIsReported_TheBuildStillRuns()
     {
         NeedAUserManager();
         var tests = "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup><ItemGroup><PackageReference Include=\"Microsoft.NET.Test.Sdk\" Version=\"17.14.1\" /></ItemGroup></Project>";
@@ -178,13 +176,13 @@ public sealed class ADetectedChecksOfACoderJobTests
 
         var result = await RunAsync(bed, Checks(bed));
 
-        result.State.Should().Be(CheckState.ToolchainRefused);
-        result.Note.Should().Contain("frozen build definition");
-        UnitsStarted(bed).Should().Be(0);
+        result.State.Should().NotBe(CheckState.ToolchainRefused, result.Note);
+        result.Toolchain!.Changes.LostSteps.Should().Contain("the worktree removed test (tests/T.csproj) of App.slnx");
+        result.Steps.Select(step => step.Step.Wire()).Should().Contain("build").And.NotContain("test");
     }
 
     [Fact]
-    public async Task D3_AHeadThatAddsACargoToml_IsToolchainRefused_ByTheNameOfTheStack()
+    public async Task D3_AHeadThatAddsACargoToml_CannotBeRun_SoItIsRefused_ByTheNameOfTheStack()
     {
         NeedAUserManager();
         await using var bed = await BoundaryBed.CreateAsync(files: new Dictionary<string, string> { ["App.csproj"] = Library });
@@ -193,11 +191,11 @@ public sealed class ADetectedChecksOfACoderJobTests
         var result = await RunAsync(bed, Checks(bed));
 
         result.State.Should().Be(CheckState.ToolchainRefused);
-        result.Note.Should().Contain("frozen build definition", "the gate refuses a path that is not a source file before the detection names the stack");
+        result.Note.Should().Contain("rust").And.Contain("native/Cargo.toml");
     }
 
     [Fact]
-    public async Task D3_AHeadThatAddsAToolchainFile_IsReportedAsAdded_AndRefusedByTheFrozenGate_NothingRuns()
+    public async Task D3_AHeadThatAddsAToolchainFile_IsReportedAsAdded_AndTheHeadsFileRuns()
     {
         NeedAUserManager();
         await using var bed = await BoundaryBed.CreateAsync(files: new Dictionary<string, string> { ["App.csproj"] = Library, ["Class1.cs"] = "public class Class1 { }\n" });
@@ -206,14 +204,14 @@ public sealed class ADetectedChecksOfACoderJobTests
         var result = await RunAsync(bed, Checks(bed));
 
         result.ToolchainChange.Should().Be(ToolchainChange.Added);
-        result.State.Should().Be(CheckState.ToolchainRefused, result.Note);
-        result.Note.Should().Contain("frozen build definition");
-        result.Steps.Should().BeEmpty();
-        File.Exists(Path.Combine(bed.Worktree, "the-new-file-ran")).Should().BeFalse();
+        result.Note.Should().Contain("added");
+        result.Toolchain!.Source.Should().Be(ToolchainSource.File, "the head's file is the file that runs");
+        result.Steps.Select(step => step.Step.Wire()).Should().Equal("build", "test");
+        File.Exists(Path.Combine(bed.Worktree, "the-new-file-ran")).Should().BeTrue("the head's own build command ran");
     }
 
     [Fact]
-    public async Task D14_AProjectOnlyTheHeadHas_IsRefusedByTheFrozenGate_BeforeAnyStep()
+    public async Task D14_AProjectOnlyTheHeadHas_IsRestoredBuiltAndTested_AndMarkedDefinedByHead()
     {
         NeedAUserManager();
         await using var bed = await BoundaryBed.CreateAsync(files: new Dictionary<string, string> { ["App.csproj"] = Library, ["Class1.cs"] = "public class Class1 { }\n", [".gitignore"] = "bin/\nobj/\n" });
@@ -221,9 +219,10 @@ public sealed class ADetectedChecksOfACoderJobTests
 
         var result = await RunAsync(bed, Checks(bed));
 
-        result.State.Should().Be(CheckState.ToolchainRefused, result.Note);
-        result.Note.Should().Contain("frozen build definition");
-        result.Steps.Should().BeEmpty("nothing ran: the head added a project file, and that is a frozen build definition (interim rule, the owner decides)");
+        result.Green.Should().BeTrue(result.Note);
+        result.Toolchain!.Projects.Select(project => (project.Id, project.DefinedByHead)).Should().Equal(("App.csproj", false), ("Other.csproj", true));
+        result.Steps.Select(step => (step.Project, step.Step.Wire())).Should().Equal(("App.csproj", "restore"), ("App.csproj", "build"), ("Other.csproj", "restore"), ("Other.csproj", "build"));
+        result.ChangedFiles!.Paths.Should().Equal("Other.csproj");
     }
 
     // ---- d3: the head is the COMMIT; nothing of the working tree is read ----

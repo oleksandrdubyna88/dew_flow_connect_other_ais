@@ -45,6 +45,32 @@ public sealed class ANodeDetectorTests
     }
 
     [Fact]
+    public void AWorkspaceMemberWithATestScript_UnderARootWithNone_IsPlannedAsAStepOfItsOwn()
+    {
+        var root = Json("\"build\": \"tsc -b\"", extra: ", \"workspaces\": [\"packages/*\"]");
+
+        var project = Detected(Detect(("package.json", root), ("package-lock.json", "{}"), ("packages/a/package.json", Json("\"test\": \"jest\"", "\"jest\": \"1\"")), ("packages/b/package.json", Json("\"build\": \"tsc\"")))).Single();
+
+        project.Steps.Select(step => (step.Name, step.Subject, string.Join(' ', step.Argv))).Should().Equal(("restore", "package.json", "npm ci --ignore-scripts"), ("build", "package.json", "npm run build"), ("test", "packages/a/package.json", "npm test --workspace=./packages/a"));
+        project.TestsNone.Should().BeFalse("a member's tests are tests");
+        project.Fact("memberScripts").Should().Be("packages/a:test");
+    }
+
+    [Fact]
+    public void AWorkspaceMemberWithATypecheckScript_IsPlanned_AndARootThatRunsThemIsLeftAlone()
+    {
+        var root = Json("\"test\": \"jest\"", extra: ", \"workspaces\": [\"packages/*\"]");
+
+        var planned = Detected(Detect(("package.json", root), ("package-lock.json", "{}"), ("packages/a/package.json", Json("\"typecheck\": \"tsc --noEmit\"")))).Single();
+        planned.Steps.Select(step => (step.Name, string.Join(' ', step.Argv))).Should().Contain(("typecheck", "npm run typecheck --workspace=./packages/a"));
+
+        var rootRuns = Json("\"test\": \"jest\", \"typecheck\": \"tsc -b\"", extra: ", \"workspaces\": [\"packages/*\"]");
+        var left = Detected(Detect(("package.json", rootRuns), ("package-lock.json", "{}"), ("packages/a/package.json", Json("\"test\": \"jest\", \"typecheck\": \"tsc\"")))).Single();
+        left.Steps.Should().NotContain(step => step.Argv.Any(item => item.StartsWith("--workspace=", StringComparison.Ordinal)));
+        left.Facts.Should().NotContain(pair => pair.Key == "memberScripts");
+    }
+
+    [Fact]
     public void ARootWithWorkspaces_IsOneProject_AndItsMembersAreNot()
     {
         var root = Json("\"test\": \"vitest run\"", "\"vitest\": \"1\"", ", \"workspaces\": [\"packages/*\"]");

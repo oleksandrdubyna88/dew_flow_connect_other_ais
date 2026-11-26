@@ -241,12 +241,35 @@ public sealed class ADotnetDetectorTests
     [Fact]
     public void AConditionedProperty_IsNotEvaluated_AndIsNoted()
     {
-        var conditioned = Project(packages: Pkg("xunit.v3"), body: "<IsTestProject Condition=\"'$(CI)' == 'true'\">true</IsTestProject>");
+        var conditioned = Project(packages: Pkg("xunit.v3"), body: "<IsTestProject Condition=\"'$(CI)' == 'true'\">false</IsTestProject>");
 
         var unit = Detected(Detect(("App.slnx", "x"), ("t/T.csproj", conditioned))).Single();
 
         unit.TestsNone.Should().BeTrue();
         unit.Notes.Should().Contain(note => note.Contains("condition"));
+    }
+
+    [Fact]
+    public void ATestSdkReferenceUnderACondition_StillMakesAProjectATestProject_TheTestStepIsPlannedConservatively()
+    {
+        var conditioned = Project(references: string.Empty, packages: "<ItemGroup Condition=\"'$(TargetFramework)' == 'net10.0'\"><PackageReference Include=\"Microsoft.NET.Test.Sdk\" Version=\"1\" /></ItemGroup>");
+
+        var unit = Detected(Detect(("App.slnx", "x"), ("t/T.csproj", conditioned))).Single();
+
+        unit.TestsNone.Should().BeFalse("a test marker under a condition is still a test marker: dropping it would leave the project with no test step");
+        unit.Steps.Select(step => step.Name).Should().Contain("test");
+        unit.TestPaths.Should().Equal("t/T.csproj");
+    }
+
+    [Fact]
+    public void AnIsTestProjectTrueUnderACondition_IsAMarkerToo()
+    {
+        var conditioned = Project(body: "<IsTestProject Condition=\"'$(CI)' == 'true'\">true</IsTestProject>", packages: Pkg("Microsoft.NET.Test.Sdk"));
+
+        var unit = Detected(Detect(("App.slnx", "x"), ("t/T.csproj", conditioned))).Single();
+
+        unit.TestsNone.Should().BeFalse();
+        unit.Steps.Select(step => step.Name).Should().Contain("test");
     }
 
     // ---- d4: no test project, too many units, the formatter ----

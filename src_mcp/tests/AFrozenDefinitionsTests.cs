@@ -5,8 +5,8 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// The pure half of the interim gate "frozen build definitions" (E4 s3, pass 2 of the security verify; INTERIM, the owner decides): the list lives in <c>shared/toolchains.json</c> and nowhere in code; a name is matched without case at any depth; the raw records of
-/// <c>git diff-tree</c> are read exactly or not at all; a head is refused for a frozen path, a symlink or a submodule, whatever the status (added, deleted, modified, mode-changed); and the sentence holds counts and no path.
+/// The pure half of the CLASSIFIER of the report "what the head changed in the definitions of the checks" (E4 s3; it was the interim gate "frozen build definitions" until the owner's decision of 2026-11-26, which made it a report and not a refusal): the list lives in <c>shared/toolchains.json</c> and nowhere in code; a name is matched without case at any depth; the raw records of
+/// <c>git diff-tree</c> are read exactly or not at all; a changed path that is not a plain source file, a symlink and a submodule are CLASSIFIED (and reported), whatever the status (added, deleted, modified, mode-changed).
 /// </summary>
 public sealed class AFrozenDefinitionsTests
 {
@@ -78,11 +78,11 @@ public sealed class AFrozenDefinitionsTests
     }
 
     [Fact]
-    public void ACleanHead_AnythingButAFrozenPath_IsNotRefused()
+    public void APlainSourceChange_IsNotReportedAsADefinition()
     {
-        var changes = FrozenDefinitions.ParseRaw(Raw(("100644", "100644", 'M', "src/Foo.cs"), ("000000", "100644", 'A', "tests/FooTests.cs"), ("100644", "000000", 'D', "docs/old.md"), ("100644", "100755", 'M', "src/web/app.TS"), ("100644", "100644", 'M', "tests/__snapshots__/a.snap")));
+        var changes = FrozenDefinitions.ParseRaw(Raw(("100644", "100644", 'M', "src/Foo.cs"), ("000000", "100644", 'A', "tests/FooTests.cs"), ("100644", "000000", 'D', "docs/old.md"), ("100644", "100755", 'M', "src/web/app.TS"), ("100644", "100644", 'M', "tests/__snapshots__/a.snap")))!;
 
-        FrozenDefinitions.Refusal(changes, cut: false, Table).Should().BeEmpty();
+        FrozenDefinitions.Classify(changes, Table).Total.Should().Be(0);
     }
 
     [Theory]
@@ -96,29 +96,20 @@ public sealed class AFrozenDefinitionsTests
     [InlineData("120000", "000000", 'D', "docs/zq.lnk")]
     [InlineData("000000", "160000", 'A', "vendor/x")]
     [InlineData("160000", "160000", 'M', "vendor/x")]
-    public void AnAddedDeletedModifiedOrModeChangedFrozenPath_AndAnyLinkOrSubmodule_IsRefused_WithCountsAndNoPath(string oldMode, string newMode, char status, string path)
+    public void AnAddedDeletedModifiedOrModeChangedDefinitionPath_AndAnyLinkOrSubmodule_IsReported_NothingIsRefused(string oldMode, string newMode, char status, string path)
     {
-        var sentence = FrozenDefinitions.Refusal(FrozenDefinitions.ParseRaw(Raw((oldMode, newMode, status, path), ("100644", "100644", 'M', "src/Foo.cs"))), cut: false, Table);
+        var classified = FrozenDefinitions.Classify(FrozenDefinitions.ParseRaw(Raw((oldMode, newMode, status, path), ("100644", "100644", 'M', "src/Foo.cs")))!, Table);
 
-        sentence.Should().Contain("frozen build definition path(s)").And.Contain("symlink or submodule path(s)").And.Contain("interim rule").And.Contain("by hand").And.NotContain(path.Split('/')[^1]);
+        classified.Total.Should().Be(1);
+        classified.Paths.Should().Equal(path);
     }
 
     [Fact]
-    public void TheCounts_AreInTheSentence_AFrozenLinkIsCountedOnceAsALink()
+    public void TheCounts_AreSeparate_AReportedLinkIsCountedOnceAsALink()
     {
-        var changes = FrozenDefinitions.ParseRaw(Raw(("100644", "100644", 'M', "A.csproj"), ("100644", "100644", 'M', "B.csproj"), ("000000", "120000", 'A', "package.json")));
+        var changes = FrozenDefinitions.ParseRaw(Raw(("100644", "100644", 'M', "A.csproj"), ("100644", "100644", 'M', "B.csproj"), ("000000", "120000", 'A', "package.json")))!;
 
-        FrozenDefinitions.Refusal(changes, cut: false, Table).Should().StartWith("the head changed 2 frozen build definition path(s) and 1 symlink or submodule path(s) against the base");
-    }
-
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void AListingThatWasCutOrCouldNotBeRead_IsRefused_APartialListDecidesNothing(bool cut)
-    {
-        var changes = cut ? FrozenDefinitions.ParseRaw(Raw(("100644", "100644", 'M', "src/Foo.cs"))) : null;
-
-        FrozenDefinitions.Refusal(changes, cut, Table).Should().Contain("could not be read completely").And.Contain("nothing was run");
+        FrozenDefinitions.Classify(changes, Table).Should().BeEquivalentTo(new ChangedFiles(2, 1, ["A.csproj", "B.csproj", "package.json"]));
     }
 
     [Fact]
@@ -163,6 +154,12 @@ public sealed class AFrozenDefinitionsTests
     [InlineData("setup.ts", false)]
     [InlineData("src/GlobalUsings.cs", false)]
     [InlineData("src/AppConfig.cs", false)]
+    [InlineData("jest.config.ts", false)]
+    [InlineData("vite.config.mts", false)]
+    [InlineData("web/eslint.rules.cjs", false)]
+    [InlineData("web/src/SetupHelper.ts", false)]
+    [InlineData("src/.hidden.fs", false)]
+    [InlineData("docs/.notes.md", false)]
     [InlineData("webpack.dev.js", false)]
     [InlineData("src/Foo.cs.", false)]
     [InlineData("src/Foo.cs ", false)]
@@ -171,11 +168,11 @@ public sealed class AFrozenDefinitionsTests
         FrozenDefinitions.IsAllowedChange(path, Table).Should().Be(allowed);
 
     [Fact]
-    public void ADeleteOrARenameOfAnythingElse_IsRefusedToo_ARenameIsADeleteAndAnAdd()
+    public void ADeleteOrARenameOfAnythingElse_IsReportedToo_ARenameIsADeleteAndAnAdd()
     {
-        var changes = FrozenDefinitions.ParseRaw(Raw(("100644", "000000", 'D', "tests/T.csproj.user"), ("000000", "100644", 'A', "tests/T.csproj.user.bak")));
+        var changes = FrozenDefinitions.ParseRaw(Raw(("100644", "000000", 'D', "tests/T.csproj.user"), ("000000", "100644", 'A', "tests/T.csproj.user.bak")))!;
 
-        FrozenDefinitions.Refusal(changes, cut: false, Table).Should().StartWith("the head changed 2 frozen build definition path(s)");
+        FrozenDefinitions.Classify(changes, Table).Definitions.Should().Be(2);
     }
 
     [Fact]

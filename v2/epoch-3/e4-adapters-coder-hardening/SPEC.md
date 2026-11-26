@@ -60,7 +60,7 @@ What the code has today (checked at `f19a7fcb`):
    of section N. Answered 2026-11-25: npm only.
 10. **The toolchain file gets four names** (`restore`, `format`, `testFor`, `testFiles`), and a file project that states a
     command runs exactly what it states (section A2). `version` stays 1: no release has shipped the coder.
-11. **A detected check cannot be changed by the job it checks.** For a project the base has, the check definition (the `scripts`
+11. **[Superseded by the owner's decision of 2026-11-26: a changed definition is reported, never refused; see A4.]** ~~**A detected check cannot be changed by the job it checks.**~~ For a project the base has, the check definition (the `scripts`
     of `package.json`; for .NET the test projects of the solution, the runner, the MSBuild targets and imports) must be the same
     at the head, or the job is refused (section A4). §16 row 9 said only "detect on both trees".
 
@@ -105,7 +105,7 @@ same limits: they are part of its check definition (A4).
 
 **Node.** Each `package.json` is a project; a root with `workspaces` is ONE project and its members are not projects. Facts: the
 lock file, the scripts, the runner (jest, vitest, node-test or unknown: it needs the package AND the word in `scripts.test`), a
-`tsconfig.json`, a prettier configuration.
+`tsconfig.json`, a prettier configuration. A workspace member that has a `test` (or `typecheck`) script when the root has none is planned as a step of its own, `npm test --workspace=./<member folder>` (measured: it runs the member's script and returns its exit code); a root that has a test script is taken to run its members'. A test marker under a `Condition` (a `Microsoft.NET.Test.Sdk` reference, `IsTestProject` set to `true`) still makes a project a test project: the reader evaluates nothing, so the test step is planned conservatively.
 
 **The defaults** (the exact argv is frozen by story s1; a line here is a proposal until s1 saw it work inside the unit):
 
@@ -133,7 +133,7 @@ the cure, which is always "name the commands in `.coai/toolchain.yaml`"):
 | a `package.json` with no lock file, with two, or with a pnpm, yarn or bun lock file | refused: the package manager is named |
 | a manifest that cannot be parsed, is over its size, or is a link | refused (a submodule is not entered and is named in the notes) |
 | over a limit of the search | refused: the number and the limit |
-| a check definition of a project of the base that differs at the head (A4) | refused: the project and the member are named |
+| a check definition of a project of the base that differs at the head (A4) | **not refused** (owner decision 2026-11-26): the head's own definitions run, and the difference is reported: the project and the member are named |
 | a project with no build, typecheck and test step | listed as `unchecked`, no step; when every project is so: `not_configured` |
 | a unit with no test project | its build runs; the result says `tests: none` |
 
@@ -141,37 +141,28 @@ There is no partial answer: one refused project refuses the repository. A reposi
 
 ### A4. Both trees
 
-Detection runs on the base and on the head.
+**Owner decision 2026-11-26 — this section was rewritten; it counts as a plan change.** The first plan (decision 11, plan gate item 1) refused a head that changed the check definition, and two interim versions (the gate "frozen build definitions" of the E4 s3 security verifies, passes 2 and 3) refused a head for any change that is not a plain source file.
+The owner replaced all of it: *"Let's widen it so the coder is comfortable. Let it restore packages from the internet itself; no proxy or address lists. If the work needs it, let it do it — allow everything."* **Nothing the head changes is refused. The head's own definitions run, and the difference is reported.**
 
-- A project only the head has is added with the defaults (decision 9 of §16). Its definition is the head's own, and the result
-  marks it `definedByHead`.
-- A step (project and step name) that the base had and the head has not is `toolchain_refused`: `the worktree removed <step> of
-  <project>`. A manifest of an unbuilt stack that appears at the head refuses the job as well.
-- **The check definition of a project the base has must be the same at the head.** The definition is what decides WHAT a default
-  command runs:
-  - node: the whole `scripts` member of `package.json` (every script a step runs, its `pre` and `post` scripts and the scripts it
-    calls by name are in it) and the name of the lock file;
-  - .NET: the test projects the solution file names; the facts that make a project a test project and choose its runner; the
-    `test` member of `global.json`; the names of every `Target`, `Import` and `UsingTask` element in the unit's project files and
-    in the `.props` and `.targets` files that apply to it.
+Detection runs on the base and on the head, and **the head's projects are what runs**.
 
-  A difference is `toolchain_refused` before any step: `the worktree changed scripts.test of <project>`. The cure is in the
-  sentence: land the change in a commit of its own (it is then in the base of the next job), or name the commands in
-  `.coai/toolchain.yaml`. A head that replaces `scripts.test` with `echo passed` is refused. It is never green.
-- Not a definition, so not refused: a new or changed source or test file, a new `PackageReference`, `ProjectReference` or
-  `PackageVersion`, a new dependency with its lock file.
+- A project only the head has is restored, built and tested with the defaults (decision 9 of §16), and the result marks it `definedByHead`. A package or a test project the coder adds is part of the head's definitions.
+- A step (project and step name) that the base had and the head has not is **reported** as lost (`the worktree removed <step> of <project>`), never refused. A manifest of an unbuilt stack that appears at the head still refuses the job: nothing can be run for it.
+- The head's `.coai/toolchain.yaml` is the file that runs; what the head did to the base's stated commands (a command removed, a command changed, the test command above all) is reported.
+- **What is reported** (the envelope's `toolchain` section, its top-level `definitionsChanged` flag and one-line `definitionSummary`, and `checks/round-<n>/changed-definitions.txt` in the job's record): the counts of definition and configuration files the head changed (every changed path that is not a plain source file, by
+  the lists of `shared/toolchains.json`), of symlinks and submodules, the spelled paths in the record file, the steps the base had and the head lost, the members of the check definition that differ (node: the `scripts` of the package and of its workspace members, the lock file's name, the runner and tool members, the configuration files; .NET: the test projects the solution names, the runner, `global.json`, the names of every
+  `Target`, `Import` and `UsingTask`, the raw test-fact elements, the `.props` and `.targets` files) with the subset about tests as `changedTestCommands`, and the test files modified, added or deleted (`headTestFiles`).
+- **The accepted risk, stated plainly:** a green check means the head's OWN definitions passed. The coder may have changed the base's tests or the commands that run them, and the envelope says when (`definitionsChanged`).
 
-The rule holds for detected and defaulted projects: there coai chose the command and knows what it reads. A project of the file
-that states its command is the repository's own word, read at the base. What that command reads inside the tree (a script file,
-the test code) is the head's, as in E2, and the code gate reads the diff. That limit is stated, not solved.
+What the coder still cannot change, because it costs the coder nothing to keep: the tree the checks run in equals the commit (`git clean -ffdx`, an empty `status --ignored`, no `.git` entry below the root) before every round; a step gets a fresh home and temp, and the package caches are writable only in a restore step; coai's own git reads are hardened; no value of the head is echoed in a sentence.
+Restore keeps the host network.
 
-Scenarios: **D1** each of the seven fixture trees gives its golden projects, facts and argv. **D2** a head that adds a project.
-**D3** a head that removes a test script, a lock file, a test project. **D4** a head that adds `Cargo.toml`. **D5** a file at the
+Scenarios: **D1** each of the seven fixture trees gives its golden projects, facts and argv. **D2** a head that adds a project: it is restored, built and tested, marked `definedByHead`. **D3** a head that removes a test script, a lock file, a test project: the head's definitions run and the lost step is reported. **D4** a head that adds `Cargo.toml` is refused by the stack's name. **D5** a file at the
 base: detection decides nothing. **D6** a file project with no command: the defaults of its folder. **D7** nothing found;
 documents only. **D8** a link, a submodule, an XML entity, a JSON 40 levels deep. **D9** each limit. **D10** this repository's own
 HEAD with detection forced, and with its file. **D11** `COAI_TOOLCHAIN_DETECT=off`. **D12** a head that replaces `scripts.test` with
-`echo passed` → refused, zero steps. **D13** a head that adds a `VSTest` target, takes a test project out of the solution file or
-changes the runner in `global.json` → refused. **D14** a new test file, a new package reference, a new dependency → not refused.
+`echo passed` → **not refused**: the head's script runs, `definitionsChanged` is true and the changed test command is named. **D13** a head that adds a `VSTest` target, takes a test project out of the solution file or
+changes the runner in `global.json` → **not refused**: reported the same way. **D14** a new test file → run, and not reported as a definition (a plain source file); a new package reference or a new dependency changes a project file or `package.json` → run (it is restored from the internet), and reported as a changed definition file.
 
 ## B. The steps and the check boundary
 
@@ -546,7 +537,7 @@ Definition of Done:
 
 The gate read `EPIC_BUNDLE.md` at `1db073b6`. All 5 findings were accepted.
 
-1. **A coder must not change its own checks** (A4, decision 11; s3 t5). The first plan only named a changed script in the result.
+1. **[Superseded 2026-11-26 by the owner: reported, not refused; see A4.]** **A coder must not change its own checks** (A4, decision 11; s3 t5). The first plan only named a changed script in the result.
    Now the check definition of a project the base has is compared between the base and the head, and a difference refuses the job
    before any step. D12 tests a `scripts.test` replaced with `echo passed`; D13 the .NET forms; D14 what must stay allowed.
 2. **Selection includes what depends on a change, or runs everything** (section E; s3 t6). The first plan left a node project out

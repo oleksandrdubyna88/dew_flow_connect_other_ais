@@ -94,15 +94,14 @@ public static class ProjectGraph
 
                     break;
                 case "packagereference":
+                    var name = ((string?)element.Attribute("Include") ?? (string?)element.Attribute("Update") ?? string.Empty).Trim();
                     if (Conditioned(element))
                     {
                         conditioned++;
-
-                        break;
                     }
 
-                    var name = ((string?)element.Attribute("Include") ?? (string?)element.Attribute("Update") ?? string.Empty).Trim();
-                    if (name.Length > 0)
+                    // A test marker under a condition is still a test marker: the reader evaluates nothing, and dropping it would leave a test project with no test step (checkpoint finding 5).
+                    if (name.Length > 0 && (!Conditioned(element) || string.Equals(name, VsTestPackage, StringComparison.OrdinalIgnoreCase)))
                     {
                         packages.Add(name);
                     }
@@ -271,20 +270,31 @@ public static class ProjectGraph
     private static (Dictionary<string, bool> Found, int Skipped) PropertiesOf(XDocument? document)
     {
         var found = new Dictionary<string, bool>(StringComparer.Ordinal);
+        var conditionalTrue = new List<string>();
         var skipped = 0;
         foreach (var group in document?.Root?.Elements().Where(element => string.Equals(element.Name.LocalName, "PropertyGroup", StringComparison.OrdinalIgnoreCase)) ?? [])
         {
             foreach (var element in group.Elements().Where(element => TestProperties.Contains(element.Name.LocalName, StringComparer.OrdinalIgnoreCase)))
             {
+                var key = TestProperties.First(name => string.Equals(name, element.Name.LocalName, StringComparison.OrdinalIgnoreCase));
                 if (Conditioned(group) || Conditioned(element))
                 {
                     skipped++;
+                    if (string.Equals(element.Value.Trim(), "true", StringComparison.OrdinalIgnoreCase))
+                    {
+                        conditionalTrue.Add(key); // a marker set to true under a condition is a marker (conservative)
+                    }
 
                     continue;
                 }
 
-                found[TestProperties.First(name => string.Equals(name, element.Name.LocalName, StringComparison.OrdinalIgnoreCase))] = string.Equals(element.Value.Trim(), "true", StringComparison.OrdinalIgnoreCase);
+                found[key] = string.Equals(element.Value.Trim(), "true", StringComparison.OrdinalIgnoreCase);
             }
+        }
+
+        foreach (var key in conditionalTrue)
+        {
+            found[key] = true;
         }
 
         return (found, skipped);

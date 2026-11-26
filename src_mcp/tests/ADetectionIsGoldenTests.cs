@@ -254,6 +254,16 @@ public sealed class ADetectionIsGoldenTests : IAsyncLifetime
                     text.Append($"difference: {difference}\n");
                 }
 
+                foreach (var lost in toolchain.Changes.LostSteps)
+                {
+                    text.Append($"lost: {lost}\n");
+                }
+
+                foreach (var changed in toolchain.Changes.ChangedDefinitions)
+                {
+                    text.Append($"changed: {changed}\n");
+                }
+
                 foreach (var note in toolchain.Notes)
                 {
                     text.Append($"note: {note}\n");

@@ -75,80 +75,120 @@ public static class AffectedProjects
     /// <summary>Decides which projects run. <paramref name="atBase"/> and <paramref name="atHead"/> are the manifests of the two commits.</summary>
     public static AffectedSelection Select(ResolvedToolchain toolchain, IReadOnlyList<PathChange>? changes, ManifestSet atBase, ManifestSet atHead)
     {
-        var all = toolchain.Projects.Select(project => project.Id).ToHashSet(StringComparer.Ordinal);
-        AffectedSelection Everything(string why) => new(true, why, all, new Dictionary<string, IReadOnlySet<string>>(), []);
-
-        if (changes is null || changes.Count == 0)
+        if (DiffUnreadable(changes))
         {
-            return Everything("the diff between the base and the head names no path coai could read, so the impact is unknown");
+            return Everything(toolchain, "the diff between the base and the head names no path coai could read, so the impact is unknown");
         }
 
-        var changed = changes.SelectMany(change => change.OldPath is null ? new[] { change.Path } : [change.Path, change.OldPath]).Distinct(StringComparer.Ordinal).ToList();
-        var folders = toolchain.Projects.Select(FolderOf).Distinct(StringComparer.Ordinal).ToList();
-        var stray = changed.FirstOrDefault(path => !folders.Any(folder => ProjectGraph.Under(folder, path)));
-        if (stray is not null)
+        var changed = ChangedPaths(changes!);
+        if (StrayReason(toolchain, changed) is { Length: > 0 } stray)
         {
-            return Everything($"a changed path is outside every project folder ({PathSpelling.Spell(stray)}{(changed.Count(path => !folders.Any(folder => ProjectGraph.Under(folder, path))) > 1 ? " and others" : string.Empty)}): a root configuration, a shared folder or documents can reach every project");
+            return Everything(toolchain, stray);
         }
 
         var graph = Graph(atHead);
-        if (graph.Refusal.Length > 0)
-        {
-            return Everything(graph.Refusal);
-        }
 
-        var baseGraph = Graph(atBase);
-        var run = new HashSet<string>(StringComparer.Ordinal);
-        var tests = new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal);
-        var left = new List<LeftOut>();
-        var dotnet = toolchain.Projects.Where(project => project.Detected is { Stack: "dotnet" }).ToList();
-
-        // The projects of the whole repository that the diff touched (a project the head removed counts too): a test project of one unit reaches a changed project of another.
-        var changedEverywhere = graph.Projects.Keys.Where(path => changed.Any(changedPath => ProjectGraph.Under(ProjectGraph.Folder(path), changedPath))).ToHashSet(StringComparer.Ordinal);
-        foreach (var removed in baseGraph.Projects.Keys.Where(path => !graph.Projects.ContainsKey(path)))
-        {
-            changedEverywhere.Add(removed);
-        }
-
-        var unitsWithChanges = dotnet.Where(unit => changed.Any(path => ProjectGraph.Under(FolderOf(unit), path))).Select(unit => unit.Id).ToHashSet(StringComparer.Ordinal);
-        foreach (var project in toolchain.Projects)
-        {
-            if (project.Detected is not { Stack: "dotnet" } detected)
-            {
-                run.Add(project.Id);
-
-                continue;
-            }
-
-            var owned = detected.OwnedPaths;
-            var folder = FolderOf(project);
-            var reachesAChangedUnit = unitsWithChanges.Contains(project.Id) || owned.Any(path => Reach(path, graph).Any(other => dotnet.Any(unit => unit.Id != project.Id && unitsWithChanges.Contains(unit.Id) && OwnedBy(unit, other))));
-            var leaving = owned.Select(path => (Path: path, File: atHead.Files.FirstOrDefault(file => file.Path == path))).FirstOrDefault(item => item.File is not null && ProjectGraph.PathsLeaving(item.File.Text, item.Path, folder) > 0);
-            var leavingDefinition = atHead.Files.Where(file => file.Stack == "dotnet" && file.Kind == ManifestKind.Definition && ProjectGraph.Under(folder, file.Path) && (file.Path.EndsWith(".props", StringComparison.OrdinalIgnoreCase) || file.Path.EndsWith(".targets", StringComparison.OrdinalIgnoreCase)))
-                .FirstOrDefault(file => ProjectGraph.PathsLeaving(file.Text, file.Path, folder) > 0);
-            if (!reachesAChangedUnit && leaving.File is null && leavingDefinition is null)
-            {
-                left.Add(new LeftOut(project.Id, "no changed path is in its folder, and none of its projects references a project of a unit that has one; every reference resolves, and no file of it holds a path that leaves its folder"));
-
-                continue;
-            }
-
-            run.Add(project.Id);
-            var unitInfo = TestSelection(detected, owned, changed, folder, graph, baseGraph, changedEverywhere);
-            if (unitInfo.Unknown.Length > 0)
-            {
-                return Everything(unitInfo.Unknown);
-            }
-
-            if (unitInfo.Tests is { } selected)
-            {
-                tests[project.Id] = selected;
-                left.AddRange(detected.TestPaths.Where(test => !selected.Contains(test)).Select(test => new LeftOut(test, "it reaches no changed project through the reverse ProjectReference graph of the head")));
-            }
-        }
-
-        return run.Count == 0 ? Everything("the selection would have selected nothing, so everything runs") : new AffectedSelection(false, string.Empty, run, tests, left);
+        return graph.Refusal.Length > 0 ? Everything(toolchain, graph.Refusal) : Decide(Context.Of(toolchain, changed, graph, Graph(atBase), atHead));
     }
+
+    private static bool DiffUnreadable(IReadOnlyList<PathChange>? changes) => changes is null || changes.Count == 0;
+
+    private static AffectedSelection Everything(ResolvedToolchain toolchain, string why) =>
+        new(true, why, toolchain.Projects.Select(project => project.Id).ToHashSet(StringComparer.Ordinal), new Dictionary<string, IReadOnlySet<string>>(), []);
+
+    /// <summary>Every path the diff names, both sides of a rename.</summary>
+    private static List<string> ChangedPaths(IReadOnlyList<PathChange> changes) =>
+        [.. changes.SelectMany(change => change.OldPath is null ? new[] { change.Path } : [change.Path, change.OldPath]).Distinct(StringComparer.Ordinal)];
+
+    /// <summary>The reason everything runs when a changed path is outside every project folder (a root configuration, a shared folder, documents), or empty.</summary>
+    private static string StrayReason(ResolvedToolchain toolchain, List<string> changed)
+    {
+        var folders = toolchain.Projects.Select(FolderOf).Distinct(StringComparer.Ordinal).ToList();
+        var strays = changed.Where(path => !folders.Any(folder => ProjectGraph.Under(folder, path))).ToList();
+
+        return strays.Count == 0
+            ? string.Empty
+            : $"a changed path is outside every project folder ({PathSpelling.Spell(strays[0])}{(strays.Count > 1 ? " and others" : string.Empty)}): a root configuration, a shared folder or documents can reach every project";
+    }
+
+    /// <summary>What the decision reads: the toolchain, the changed paths, the project graphs of the two commits and the units that have a changed path.</summary>
+    private sealed record Context(ResolvedToolchain Toolchain, List<string> Changed, GraphRead Graph, GraphRead BaseGraph, ManifestSet AtHead, HashSet<string> ChangedEverywhere, List<ResolvedProject> Dotnet, HashSet<string> UnitsWithChanges)
+    {
+        public static Context Of(ResolvedToolchain toolchain, List<string> changed, GraphRead graph, GraphRead baseGraph, ManifestSet atHead)
+        {
+            var dotnet = toolchain.Projects.Where(project => project.Detected is { Stack: "dotnet" }).ToList();
+
+            // The projects of the whole repository that the diff touched (a project the head removed counts too): a test project of one unit reaches a changed project of another.
+            var changedEverywhere = graph.Projects.Keys.Where(path => changed.Any(changedPath => ProjectGraph.Under(ProjectGraph.Folder(path), changedPath))).ToHashSet(StringComparer.Ordinal);
+            changedEverywhere.UnionWith(baseGraph.Projects.Keys.Where(path => !graph.Projects.ContainsKey(path)));
+            var unitsWithChanges = dotnet.Where(unit => changed.Any(path => ProjectGraph.Under(FolderOf(unit), path))).Select(unit => unit.Id).ToHashSet(StringComparer.Ordinal);
+
+            return new Context(toolchain, changed, graph, baseGraph, atHead, changedEverywhere, dotnet, unitsWithChanges);
+        }
+    }
+
+    /// <summary>What the loop over the projects collects.</summary>
+    private sealed record Outcome(HashSet<string> Run, Dictionary<string, IReadOnlySet<string>> Tests, List<LeftOut> Left);
+
+    private static AffectedSelection Decide(Context context)
+    {
+        var outcome = new Outcome(new HashSet<string>(StringComparer.Ordinal), new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal), []);
+        foreach (var project in context.Toolchain.Projects)
+        {
+            if (Evaluate(context, project, outcome) is { Length: > 0 } unknown)
+            {
+                return Everything(context.Toolchain, unknown);
+            }
+        }
+
+        return outcome.Run.Count == 0 ? Everything(context.Toolchain, "the selection would have selected nothing, so everything runs") : new AffectedSelection(false, string.Empty, outcome.Run, outcome.Tests, outcome.Left);
+    }
+
+    /// <summary>One project: it runs, or it is left out with its reason; for a unit that runs, which of its test projects run. Answers the sentence that makes the impact unknown, or empty.</summary>
+    private static string Evaluate(Context context, ResolvedProject project, Outcome outcome)
+    {
+        if (project.Detected is not { Stack: "dotnet" } detected)
+        {
+            outcome.Run.Add(project.Id);
+
+            return string.Empty;
+        }
+
+        var folder = FolderOf(project);
+        if (NothingReaches(context, project, detected, folder))
+        {
+            outcome.Left.Add(new LeftOut(project.Id, "no changed path is in its folder, and none of its projects references a project of a unit that has one; every reference resolves, and no file of it holds a path that leaves its folder"));
+
+            return string.Empty;
+        }
+
+        outcome.Run.Add(project.Id);
+        var info = TestSelection(detected, detected.OwnedPaths, context.Changed, folder, context.Graph, context.BaseGraph, context.ChangedEverywhere);
+        if (info.Tests is { } selected)
+        {
+            outcome.Tests[project.Id] = selected;
+            outcome.Left.AddRange(detected.TestPaths.Where(test => !selected.Contains(test)).Select(test => new LeftOut(test, "it reaches no changed project through the reverse ProjectReference graph of the head")));
+        }
+
+        return info.Unknown;
+    }
+
+    /// <summary>True when no changed path is in the unit's folder, no project of it references a unit that has one, and no file of it holds a path that leaves its folder.</summary>
+    private static bool NothingReaches(Context context, ResolvedProject project, DetectedProject detected, string folder) =>
+        !context.UnitsWithChanges.Contains(project.Id) && !ReachesAChangedUnit(context, project, detected) && !LeavesItsFolder(context, detected, folder);
+
+    private static bool ReachesAChangedUnit(Context context, ResolvedProject project, DetectedProject detected) =>
+        detected.OwnedPaths.Any(path => Reach(path, context.Graph).Any(other => context.Dotnet.Any(unit => unit.Id != project.Id && context.UnitsWithChanges.Contains(unit.Id) && OwnedBy(unit, other))));
+
+    private static bool LeavesItsFolder(Context context, DetectedProject detected, string folder)
+    {
+        var projectLeaves = detected.OwnedPaths.Select(path => context.AtHead.Files.FirstOrDefault(file => file.Path == path)).Any(file => file is not null && ProjectGraph.PathsLeaving(file.Text, file.Path, folder) > 0);
+
+        return projectLeaves || context.AtHead.Files.Any(file => IsDefinitionOfTheUnit(file, folder) && ProjectGraph.PathsLeaving(file.Text, file.Path, folder) > 0);
+    }
+
+    private static bool IsDefinitionOfTheUnit(ManifestFile file, string folder) =>
+        file.Stack == "dotnet" && file.Kind == ManifestKind.Definition && ProjectGraph.Under(folder, file.Path) && (file.Path.EndsWith(".props", StringComparison.OrdinalIgnoreCase) || file.Path.EndsWith(".targets", StringComparison.OrdinalIgnoreCase));
 
     private static string FolderOf(ResolvedProject project) =>
         project.Detected is { } detected ? (detected.Folder == "." ? string.Empty : detected.Folder) : project.FileProject is { } file ? (file.Path == "." ? string.Empty : file.Path) : string.Empty;

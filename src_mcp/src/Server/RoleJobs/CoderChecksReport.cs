@@ -19,7 +19,7 @@ internal sealed record CoderChecksReport(IReadOnlyList<CoderChecksRound> Rounds,
     /// <c>toolchain</c>: where the checks came from (<c>file</c>, <c>file+defaults</c> or <c>detected</c>), each project with its adapter, the facts the detector read and the steps planned (name, working folder, network where the table fixes it), the notes, and
     /// <c>changedBetweenBaseAndHead</c>: what differs between the two commits for a detected or defaulted project. No value of the head tree is written: every sentence here was spelled by <see cref="PathSpelling"/> or states a count. Null when the round never reached the resolving.
     /// </summary>
-    private static void WriteToolchain(Utf8JsonWriter json, ResolvedToolchain? toolchain, AffectedSelection? selection)
+    private static void WriteToolchain(Utf8JsonWriter json, ResolvedToolchain? toolchain, AffectedSelection? selection, CoderChecksRound round)
     {
         if (toolchain is null)
         {
@@ -68,6 +68,13 @@ internal sealed record CoderChecksReport(IReadOnlyList<CoderChecksRound> Rounds,
         }
 
         json.WriteEndArray();
+        json.WriteBoolean("definitionsChanged", round.Definitions.Changed);
+        json.WriteString("definitionSummary", round.Definitions.Summary);
+        json.WriteNumber("changedDefinitionFiles", round.ChangedFiles?.Definitions ?? 0);
+        json.WriteNumber("changedLinksOrSubmodules", round.ChangedFiles?.Links ?? 0);
+        WriteLines(json, "lostSteps", toolchain.Changes.LostSteps);
+        WriteLines(json, "changedDefinitions", toolchain.Changes.ChangedDefinitions);
+        WriteLines(json, "changedTestCommands", toolchain.Changes.ChangedTestCommands);
         json.WriteStartArray("changedBetweenBaseAndHead");
         foreach (var difference in toolchain.Differences)
         {
@@ -92,6 +99,17 @@ internal sealed record CoderChecksReport(IReadOnlyList<CoderChecksRound> Rounds,
         json.WriteEndArray();
         json.WriteEndObject();
         json.WriteEndObject();
+    }
+
+    private static void WriteLines(Utf8JsonWriter json, string name, IReadOnlyList<string> lines)
+    {
+        json.WriteStartArray(name);
+        foreach (var line in lines.Take(50))
+        {
+            json.WriteStringValue(line);
+        }
+
+        json.WriteEndArray();
     }
 
     /// <summary>Writes the fields of the envelope's checks half into the object being written.</summary>
@@ -132,7 +150,9 @@ internal sealed record CoderChecksReport(IReadOnlyList<CoderChecksRound> Rounds,
         json.WriteNumber("added", last.HeadTests?.Added ?? 0);
         json.WriteNumber("deleted", last.HeadTests?.Deleted ?? 0);
         json.WriteEndObject();
-        WriteToolchain(json, last.Toolchain, last.Selection);
+        json.WriteBoolean("definitionsChanged", last.Definitions.Changed);
+        json.WriteString("definitionSummary", last.Definitions.Summary);
+        WriteToolchain(json, last.Toolchain, last.Selection, last);
         json.WriteStartArray("rounds");
         foreach (var round in Rounds)
         {

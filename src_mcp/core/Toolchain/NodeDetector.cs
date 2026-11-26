@@ -254,15 +254,16 @@ public static class NodeDetector
         var hasBuild = scripts.ContainsKey("build");
         var prettier = dependencies.Contains("prettier") && (root.TryGetProperty("prettier", out _) || here.Any(name => ManifestSearch.Matches(".prettierrc*", name) || ManifestSearch.Matches("prettier.config.*", name)));
         var runner = RunnerOf(testScript, dependencies);
+        var members = UncoveredMembers(file, root, folder, set, hasTest, typecheck);
 
         var steps = new List<DetectedStep>();
-        if (hasBuild || typecheck || hasTest)
+        if (hasBuild || typecheck || hasTest || members.Count > 0)
         {
             var workingFolder = folder.Length == 0 ? "." : folder;
-            void Add(string name, IReadOnlyList<string> argv)
+            void Add(string name, IReadOnlyList<string> argv, string? subject = null)
             {
                 var step = stack.Steps[name]!;
-                steps.Add(new DetectedStep(name, argv, step.Network, workingFolder, file.Path, name == "format" ? step.Extensions : []));
+                steps.Add(new DetectedStep(name, argv, step.Network, workingFolder, subject ?? file.Path, name == "format" ? step.Extensions : []));
             }
 
             Add("restore", stack.Steps["restore"]!.Argv);
@@ -281,9 +282,19 @@ public static class NodeDetector
                 Add("typecheck", hasTypecheckScript ? stack.Steps["typecheck"]!.Argv : stack.Steps["typecheck"]!.Fallback);
             }
 
+            foreach (var member in members.Where(member => member.Typecheck))
+            {
+                Add("typecheck", [.. stack.Steps["typecheck"]!.Argv, WorkspaceFlag(folder, member.Path)], member.Path);
+            }
+
             if (hasTest)
             {
                 Add("test", stack.Steps["test"]!.ByRunner[runner]);
+            }
+
+            foreach (var member in members.Where(member => member.Test))
+            {
+                Add("test", [.. stack.Steps["test"]!.ByRunner["unknown"], WorkspaceFlag(folder, member.Path)], member.Path);
             }
         }
 
@@ -300,8 +311,63 @@ public static class NodeDetector
             new("prettier", prettier ? "true" : "false"),
             new("unchecked", steps.Count == 0 ? "true" : "false"),
         };
+        if (members.Count > 0)
+        {
+            facts.Add(new("memberScripts", string.Join(',', members.Select(member => $"{ProjectGraph.Folder(member.Path)}:{(member.Test ? "test" : string.Empty)}{(member.Test && member.Typecheck ? "+" : string.Empty)}{(member.Typecheck ? "typecheck" : string.Empty)}"))));
+        }
 
-        return new Planned(new DetectedProject("node", file.Path, folder.Length == 0 ? "." : folder, steps, facts, [], TestsNone: !hasTest), string.Empty);
+        return new Planned(new DetectedProject("node", file.Path, folder.Length == 0 ? "." : folder, steps, facts, [], TestsNone: !hasTest && !members.Any(member => member.Test)), string.Empty);
+    }
+
+    /// <summary>A workspace member with a script the root's own steps would not run.</summary>
+    private sealed record Uncovered(string Path, bool Test, bool Typecheck);
+
+    /// <summary>
+    /// A workspace root swallows its members: they are not projects, and the root's own steps are all that run. A member with a test script (a typecheck script) under a root that has none is planned as a step of its own,
+    /// <c>npm test --workspace=./&lt;member folder&gt;</c> (measured: it runs the member's script and returns its exit code; <c>npm run typecheck --workspace=...</c> likewise). The path is a manifest path that already passed the search's checks (no leading <c>-</c> or <c>@</c>) and the
+    /// flag carries it after <c>./</c>, so it can never be read as an option. A root WITH a test script is taken to run the members' (coai cannot read what the script does).
+    /// </summary>
+    private static List<Uncovered> UncoveredMembers(ManifestFile file, JsonElement root, string folder, ManifestSet set, bool rootHasTest, bool rootHasTypecheck)
+    {
+        var found = new List<Uncovered>();
+        if (WorkspacePatternsOf(root) is not { } patterns || (rootHasTest && rootHasTypecheck))
+        {
+            return found;
+        }
+
+        foreach (var member in set.Files.Where(candidate => candidate.Stack == "node" && candidate.Kind == ManifestKind.Manifest && candidate.Path != file.Path && IsMember(folder, patterns, ProjectGraph.Folder(candidate.Path))))
+        {
+            var (test, typecheck) = MemberScripts(member);
+            if ((!rootHasTest && test) || (!rootHasTypecheck && typecheck))
+            {
+                found.Add(new Uncovered(member.Path, !rootHasTest && test, !rootHasTypecheck && typecheck));
+            }
+        }
+
+        return found;
+    }
+
+    private static string WorkspaceFlag(string rootFolder, string memberPath)
+    {
+        var memberFolder = ProjectGraph.Folder(memberPath);
+        var relative = rootFolder.Length > 0 && memberFolder.StartsWith(rootFolder + "/", StringComparison.Ordinal) ? memberFolder[(rootFolder.Length + 1)..] : memberFolder;
+
+        return $"--workspace=./{relative}";
+    }
+
+    private static (bool Test, bool Typecheck) MemberScripts(ManifestFile member)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(member.Text, new JsonDocumentOptions { MaxDepth = 32 });
+            var scripts = StringMap(document.RootElement, "scripts");
+
+            return (scripts.TryGetValue("test", out var test) && !IsPlaceholder(test), scripts.ContainsKey("typecheck"));
+        }
+        catch (JsonException)
+        {
+            return (false, false);
+        }
     }
 
     /// <summary>npm's own placeholder for a package with no test (<c>echo "Error: no test specified" &amp;&amp; exit 1</c>), however it is quoted.</summary>

@@ -70,7 +70,7 @@ public sealed class ACoderEnvelopeNamesItsToolchainTests
     }
 
     [Fact]
-    public async Task D1_AHeadThatAddsAProjectFile_IsRefusedByTheFrozenGate_TheRoundSaysSoAndNoToolchainSectionClaimsAProject()
+    public async Task D1_AHeadThatAddsAProjectFile_IsRestoredBuiltAndTested_TheEnvelopeNamesItAsDefinedByTheHeadAndFlagsTheChange()
     {
         await using var rig = await CoderRig.CreateAsync(toolchain: string.Empty, extra: new Dictionary<string, string> { ["App.csproj"] = Library, [".gitignore"] = "bin/\nobj/\n" });
         rig.Says("sonnet", new CoderRig.Launch(new Dictionary<string, string> { ["notes/state.txt"] = "x\n", ["Other.csproj"] = Library }, CoderRig.Report()));
@@ -78,10 +78,13 @@ public sealed class ACoderEnvelopeNamesItsToolchainTests
 
         var (_, ended) = await rig.RunAsync(job);
 
-        (ended.State, ended.Stop).Should().Be((RoleJobStates.Failed, "toolchain-refused"), ended.Reason);
+        ended.State.Should().Be(RoleJobStates.Succeeded, ended.Reason);
         var envelope = rig.Envelope(job);
-        envelope.GetProperty("checks").GetArrayLength().Should().Be(0);
-        envelope.GetProperty("rounds").EnumerateArray().Should().ContainSingle().Which.GetProperty("state").GetString().Should().Be("toolchain_refused");
+        envelope.GetProperty("definitionsChanged").GetBoolean().Should().BeTrue();
+        var toolchain = envelope.GetProperty("toolchain");
+        toolchain.GetProperty("projects").EnumerateArray().Select(project => (project.GetProperty("path").GetString(), project.GetProperty("definedByHead").GetBoolean())).Should().Equal(new (string?, bool)[] { ("App.csproj", false), ("Other.csproj", true) });
+        toolchain.GetProperty("changedDefinitionFiles").GetInt32().Should().Be(1);
+        envelope.GetProperty("checks").EnumerateArray().Select(step => step.GetProperty("project").GetString()).Should().Contain("Other.csproj");
     }
 
     [Fact]
