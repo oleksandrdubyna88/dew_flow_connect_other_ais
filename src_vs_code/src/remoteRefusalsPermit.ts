@@ -50,6 +50,9 @@ const againstOf = (list: Listing, copy: Against['copy']): Against => ({ files: l
 
 type Copy = Against['copy'];
 
+/** A withdrawal's time may be this far ahead of the clock and still be a later word (clocks of two windows differ a little). */
+const AHEAD_SLACK_MS = 5 * 60_000;
+
 const unwritten = (why: 'busy' | 'disk' | 'lost'): Extract<Allowed, { kind: 'unwritten' }> => ({ kind: 'unwritten', why });
 
 /** Nothing was kept: the write did not stay, or the claim kept going stale. */
@@ -180,9 +183,16 @@ class AllowRun {
     return now.names.some((name) => !had.has(name) && !this.floors.has(name));
   }
 
-  /** A readable withdrawal whose `utc` is later than the *Allow*'s is a later word, whatever listing it was in (F5). */
+  /** A readable withdrawal whose `utc` is later than the *Allow*'s is a later word, whatever listing it was in (F5) — unless its time is not a time or is ahead of this clock, which only a hand can write. */
   private laterWord(now: Listing): boolean {
-    return now.files.some((one) => one.kind === 'stamp' && one.utc > this.input.utc && !this.floors.has(one.name));
+    return now.files.some((one) => one.kind === 'stamp' && one.utc > this.input.utc && !this.floors.has(one.name) && this.notAhead(one.utc));
+  }
+
+  /** The time is a time and is not ahead of this clock by more than the slack: a far-future file must not lock the person out. */
+  private notAhead(utc: string): boolean {
+    const at = Date.parse(utc);
+
+    return Number.isFinite(at) && at <= this.kit.clock() + AHEAD_SLACK_MS;
   }
 
   private higherCopy(copy: Copy): boolean {
@@ -243,6 +253,13 @@ class AllowRun {
     return back === 'failed' ? undefined : back.files.find((one) => one.name === name);
   }
 
+  /** Only a file this Allow created is its own: an existing one may be a Withdraw at the floor's stamp, and must stay a new name. */
+  private owned(made: 'made' | 'there' | 'refused', name: string): void {
+    if (made === 'made') {
+      this.floors.add(name);
+    }
+  }
+
   /** One try of the floor file: `ok`, `taken` (by a file that cannot be read) or `disk`. */
   private async floorFile(floor: number): Promise<'ok' | 'taken' | 'disk'> {
     const { disk } = this.kit;
@@ -252,7 +269,7 @@ class AllowRun {
     if (seen === undefined) {
       return 'disk';
     }
-    this.floors.add(name);
+    this.owned(made, name);
 
     return seen.kind === 'stamp' ? 'ok' : 'taken';
   }
@@ -429,9 +446,12 @@ class WithdrawRun {
     if (list === 'failed') {
       return { kind: 'unwritten', why: 'disk' };
     }
-    const stamp = withdrawalStamp(seenStamps(disk.withdrawnPrefix, list, await this.grantNow(), this.input.above));
+    const grant = await this.grantNow();
+    const stamp = withdrawalStamp(seenStamps(disk.withdrawnPrefix, list, grant, this.input.above));
+    // past the keep limit with every removal failed: no file is made only when the permission is already not in force (the files that cannot be read withdraw)
+    const full = (await this.pruned(list)) >= WITHDRAWN_KEEP_MAX && !inForce(grant, againstOf(list, undefined));
 
-    return (await this.pruned(list)) >= WITHDRAWN_KEEP_MAX ? { kind: 'withdrawn', stamp } : this.made(stamp);
+    return full ? { kind: 'withdrawn', stamp } : this.made(stamp);
   }
 
   /** Step 8: an exclusive create; then step 9. */
@@ -480,8 +500,18 @@ class WithdrawRun {
     return list === 'failed' ? { kind: 'unwritten', why: 'disk' } : this.stands(list, stamp);
   }
 
+  private lostOwn(file: RefusalsFile | undefined, list: Listing, stamp: number): boolean {
+    return file === undefined && !list.names.includes(withdrawalName(this.kit.disk.withdrawnPrefix, stamp));
+  }
+
+  /** Step 9: a file of refusals that cannot be read withdraws only while this withdrawal's own file is in the listing; else the file is made again. */
   private async stands(list: Listing, stamp: number): Promise<Withdrawn | 'again'> {
-    return inForce(await this.grantNow(), againstOf(list, undefined)) ? 'again' : { kind: 'withdrawn', stamp };
+    const file = await this.kit.readFile();
+    if (this.lostOwn(file, list, stamp)) {
+      return 'again';
+    }
+
+    return inForce(grantOf(file ?? {}), againstOf(list, undefined)) ? 'again' : { kind: 'withdrawn', stamp };
   }
 }
 

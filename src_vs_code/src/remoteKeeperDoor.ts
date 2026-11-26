@@ -204,7 +204,8 @@ export class Door {
     const read = await this.read();
     this.side.changed();
 
-    return this.contextOf('session', '', read, false).inForce ? result : { kind: 'withdrawn' };
+    // a Withdraw of this window pressed after the Allow and not saved yet is a later word: it stands against the grant too
+    return this.contextOf('session', '', read, this.waits()).inForce ? result : { kind: 'withdrawn' };
   }
 
   /** The row's copy is raised to the floor of an *Allow* that was given (`restart`: removed). */
