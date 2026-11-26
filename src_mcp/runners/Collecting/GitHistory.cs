@@ -338,6 +338,18 @@ public sealed partial class GitHistory(IProcessLauncher launcher)
             : new GitAnswer(true, result.ExitCode == 0, result.StdOut, result.Truncated);
     }
 
+    /// <summary>
+    /// EVERY entry of the tree of a commit, recursively — <c>mode type oid size\tpath\0</c> for each, the output raw (parse it with <c>TreeEntries</c>) — read from the repository at <paramref name="repoPath"/> and never from a working tree (epoch 3 E4 s2 t2).
+    /// </summary>
+    /// <remarks>
+    /// <c>ls-tree -r -l -z --full-tree</c> with <c>--literal-pathspecs</c>; a submodule is one entry of type <c>commit</c> and is never entered. The stream ceiling is <paramref name="maxChars"/>: past it the launcher cuts the output and <see cref="GitAnswer.Truncated"/> says so, and a caller that
+    /// must be exact refuses a cut listing. The sha goes through <see cref="IsCommitish"/>: an option can never be read from it.
+    /// </remarks>
+    public Task<GitAnswer> TreeAtAsync(string repoPath, string sha, int maxChars, CancellationToken ct = default) =>
+        IsCommitish(sha)
+            ? RunAsync(repoPath, ["--literal-pathspecs", "ls-tree", "-r", "-l", "-z", "--full-tree", sha], ct, maxChars)
+            : Refused;
+
     /// <summary>A value git must never be handed: answered as "ran, and said no".</summary>
     /// <remarks>
     /// Not a failure — nothing broke — and not a silent pass. The candidate skips for the reason its
@@ -345,10 +357,10 @@ public sealed partial class GitHistory(IProcessLauncher launcher)
     /// </remarks>
     private static Task<GitAnswer> Refused => Task.FromResult(new GitAnswer(true, false, string.Empty));
 
-    private async Task<GitAnswer> RunAsync(string repoPath, string[] args, CancellationToken ct)
+    private async Task<GitAnswer> RunAsync(string repoPath, string[] args, CancellationToken ct, int? maxChars = null)
     {
         var result = await launcher.RunAsync(
-            new ProcessRequest("git", args, repoPath) { Timeout = Budget }, ct);
+            maxChars is { } ceiling ? new ProcessRequest("git", args, repoPath) { Timeout = Budget, MaxOutputChars = ceiling } : new ProcessRequest("git", args, repoPath) { Timeout = Budget }, ct);
 
         // A timeout or a cancellation is not an answer about the repository — it is us having learned
         // nothing, and the caller must record `failed` rather than a skip.
