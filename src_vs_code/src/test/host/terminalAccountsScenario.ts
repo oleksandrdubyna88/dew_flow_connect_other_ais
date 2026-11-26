@@ -163,7 +163,8 @@ export async function theWslPlacesAreInTheTabsModel(): Promise<void> {
     assert.equal((await sessions.allow()).kind, 'given', 'the permission was not given through the keeper');
     await until(() => accounts.memoryHosts().filter((key) => key.startsWith('wsl:')).length === 3, 'the round did not remember the three places');
     await vscode.commands.executeCommand('coai.terminalAccounts');
-    await until(() => (accounts.lastModel()?.blocks.length ?? 0) === 4, 'the tab does not hold the wsl block and the three places');
+    // The line of the stopped distro is set after the users of the running one are read, so the model is complete when the round has ended, not when the third place landed.
+    await until(() => (accounts.lastModel()?.blocks.length ?? 0) === 4 && accounts.lastModel()?.toolbar.round.kind === 'ended', 'the tab does not hold the wsl block and the three places of a round that ended');
 
     const model = accounts.lastModel();
     assert.deepEqual(model?.blocks.map((block) => block.host), ['wsl', 'wsl:Ubuntu/alice', 'wsl:Ubuntu/bob', 'wsl:Ubuntu/root']);
