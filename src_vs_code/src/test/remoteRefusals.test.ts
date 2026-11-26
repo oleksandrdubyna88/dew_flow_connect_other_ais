@@ -451,6 +451,7 @@ test('E2S1-T19 (the store): an Allow removes what cannot be read after the floor
   assert.ok(takenAnswer.kind === 'given' && takenAnswer.floor === 5 && takenAnswer.grant.stamp === 6, JSON.stringify(takenAnswer));
   // F5: a readable withdrawal whose utc is later than the Allow's, already there before step 0, is a later word
   const later = sideWith(undefined);
+  later.now = Date.parse(U2);
   later.files.set(wname(2), withdrawalText(2, U2));
   const laterAnswer = await storeOver(later).allow({ utc: U1, copy: noCopy });
   assert.equal(laterAnswer.kind, 'withdrawn');
@@ -512,4 +513,51 @@ test('E2S1-T4 (the real disk): a withdrawal is an exclusive create in a real fol
   assert.ok(given.kind === 'given' && given.floor === 3 && given.grant.stamp === 4, JSON.stringify(given));
   assert.deepEqual(readdirSync(dir).filter((name) => name.startsWith('withdrawn-')), [wname(3)]);
   assert.equal(grantOf(refusalsOf(readFileSync(join(dir, 'refused.json'), 'utf8')) ?? {})?.stamp, 4);
+});
+
+test('E2S1-F1: a floor name that already exists (a Withdraw at exactly the floor stamp, concurrent) is a new name, not hidden', async () => {
+  const disk = sideWith(undefined);
+  // between step 3's listing and the Allow's own floor file another window withdraws at the stamp the floor will take
+  disk.afterListing = (n) => { if (n === 2) { disk.files.set(wname(5), withdrawalText(5, U0)); } };
+  const answer = await storeOver(disk).allow({ utc: U1, copy: () => 5 });
+  assert.notEqual(answer.kind, 'given', `an Allow said given over a withdrawal that took its floor stamp: ${JSON.stringify(answer)}`);
+  assert.equal(answer.kind, 'withdrawn');
+});
+
+test('E2S1-F2: with 8 names and removals that fail, a withdrawal is made anyway while the permission would stand', async () => {
+  const disk = sideWith(9, [1, 2, 3, 4, 5, 6, 7, 8]);
+  disk.failUnwithdraw = true;
+  const answer = await storeOver(disk).withdraw({ utc: U1, above: 0 });
+  assert.ok(answer.kind === 'withdrawn' && answer.stamp === 10, JSON.stringify(answer));
+  assert.ok(disk.files.has(wname(10)), 'the withdrawal was answered although no file was made and the grant still stood above every file');
+  // when nothing may be made and the permission is already not in force, the unreadable files withdraw and no file is made
+  const blocked = sideWith(undefined, [], [1, 2, 3, 4, 5, 6, 7, 8]);
+  assert.equal((await storeOver(blocked).withdraw({ utc: U1, above: 0 })).kind, 'withdrawn');
+  assert.equal(blocked.withdrawnNames().length, 8);
+});
+
+test('E2S1-N1: a readable withdrawal with a far-future utc is not a later word, and one just ahead of the clock still is', async () => {
+  const far = sideWith(undefined);
+  far.now = Date.parse(U1);
+  far.files.set(wname(2), withdrawalText(2, '2999-01-01T00:00:00.000Z'));
+  assert.equal((await storeOver(far).allow({ utc: U1, copy: noCopy })).kind, 'given', 'a withdrawal from the far future locked the person out of the permission');
+  const nonsense = sideWith(undefined);
+  nonsense.now = Date.parse(U1);
+  nonsense.files.set(wname(2), withdrawalText(2, 'not a time'));
+  assert.equal((await storeOver(nonsense).allow({ utc: U1, copy: noCopy })).kind, 'given');
+  const near = sideWith(undefined);
+  near.now = Date.parse(U1) + 60_000;
+  near.files.set(wname(2), withdrawalText(2, new Date(Date.parse(U1) + 2 * 60_000).toISOString()));
+  assert.equal((await storeOver(near).allow({ utc: U1, copy: noCopy })).kind, 'withdrawn', 'a withdrawal pressed after the Allow, two minutes on, was not a later word');
+});
+
+test('E2S1-N2: a withdrawal whose own file is gone and whose refused.json cannot be read makes its file again before it answers', async () => {
+  const disk = new FakeDisk();
+  disk.files.set('refused.json', 'junk');
+  let made = 0;
+  disk.afterWithdrawn = (name) => { made += 1; if (made === 1) { disk.files.delete(name); } };
+  const answer = await storeOver(disk).withdraw({ utc: U1, above: 0 });
+  assert.equal(answer.kind, 'withdrawn');
+  assert.equal(made, 2, 'the withdrawal was answered without its file in the folder');
+  assert.equal(disk.withdrawnNames().length, 1);
 });

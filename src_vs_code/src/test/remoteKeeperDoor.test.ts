@@ -307,8 +307,16 @@ const stampsOnDisk = (disk: FakeDisk): number | undefined => (JSON.parse(disk.fi
 test('E2S1-T20: a withdrawal wins — generated histories: after a last Withdraw no door says yes, and whenever one says yes an Allow came after the last Withdraw', async () => {
   let seed = 20260126;
   const pick = (n: number): number => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed % n; };
-  type Op = 'allow' | 'withdraw' | 'stale-rename' | 'stale-write' | 'reload' | 'withdraw-while-unreadable' | 'allow-b' | 'withdraw-b';
-  const ops: readonly Op[] = ['allow', 'withdraw', 'stale-rename', 'stale-write', 'reload', 'withdraw-while-unreadable', 'allow-b', 'withdraw-b'];
+  type Op = 'allow' | 'withdraw' | 'stale-rename' | 'stale-write' | 'reload' | 'withdraw-while-unreadable' | 'allow-b' | 'withdraw-b' | 'interleave' | 'mend';
+  const ops: readonly Op[] = ['allow', 'withdraw', 'stale-rename', 'stale-write', 'reload', 'withdraw-while-unreadable', 'allow-b', 'withdraw-b', 'interleave', 'mend'];
+  /** I1: after every Allow that was given, the folder holds a readable withdrawal one below the grant, or the grant is 1. */
+  let givens = 0;
+  const holdsI1 = (disk: FakeDisk, answer: Awaited<ReturnType<Window['keeper']['allow']>>, where: string): void => {
+    if (answer.kind === 'given') {
+      givens += 1;
+      assert.ok(answer.grant.stamp === 1 || disk.files.has(wname(answer.grant.stamp - 1)), `I1: no floor file below grant ${answer.grant.stamp} (${where})`);
+    }
+  };
   for (let history = 0; history < 120; history += 1) {
     const backing = new Backing();
     const disk = new FakeDisk();
@@ -324,7 +332,9 @@ test('E2S1-T20: a withdrawal wins — generated histories: after a last Withdraw
       if (op === 'allow' || op === 'allow-b') {
         const mine = op === 'allow' ? a : b;
         mine.view.sync();
-        if ((await mine.keeper.allow()).kind === 'given') {
+        const answer = await mine.keeper.allow();
+        holdsI1(disk, answer, log.join(' '));
+        if (answer.kind === 'given') {
           lastAllow = step;
         }
       } else if (op === 'withdraw' || op === 'withdraw-b') {
@@ -333,6 +343,19 @@ test('E2S1-T20: a withdrawal wins — generated histories: after a last Withdraw
         if ((await mine.keeper.withdraw()) === 'withdrawn') {
           lastWithdraw = step;
         }
+      } else if (op === 'interleave') {
+        // an Allow in window A and a Withdraw in window B at once: the Withdraw is the last word, whichever lands first
+        a.view.sync();
+        b.view.sync();
+        const [answer] = await Promise.all([a.keeper.allow(), b.keeper.withdraw()]);
+        holdsI1(disk, answer, log.join(' '));
+        lastWithdraw = step;
+      } else if (op === 'mend') {
+        // the file is damaged and a person's answer writes it again: no grant, the round stopped
+        disk.files.set('refused.json', 'junk');
+        a.view.sync();
+        await a.keeper.commit({ kind: 'mend', host: 'q', answer: 'no' });
+        lastWithdraw = step;
       } else if (op === 'stale-rename') {
         const old = snapshots[pick(Math.max(1, snapshots.length))];
         if (old !== undefined) {
@@ -358,9 +381,8 @@ test('E2S1-T20: a withdrawal wins — generated histories: after a last Withdraw
         assert.ok(lastAllow > lastWithdraw, `a door said yes with no Allow after the last Withdraw: ${log.join(' ')} (history ${history})`);
       }
     }
-    // I1: after the last Allow that was given, the folder holds a readable withdrawal one below the grant, or the grant is 1
-    void lastAllow;
   }
+  assert.ok(givens > 50, `companion: the histories gave the permission only ${givens} times, so I1 was held over almost nothing`);
   // I1 after every given: the folder holds withdrawn-<g-1>, or g is 1
   const disk = new FakeDisk();
   const w = windowOver(new Backing(), disk);
@@ -499,4 +521,22 @@ test('E2S1-T9 (carried CUT-D2, CUT-D3, CUT-D4): the round over the door — an a
     assert.equal(readsKey(`Creds: ${H} / s`, await windowOver(backing, new FakeDisk()).keeper.standings()), kind !== 'no');
   }
   await instant();
+});
+
+test('E2S1-F3: an Allow that is kept or given does not say so while a later Withdraw of its window still waits', async () => {
+  const disk = new FakeDisk();
+  const w = windowOver(new Backing(), disk);
+  await w.keeper.allow();
+  // a kept Allow (the grant is in force), then a Withdraw pressed behind it in the same queue, which neither the profile (its copy) nor the disk takes yet
+  w.view.update = async () => { throw new Error('the profile is full'); };
+  disk.failWithdrawn = true;
+  const allowing = w.keeper.allow();
+  const withdrawing = w.keeper.withdraw();
+  const answer = await allowing;
+  assert.equal(answer.kind, 'withdrawn', `an Allow said ${answer.kind} while a later Withdraw waited`);
+  assert.deepEqual(await withdrawing, { kind: 'unwritten', why: 'disk' });
+  assert.deepEqual(await doors(w), ['waiting', 'waiting']);
+  disk.failWithdrawn = false;
+  await w.keeper.saveWaiting();
+  assert.deepEqual(await doors(w), ['no-permission', 'no-permission']);
 });

@@ -266,7 +266,7 @@ export function rowOver(v: View, disk: FakeDisk): PermissionRow {
 
       return { withdrawn: read.withdrawn, stopped: read.stopped };
     },
-    change: (change) => { disk.calls.push('row'); return commit(v, STATE_KEY, change, stateMerge).then(() => undefined); },
+    change: (change) => { disk.calls.push('row'); return commit(v, STATE_KEY, change, stateMerge).then(() => undefined, () => undefined); },
   };
 }
 
