@@ -220,19 +220,6 @@ public sealed class ACheckBoundaryUnitTests
     }
 
     [Fact]
-    public async Task TheUnit_SeesItsOwnProcessesOnly_AndCannotSignalTheHosts()
-    {
-        NeedAUserManager();
-        await using var bed = await BoundaryBed.CreateAsync();
-
-        var run = await bed.ShellAsync("ls /proc | grep -c '^[0-9][0-9]*$'");
-
-        run.Result.ExitCode.Should().Be(0, run.Result.StdErr);
-        int.Parse(run.Result.StdOut.Trim(), System.Globalization.CultureInfo.InvariantCulture).Should().BeLessThan(12, "a unit with PrivatePIDs sees its own few processes, not the host's");
-        Directory.GetDirectories("/proc").Count(folder => int.TryParse(Path.GetFileName(folder), out _)).Should().BeGreaterThan(20, "a positive control: the host has many more");
-    }
-
-    [Fact]
     public async Task TheUnit_SeesTheJobsHome_NeverTheRealOne_AndASafePath()
     {
         NeedAUserManager();

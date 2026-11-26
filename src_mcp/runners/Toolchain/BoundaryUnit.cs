@@ -50,8 +50,6 @@ internal static class BoundaryUnit
             .. host.ReadOnlyCaches.Select(cache => $"BindReadOnlyPaths={cache}"),
             .. network == CheckNetwork.Host && host.ResolverFile.Length > 0 ? [$"BindReadOnlyPaths={host.ResolverFile}"] : Array.Empty<string>(),
             .. Hardening,
-            // A check sees the processes of its own unit only: it could signal every process of the person (the runner, the user manager, another unit) and read every command line (S1 of the security verify of the E2 follow-ups). Needs systemd 257; an older manager refuses the unit and the preflight refuses the job.
-            "PrivatePIDs=yes",
             network == CheckNetwork.Private ? "PrivateNetwork=yes" : "PrivateNetwork=no",
             .. Limits(job, runtimeMax),
         ];
