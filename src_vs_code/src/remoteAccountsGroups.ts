@@ -41,6 +41,8 @@ export interface AccountPlace {
   readonly readAt: number;
   readonly failure: Failure | null;
   readonly version: string | null;
+  /** The warning of that place's row (the program runs as root from a path another user can write), or `null`. */
+  readonly warning: string | null;
 }
 
 /** An account's usage: stands ONCE on its block. */
@@ -56,6 +58,9 @@ export interface AccountBlock {
   /** The account's key, or `null` for an account that is not known: that block belongs to one place. */
   readonly key: string | null;
   readonly text: string;
+  /** The email the text starts with and the closed class of its colour (`em-1` to `em-12`), or `''` and `null`: the model's, taken from the row. */
+  readonly email: string;
+  readonly tone: string | null;
   readonly usage: AccountUsage;
   readonly places: readonly AccountPlace[];
 }
@@ -167,7 +172,7 @@ export function viewOf(model: TableModel, state: ViewState, compare: Compare): V
     const places = order(group.members.map(function (one): Sorted<AccountPlace> {
       return {
         s: { name: one.block.host, account: null, left5h: null, reset5h: null, leftWeek: null, resetWeek: null, age: 0 - one.row.readAt },
-        v: { place: one.block.host, shown: one.block.shown, tookMs: one.block.tookMs, readAt: one.row.readAt, failure: failureOf(one.block), version: one.row.version },
+        v: { place: one.block.host, shown: one.block.shown, tookMs: one.block.tookMs, readAt: one.row.readAt, failure: failureOf(one.block), version: one.row.version, warning: one.row.warning },
       };
     }));
 
@@ -175,7 +180,7 @@ export function viewOf(model: TableModel, state: ViewState, compare: Compare): V
       s: {
         name: source.row.account.text, account: source.row.account.text, left5h: usage.five.left, reset5h: usage.five.resetsAt, leftWeek: usage.week.left, resetWeek: usage.week.resetsAt, age: 0 - newest(group.members).row.readAt,
       },
-      v: { key: group.key, text: source.row.account.text, usage, places },
+      v: { key: group.key, text: source.row.account.text, email: source.row.account.email, tone: source.row.account.tone, usage, places },
     };
   }
 

@@ -21,7 +21,7 @@ import { WslRun, isStrike } from './remoteWslRun';
 export interface WslPort {
   readonly list: (running: boolean) => Promise<WslRun>;
   readonly users: (distro: string) => Promise<WslRun>;
-  readonly accounts: (place: WslPlace, mode: AccountsMode, digest: string | undefined) => Promise<WslRun>;
+  readonly accounts: (place: WslPlace, mode: AccountsMode, operand: string | undefined) => Promise<WslRun>;
 }
 
 /** What a distro is, in the words of § W13. `read`: its users were read; the others say why not. */
@@ -109,7 +109,7 @@ const listingOf = (run: WslRun, running: boolean): Listing => (run.kind === 'ref
 /** What `visit` is given to make a place's call. `left`: the distro was not in the running list when it was read again, so no call was made. */
 export type PlaceRun = WslRun | { readonly kind: 'left' };
 
-export type PlaceCall = (mode: AccountsMode, digest: string | undefined) => Promise<PlaceRun>;
+export type PlaceCall = (mode: AccountsMode, operand: string | undefined) => Promise<PlaceRun>;
 
 /** What a visit tells the walk: go on, or end the WSL part (the round's own checks said so, or the door did). */
 export interface Visited<S> {
@@ -288,7 +288,7 @@ class Walk<S> {
     return run;
   }
 
-  private async placeCall(place: WslPlace, mode: AccountsMode, digest: string | undefined): Promise<PlaceRun> {
+  private async placeCall(place: WslPlace, mode: AccountsMode, operand: string | undefined): Promise<PlaceRun> {
     const blocked = this.blocked();
     if (blocked !== undefined) {
       return blocked;
@@ -298,11 +298,11 @@ class Walk<S> {
       return again === 'left' ? { kind: 'left' } : this.stopRun();
     }
 
-    return this.noted(await this.port.accounts(place, mode, digest));
+    return this.noted(await this.port.accounts(place, mode, operand));
   }
 
   private callOf(place: WslPlace): PlaceCall {
-    return (mode, digest) => this.placeCall(place, mode, digest);
+    return (mode, operand) => this.placeCall(place, mode, operand);
   }
 
   private applyUsers(distro: string, got: UsersResult): readonly WslUser[] | undefined {

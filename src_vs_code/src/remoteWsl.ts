@@ -3,7 +3,7 @@ import { win32 } from 'node:path';
 import { Platform, hostPlatform } from './hostSide';
 import { system32 } from './processLauncher';
 import { withoutControls } from './remoteAccountsReply';
-import { ACCOUNTS_PROTOCOL, ACCOUNTS_SCRIPT, AccountsMode, isAccountsDigest, isAccountsMode } from './remoteAccountsScript';
+import { ACCOUNTS_PROTOCOL, ACCOUNTS_SCRIPT, AccountsMode, isAccountsMode, operandFits } from './remoteAccountsScript';
 import { WslPlace, distroOk, placeKey, placeLabel, wslDecoded, wslPlaceOk } from './remotePlaces';
 import type { DoorAnswer } from './remotePermission';
 import { RemoteLimits, lastLine, sizeWords } from './remoteSsh';
@@ -70,23 +70,20 @@ export function wslUsersArgv(distro: string): readonly string[] {
 }
 
 /**
- * The accounts call's words: `-d <distro> -u <user> --cd / --exec /bin/sh -s -- <mode>` and, for `claude-usage`, the digest. No word is quoted: `--exec`
+ * The accounts call's words: `-d <distro> -u <user> --cd / --exec /bin/sh -s -- <mode>` and the operand: for `claude-usage` the digest, for the first mode nothing or the word that skips agy's quota. No word is quoted: `--exec`
  * starts `/bin/sh` with these words and no shell reads them. THROWS a fixed text that holds no value when the place fails `wslPlaceOk`, the mode is not
- * one of the two, or the digest rule fails.
+ * one of the two, or the operand does not fit its mode.
  */
-export function wslAccountsArgv(place: WslPlace, mode: AccountsMode, digest?: string): readonly string[] {
-  if (!accountsAllowed(place, mode, digest)) {
+export function wslAccountsArgv(place: WslPlace, mode: AccountsMode, operand?: string): readonly string[] {
+  if (!accountsAllowed(place, mode, operand)) {
     throw new Error(REFUSED_WORD);
   }
 
-  return ['-d', place.distro, '-u', place.user, '--cd', '/', EXEC, '/bin/sh', '-s', '--', mode, ...(digest === undefined ? [] : [digest])];
+  return ['-d', place.distro, '-u', place.user, '--cd', '/', EXEC, '/bin/sh', '-s', '--', mode, ...(operand === undefined ? [] : [operand])];
 }
 
-const accountsAllowed = (place: WslPlace, mode: AccountsMode, digest: string | undefined): boolean =>
-  wslPlaceOk(place) && isAccountsMode(mode) && digestFits(mode, digest);
-
-const digestFits = (mode: AccountsMode, digest: string | undefined): boolean =>
-  (mode === 'claude-usage' ? digest !== undefined && isAccountsDigest(digest) : digest === undefined);
+const accountsAllowed = (place: WslPlace, mode: AccountsMode, operand: string | undefined): boolean =>
+  wslPlaceOk(place) && isAccountsMode(mode) && operandFits(mode, operand);
 
 // ───────────────── the seams and the result ─────────────────
 
@@ -121,7 +118,7 @@ export type { WslEnd, WslRun } from './remoteWslRun';
 export const wslPortOf = (seams: WslSeams): WslPort => ({
   list: (running) => runWslList(running, seams),
   users: (distro) => runWslUsers(distro, seams),
-  accounts: (place, mode, digest) => runWslAccounts(place, mode, digest, seams),
+  accounts: (place, mode, operand) => runWslAccounts(place, mode, operand, seams),
 });
 
 // ───────────────── the words (§ W13) ─────────────────
@@ -275,10 +272,10 @@ export function runWslUsers(distro: string, seams: WslSeams): Promise<WslRun> {
   return ran({ argv: argvOf(() => wslUsersArgv(distro)), label: `users of ${distro}`, distro, key: `wsl:${distro}/${ROOT}`, begin: 'COAI-USERS 1', script: USERS_SCRIPT }, false, seams);
 }
 
-/** The accounts call for one place: `ACCOUNTS_SCRIPT` ALWAYS on stdin, there is no script parameter. NEVER rejects; a bad place, mode or digest is `refused` with no call. */
-export function runWslAccounts(place: WslPlace, mode: AccountsMode, digest: string | undefined, seams: WslSeams): Promise<WslRun> {
+/** The accounts call for one place: `ACCOUNTS_SCRIPT` ALWAYS on stdin, there is no script parameter. NEVER rejects; a bad place, mode or operand is `refused` with no call. */
+export function runWslAccounts(place: WslPlace, mode: AccountsMode, operand: string | undefined, seams: WslSeams): Promise<WslRun> {
   const ask: Ask = {
-    argv: argvOf(() => wslAccountsArgv(place, mode, digest)),
+    argv: argvOf(() => wslAccountsArgv(place, mode, operand)),
     label: placeLabel(place),
     distro: place.distro,
     key: placeKey(place),

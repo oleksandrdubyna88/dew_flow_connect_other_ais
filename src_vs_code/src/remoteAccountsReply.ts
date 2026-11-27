@@ -1,13 +1,13 @@
 import { VENDOR_KEY_SHAPE } from './notifications';
 import {
-  ACCOUNTS_LINES_MAX, ACCOUNTS_LINE_BYTES_MAX, ACCOUNTS_PROTOCOL, AccountsMode, MANAGER_WORDS, ManagerWord, USAGE_LINES_MAX,
+  ACCOUNTS_LINES_MAX, ACCOUNTS_LINE_BYTES_MAX, ACCOUNTS_PROTOCOL, AGY_WINDOWS_MAX, AccountsMode, MANAGER_WORDS, ManagerWord, USAGE_LINES_MAX,
 } from './remoteAccountsScript';
 import {
-  ClaudeUsage, CodexUsage, claudeUsageOf, codexUsageOf, emailOf, orgOf, planOf, versionOf,
+  AgyUsage, ClaudeUsage, CodexUsage, agyUsageOf, claudeUsageOf, codexUsageOf, emailOf, orgOf, planOf, versionOf,
 } from './remoteAccountsUsage';
 import { Framed, framed } from './remoteFraming';
 
-export type { ClaudeUsage, ClaudeWindow, CodexUsage, CodexWindow } from './remoteAccountsUsage';
+export type { AgyGroup, AgyUsage, AgyWindow, ClaudeUsage, ClaudeWindow, CodexUsage, CodexWindow } from './remoteAccountsUsage';
 export {
   ACCOUNTS_LINES_MAX, ACCOUNTS_LINE_BYTES_MAX, ACCOUNTS_PROTOCOL, ACCOUNTS_REPLY_BYTES_MAX, ACCOUNTS_SECONDS, MANAGER_WORDS,
 } from './remoteAccountsScript';
@@ -40,25 +40,42 @@ export interface UnsafeSide { readonly state: 'unsafe'; readonly path: string | 
 export type ClaudeSide =
   | { readonly state: 'absent' }
   | UnsafeSide
-  | { readonly state: 'signed-out' }
-  | { readonly state: 'unreadable'; readonly why: 'no-jq' | 'auth' | 'timeout' | 'credential-shape' }
+  | { readonly state: 'signed-out'; readonly unsafePath?: string | null }
+  | { readonly state: 'unreadable'; readonly why: 'no-jq' | 'auth' | 'timeout' | 'credential-shape'; readonly unsafePath?: string | null }
   | {
     readonly state: 'found'; readonly version: string | null;
     /** `''` = the account is not known. */
     readonly email: string;
     readonly org: string | null; readonly plan: string | null; readonly usage: ClaudeUsage;
+    /** The vendor program runs as root although a folder of its path is writable by another user (`:unsafe-path`): the path as it is shown, or `null` when it is not. Absent when there is no such warning. */
+    readonly unsafePath?: string | null;
   };
 
 export type CodexSide =
   | { readonly state: 'absent' }
-  | { readonly state: 'unreadable'; readonly why: 'no-jq' | 'credential-shape' }
-  | { readonly state: 'found'; readonly signInFile: boolean; readonly plan: string | null; readonly usage: CodexUsage };
+  | UnsafeSide
+  | { readonly state: 'unreadable'; readonly why: 'no-jq' | 'credential-shape'; readonly unsafePath?: string | null }
+  | {
+    readonly state: 'found'; readonly signInFile: boolean;
+    /** `''` = the account is not known. */
+    readonly email: string;
+    readonly plan: string | null; readonly usage: CodexUsage;
+    /** The vendor program runs as root although a folder of its path is writable by another user (`:unsafe-path`): the path as it is shown, or `null` when it is not. Absent when there is no such warning. */
+    readonly unsafePath?: string | null;
+  };
 
 export type AgySide =
   | { readonly state: 'absent' }
   | UnsafeSide
   | { readonly state: 'unreadable'; readonly why: 'credential-shape' }
-  | { readonly state: 'found'; readonly version: string | null; readonly signInFile: boolean; readonly usage: { readonly state: 'no-source' } };
+  | {
+    readonly state: 'found'; readonly version: string | null; readonly signInFile: boolean;
+    /** `''` = the account is not known: agy's log had no such line. */
+    readonly email: string;
+    readonly usage: AgyUsage;
+    /** The vendor program runs as root although a folder of its path is writable by another user (`:unsafe-path`): the path as it is shown, or `null` when it is not. Absent when there is no such warning. */
+    readonly unsafePath?: string | null;
+  };
 
 export type AccountsRead =
   | { readonly kind: 'unreadable'; readonly why: Exclude<AccountsUnreadable, 'unsafe'> }
@@ -88,7 +105,7 @@ export const ACCOUNTS_UNREADABLE_SAID: Readonly<Record<AccountsUnreadable, strin
   operands: 'the remote script refused what it was asked',
   home: 'the remote account has no home folder',
   folder: 'the remote script could not go to the folder /',
-  tool: 'a tool the read needs (id, timeout, tail, ls, sed, grep or sha256sum) is not in a system folder there',
+  tool: 'a tool the read needs (id, timeout, tail, sleep, sed, grep or sha256sum) is not in a system folder there',
   unsafe: 'a program the read needs is writable by another user',
 };
 
@@ -131,6 +148,7 @@ const NONE: Readonly<Record<string, Count>> = {};
 
 const BAD_WORDS = ['operands', 'home', 'folder', 'tool'] as const;
 const ONE_PATH: Readonly<Record<string, Count>> = { path: ONCE };
+const WARNED: Readonly<Record<string, Count>> = { 'unsafe-path': MAYBE };
 
 /** A row for each word of a marker: the marker's whole line, and the keys its data lines may hold. */
 const wordRows = (head: string, words: readonly string[], keys: Readonly<Record<string, Count>> = NONE): readonly (readonly [string, Readonly<Record<string, Count>>])[] => words.map((word) => [`${head} ${word}`, keys]);
@@ -138,31 +156,35 @@ const wordRows = (head: string, words: readonly string[], keys: Readonly<Record<
 /**
  * Every marker line the script can print, and for each the keys of its data lines with how often each may stand. A line that is not
  * a key of this table is the fault `marker`; a key that is not in its row, or stands too often, is `key`; one that stands too
- * seldom makes the parts not fit (`shape`). The slots of Codex's windows (`primary`, `secondary`) are not in it: a window is named by its length.
+ * seldom makes the parts not fit (`shape`). The slots of Codex's windows (`primary`, `secondary`) are not in it: a window is named by its length; an agy window by its group and its length.
  */
 export const ACCOUNTS_GRAMMAR: Readonly<Record<string, Readonly<Record<string, Count>>>> = Object.fromEntries([
   ...wordRows('COAI-BAD', BAD_WORDS),
   ['COAI-BAD unsafe', ONE_PATH],
   ['COAI-JQ found', NONE],
   ...wordRows('COAI-JQ missing', MANAGER_WORDS),
-  ['COAI-VENDOR claude found', { version: MAYBE, email: MAYBE, org: MAYBE, plan: MAYBE }],
-  ...wordRows('COAI-VENDOR claude', ['absent', 'signed-out', 'unreadable no-jq', 'unreadable auth', 'unreadable timeout']),
+  ['COAI-VENDOR claude found', { version: MAYBE, email: MAYBE, org: MAYBE, plan: MAYBE, 'unsafe-path': MAYBE }],
+  ['COAI-VENDOR claude absent', NONE],
+  // a vendor that runs as root from a path others can write keeps its warning when it stops early (the owner's decision of 2026-11-27)
+  ...wordRows('COAI-VENDOR claude', ['signed-out', 'unreadable no-jq', 'unreadable auth', 'unreadable timeout'], WARNED),
   ['COAI-VENDOR claude unsafe', ONE_PATH],
   ['COAI-USAGE claude read', { turns: ONCE, line: [0, USAGE_LINES_MAX], unmatched: ONCE }],
   ...wordRows('COAI-USAGE claude', ['skipped', 'skipped account-changed', 'failed timeout', 'failed error']),
-  ['COAI-VENDOR codex found', { 'sign-in-file': ONCE, plan: MAYBE }],
-  ...wordRows('COAI-VENDOR codex', ['absent', 'unreadable no-jq']),
-  ['COAI-USAGE codex read', { window: [0, 2], 'as-of': ONCE }],
-  ...wordRows('COAI-USAGE codex', ['failed no-sessions', 'failed none', 'failed error']),
-  ['COAI-VENDOR agy found', { version: MAYBE, 'sign-in-file': ONCE }],
+  ['COAI-VENDOR codex found', { 'sign-in-file': ONCE, account: MAYBE, plan: MAYBE, 'unsafe-path': MAYBE }],
+  ['COAI-VENDOR codex absent', NONE],
+  ...wordRows('COAI-VENDOR codex', ['unreadable no-jq'], WARNED),
+  ['COAI-VENDOR codex unsafe', ONE_PATH],
+  ['COAI-USAGE codex read', { window: [0, 2] }],
+  ...wordRows('COAI-USAGE codex', ['failed none', 'failed error', 'failed timeout', 'failed not-started']),
+  ['COAI-VENDOR agy found', { version: MAYBE, 'sign-in-file': ONCE, account: MAYBE, 'unsafe-path': MAYBE }],
   ['COAI-VENDOR agy absent', NONE],
   ['COAI-VENDOR agy unsafe', ONE_PATH],
-  ['COAI-USAGE agy none', NONE],
+  ['COAI-USAGE agy read', { quota: [0, AGY_WINDOWS_MAX] }],
+  ...wordRows('COAI-USAGE agy', ['skipped', 'failed timeout', 'failed error', 'failed model-call', 'failed no-jq']),
 ]);
 
 /** The keys whose values are in a closed form (§ A2.5): the others are text, and `plainValue` and the credential net judge them. */
 const DIGITS = /^\d{1,6}$/u;
-const TIME_WORD = /^(?:\d+|-|no-stat)$/u;
 /** A path the script printed: the dash, or an absolute path of at most 200 characters of `[A-Za-z0-9._/@+-]` (§ R2.6). */
 const PATH_WORD = /^(?:-|\/[A-Za-z0-9._/@+-]{0,199})$/u;
 const CLOSED: Readonly<Record<string, (value: string) => boolean>> = {
@@ -170,8 +192,9 @@ const CLOSED: Readonly<Record<string, (value: string) => boolean>> = {
   unmatched: (value) => DIGITS.test(value),
   'sign-in-file': (value) => value === 'present' || value === 'absent',
   path: (value) => PATH_WORD.test(value),
+  'unsafe-path': (value) => PATH_WORD.test(value),
   window: (value) => value.split(' ').length === 3,
-  'as-of': (value) => value.split(' ').length >= 2 && TIME_WORD.test(value.slice(value.lastIndexOf(' ') + 1)),
+  quota: (value) => value.split(' ').length === 4,
 };
 
 // ───────────────── the records ─────────────────
@@ -306,13 +329,14 @@ const keysMissing = (recs: readonly Rec[]): boolean => recs.some((rec) => Object
 
 /**
  * `COAI-JQ missing` goes only with `absent`, `unsafe` (refused before `jq` is asked for) or `unreadable no-jq` for Claude and for Codex, and `COAI-JQ found` never with
- * `no-jq`. A vendor that the reply does not hold (the usage mode has no Codex) says nothing.
+ * `no-jq`. A found agy says `failed no-jq` exactly when `jq` is missing. A vendor that the reply does not hold (the usage mode has no Codex) says nothing.
  */
 function jqMismatch(recs: readonly Rec[]): boolean {
   const missing = (recs[0] as Rec).head.startsWith('COAI-JQ missing ');
   const states = [stateOf(recs, 'claude'), stateOf(recs, 'codex')].filter((state) => state !== '');
+  const agyAsked = stateOf(recs, 'agy') === 'found' && recs.some((rec) => rec.head === 'COAI-USAGE agy failed no-jq') !== missing;
 
-  return missing ? states.some((state) => state !== 'absent' && state !== 'unsafe' && state !== 'unreadable no-jq') : states.some((state) => state === 'unreadable no-jq');
+  return agyAsked || (missing ? states.some((state) => state !== 'absent' && state !== 'unsafe' && state !== 'unreadable no-jq') : states.some((state) => state === 'unreadable no-jq'));
 }
 
 /** For `no-claude-usage` a found Claude has `skipped`; for `claude-usage` it never has. */
@@ -364,7 +388,7 @@ function partOf(recs: readonly Rec[], name: string): Part {
 const wordsAfter = (rec: Rec, prefix: string): string => rec.head.slice(prefix.length);
 
 /** Rule 9: one value of the vendor that looks like a credential, and the vendor is unreadable with every other value of it. */
-const credentialIn = (part: Part): boolean => [part.vendor, part.usage].some((rec) => rec?.data.some((one) => credentialShaped(plainValue(one.value))) === true);
+const credentialIn = (part: Part): boolean => [part.vendor, part.usage].some((rec) => rec?.data.some((one) => one.key !== 'unsafe-path' && credentialShaped(plainValue(one.value))) === true);
 
 /** The value of a key through `plainValue` and the text rule of the field; `absent` when the key is not there. */
 function ruled<T>(rec: Rec, key: string, rule: (plain: string) => T, absent: T): T {
@@ -403,6 +427,13 @@ function pathOf(value: string): string | null {
   return plain === '-' || credentialShaped(plain) ? null : plain;
 }
 
+/** The warning of a vendor that runs from a path another user can write (`:unsafe-path`, the path closed by the grammar): nothing, or the path as it is shown (`null` for a dash or a path in the shape of a credential). */
+const warningOf = (rec: Rec): { readonly unsafePath?: string | null } => {
+  const value = valuesOf(rec, 'unsafe-path')[0];
+
+  return value === undefined ? {} : { unsafePath: pathOf(value) };
+};
+
 const unsafeOf = (rec: Rec): UnsafeSide => ({ state: 'unsafe', path: pathOf(valueOf(rec, 'path')) });
 
 function claudeOf(part: Part, nowMs: number): ClaudeSide {
@@ -411,7 +442,7 @@ function claudeOf(part: Part, nowMs: number): ClaudeSide {
   }
   const flat = CLAUDE_FLAT[wordsAfter(part.vendor, 'COAI-VENDOR claude ')];
   if (flat !== undefined) {
-    return flat;
+    return { ...flat, ...warningOf(part.vendor) } as ClaudeSide;
   }
 
   return credentialIn(part) ? { state: 'unreadable', why: 'credential-shape' } : {
@@ -421,19 +452,21 @@ function claudeOf(part: Part, nowMs: number): ClaudeSide {
     org: ruled(part.vendor, 'org', orgOf, null),
     plan: ruled(part.vendor, 'plan', planOf, null),
     usage: claudeUsageSide(part.usage as Rec, nowMs),
+    ...warningOf(part.vendor),
   };
 }
 
 const CODEX_USAGE_FLAT: Readonly<Record<string, CodexUsage>> = {
-  'failed no-sessions': { state: 'failed', why: 'no-sessions' },
   'failed none': { state: 'failed', why: 'none' },
   'failed error': { state: 'failed', why: 'error' },
+  'failed timeout': { state: 'failed', why: 'timeout' },
+  'failed not-started': { state: 'failed', why: 'not-started' },
 };
 
-function codexUsageSide(rec: Rec, nowMs: number): CodexUsage {
+function codexUsageSide(rec: Rec): CodexUsage {
   const flat = CODEX_USAGE_FLAT[wordsAfter(rec, 'COAI-USAGE codex ')];
 
-  return flat ?? codexUsageOf(plainValues(rec, 'window'), plainValue(valueOf(rec, 'as-of')), nowMs);
+  return flat ?? codexUsageOf(plainValues(rec, 'window'));
 }
 
 const CODEX_FLAT: Readonly<Record<string, CodexSide>> = {
@@ -441,21 +474,36 @@ const CODEX_FLAT: Readonly<Record<string, CodexSide>> = {
   'unreadable no-jq': { state: 'unreadable', why: 'no-jq' },
 };
 
-function codexOf(part: Part, nowMs: number): CodexSide {
+function codexOf(part: Part): CodexSide {
+  if (part.vendor.head.endsWith(' unsafe')) {
+    return unsafeOf(part.vendor);
+  }
   const flat = CODEX_FLAT[wordsAfter(part.vendor, 'COAI-VENDOR codex ')];
   if (flat !== undefined) {
-    return flat;
+    return { ...flat, ...warningOf(part.vendor) } as CodexSide;
   }
 
   return credentialIn(part) ? { state: 'unreadable', why: 'credential-shape' } : {
     state: 'found',
     signInFile: valueOf(part.vendor, 'sign-in-file') === 'present',
+    email: ruled(part.vendor, 'account', emailOf, ''),
     plan: ruled(part.vendor, 'plan', planOf, null),
-    usage: codexUsageSide(part.usage as Rec, nowMs),
+    usage: codexUsageSide(part.usage as Rec),
+    ...warningOf(part.vendor),
   };
 }
 
-function agyOf(part: Part): AgySide {
+const AGY_USAGE_FLAT: Readonly<Record<string, AgyUsage>> = {
+  skipped: { state: 'skipped' },
+  'failed timeout': { state: 'failed', why: 'timeout' },
+  'failed error': { state: 'failed', why: 'error' },
+  'failed model-call': { state: 'failed', why: 'model-call' },
+  'failed no-jq': { state: 'failed', why: 'no-jq' },
+};
+
+const agyUsageSide = (rec: Rec, nowMs: number): AgyUsage => AGY_USAGE_FLAT[wordsAfter(rec, 'COAI-USAGE agy ')] ?? agyUsageOf(plainValues(rec, 'quota'), nowMs);
+
+function agyOf(part: Part, nowMs: number): AgySide {
   if (part.vendor.head.endsWith(' absent')) {
     return { state: 'absent' };
   }
@@ -467,7 +515,9 @@ function agyOf(part: Part): AgySide {
     state: 'found',
     version: ruled(part.vendor, 'version', versionOf, null),
     signInFile: valueOf(part.vendor, 'sign-in-file') === 'present',
-    usage: { state: 'no-source' },
+    email: ruled(part.vendor, 'account', emailOf, ''),
+    usage: agyUsageSide(part.usage as Rec, nowMs),
+    ...warningOf(part.vendor),
   };
 }
 
@@ -505,5 +555,5 @@ function readOfRecords(recs: readonly Rec[], mode: AccountsMode, nowMs: number):
     return { kind: 'claude-only', claude, jqMissing: jqMissingOf(recs) };
   }
 
-  return { kind: 'read', claude, codex: codexOf(partOf(recs, 'codex'), nowMs), agy: agyOf(partOf(recs, 'agy')), jqMissing: jqMissingOf(recs) };
+  return { kind: 'read', claude, codex: codexOf(partOf(recs, 'codex')), agy: agyOf(partOf(recs, 'agy'), nowMs), jqMissing: jqMissingOf(recs) };
 }

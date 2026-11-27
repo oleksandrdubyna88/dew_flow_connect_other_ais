@@ -10,7 +10,7 @@ import { ownedTemp } from './ownedTemp';
 
 /**
  * As UID 0, nothing that another user can write is started (E3.S1, spec § W8; E3S1-T20 to T26). These are tests of the TEXT of the accounts script's
- * revision 2 (the S2 spec, § R2.3): they run the real script by `sh -s`, with false programs in a temporary `HOME`.
+ * revision 3 (the S2 spec, § R2.3): they run the real script by `sh -s`, with false programs in a temporary `HOME`.
  *
  * <p><b>How a run that is not root stands for UID 0.</b> The test sends, BEFORE the pinned text, a prelude of two shell functions: `id` prints `0`, and
  * `stat` answers the real owner and mode with the test's own UID written as `0`, answers `0 755` for every folder ABOVE the test's root (a runner's
@@ -20,17 +20,17 @@ import { ownedTemp } from './ownedTemp';
  * <p>The script is given a made-up `jq` (a file in the test's own `~/.local/bin` that prints the account lines), so these runs need no real `jq`.</p>
  */
 
-const PIN2 = '3159e39df42ad88d3240c4f64b4098b54fb345828d9e8089eadb53ff8497e9b9';
+const PIN2 = '67b7228c25f327f35cf57f74dbbe9c052dfac68ea44f69a0ee222cc0162995fa';
 const sha256 = (text: string): string => createHash('sha256').update(text).digest('hex');
 const ON_PATH = (name: string): string | undefined => (process.env['PATH'] ?? '').split(delimiter).map((dir) => join(dir, name)).find((path) => existsSync(path));
 const SH = ON_PATH('sh');
 const NO_SH = SH === undefined ? 'no POSIX sh on this machine' : false;
 const SYSTEM_PATH = '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin';
 
-/** The text that runs is the constant, which is the pinned revision 2 (the S2 spec, § R2.3). */
+/** The text that runs is the constant, which is the pinned revision 3 (the S2 spec, § R2.3). */
 const SCRIPT = ACCOUNTS_SCRIPT;
 
-test('E3S1-T20…T26: the constant ACCOUNTS_SCRIPT is the pinned revision 2 these runs use', () => {
+test('E3S1-T20…T26: the constant ACCOUNTS_SCRIPT is the pinned revision 3 these runs use', () => {
   assert.equal(sha256(SCRIPT), PIN2);
 });
 
@@ -118,11 +118,6 @@ function run(t: Tree, mode: string, options: { readonly uid0?: boolean; readonly
 
 const started = (out: Outcome, name: string): boolean => out.log.some((line) => line === name || line.startsWith(`${name} `));
 const has = (out: Outcome, line: string): boolean => out.lines.includes(line);
-const pathOf = (out: Outcome, after: string): string | undefined => {
-  const at = out.lines.indexOf(after);
-
-  return at < 0 ? undefined : out.lines[at + 1];
-};
 const NO = 'no-claude-usage';
 
 // ───────────────── the runs ─────────────────
@@ -138,19 +133,43 @@ test('E3S1-T20: as UID 0, all closed — the three parts; claude and agy each re
   assert.equal(out.lines.some((line) => line.startsWith(':path')), false);
 });
 
-test('E3S1-T21: root\'s ~/.local/bin writable by its group — claude and agy are unsafe with that folder\'s path, and neither records a start', { skip: NO_SH }, () => {
+/** The `:unsafe-path` lines that follow a vendor's `found` marker, up to its `COAI-USAGE` line. */
+const warnOf = (out: Outcome, vendor: string): readonly string[] => {
+  const at = out.lines.indexOf(`COAI-VENDOR ${vendor} found`);
+  const rest = at < 0 ? [] : out.lines.slice(at + 1);
+  const end = rest.findIndex((line) => line.startsWith('COAI-USAGE'));
+
+  return (end < 0 ? rest : rest.slice(0, end)).filter((line) => line.startsWith(':unsafe-path'));
+};
+
+test('E3S1-T21: root\'s ~/.local/bin writable by its group (the owner\'s decision of 2026-11-27) — claude and agy ARE read and started, each with one :unsafe-path line of that folder; no refusal', { skip: NO_SH }, () => {
   const t = tree();
   chmodSync(t.local, 0o775);
   const out = run(t, NO);
-  assert.ok(has(out, 'COAI-VENDOR claude unsafe'), JSON.stringify(out.lines));
-  assert.ok(has(out, 'COAI-VENDOR agy unsafe'));
-  assert.equal(pathOf(out, 'COAI-VENDOR claude unsafe'), `:path ${t.local}`);
-  assert.equal(started(out, 'claude'), false);
-  assert.equal(started(out, 'agy'), false);
-  assert.equal(started(out, 'jq'), false, 'a false jq of the same folder is not started either');
+  assert.ok(has(out, 'COAI-VENDOR claude found') && has(out, 'COAI-VENDOR agy found'), JSON.stringify(out.lines));
+  assert.deepEqual(warnOf(out, 'claude'), [`:unsafe-path ${t.local}`]);
+  assert.deepEqual(warnOf(out, 'agy'), [`:unsafe-path ${t.local}`]);
+  assert.equal(out.lines.some((line) => line.startsWith(':path') || line.includes(' unsafe') || line.startsWith('COAI-BAD')), false, 'a refusal');
+  assert.equal(started(out, 'claude'), true);
+  assert.equal(started(out, 'agy'), true);
+  assert.equal(started(out, 'jq'), false, 'a false jq of the same folder is a tool: it is not started, and the system one is used');
 });
 
-test('E3S1-T22: claude is a link whose target sits in a folder open to all — unsafe with that folder, no start; agy beside it is read', { skip: NO_SH }, () => {
+test('E3S1-T21: a TOOL under a folder others can write is still refused — COAI-BAD unsafe with its path, and no program of the place is started', { skip: NO_SH }, () => {
+  const t = tree();
+  const open = join(t.root, 'open');
+  mkdirSync(open);
+  chmodSync(open, 0o777);
+  const sed = ON_PATH('sed');
+  assert.ok(sed !== undefined, 'no sed on this machine');
+  symlinkSync(sed as string, join(open, 'sed-real'));
+  symlinkSync(join(open, 'sed-real'), join(t.local, 'sed'));
+  const out = run(t, NO);
+  assert.deepEqual(out.lines.filter((line) => line.startsWith('COAI-BAD') || line.startsWith(':path') || line.startsWith('COAI-VENDOR')), ['COAI-BAD unsafe', `:path ${open}`]);
+  assert.deepEqual(out.log, [], 'a vendor was started beside a refused tool');
+});
+
+test('E3S1-T22: claude is a link whose target sits in a folder open to all — it is read, started, and warned with that folder; agy beside it is read without a warning', { skip: NO_SH }, () => {
   const t = tree();
   const open = join(t.root, 'open');
   mkdirSync(open);
@@ -159,14 +178,15 @@ test('E3S1-T22: claude is a link whose target sits in a folder open to all — u
   rmSync(join(t.local, 'claude'));
   symlinkSync(join(open, 'claude-real'), join(t.local, 'claude'));
   const out = run(t, NO);
-  assert.ok(has(out, 'COAI-VENDOR claude unsafe'), JSON.stringify(out.lines));
-  assert.equal(pathOf(out, 'COAI-VENDOR claude unsafe'), `:path ${open}`);
-  assert.equal(started(out, 'claude'), false);
+  assert.ok(has(out, 'COAI-VENDOR claude found'), JSON.stringify(out.lines));
+  assert.deepEqual(warnOf(out, 'claude'), [`:unsafe-path ${open}`]);
+  assert.equal(started(out, 'claude'), true);
   assert.ok(has(out, 'COAI-VENDOR agy found'));
+  assert.deepEqual(warnOf(out, 'agy'), []);
   assert.ok(started(out, 'agy'));
 });
 
-test('E3S1-T23: agy is another owner\'s file behind an absolute link — unsafe, no start; claude beside it is read', { skip: NO_SH }, () => {
+test('E3S1-T23: agy is another owner\'s file behind an absolute link — it is read, started and warned with that folder; claude beside it is read without a warning', { skip: NO_SH }, () => {
   const t = tree();
   const other = join(t.root, 'other');
   mkdirSync(other);
@@ -174,8 +194,10 @@ test('E3S1-T23: agy is another owner\'s file behind an absolute link — unsafe,
   rmSync(join(t.local, 'agy'));
   symlinkSync(join(other, 'agy-real'), join(t.local, 'agy'));
   const out = run(t, NO);
-  assert.ok(has(out, 'COAI-VENDOR agy unsafe'), JSON.stringify(out.lines));
-  assert.equal(started(out, 'agy'), false);
+  assert.ok(has(out, 'COAI-VENDOR agy found'), JSON.stringify(out.lines));
+  assert.deepEqual(warnOf(out, 'agy'), [`:unsafe-path ${other}`]);
+  assert.equal(started(out, 'agy'), true);
+  assert.deepEqual(warnOf(out, 'claude'), []);
   assert.ok(has(out, 'COAI-VENDOR claude found'));
   assert.ok(started(out, 'claude'));
 });
@@ -188,7 +210,7 @@ test('E3S1-T24: a tool (jq) writable by others — COAI-BAD unsafe with its path
   assert.deepEqual(out.log, [], 'nothing of the place was started');
 });
 
-test('E3S1-T25: 17 links in a row and a link that points to itself are unsafe; a command -v answer that is not absolute is unsafe', { skip: NO_SH }, () => {
+test('E3S1-T25: 17 links in a row are warned and read; a link that points to itself is not found; a command -v answer that is not absolute is warned with a dash', { skip: NO_SH }, () => {
   const t = tree();
   rmSync(join(t.local, 'claude'));
   write(join(t.root, 'real-claude'), FAKE_CLAUDE(t.fx));
@@ -199,20 +221,20 @@ test('E3S1-T25: 17 links in a row and a link that points to itself are unsafe; a
     target = link;
   }
   const chain = run(t, NO);
-  assert.ok(has(chain, 'COAI-VENDOR claude unsafe'), `the chain of 17: ${JSON.stringify(chain.lines)}`);
-  assert.equal(started(chain, 'claude'), false);
+  assert.ok(has(chain, 'COAI-VENDOR claude found'), `the chain of 17: ${JSON.stringify(chain.lines)}`);
+  assert.equal(warnOf(chain, 'claude').length, 1, 'the walk refused more than 16 links, so the warning is there');
+  assert.equal(started(chain, 'claude'), true);
   const loop = tree();
   rmSync(join(loop.local, 'claude'));
   symlinkSync('claude', join(loop.local, 'claude'));
   const self = run(loop, NO);
   // `command -v` does not find a link that loops (ELOOP: it is not executable), so the script says `absent` and starts nothing: the property holds, the word differs from the spec's `unsafe`.
-  assert.ok(has(self, 'COAI-VENDOR claude unsafe') || has(self, 'COAI-VENDOR claude absent'), `the self link: ${JSON.stringify(self.lines)}`);
+  assert.ok(has(self, 'COAI-VENDOR claude absent'), `the self link: ${JSON.stringify(self.lines)}`);
   assert.equal(started(self, 'claude'), false);
   const relative = tree();
   const asFunction = run(relative, NO, { script: `claude() { :; }\n${SCRIPT}` });
-  assert.ok(has(asFunction, 'COAI-VENDOR claude unsafe'), `the function: ${JSON.stringify(asFunction.lines)}`);
-  assert.equal(pathOf(asFunction, 'COAI-VENDOR claude unsafe'), ':path claude');
-  assert.equal(started(asFunction, 'claude'), false);
+  assert.ok(has(asFunction, 'COAI-VENDOR claude found'), `the function: ${JSON.stringify(asFunction.lines)}`);
+  assert.deepEqual(warnOf(asFunction, 'claude'), [':unsafe-path -'], 'a path that is not absolute is not shown');
 });
 
 test('E3S1-T26: NOT UID 0 — the folders of T21 and T22 start the tools and print no :path line', { skip: NO_SH }, () => {

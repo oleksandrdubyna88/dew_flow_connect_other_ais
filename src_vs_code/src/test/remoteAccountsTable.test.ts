@@ -8,7 +8,7 @@ import { NO_TERMINAL_SAID, USAGE_READING_NOW_SAID, WSL_ELSEWHERE_SAID, WSL_HEADI
 import type { Block, TableModel } from '../remoteAccountsTable';
 import { HOSTS_SAID } from '../remoteHostsSaid';
 import {
-  ANN, NOW, agyOf, claude, codexOf, codexUsage, hour, inputOf, memoryOf, min, reading, refused, seen, usageOf,
+  ANN, COX, NOW, agyOf, claude, codexOf, codexUsage, inputOf, memoryOf, min, reading, refused, seen, usageOf,
 } from './accountsTableFixtures';
 
 /**
@@ -154,7 +154,7 @@ test('E2S2-T4: a real 100% used is 0 left, and a window that is not there is nul
 
 // ───────────────── T5 ─────────────────
 
-test('E2S2-T5: a Codex window is placed by its length, the session file\'s instant is on Codex\'s row, and Claude\'s model windows are sub-lines', () => {
+test('E2S2-T5: a Codex window is placed by its length, Codex\'s row carries its email and no session time, and Claude\'s model windows are sub-lines', () => {
   const windows = [{ minutes: 300, usedPercent: 10, resetsAtMs: NOW + min(60) }, { minutes: 10_080, usedPercent: 14, resetsAtMs: NOW + min(7_000) }, { minutes: 120, usedPercent: 20, resetsAtMs: null }];
   const memory = memoryOf(['h', seen(reading({ claude: claude({ usage: usageOf(56, 77, 49) }), codex: codexOf(codexUsage({ windows })) }), 1)]);
   const [claudeRow, codexRow] = blockFor(tableModel(inputOf({ hosts: ['h'], memory })), 'h').rows;
@@ -162,9 +162,9 @@ test('E2S2-T5: a Codex window is placed by its length, the session file\'s insta
   assert.deepEqual(codexRow?.five, { left: 90, resetsAt: NOW + min(60) });
   assert.deepEqual(codexRow?.week, { left: 86, resetsAt: NOW + min(7_000) });
   assert.deepEqual(codexRow?.others, [{ name: '2h', left: 80, resetsAt: null }]);
-  assert.equal(codexRow?.session, NOW - hour(48));
-  assert.equal(codexRow?.account.text, 'account name not shown by Codex');
+  assert.equal(codexRow?.account.text, COX);
   assert.equal(codexRow?.account.plan, 'prolite');
+  assert.ok(!('session' in (codexRow ?? {})) && !('note' in (codexRow ?? {})), 'the row has no "from a Codex session" fields: the reading is from now');
   assert.deepEqual(claudeRow?.models, [{ name: 'Fable', left: 51, resetsAt: null }]);
   assert.deepEqual(claudeRow?.five, { left: 44, resetsAt: NOW + min(130) });
 
@@ -234,16 +234,16 @@ test('E2S2-T7: every reason spans the two cells with its own sentence, and no to
     ['off', seen(reading({ claude: claude({ usage: { state: 'skipped' } }), codex: codexOf(codexUsage({ windows: [] })) }), 1)],
     ['fmt', seen(reading({ claude: claude({ email: 'fmt@example.test', usage: { state: 'failed', why: 'format' } }), agy: agyOf() }), 1)],
     ['out', seen(reading({ claude: { state: 'signed-out' } }), 1)],
-    ['cdx', seen(reading({ claude: { state: 'unreadable', why: 'timeout' }, codex: { state: 'found', signInFile: true, plan: null, usage: { state: 'failed', why: 'none' } } }), 1)],
+    ['cdx', seen(reading({ claude: { state: 'unreadable', why: 'timeout' }, codex: { state: 'found', signInFile: true, email: '', plan: null, usage: { state: 'failed', why: 'none' } } }), 1)],
     ['cred', seen(reading({ claude: { state: 'unreadable', why: 'credential-shape' }, codex: { state: 'unreadable', why: 'credential-shape' }, agy: { state: 'unreadable', why: 'credential-shape' } }), 1)],
   );
   const model = tableModel(inputOf({ hosts: ['off', 'fmt', 'out', 'cdx', 'cred'], memory }));
 
   assert.equal(blockFor(model, 'off').rows[0]?.span, 'Usage not read: it was not asked for in this round');
   assert.match(blockFor(model, 'fmt').rows[0]?.span ?? '', /^Usage unavailable: Claude Code 2\.1\.5 printed no usage line this version understands$/u);
-  assert.equal(blockFor(model, 'fmt').rows[1]?.span, 'agy states no usage');
+  assert.equal(blockFor(model, 'fmt').rows[1]?.span, null, 'agy with a quota has figures');
   assert.equal(blockFor(model, 'out').rows[0]?.span, 'signed out');
-  assert.match(blockFor(model, 'cdx').rows[1]?.span ?? '', /no usage record is near the end/u);
+  assert.match(blockFor(model, 'cdx').rows[1]?.span ?? '', /^Codex stated no rate limits$/u);
   for (const block of model.blocks) {
     for (const row of block.rows) {
       const empty = row.five.left === null && row.week.left === null && row.five.resetsAt === null && row.week.resetsAt === null;

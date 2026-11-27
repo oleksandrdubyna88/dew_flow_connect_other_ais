@@ -929,7 +929,7 @@ test('A5-T1: every language’s accounts article names its controls, the setting
     for (const word of ['**AI accounts and usage**', '**Refresh now**', '**Stop the round**', '**Not this host**', '**Allow reading**', '**Withdraw the permission**', 'jq']) {
       assert.ok(text.includes(word), `the ${language} accounts article never names ${word}`);
     }
-    for (const word of ['**Claude Code**', '**Codex**', '**Antigravity**', '*account name not shown by Codex*', '`~/.claude`']) {
+    for (const word of ['**Claude Code**', '**Codex**', '**Antigravity**', '`codex app-server`', '`agy -p /quota`', '`~/.claude`']) {
       assert.ok(text.includes(word), `the ${language} accounts article does not say what is read on each program, or what Claude Code writes (${word})`);
     }
   }

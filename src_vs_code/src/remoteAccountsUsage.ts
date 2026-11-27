@@ -1,10 +1,10 @@
 /**
- * The value rules of the accounts parser (E1.S2, spec § A2.7): the Claude usage lines with their reset text, the Codex record's
- * windows and times, and the small rules of a text value (version, email, organization, plan). Pure — no process, no file, no
+ * The value rules of the accounts parser (E1.S2, spec § A2.7): the Claude usage lines with their reset text, the Codex and agy
+ * windows, and the small rules of a text value (version, email, organization, plan). Pure — no process, no file, no
  * `vscode` — and it takes values that have ALREADY passed `plainValue` and the credential net in `remoteAccountsReply.ts`.
  *
  * <p><b>A number is a number in its range, or `null`.</b> The VM states percents USED, and they are kept as sent; this module never
- * works out "left" (that is the list's, in one place), and no path turns a missing number into a zero. A reset time is read only with
+ * works out "left" (that is the list's, in one place; agy states percents LEFT and its windows carry them as such), and no path turns a missing number into a zero. A reset time is read only with
  * the zone `UTC` and only when it falls between one hour ago and eight days ahead; anything else is a dash and the percent is still
  * shown.</p>
  */
@@ -30,15 +30,27 @@ export interface CodexWindow {
   readonly resetsAtMs: number | null;
 }
 
+/** What `codex app-server` said just now: the windows it named, or why there are none. */
 export type CodexUsage =
-  | {
-    readonly state: 'read';
-    readonly windows: readonly CodexWindow[];
-    readonly asOf: { readonly ms: number; readonly from: 'record' | 'file' } | null;
-    /** The host has no `stat`: said, and never read as "a time that is not known". */
-    readonly statMissing: boolean;
-  }
-  | { readonly state: 'failed'; readonly why: 'no-sessions' | 'none' | 'error' };
+  | { readonly state: 'read'; readonly windows: readonly CodexWindow[] }
+  /** `none`: Codex answered and has no rate limits; `error`: it did not answer (no app-server in this version, or it did not start); `timeout`: it did not answer in time; `not-started`: its program was not found on the script's PATH. */
+  | { readonly state: 'failed'; readonly why: 'none' | 'error' | 'timeout' | 'not-started' };
+
+/** The two groups of models agy states a quota for; the closed words of the script's `:quota` lines. */
+export type AgyGroup = 'gemini' | 'third-party';
+/** A quota window of agy: the group, which of the two lengths, the percent LEFT as agy states it and the reset (`null` for a window that has not started: full). */
+export interface AgyWindow {
+  readonly group: AgyGroup;
+  readonly window: '5h' | 'weekly';
+  readonly leftPercent: number | null;
+  readonly resetsAtMs: number | null;
+}
+
+export type AgyUsage =
+  | { readonly state: 'read'; readonly windows: readonly AgyWindow[] }
+  /** The first call was told not to run agy's quota command (a block from an earlier reply), or the host has no `jq`. */
+  | { readonly state: 'skipped' }
+  | { readonly state: 'failed'; readonly why: 'timeout' | 'error' | 'model-call' | 'format' | 'no-jq' };
 
 const HOUR_MS = 3_600_000;
 const DAY_MS = 24 * HOUR_MS;
@@ -200,52 +212,51 @@ export function codexWindowsOf(values: readonly string[]): readonly CodexWindow[
   return windows;
 }
 
-const RECORD_TIME = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{1,9})?(?:Z|[+-]\d\d:\d\d)$/u;
-const EARLIEST_MS = Date.UTC(2020, 0, 1);
+/** The Codex usage of the `window` values of a `COAI-USAGE codex read` record. */
+export function codexUsageOf(windowValues: readonly string[]): CodexUsage {
+  const windows = codexWindowsOf(windowValues);
 
-const inRange = (ms: number, nowMs: number): boolean => Number.isFinite(ms) && ms >= EARLIEST_MS && ms <= nowMs + DAY_MS;
-
-/** The record's own time when it fits and is in range. */
-function recordTimeOf(text: string, nowMs: number): number | null {
-  const ms = RECORD_TIME.test(text) ? Date.parse(text) : Number.NaN;
-
-  return inRange(ms, nowMs) ? ms : null;
+  return windows.length === 0 ? { state: 'failed', why: 'none' } : { state: 'read', windows };
 }
 
-const fileTimeOf = (word: string, nowMs: number): number | null => {
+// ───────────────── the Antigravity quota ─────────────────
+
+const AGY_GROUPS: readonly string[] = ['gemini', 'third-party'];
+const AGY_WINDOWS: readonly string[] = ['5h', 'weekly'];
+
+/** An agy reset: epoch seconds, kept only between one hour ago and eight days ahead like Claude's (a window of agy is 5 hours or a week); a dash and anything else is no reset. */
+function agyResetOf(word: string, nowMs: number): number | null {
   const ms = secondsToMs(word);
 
-  return ms !== null && inRange(ms, nowMs) ? ms : null;
-};
-
-type AsOf = { readonly ms: number; readonly from: 'record' | 'file' } | null;
-
-function timeOf(record: number | null, file: number | null): AsOf {
-  if (record !== null) {
-    return { ms: record, from: 'record' };
-  }
-
-  return file === null ? null : { ms: file, from: 'file' };
+  return ms === null ? null : inReach(ms, nowMs);
 }
 
-/**
- * `as-of` is the record's time (every word but the last, as the record has it) and the file's time (the last word: epoch seconds,
- * `-`, or `no-stat`). The record's own wins when it parses and is in range; else the file's; else there is no time. `no-stat` is no
- * time and is said by `statMissing`. The caller has already refused a last word that is none of the three.
- */
-export function asOfOf(value: string, nowMs: number): { readonly asOf: AsOf; readonly statMissing: boolean } {
+/** `<group> <window> <left> <reset>` (four words, the caller has checked that): a closed group and window, else the line is no window. */
+function agyWindowOf(value: string, nowMs: number): AgyWindow | undefined {
   const words = value.split(' ');
-  const last = words[words.length - 1] as string;
-
-  return { asOf: timeOf(recordTimeOf(words.slice(0, -1).join(' '), nowMs), fileTimeOf(last, nowMs)), statMissing: last === 'no-stat' };
-}
-
-/** The Codex usage of the `window` and `as-of` values of a `COAI-USAGE codex read` record. */
-export function codexUsageOf(windowValues: readonly string[], asOfValue: string, nowMs: number): CodexUsage {
-  const windows = codexWindowsOf(windowValues);
-  if (windows.length === 0) {
-    return { state: 'failed', why: 'none' };
+  if (!AGY_GROUPS.includes(words[0] as string) || !AGY_WINDOWS.includes(words[1] as string)) {
+    return undefined;
   }
 
-  return { state: 'read', windows, ...asOfOf(asOfValue, nowMs) };
+  return { group: words[0] as AgyGroup, window: words[1] as AgyWindow['window'], leftPercent: percentOf(words[2] as string), resetsAtMs: agyResetOf(words[3] as string, nowMs) };
+}
+
+/** The windows in the order sent; of two lines for one group and window the first is kept. */
+export function agyWindowsOf(values: readonly string[], nowMs: number): readonly AgyWindow[] {
+  const windows: AgyWindow[] = [];
+  for (const value of values) {
+    const one = agyWindowOf(value, nowMs);
+    if (one !== undefined && !windows.some((have) => have.group === one.group && have.window === one.window)) {
+      windows.push(one);
+    }
+  }
+
+  return windows;
+}
+
+/** The agy usage of the `window` values of a `COAI-USAGE agy read` record: no window at all is `format`. */
+export function agyUsageOf(windowValues: readonly string[], nowMs: number): AgyUsage {
+  const windows = agyWindowsOf(windowValues, nowMs);
+
+  return windows.length === 0 ? { state: 'failed', why: 'format' } : { state: 'read', windows };
 }

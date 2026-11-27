@@ -133,7 +133,7 @@ function randomInput(next: () => number): TableInput {
         { state: 'absent' }, { state: 'signed-out' }, { state: 'unreadable', why: 'auth' },
         claude({ email, org: pick([null, 'O']), usage: pick([{ state: 'skipped' }, usageOf(pick([null, 0, 50, 100]), pick([null, 20]), pick([null, 5])), { state: 'failed', why: 'timeout' }]) }),
       ] as const),
-      codex: pick([{ state: 'absent' }, codexOf(), codexOf(codexUsage({ windows: [] })), { state: 'found', signInFile: false, plan: null, usage: { state: 'failed', why: 'none' } }] as const),
+      codex: pick([{ state: 'absent' }, codexOf(), codexOf(codexUsage({ windows: [] })), { state: 'found', signInFile: false, email: '', plan: null, usage: { state: 'failed', why: 'none' } }] as const),
       agy: pick([{ state: 'absent' }, agyOf()] as const),
       jqMissing: pick([undefined, undefined, 'dnf'] as const),
     });
@@ -256,14 +256,16 @@ test('E2S2-T19: rows inside a block — every key both ways, a dash last, equal 
 
   assert.deepEqual(block('name', 'asc'), ['claude-code', 'codex', 'agy']);
   assert.deepEqual(block('name', 'desc'), ['agy', 'codex', 'claude-code']);
-  // claude 0% left, codex 90%, agy a dash (no figures)
+  // 5-hour left: claude 0%, codex 90%, agy 92% (its first group, Gemini)
   assert.deepEqual(block('left5h', 'asc'), ['claude-code', 'codex', 'agy']);
-  assert.deepEqual(block('left5h', 'desc'), ['codex', 'claude-code', 'agy']);
-  // claude week 50 used → 50 left; codex 86; agy dash
-  assert.deepEqual(block('leftWeek', 'asc'), ['claude-code', 'codex', 'agy']);
-  assert.deepEqual(block('reset5h', 'asc'), ['codex', 'claude-code', 'agy']);
-  assert.deepEqual(block('reset5h', 'desc'), ['claude-code', 'codex', 'agy']);
-  assert.deepEqual(block('account', 'asc'), ['codex', 'claude-code', 'agy']);
+  assert.deepEqual(block('left5h', 'desc'), ['agy', 'codex', 'claude-code']);
+  // weekly left: claude 50, agy 60, codex 86
+  assert.deepEqual(block('leftWeek', 'asc'), ['claude-code', 'agy', 'codex']);
+  // 5-hour reset in 65 min (codex), 95 (agy), 130 (claude)
+  assert.deepEqual(block('reset5h', 'asc'), ['codex', 'agy', 'claude-code']);
+  assert.deepEqual(block('reset5h', 'desc'), ['claude-code', 'agy', 'codex']);
+  // the accounts: agy@, ann@ (Claude), cox@ (Codex)
+  assert.deepEqual(block('account', 'asc'), ['agy', 'claude-code', 'codex']);
   // all three read at the same instant: equal ages fall back to the name, ascending, in both directions
   assert.deepEqual(block('age', 'asc'), ['claude-code', 'codex', 'agy']);
   assert.deepEqual(block('age', 'desc'), ['claude-code', 'codex', 'agy']);

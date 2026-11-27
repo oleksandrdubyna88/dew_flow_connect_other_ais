@@ -5,6 +5,7 @@ import { INSTALL_JQ } from './remoteAccountsRows';
 import { PLAIN_TEXT, TEXT_CONTROLS_CSS, textControlsHtml, textControlsScript, textControlsStyle } from './textControls';
 import type { TextSettings } from './textControls';
 import { RESET_PASSED, minutesLeft, resetDate, resetText } from './usageWords';
+import { EMAIL_COLOURS } from './vendorColour';
 import { jsonForScript } from './webviewHtml';
 
 /**
@@ -31,6 +32,9 @@ const WORDS = {
   toolNames: { 'claude-code': 'Claude Code', codex: 'Codex', agy: 'Antigravity' },
 };
 
+/** The twelve classes of an email's colour, `em-1` to `em-12`: the palette's own `var()` values, in the order the emails are given them (`EMAIL_COLOURS`). The page only ever sets a class of this closed list. */
+const EMAIL_CSS = EMAIL_COLOURS.map((colour, at) => `.em-${at + 1} { color: ${colour}; }`).join(' ');
+
 const STYLE = `
   body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); background: var(--vscode-editor-background); margin: 0; padding: 16px 20px; __TEXT__ }
   header { display: flex; align-items: baseline; gap: 12px; }
@@ -52,10 +56,13 @@ ${TEXT_CONTROLS_CSS}
   .bad { color: var(--vscode-errorForeground); }
   table.acct { border-collapse: collapse; width: 100%; margin: 2px 0 4px; table-layout: fixed; }
   table.acct th, table.acct td { text-align: left; vertical-align: top; padding: 4px 10px 4px 0; overflow-wrap: anywhere; }
+  table.acct tbody td { height: 3em; }
   .pct-g { color: #22c55e; } .pct-o { color: #f97316; } .pct-r { color: #ef4444; }
   .rs-g { color: #22c55e; } .rs-o { color: #f97316; } .rs-r { color: #ef4444; }
   .tn-claude-code { color: #d97757; } .tn-codex { color: #38bdf8; } .tn-agy { color: #a78bfa; }
-  td.tb-claude-code { border-left: 3px solid #d97757; padding-left: 8px; } td.tb-codex { border-left: 3px solid #38bdf8; padding-left: 8px; } td.tb-agy { border-left: 3px solid #a78bfa; padding-left: 8px; }
+  td.tb-claude-code { border-left: 3px solid #d97757; } td.tb-codex { border-left: 3px solid #38bdf8; } td.tb-agy { border-left: 3px solid #a78bfa; }
+  table.acct td.tb-claude-code, table.acct td.tb-codex, table.acct td.tb-agy { padding-left: 0.6em; }
+  ${EMAIL_CSS}
   body.vscode-light .pct-g, body.vscode-light .rs-g { color: #15803d; } body.vscode-light .pct-o, body.vscode-light .rs-o { color: #c2410c; } body.vscode-light .pct-r, body.vscode-light .rs-r { color: #b91c1c; }
   body.vscode-light .tn-claude-code { color: #b4532f; } body.vscode-light .tn-codex { color: #0369a1; } body.vscode-light .tn-agy { color: #6d28d9; }
   body.vscode-light td.tb-claude-code { border-left-color: #b4532f; } body.vscode-light td.tb-codex { border-left-color: #0369a1; } body.vscode-light td.tb-agy { border-left-color: #6d28d9; }
@@ -71,6 +78,7 @@ ${TEXT_CONTROLS_CSS}
     table.acct, table.acct tbody, table.acct tr, table.acct td { display: block; width: auto; }
     table.acct thead, table.acct colgroup { display: none; }
     table.acct tr { padding: 4px 0; border-bottom: 1px solid var(--vscode-panel-border); }
+    table.acct tbody td { height: auto; }
     .acct td .label { display: inline-block; min-width: 9em; opacity: .7; }
     .toolbar { gap: 6px 10px; }
     #summary { margin-left: 0; width: 100%; }
@@ -203,17 +211,17 @@ const SCRIPT = `
     return [['resets in ', ''], [resetText(minutes), five ? resetClass(minutes) : '']];
   }
 
-  /** A window cell: the percent LEFT or a dash, and under it when it resets. A Codex window whose reset has passed says so. */
-  function cellNode(cell, codex, five) {
+  /** A window cell: the percent LEFT or a dash, and under it when it resets. A Codex or Antigravity window whose reset has passed says so; an Antigravity window with no reset is full and says so. */
+  function cellNode(cell, tool, five) {
     var box = el('div', 'cell');
-    var passed = function (t) { return codex && cell.resetsAt !== null && t >= cell.resetsAt; };
+    var passed = function (t) { return tool !== 'claude-code' && cell.resetsAt !== null && t >= cell.resetsAt; };
     box.appendChild(live(el('div', 'left'), function (t) { return passed(t) ? '—' : leftParts(cell.left); }));
     if (cell.resetsAt !== null) {
       var reset = live(el('div', 'reset'), function (t) { return passed(t) ? WORDS.passed : resetParts(cell.resetsAt, t, five); });
       reset.setAttribute('title', stamp(cell.resetsAt));
       box.appendChild(reset);
     } else if (cell.left !== null) {
-      box.appendChild(el('div', 'reset', 'resets in —'));
+      box.appendChild(el('div', 'reset', tool === 'agy' && cell.left === 100 ? 'no reset' : 'resets in —'));
     }
     return box;
   }
@@ -235,7 +243,6 @@ const SCRIPT = `
   var W_SERVER = [14, 38, 24, 24];
   var W_ACCOUNT = [22, 78];
   var W_CODEX = [22, 28, 16, 16, 18];
-  var W_AGY = [22, 30, 48];
   var W_USER = [14, 18, 23, 23, 22];
   function td(label, className) {
     var cell = el('td', className);
@@ -311,25 +318,42 @@ const SCRIPT = `
     if (head.kind === 'jq-missing' && head.at !== null) { when(box, ' · read ', head.at, took); }
     return box;
   }
+  /** The colour class of an email: only one of the twelve closed names, whatever the model holds. */
+  function toneClass(tone) { return typeof tone === 'string' && /^em-([1-9]|1[0-2])$/.test(tone) ? tone : null; }
+  /** An account text with its email in the email's own colour: the model's text starts with the email. The class is the extension's closed name, never a value of a reply. */
+  function accountText(node, account) {
+    var tone = toneClass(account.tone);
+    if (tone === null || account.email === '' || account.text.indexOf(account.email) !== 0) {
+      node.textContent = account.text;
+      return node;
+    }
+    put(node, el('span', tone, account.email), account.text.length > account.email.length ? el('span', null, account.text.slice(account.email.length)) : null);
+    return node;
+  }
+  /** A second line that is there even when it has nothing to say, so the rows of a block are as tall as one another. */
+  var PAD = String.fromCharCode(160);
+  function secondLine(text) { return el('div', 'muted', text ? text : PAD); }
   function accountCell(row) {
     var cell = td('Account');
-    cell.appendChild(el('div', null, row.account.text));
-    if (row.account.plan !== null) { cell.appendChild(el('div', 'muted', 'plan ' + row.account.plan)); }
-    if (row.sharedAcross !== null) { cell.appendChild(el('div', 'muted', 'shared across ' + row.sharedAcross + ' hosts')); }
-    if (row.session !== null) {
-      var session = el('div', 'muted');
-      session.appendChild(el('span', null, 'from a Codex session '));
-      session.appendChild(live(el('span', null), function (t) { return agoWords(t - row.session); }));
-      session.setAttribute('title', stamp(row.session));
-      cell.appendChild(session);
-    }
-    if (row.note !== null) { cell.appendChild(el('div', 'muted', row.note)); }
+    cell.appendChild(accountText(el('div'), row.account));
+    // ONE second line, whatever it holds, so the rows of a block stand as tall as one another
+    var second = [];
+    if (row.account.plan !== null) { second.push('plan ' + row.account.plan); }
+    if (row.sharedAcross !== null) { second.push('shared across ' + row.sharedAcross + ' hosts'); }
+    cell.appendChild(secondLine(second.join(' · ')));
+    if (row.warning) { cell.appendChild(el('div', 'muted warn', row.warning)); }
     return cell;
+  }
+  /** A row of Antigravity stands for every group of models it has: one row for each, the group's windows in place of the first group's. Another tool's row is its own. */
+  function expand(row) {
+    if (!row.groups || row.groups.length === 0) { return [row]; }
+    return row.groups.map(function (group, at) {
+      return Object.assign({}, row, { five: group.five, week: group.week, group: group.name, warning: at === 0 ? row.warning : null });
+    });
   }
   /** A place name as shown: cut like the model's shown field, while the raw name is what a button posts. */
   function cut(name) { return name.length > 200 ? name.slice(0, 199) + '…' : name; }
   function windowCells(row) {
-    var codex = row.tool === 'codex';
     if (row.span !== null) {
       var both = td('Usage');
       both.setAttribute('colspan', '2');
@@ -337,26 +361,30 @@ const SCRIPT = `
       return [both];
     }
     var five = td('5-hour window');
-    five.appendChild(cellNode(row.five, codex, true));
+    five.appendChild(cellNode(row.five, row.tool, true));
     var week = td('Weekly window');
-    week.appendChild(cellNode(row.week, codex, false));
+    week.appendChild(cellNode(row.week, row.tool, false));
     row.models.forEach(function (one) { week.appendChild(namedLine(one)); });
     row.others.forEach(function (one) { week.appendChild(namedLine(one)); });
     return [five, week];
   }
 
   // ───── Server ─────
+  /** The tool's name and, under it, its version (and an Antigravity group's name); a tool with nothing to say there (Codex) keeps the line, empty. */
   function toolCell(row) {
     var cell = td('Tool', 'tb-' + row.tool);
     cell.appendChild(el('strong', 'tn-' + row.tool, WORDS.toolNames[row.tool]));
-    if (row.version !== null) { cell.appendChild(el('div', 'muted', row.version)); }
+    var second = [row.version, row.group].filter(function (part) { return typeof part === 'string' && part !== ''; });
+    cell.appendChild(secondLine(second.join(' · ')));
     return cell;
   }
-  function serverRow(row) {
-    var tr = el('tr');
-    put(tr, toolCell(row), accountCell(row));
-    windowCells(row).forEach(function (cell) { tr.appendChild(cell); });
-    return tr;
+  function serverRows(row) {
+    return expand(row).map(function (one) {
+      var tr = el('tr');
+      put(tr, toolCell(one), accountCell(one));
+      windowCells(one).forEach(function (cell) { tr.appendChild(cell); });
+      return tr;
+    });
   }
   /** The scope host wsl's own part: the count, the login-session line (always), a line for each distro and the notes. Every text is a textContent. */
   function wslPart(part) {
@@ -381,7 +409,7 @@ const SCRIPT = `
     if (block.line !== null) { node.appendChild(el('div', 'muted', block.line)); }
     if (block.rows.length > 0) {
       var body = el('tbody');
-      block.rows.forEach(function (row) { body.appendChild(serverRow(row)); });
+      block.rows.forEach(function (row) { serverRows(row).forEach(function (tr) { body.appendChild(tr); }); });
       node.appendChild(put(el('table', 'acct'), cols(W_SERVER), headRow([
         { label: 'Tool', key: 'name' }, { label: 'Account', key: 'account' }, { label: '5-hour window', key: 'left5h' }, { label: 'Weekly window', key: 'leftWeek' },
       ]), body));
@@ -404,15 +432,15 @@ const SCRIPT = `
   function accountUnit(account) {
     var node = el('section', 'block');
     var heading = el('div', 'heading');
-    put(heading, el('strong', 'host tn-claude-code', account.text));
+    put(heading, accountText(el('strong', 'host tn-claude-code'), account));
     if (account.usage.plan !== null) { heading.appendChild(el('span', 'muted', 'plan ' + account.usage.plan)); }
     node.appendChild(heading);
     var usage = el('div', 'usage');
     if (account.usage.span !== null) {
       usage.appendChild(el('div', 'muted', account.usage.span));
     } else {
-      var five = el('div'); put(five, el('span', 'label muted', '5-hour '), cellNode(account.usage.five, false, true));
-      var week = el('div'); put(week, el('span', 'label muted', 'Weekly '), cellNode(account.usage.week, false, false));
+      var five = el('div'); put(five, el('span', 'label muted', '5-hour '), cellNode(account.usage.five, 'claude-code', true));
+      var week = el('div'); put(week, el('span', 'label muted', 'Weekly '), cellNode(account.usage.week, 'claude-code', false));
       account.usage.models.forEach(function (one) { week.appendChild(namedLine(one)); });
       put(usage, five, week);
     }
@@ -420,36 +448,30 @@ const SCRIPT = `
     var body = el('tbody');
     account.places.forEach(function (one) {
       var tr = el('tr');
-      put(tr, put(td('Place', 'tb-claude-code'), el('strong', null, one.shown)), readCell(one.place, one.failure, one.readAt, one.tookMs));
+      var place = put(td('Place', 'tb-claude-code'), el('strong', null, one.shown));
+      if (one.warning) { place.appendChild(el('div', 'muted warn', one.warning)); }
+      put(tr, place, readCell(one.place, one.failure, one.readAt, one.tookMs));
       body.appendChild(tr);
     });
     node.appendChild(put(el('table', 'acct'), cols(W_ACCOUNT), headRow([{ label: 'Place', key: 'name' }, { label: 'Read', key: 'age' }]), body));
     return node;
   }
-  function lineRow(line, withWindows) {
-    var tr = el('tr');
-    put(tr, put(td('Place', 'tb-' + line.row.tool), el('strong', null, line.shown)), accountCell(line.row));
-    if (withWindows) {
-      windowCells(line.row).forEach(function (cell) { tr.appendChild(cell); });
-    } else {
-      put(tr, put(td('Usage'), el('div', 'muted', line.row.span === null ? '' : line.row.span)));
-    }
-    tr.appendChild(readCell(line.place, line.failure, line.row.readAt));
-    return tr;
+  function lineRows(line) {
+    return expand(line.row).map(function (one) {
+      var tr = el('tr');
+      put(tr, put(td('Place', 'tb-' + one.tool), el('strong', null, line.shown), secondLine(one.group)), accountCell(one));
+      windowCells(one).forEach(function (cell) { tr.appendChild(cell); });
+      tr.appendChild(readCell(line.place, line.failure, one.readAt));
+      return tr;
+    });
   }
-  function sectionUnit(title, lines, withWindows) {
+  function sectionUnit(title, tool, lines) {
     var node = el('section', 'block');
-    node.appendChild(el('h2', 'tn-' + (withWindows ? 'codex' : 'agy'), title));
+    node.appendChild(el('h2', 'tn-' + tool, title));
     var body = el('tbody');
-    lines.forEach(function (line) { body.appendChild(lineRow(line, withWindows)); });
-    var columns = [{ label: 'Place', key: 'name' }, { label: 'Account', key: 'account' }];
-    if (withWindows) {
-      columns.push({ label: '5-hour window', key: 'left5h' }, { label: 'Weekly window', key: 'leftWeek' });
-    } else {
-      columns.push({ label: 'Usage' });
-    }
-    columns.push({ label: 'Read', key: 'age' });
-    node.appendChild(put(el('table', 'acct'), cols(withWindows ? W_CODEX : W_AGY), headRow(columns), body));
+    lines.forEach(function (line) { lineRows(line).forEach(function (tr) { body.appendChild(tr); }); });
+    var columns = [{ label: 'Place', key: 'name' }, { label: 'Account', key: 'account' }, { label: '5-hour window', key: 'left5h' }, { label: 'Weekly window', key: 'leftWeek' }, { label: 'Read', key: 'age' }];
+    node.appendChild(put(el('table', 'acct'), cols(W_CODEX), headRow(columns), body));
     return node;
   }
   function noneUnit(items) {
@@ -472,14 +494,18 @@ const SCRIPT = `
       cell.appendChild(el('div', 'muted dash', '—'));
       return cell;
     }
-    cell.appendChild(el('div', null, row.account.text));
+    cell.appendChild(accountText(el('div'), row.account));
+    if (row.warning) { cell.appendChild(el('div', 'muted warn', row.warning)); }
     if (row.span !== null) {
       cell.appendChild(el('div', 'muted', row.span));
       return cell;
     }
-    var line = el('div', 'usage');
-    put(line, cellNode(row.five, row.tool === 'codex', true), cellNode(row.week, row.tool === 'codex', false));
-    cell.appendChild(line);
+    expand(row).forEach(function (one) {
+      if (one.group) { cell.appendChild(el('div', 'sub', one.group)); }
+      var line = el('div', 'usage');
+      put(line, cellNode(one.five, row.tool, true), cellNode(one.week, row.tool, false));
+      cell.appendChild(line);
+    });
     row.models.forEach(function (one) { cell.appendChild(namedLine(one)); });
     row.others.forEach(function (one) { cell.appendChild(namedLine(one)); });
     return cell;
@@ -516,8 +542,8 @@ const SCRIPT = `
         var key = 'account:' + (account.key === null ? 'place:' + account.places[0].place : account.key);
         units.push({ key: key, label: 'account:#' + units.length, data: account, build: function () { return accountUnit(account); } });
       });
-      if (view.codex.length > 0) { units.push({ key: 'section:codex', data: view.codex, build: function () { return sectionUnit('Codex', view.codex, true); } }); }
-      if (view.agy.length > 0) { units.push({ key: 'section:agy', data: view.agy, build: function () { return sectionUnit('Antigravity', view.agy, false); } }); }
+      if (view.codex.length > 0) { units.push({ key: 'section:codex', data: view.codex, build: function () { return sectionUnit('Codex', 'codex', view.codex); } }); }
+      if (view.agy.length > 0) { units.push({ key: 'section:agy', data: view.agy, build: function () { return sectionUnit('Antigravity', 'agy', view.agy); } }); }
       if (view.none.length > 0) { units.push({ key: 'section:none', data: view.none, build: function () { return noneUnit(view.none); } }); }
     } else {
       view.rows.forEach(function (row) { units.push({ key: 'user:' + row.place, data: row, build: function () { return userRow(row); } }); });
