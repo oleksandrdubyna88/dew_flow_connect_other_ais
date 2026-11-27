@@ -420,6 +420,13 @@ test('E2S3-L1: every table of a grouping has the same colgroup widths, so the bl
     const widths = run.document.querySelectorAll('table').map((table) => table.querySelectorAll('col').map((col) => col.getAttribute('width') ?? '').join(','));
     assert.ok(widths.length >= 2 || groupBy !== 'server', groupBy + ': too few tables to compare');
     assert.ok(widths.every((one) => one.length > 0), groupBy + ': a table has no colgroup');
+    // A column with no width of its own gets 0 % in a fixed table: its text then stands one letter to a line (the owner saw it on Antigravity's Read).
+    for (const table of run.document.querySelectorAll('table')) {
+      const cols = table.querySelectorAll('col').map((col) => Number.parseFloat(col.getAttribute('width') ?? ''));
+      const heads = table.querySelectorAll('th').length;
+      assert.equal(cols.length, heads, `${groupBy}: ${cols.length} widths for ${heads} columns`);
+      assert.equal(cols.reduce((sum, one) => sum + one, 0), 100, `${groupBy}: the widths do not add up to 100 %`);
+    }
     if (groupBy === 'server') {
       assert.equal(new Set(widths).size, 1, 'the Server tables do not share one width set: ' + widths.join(' | '));
     }

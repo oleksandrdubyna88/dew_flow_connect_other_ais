@@ -235,7 +235,7 @@ const SCRIPT = `
   var W_SERVER = [14, 38, 24, 24];
   var W_ACCOUNT = [22, 78];
   var W_CODEX = [22, 28, 16, 16, 18];
-  var W_AGY = [22, 30, 48];
+  var W_AGY = [22, 30, 30, 18];
   var W_USER = [14, 18, 23, 23, 22];
   function td(label, className) {
     var cell = el('td', className);
