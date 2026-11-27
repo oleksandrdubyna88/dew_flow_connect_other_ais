@@ -7,6 +7,12 @@ version: 1
 projects:
   - path: src_mcp
     adapter: dotnet
+    # The restore step (epoch 3 E4 s5 t6, found by the recorded run): a check unit binds the package, npm and dotnet folders read-only in every step but a restore (verify pass 3, M16), and a fresh job folder is empty.
+    # Without this step the build died at once on "Read-only file system: dotnet-home/.dotnet" (the first-use setup of the SDK) and could not fetch a package; a restore runs on the host network and fills them.
+    restore:
+      - dotnet
+      - restore
+      - dew_flow_connect_other_ais.slnx
     # Build the whole solution: the MCP server is the thing under test, and its test executable is built with it.
     build:
       - dotnet

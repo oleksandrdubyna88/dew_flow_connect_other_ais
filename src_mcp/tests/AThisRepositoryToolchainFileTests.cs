@@ -57,6 +57,7 @@ public sealed class AThisRepositoryToolchainFileTests
         project.TestFor.Stated.Should().BeTrue();
         project.TestFor.Argv.Should().Contain("{stem}", "the class of a test file is named by the stem of the file");
         project.TestFor.Argv.Should().NotContain("{file}");
+        project.Restore.Argv.Should().Equal("dotnet", "restore", "dew_flow_connect_other_ais.slnx");
         project.Build.Argv.Should().Equal("dotnet", "build", "dew_flow_connect_other_ais.slnx", "-c", "Debug", "-m:{jobs}");
         project.Test.Argv.Should().Equal("./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests");
         project.Path.Should().Be("src_mcp");
@@ -117,10 +118,10 @@ public sealed class AThisRepositoryToolchainFileTests
         using var logs = TempDir.For("coai-repo-checks-");
         var committed = Committed();
         var project = committed.Projects.Single();
-        // The committed test command, narrowed to one cheap class, and no build: this run must not rebuild the binary it is running.
+        // The committed test command, narrowed to one cheap class, and no restore or build: this run must not rebuild the binary it is running.
         var narrowed = committed with
         {
-            Projects = [project with { Build = new ToolchainCommand(true, []), Test = new ToolchainCommand(true, [.. project.Test.Argv, "--filter-class", "*AToolchainSchemaAgreesWithTheReaderTests", "--progress", "off"]) }],
+            Projects = [project with { Restore = new ToolchainCommand(true, []), Build = new ToolchainCommand(true, []), Test = new ToolchainCommand(true, [.. project.Test.Argv, "--filter-class", "*AToolchainSchemaAgreesWithTheReaderTests", "--progress", "off"]) }],
         };
 
         var result = await new CheckRunner(new ProcessLauncher()).RunAsync(new ToolchainRead.Configured(narrowed), new CheckRequest(RepoPaths.Root(), logs.At("run"), 2));
@@ -187,7 +188,7 @@ public sealed class AThisRepositoryToolchainFileTests
         var opened = CoderTree.Open(tree.Path, main).Should().BeOfType<CoderTreeOpening.Opened>().Subject.Tree;
         var checks = new ChecksAtBase(new GitHistory(launcher), new CheckRunner(launcher, new CheckBoundary(launcher, BoundaryHost.Current())));
         var lines = new List<string> { $"recorded selected run of .coai/toolchain.yaml, base {baseSha}, worktree {tree.Path}" };
-        BoundaryJob JobFor(string name) => new("m1", opened, Path.Combine(folder, name), NetworkChoice.None("none for this measurement"), NetworkChoice.None("none for this measurement"), 8000);
+        BoundaryJob JobFor(string name) => BoundaryJob.ForCoder("m1", opened, Path.Combine(folder, name)) with { MemoryMegabytes = 8000 };
 
         // Run one: a commit that adds one failing test class.
         await File.WriteAllTextAsync(Path.Combine(tree.Path, ProbeFile), ProbeText(fixedProbe: false));

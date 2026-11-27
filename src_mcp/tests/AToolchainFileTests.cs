@@ -445,9 +445,9 @@ public sealed class AToolchainFileTests
 
         var project = read.Should().BeOfType<ToolchainRead.Configured>().Subject.Toolchain.Projects.Should().ContainSingle().Subject;
         // E4 s5 t6: the build and the test are what they were; the file now also names testFor and testFiles (a prefix relative to the project).
-        project.Should().BeEquivalentTo(new ToolchainProject("src_mcp", "dotnet", new ToolchainCommand(true, ["dotnet", "build", "dew_flow_connect_other_ais.slnx", "-c", "Debug", "-m:{jobs}"]), new ToolchainCommand(true, ["./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests"]), 3000), options => options.Excluding(member => member.TestFor).Excluding(member => member.TestFiles));
+        project.Should().BeEquivalentTo(new ToolchainProject("src_mcp", "dotnet", new ToolchainCommand(true, ["dotnet", "build", "dew_flow_connect_other_ais.slnx", "-c", "Debug", "-m:{jobs}"]), new ToolchainCommand(true, ["./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests"]), 3000), options => options.Excluding(member => member.TestFor).Excluding(member => member.TestFiles).Excluding(member => member.Restore));
         project.StatesACommand.Should().BeTrue();
-        project.Restore.Stated.Should().BeFalse();
+        project.Restore.Argv.Should().Equal("dotnet", "restore", "dew_flow_connect_other_ais.slnx");
         project.Format.Stated.Should().BeFalse();
         project.TestFor.Stated.Should().BeTrue();
         project.TestFiles.Should().Equal("tests");
