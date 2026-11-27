@@ -118,35 +118,39 @@ public sealed class AToolchainFileOfTheWorktreeTests
 
     // ---------- the product road, with real units: Fable's three ways ----------
 
-    public static TheoryData<string> Ways => new() { "base-has-none-and-a-command-makes-a-fifo", "delete-then-a-fix-turn-makes-a-fifo", "delete-then-a-check-makes-a-fifo" };
+    // E4 joined: the head's own definitions run, and the head's toolchain file is read from the COMMIT. A way that deleted the base's file in turn 0 (E3) would now run nothing — so the ways keep the file in the head and make the FIFO where the host's look can see it.
+    // A FIFO that replaces a TRACKED file in a turn is a type change that `git add` refuses, so the job ends `coder-commit` before any check: the host reads nothing and waits on nothing. An untracked FIFO, and one a check makes, reach the host's look.
+    public static TheoryData<string, string> Ways => new()
+    {
+        { "base-has-none-and-a-command-makes-a-fifo", "checks-changed-tree" },
+        { "a-fix-turn-replaces-the-heads-file-with-a-fifo", "coder-commit" },
+        { "a-check-replaces-the-heads-file-with-a-fifo", "checks-changed-tree" },
+    };
 
     [Theory]
     [MemberData(nameof(Ways))]
-    public async Task M20_AFifoAtTheWorktreesToolchainFile_EndsTheJobWithAStopWord_NeverAWait(string way)
+    public async Task M20_AFifoAtTheWorktreesToolchainFile_EndsTheJobWithAStopWord_NeverAWait(string way, string stop)
     {
         var toolchain = way switch
         {
             "base-has-none-and-a-command-makes-a-fifo" => string.Empty,
-            "delete-then-a-check-makes-a-fifo" => ToolchainFixture.Shell(
-                "if [ ! -e .coai/toolchain.yaml ]; then /usr/bin/mkfifo .coai/toolchain.yaml; fi; echo built",
-                $"if grep -rq '{CoderRig.Red}' src 2>/dev/null; then echo 'FAILED thing: the state is red'; exit 1; fi; echo tested"),
+            "a-check-replaces-the-heads-file-with-a-fifo" => ToolchainFixture.Shell(
+                "rm -f .coai/toolchain.yaml && /usr/bin/mkfifo .coai/toolchain.yaml; echo built",
+                "echo tested"),
             _ => null,
         };
         await using var world = await CodexRigWorld.CreateAsync(toolchain);
         var rig = world.Rig;
-        var first = (Dictionary<string, object?>)Turn(Writes(way == "base-has-none-and-a-command-makes-a-fifo" ? CoderRig.Green : CoderRig.Red), Report());
+        var first = (Dictionary<string, object?>)Turn(Writes(way == "a-fix-turn-replaces-the-heads-file-with-a-fifo" ? CoderRig.Red : CoderRig.Green), Report());
         var second = (Dictionary<string, object?>)Turn(Writes(CoderRig.Green), Report());
         switch (way)
         {
             case "base-has-none-and-a-command-makes-a-fifo":
                 first["cwdFifos"] = new[] { ToolchainName };
                 break;
-            case "delete-then-a-fix-turn-makes-a-fifo":
-                first["cwdDelete"] = new[] { ToolchainName };
+            case "a-fix-turn-replaces-the-heads-file-with-a-fifo":
+                second["cwdDelete"] = new[] { ToolchainName };
                 second["cwdFifos"] = new[] { ToolchainName };
-                break;
-            default:
-                first["cwdDelete"] = new[] { ToolchainName };
                 break;
         }
 
@@ -155,7 +159,57 @@ public sealed class AToolchainFileOfTheWorktreeTests
 
         var (_, ended) = await rig.RunAsync(job).WaitAsync(TimeSpan.FromSeconds(90), TestContext.Current.CancellationToken);
 
-        (ended.State, ended.Stop).Should().Be((RoleJobStates.Failed, "checks-changed-tree"), $"{way}: {ended.Reason}");
+        (ended.State, ended.Stop).Should().Be((RoleJobStates.Failed, stop), $"{way}: {ended.Reason}");
+    }
+
+    // ---------- E4 joined: the other definition files of the head ----------
+    // The head's definitions (package.json, the project files, .npmrc ...) are read from the COMMIT by git, never from the worktree, so the host has no plain read of them to wait on. These pin what a FIFO at one of them does to a round: it ends the round, the same way, and never waits.
+
+    private const string NodePackage = "{ \"name\": \"p\", \"version\": \"1.0.0\", \"scripts\": { } }\n";
+
+    private static readonly Dictionary<string, string> Package = new() { ["package.json"] = NodePackage };
+
+    [Fact]
+    public async Task E4_AFifoThatACheckPutsInPlaceOfATrackedDefinitionFile_EndsTheJobChecksChangedTree_NeverAWait()
+    {
+        var toolchain = ToolchainFixture.Shell("rm -f package.json && /usr/bin/mkfifo package.json; echo built", "echo tested");
+        await using var world = await CodexRigWorld.CreateAsync(toolchain, Package);
+        var turn = (Dictionary<string, object?>)Turn(Writes(CoderRig.Green), Report());
+        world.Rig.SaysRaw("terra", turn, turn);
+        var job = world.Rig.NewJob(route: ["codex/terra"]);
+
+        var (_, ended) = await world.Rig.RunAsync(job).WaitAsync(TimeSpan.FromSeconds(90), TestContext.Current.CancellationToken);
+
+        (ended.State, ended.Stop).Should().Be((RoleJobStates.Failed, "checks-changed-tree"), ended.Reason);
+    }
+
+    [Fact]
+    public async Task E4_AFifoThatATurnPutsInPlaceOfATrackedDefinitionFile_EndsTheJobCoderCommit_NeverAWait()
+    {
+        await using var world = await CodexRigWorld.CreateAsync(extra: Package);
+        var turn = (Dictionary<string, object?>)Turn(Writes(CoderRig.Green), Report());
+        turn["cwdDelete"] = new[] { "package.json" };
+        turn["cwdFifos"] = new[] { "package.json" };
+        world.Rig.SaysRaw("terra", turn, turn);
+        var job = world.Rig.NewJob(route: ["codex/terra"]);
+
+        var (_, ended) = await world.Rig.RunAsync(job).WaitAsync(TimeSpan.FromSeconds(90), TestContext.Current.CancellationToken);
+
+        (ended.State, ended.Stop).Should().Be((RoleJobStates.Failed, "coder-commit"), ended.Reason);
+    }
+
+    [Fact]
+    public async Task E4_AFifoAtAnUntrackedDefinitionFile_IsCleanedBeforeTheRound_AndTheRoundRunsOnTheCommit()
+    {
+        await using var world = await CodexRigWorld.CreateAsync(extra: Package);
+        var turn = (Dictionary<string, object?>)Turn(Writes(CoderRig.Green), Report());
+        turn["cwdFifos"] = new[] { ".npmrc" };
+        world.Rig.SaysRaw("terra", turn);
+        var job = world.Rig.NewJob(route: ["codex/terra"]);
+
+        var (_, ended) = await world.Rig.RunAsync(job).WaitAsync(TimeSpan.FromSeconds(90), TestContext.Current.CancellationToken);
+
+        ended.State.Should().Be(RoleJobStates.Succeeded, "an untracked entry is not in the commit, so git clean removes it before any step: " + ended.Reason);
     }
 
     [Fact]

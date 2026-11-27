@@ -176,12 +176,12 @@ public sealed class AStepPlanRunsInsideTheBoundaryTests
     // ---- d2: no road around CheckBoundary ----
 
     [Fact]
-    public void NoCodeOfTheToolchainFolder_StartsAProcessButTheFourKnownRoads_AndTheScanSeesThem()
+    public void NoCodeOfTheToolchainFolder_StartsAProcessButTheFiveKnownRoads_AndTheScanSeesThem()
     {
         var folder = Path.Combine(RepoPaths.Root(), "src_mcp", "runners", "Toolchain");
         var starters = Directory.GetFiles(folder, "*.cs").Where(path => File.ReadAllText(path).Contains("new ProcessRequest(", StringComparison.Ordinal)).Select(Path.GetFileName).Order().ToList();
 
-        starters.Should().Equal("CheckBoundary.cs", "CheckRunner.cs", "CoderBoundary.cs", "UnitControl.cs");
+        starters.Should().Equal("CheckBoundary.cs", "CheckRunner.cs", "CoderBoundary.cs", "SignInRefresh.cs", "UnitControl.cs");
         File.ReadAllText(Path.Combine(folder, "CheckRunner.cs")).Split("launcher.RunAsync(").Length.Should().Be(2, "the one unbounded launch of the runner is in RunStepAsync, reached only when the request names no coder job");
         File.ReadAllText(Path.Combine(folder, "ChecksAtBase.cs")).Should().NotContain("ProcessRequest").And.NotContain("Process.Start");
     }

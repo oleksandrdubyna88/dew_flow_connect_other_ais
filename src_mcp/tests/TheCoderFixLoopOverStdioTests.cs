@@ -129,8 +129,8 @@ public sealed class TheCoderFixLoopOverStdioTests
 
         internal string WorktreeOf(string jobId) => Path.Combine(Root.Path, $"coai-coder-{jobId}");
 
-        /// <summary>The argv of every launch of the fake, in order — recorded below <c>launches</c> of the coder unit's own /tmp (the job's temp folder): a file of the worktree is cleaned away before every round of checks.</summary>
-        internal IReadOnlyList<string[]> Launches(string jobId) => RoleFailoverRig.LaunchesIn(Path.Combine(Jobs.Path, jobId, "coder", "tmp", "launches"));
+        /// <summary>The argv of every launch of the fake, in order — recorded below <c>launches</c> of the claude coder unit's own /tmp (<c>coder-temp/claude/tmp</c> of the job): a file of the worktree is cleaned away before every round of checks.</summary>
+        internal IReadOnlyList<string[]> Launches(string jobId) => RoleFailoverRig.LaunchesIn(Path.Combine(Jobs.Path, jobId, "coder-temp", "claude", "tmp", "launches"));
 
         internal async Task<string> GitAsync(string folder, params string[] args)
         {

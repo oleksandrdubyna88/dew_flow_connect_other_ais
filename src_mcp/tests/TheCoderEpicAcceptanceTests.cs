@@ -250,7 +250,7 @@ public sealed class TheCoderEpicAcceptanceTests
             status.GetProperty("attempts").EnumerateArray().Select(attempt => attempt.GetProperty("vendor").GetString()).Should().OnlyContain(vendor => vendor == "claude");
             var envelope = status.GetProperty("result");
             envelope.GetProperty("green").GetBoolean().Should().BeTrue();
-            var launches = RoleFailoverRig.LaunchesIn(Path.Combine(world.Jobs.Path, jobId, "coder", "tmp", "launches"));
+            var launches = RoleFailoverRig.LaunchesIn(Path.Combine(world.Jobs.Path, jobId, "coder-temp", "claude", "tmp", "launches"));
             launches.Should().HaveCount(2, "turn 0 and one fix turn");
             launches.Count(argv => argv.Contains("--resume")).Should().Be(1, "the fix turn resumes the session; turn 0 does not");
             launches.Select(Resumed).Should().Equal(string.Empty, SessionOfTurnZero);

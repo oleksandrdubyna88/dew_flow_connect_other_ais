@@ -115,6 +115,15 @@ internal sealed class CoderChecks(IRoleRun run, GitHistory git, CoderOsLayer lay
     private async Task<CoderChecksRound> RunRoundAsync(int turn, string head, CancellationToken ct, FormatResult? format)
     {
         run.Phase("checks", turn);
+
+        // A FIFO (or another entry that is not a regular file) at the worktree's toolchain file: the host never waits on it, and the round is not trusted (pass 9, M20). It is looked at BEFORE the clean below, because `git clean -ffdx` would remove an untracked FIFO and the round would run as if it had never been there: a model's
+        // command made it, and the sentence says so. `checks-changed-tree` and not `coder-boundary`: a FIFO there proves no command of the model — a check can make it — so no boundary is said to have broken; it says the tree is not what coai committed and expected. The head's definitions themselves are read from the COMMIT
+        // (the main repository, through git), never from this folder, so no other file of the worktree is read by the host: a FIFO at a tracked definition file is a type change that the status below ends the round on, and an untracked one is cleaned.
+        if (ToolchainEntryProblem(afterRound: false) is { Length: > 0 } odd)
+        {
+            return Unverified(turn, head, odd) with { Format = format ?? FormatResult.NotConfigured };
+        }
+
         var clean = await ProveEqualToTheCommitAsync(ct);
         if (clean.Length > 0)
         {
@@ -125,12 +134,6 @@ internal sealed class CoderChecks(IRoleRun run, GitHistory git, CoderOsLayer lay
         if (before.Sentence.Length > 0 || before.Head != head)
         {
             return Unverified(turn, head, before.Sentence.Length > 0 ? before.Sentence : $"the worktree is at {before.Head}, not at the commit {head} the checks were to run on; nothing was run");
-        }
-
-        // A FIFO (or another entry that is not a regular file) at the worktree's toolchain file: the host never waits on it, and the round is not trusted (pass 9, M20). `checks-changed-tree` and not `coder-boundary`: a FIFO there proves no command of the model — a check can make it — so no boundary is said to have broken; it says the tree is not what coai committed and expected.
-        if (ToolchainEntryProblem(afterRound: false) is { Length: > 0 } odd)
-        {
-            return Unverified(turn, head, odd);
         }
 
         var logs = Path.Combine(run.Folder, "checks", $"round-{turn}");
