@@ -1,5 +1,12 @@
 # Changelog
 
+## Extension 2.1.1 — 2026-11-27
+
+**The accounts tab no longer says "not asked" while it asks.** A round reads each host twice: first its accounts, then the
+Claude usage of the account it found, up to 30 s later. Between the two, the Claude row said *Usage not read: it was not asked
+for in this round*, which was not true. While the round is at that host — or, for WSL, at `wsl` — the row now says *Usage is
+being read now…*. A known reason why no figures came, and a host where CoAI stopped asking, are said as before.
+
 ## Extension 2.1.0 — 2026-11-27
 
 **The AI accounts of your terminals, and their limits, in one tab.** The new icon in the terminal panel's title bar (beside *Ask
