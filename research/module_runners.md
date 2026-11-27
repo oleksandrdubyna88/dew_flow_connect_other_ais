@@ -4478,3 +4478,24 @@ Tests: `CapabilityMatrixTests` (S5.6.1, S5.6.2, S5.6.4), `ConfinementPlannerTest
 `AKimiConsultantCheckTests` (S5.5.1–S5.5.4), `capabilityAdmission.test.ts` (S5.6.8) — listed in [module_tests.md](module_tests.md).
 
 *[2026-11-04, E5 S4: the extension runners' run folder, file arguments and refusal.]* `scripts/run-tests.mjs` and `scripts/run-lib-tests.mjs` now make ONE owned run folder through the wrap (`src_vs_code/scripts/owned.mjs`, `beginOwnedRun`: the folder `testsToDelete-<owner>-coai-run-<id>`, claimed first by the runner, TEMP, TMP, TMPDIR and `COAI_TEST_RUN_FOLDER` pointed at it, the runner's own record exported as `TESTSTODELETE_RUN`) and pass a gate before any `node --test` is spawned: a folder or claim that cannot be made, or temp variables that disagree with it, is ONE stderr line starting `coai tests: no test ran — ` and exit **78** (the old "the tests share the machine's temp as before" fallback and the legacy `testsToDelete-coai-run-<6>` name are gone, which supersedes the note on the run folder's name above). Both runners take optional file arguments: `node scripts/run-tests.mjs src/test/x.test.mjs out/test/y.test.js` (in `src_vs_code`) and `node scripts/run-lib-tests.mjs scripts/lib/x.test.mjs` (repository root) run exactly those files, validated before the sweep (a missing or non-test path is exit 2 and nothing is made). A test file started directly (`node --test x`, `node x`) refuses at its first import. `run-contract`, `run-seam`, `run-parity`, `run-host`, the `live-*`, `measure-*` and `render-page` scripts each start their own run folder (`startOwnedRun`). Detail, the entry table and the counts: `research/module_tests.md` § E5 S4.
+
+*[2026-11-27, PR #1065: the model a claude launch is told, in ONE place.]* `Reviewers/ClaudeModels.cs` (static) is where every claude `--model` is built: `ClaudeRuntime.Build`
+(the reviewer) and `ClaudeConsultant.Options` (the stuck consultant and the question consultant) both call `ClaudeModels.Arguments(settings)`. Why: every claude launch here runs
+`--permission-mode plan`, and claude CLI 2.1.332 maps the bare alias `haiku` to Sonnet in plan mode (a full id is not mapped), so a row set to `haiku` ran and was billed as Sonnet.
+`ClaudeModels.Sent` rewrites exactly that alias (case-insensitive, trimmed) to `HaikuId = "claude-haiku-5-5"` and sends every other value as the row wrote it (`opusplan` too: in plan mode it
+runs Opus, as its name says). The id is the model the alias runs OUTSIDE plan mode (a v2 acceptEdits coder job's api-request) and the newest Haiku in `shared/model-display-vectors.json`
+(a test fails when a newer one is listed there). The measurement is `research/RESULTS_haiku_alias_in_plan_mode.md`: with `--model haiku` the CLI's `modelUsage` named
+`claude-sonnet-5-5` (0.0185949 USD), with `--model claude-haiku-5-5` it named `claude-haiku-5-5` (0.00102879 USD).
+
+- **The model-family mismatch note.** `ClaudeRuntime.NotApplied` (the `IReviewerRuntime.NotApplied` road a Team server already uses, then `Ok.NotApplied` into the round note) calls
+  `ClaudeModels.Mismatch(asked, stdOut)`: it reads the CLI result's `modelUsage` keys and answers one sentence ("asked for haiku (haiku), but the CLI's own result says it ran …") only when
+  the asked value is a known family (`ModelFamily.OfRequested`, so `opusplan`, an empty model and a non-claude id say nothing) AND every answering model's family is known (`ModelFamily.OfModel`
+  is none of `other`/`unknown`) AND none of them is the asked family. A helper of a known family beside an id that names no family (a gateway's own name) is NOT flagged: the unknown one may
+  be the asked model. No `modelUsage`, unreadable JSON or a non-object answers empty and never throws (it runs on the path of a run already paid for). `ModelFamily` moved for this from
+  `src_mcp/src/Store/` to `src_mcp/core/Authors/` (namespace `CoaiMcp.Core.Authors`, content unchanged) so the runners use the one family rule.
+- **A structural scan keeps it the one place.** `AClaudeModelIsBuiltOnlyInClaudeModelsTests` reads every non-test `.cs` under `src_mcp` that is claude launch code (file name starts with
+  `Claude`, or names `"--permission-mode"`) and fails when one other than `ClaudeModels.cs` holds `"--model"`; a companion finds the sanctioned construction, one writes a violating file in a temp
+  folder and sees it flagged. `src_bench/CoaiBench/Judging/Judge.cs` builds its own plan-mode `--model` (a separate project, no reference to the runners, judge Fable by default): the one named
+  exception, held to the file by a test, and a follow-up.
+- Tests: `AClaudePlanLaunchNeverSendsTheHaikuAliasTests` (argv for the reviewer, both consultant shapes and the question consultant; the list test; the mismatch cases through `NotApplied` and
+  `ReviewerExecutor`), `AClaudeModelIsBuiltOnlyInClaudeModelsTests`.
