@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace CoaiMcp.Store;
+namespace CoaiMcp.Core.Authors;
 
 /// <summary>
 /// Which family a model counts under in the report (D4 of the E6 stories) — ONE function for the observed id (<c>claude-sonnet-5-5</c>) and for

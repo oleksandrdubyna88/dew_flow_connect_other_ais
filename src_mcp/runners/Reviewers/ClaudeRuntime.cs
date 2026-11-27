@@ -96,7 +96,7 @@ public sealed class ClaudeRuntime(string id = "claude") : IReviewerRuntime
                 // No MCP server at all: the person's own list held coai itself (issue #514).
                 NoMcpServers.ClaudeFlag,
                 "--add-dir", worktreePath,
-                .. settings.Model.Length > 0 ? (string[])["--model", settings.Model] : [],
+                .. ClaudeModels.Arguments(settings),
                 .. effort,
                 // The row's fast mode, as a one-key settings file (research/PLAN_fast_mode.md).
                 .. fast,
@@ -183,6 +183,16 @@ public sealed class ClaudeRuntime(string id = "claude") : IReviewerRuntime
         root.TryGetProperty("api_error_status", out var status) && status.ValueKind == JsonValueKind.Number && status.TryGetInt32(out var code)
             ? $" (HTTP {code})"
             : string.Empty;
+
+    /// <summary>
+    /// A note when the CLI's own result says another model family answered than the row asked for — see <see cref="ClaudeModels.Mismatch"/>.
+    /// </summary>
+    /// <remarks>
+    /// Measured 2026-11-27: <c>--permission-mode plan --model haiku</c> was answered by <c>claude-sonnet-5-5</c>. The launch now sends the full id for
+    /// that alias; this notices the next alias the CLI maps, and the note reaches the round the way a Team server's does.
+    /// </remarks>
+    public string NotApplied(ReviewerInvocation invocation, ProcessResult result) =>
+        ClaudeModels.Mismatch(invocation.Model, result.StdOut);
 
     /// <summary>
     /// Claude reports the same run TWICE and the two disagree — this reads the right one.
