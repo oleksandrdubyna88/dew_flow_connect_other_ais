@@ -623,8 +623,6 @@ export const testDoorOf = (sessions: RemoteSessions, state: vscode.Memento, fold
     await putBack(state, folder, before);
     sessions.keeper.forgetHeld();
     void setReadsKey(sessions);
-    // The raw writes above sent no change signal: tell the listeners (the accounts window's known hosts and generation) what the store now holds, as a commit does.
-    signalChange?.();
     // The editor may take a write away with the late news of an older one, and the keeper may put a refusal back from what it read before: read, and put back, until it stands.
     await putBackUntilHeld(sampleText(before), {
       read: async () => sampleText(await storedOf(state, folder)),
@@ -636,6 +634,9 @@ export const testDoorOf = (sessions: RemoteSessions, state: vscode.Memento, fold
       pause: pauseFor,
       now: Date.now,
     }, SETTLE);
+    // The raw writes sent no change signal: tell the listeners (the accounts window's known hosts and generation) what the store now holds, as a commit does.
+    // Last, because the loop above can write again, and a listener told before it would read a store that is not the one that stands.
+    signalChange?.();
   },
   stopRound: sessions.stopRound,
   startRound: sessions.startRound,
