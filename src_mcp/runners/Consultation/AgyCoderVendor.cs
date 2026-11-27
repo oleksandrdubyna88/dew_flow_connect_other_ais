@@ -59,8 +59,22 @@ internal sealed class AgyCoderVendor(HookHandler? handler = null) : ICoderVendor
     /// <summary>Without the job's records no turn can be tied to the guard: the check fails closed.</summary>
     public CoderTurnVerdict CheckTurn(ProcessResult process, string expectedSession) => AgyTurnCheck.Check(process, expectedSession, records: null);
 
-    public CoderTurnVerdict CheckTurn(ProcessResult process, string expectedSession, BoundaryJob job) =>
-        AgyTurnCheck.Check(process, expectedSession, AgyGuardRecords.Read(AgyCoderUnit.RecordsFile(job)));
+    public CoderTurnVerdict CheckTurn(ProcessResult process, string expectedSession, BoundaryJob job)
+    {
+        var unreadable = false;
+        var verdict = AgyTurnCheck.Check(process, expectedSession, () =>
+        {
+            var text = AgyGuardRecords.Read(AgyCoderUnit.RecordsFile(job));
+            unreadable = text is null;
+
+            return text;
+        });
+
+        // The name of the records is in a folder the unit can write: an entry there that is not a regular file is never a guard's file, whatever the stream says (pass 7, M18).
+        return unreadable && verdict is not CoderTurnVerdict.Boundary
+            ? new CoderTurnVerdict.Boundary("the guard's records of the agy turn are not a regular file that can be read, so nothing shows the hook decided what the turn did (G15); nothing of this turn was committed")
+            : verdict;
+    }
 
     public async Task<CoderCapability> ProbeAsync(IProcessLauncher launcher, string executable, string workingDirectory, CancellationToken ct) =>
         await AgyWriteCapability.ProbeAsync(launcher, executable, workingDirectory, ct) switch
@@ -124,9 +138,12 @@ internal sealed class AgyCoderVendor(HookHandler? handler = null) : ICoderVendor
 }
 
 /// <summary>The guard's records file of a job: read for the turn check, put away before each launch.</summary>
-internal static class AgyGuardRecords
+internal static partial class AgyGuardRecords
 {
-    /// <summary>The text of the records, or empty when there is no file (no tool was asked), or null when it could not be read.</summary>
+    /// <summary>
+    /// The text of the records, or empty when there is no file (no tool was asked), or null when it could not be read — and it is not read when the entry is anything but a regular file (pass 7, M18): the file lies in a folder the unit can write, and the open of a FIFO with no writer
+    /// does not return. The open itself cannot wait (<c>O_NONBLOCK</c>), and what it opened must be a seekable file.
+    /// </summary>
     public static string? Read(string file)
     {
         try
@@ -134,7 +151,7 @@ internal static class AgyGuardRecords
             return Files.RealPath.Lstat(file).Kind switch
             {
                 Files.EntryKind.Missing => string.Empty,
-                Files.EntryKind.File => File.ReadAllText(file),
+                Files.EntryKind.File => ReadRegular(file),
                 _ => null,
             };
         }
@@ -143,6 +160,30 @@ internal static class AgyGuardRecords
             return null;
         }
     }
+
+    private const int OpenReadOnlyNonBlocking = 0x800 | 0x80000; // O_RDONLY | O_NONBLOCK, O_CLOEXEC (Linux: the same value on x86-64 and arm64)
+
+    private static string? ReadRegular(string file)
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return File.ReadAllText(file);
+        }
+
+        var descriptor = Open(file, OpenReadOnlyNonBlocking);
+        if (descriptor < 0)
+        {
+            return null;
+        }
+
+        using var handle = new Microsoft.Win32.SafeHandles.SafeFileHandle(descriptor, ownsHandle: true);
+        using var stream = new FileStream(handle, FileAccess.Read, bufferSize: 1, isAsync: false);
+
+        return stream.CanSeek ? new StreamReader(stream).ReadToEnd() : null;
+    }
+
+    [System.Runtime.InteropServices.LibraryImport("libc", EntryPoint = "open", StringMarshalling = System.Runtime.InteropServices.StringMarshalling.Utf8, SetLastError = true)]
+    private static partial int Open(string path, int flags);
 
     /// <summary>Moves the records file to a name beside it (the earlier records stay for a person to read, under the job's folder); a sentence when that cannot be done.</summary>
     public static string PutAway(string file)

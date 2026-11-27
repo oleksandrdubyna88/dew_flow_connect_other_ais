@@ -40,13 +40,26 @@ internal static partial class AgyTurnCheck
     private sealed record Record(string Conversation, long Step, string Tool, string Decision);
 
     /// <summary>The verdict for one finished turn. <paramref name="records"/> is the text of the guard's records for THIS turn, or null when the file could not be read.</summary>
-    public static CoderTurnVerdict Check(ProcessResult process, string expectedSession, string? records)
+    public static CoderTurnVerdict Check(ProcessResult process, string expectedSession, string? records) => Check(process, expectedSession, () => records);
+
+    /// <summary>
+    /// The same, with the records given as a READ that is made only after what the stream alone proves has been judged (pass 7, M18): a mode sign, or an event of a tool outside the three, ends the job as a boundary without a file of the job's own folder being touched.
+    /// </summary>
+    public static CoderTurnVerdict Check(ProcessResult process, string expectedSession, Func<string?> readRecords)
     {
         var lines = Lines(process.StdOut);
         if (ModeSign(process, lines) is { Length: > 0 } sign)
         {
             return new CoderTurnVerdict.Boundary(sign);
         }
+
+        var cutEnd = process.ExitCode != 0 || process.TimedOut || process.Cancelled;
+        if (ForeignTool(Events(lines), cutEnd) is { Length: > 0 } foreignTool)
+        {
+            return new CoderTurnVerdict.Boundary(foreignTool);
+        }
+
+        var records = readRecords();
 
         // A launch that did not end cleanly (an exit that is not 0, a deadline, a cancel) has a CUT stream: nothing says the counts are equal or that every event ended. What ONE side alone proves still ends the job (pass 5, M11) — a boundary wins over the crash that follows.
         if (process.ExitCode != 0 || process.TimedOut || process.Cancelled)
@@ -83,13 +96,19 @@ internal static partial class AgyTurnCheck
 
     // ---------- a cut stream ----------
 
+    /// <summary>The sentence for an event of a tool outside the three, in any state — what the stream alone proves, on a clean end and on a cut one; empty when there is none.</summary>
+    private static string ForeignTool(IReadOnlyList<ToolEvent> events, bool cut) =>
+        events.FirstOrDefault(item => !Tools.Contains(item.Tool, StringComparer.Ordinal)) is { } foreign
+            ? $"the {(cut ? "cut " : string.Empty)}agy turn has a tool event (step {foreign.Step.ToString(CultureInfo.InvariantCulture)}) for a tool outside read_file, write_file and edit_file, so the coder's boundary did not hold (G15, AG-A2); nothing of this turn was committed"
+            : string.Empty;
+
     /// <summary>What a cut stream shows by one side alone: an event of a tool outside the three in any state, a <c>DONE</c> event with no record or with a record that is not <c>allow</c>, and records that cannot be read beside a <c>DONE</c> event. An event that did not end, and a record with no event, are what a cut explains.</summary>
     private static string Cut(List<ToolEvent> events, string? records)
     {
         // A tool outside the three is a break in EVERY state (re-check leg b): a cut explains a missing END of an event, never that such a tool was started at all.
-        if (events.FirstOrDefault(item => !Tools.Contains(item.Tool, StringComparer.Ordinal)) is { } foreign)
+        if (ForeignTool(events, cut: true) is { Length: > 0 } foreignTool)
         {
-            return $"the cut agy turn has a tool event (step {foreign.Step.ToString(CultureInfo.InvariantCulture)}) for a tool outside read_file, write_file and edit_file, so the coder's boundary did not hold (G15, AG-A2); nothing of this turn was committed";
+            return foreignTool;
         }
 
         var done = events.Where(item => item.State == "DONE").ToList();

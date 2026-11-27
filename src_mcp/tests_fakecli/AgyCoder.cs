@@ -42,6 +42,15 @@ internal static class AgyCoder
             ["init"] = new JsonObject { ["model"] = After(args, "--model"), ["cwd"] = cwd, ["agent"] = After(args, "--agent"), ["tools"] = new JsonArray("run_command", "view_file", "write_to_file"), ["permission_mode"] = "request-review" },
         }.ToJsonString());
 
+        if (steer("AGY_FIFO_RECORDS") == "1")
+        {
+            // A command of the model in the unit: the guard's records (beside the guard folder, in the vendor's writable folder) are replaced by a FIFO.
+            var records = Path.Combine(Path.GetDirectoryName(cwd)!, "guard-records.jsonl");
+            File.Delete(records);
+            using var fifo = Process.Start(new ProcessStartInfo("/usr/bin/mkfifo", [records]) { UseShellExecute = false })!;
+            fifo.WaitForExit();
+        }
+
         foreach (var call in JsonNode.Parse(toolsJson)!.AsArray().OfType<JsonObject>())
         {
             step += 2;

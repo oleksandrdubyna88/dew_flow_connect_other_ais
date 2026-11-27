@@ -38,7 +38,7 @@ internal static class ModelMap
         }
 
         var values = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var (steering, field) in new[] { ("STDOUT", "stdout"), ("STDERR", "stderr"), ("EXIT", "exit"), ("SLEEP_MS", "sleepMs"), ("OUTFILE_TEXT", "outfileText"), ("WRITE_FILES", "writeFiles"), ("TRY_WRITE_FILES", "tryWriteFiles"), ("HOME_FILES", "homeFiles"), ("READ_FILES", "readFiles"), ("IGNORE_TERM", "ignoreTerm"), ("AGY_TOOLS", "agyTools"), ("AGY_CONVERSATION", "agyConversation"), ("AGY_ANSWER", "agyAnswer"), ("AGY_TOKENS_IN", "agyTokensIn"), ("AGY_TOKENS_OUT", "agyTokensOut"), ("AGY_DENIED_ACTIONS", "agyDeniedActions"), ("AGY_HOLD_MS", "agyHoldMs"), ("HOLD_AFTER_MS", "holdAfterMs") })
+        foreach (var (steering, field) in new[] { ("STDOUT", "stdout"), ("STDERR", "stderr"), ("EXIT", "exit"), ("SLEEP_MS", "sleepMs"), ("OUTFILE_TEXT", "outfileText"), ("WRITE_FILES", "writeFiles"), ("TRY_WRITE_FILES", "tryWriteFiles"), ("HOME_FILES", "homeFiles"), ("READ_FILES", "readFiles"), ("IGNORE_TERM", "ignoreTerm"), ("AGY_TOOLS", "agyTools"), ("AGY_CONVERSATION", "agyConversation"), ("AGY_ANSWER", "agyAnswer"), ("AGY_TOKENS_IN", "agyTokensIn"), ("AGY_TOKENS_OUT", "agyTokensOut"), ("AGY_DENIED_ACTIONS", "agyDeniedActions"), ("AGY_HOLD_MS", "agyHoldMs"), ("AGY_FIFO_RECORDS", "agyFifoRecords"), ("HOLD_AFTER_MS", "holdAfterMs") })
         {
             if (entry.TryGetProperty(field, out var value))
             {

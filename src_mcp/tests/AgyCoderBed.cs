@@ -62,7 +62,7 @@ internal sealed class AgyCoderBed
         new Dictionary<string, object?> { ["tool"] = tool, ["path"] = path, ["content"] = content, ["target"] = target, ["replacement"] = replacement, ["skipHook"] = skipHook, ["noEvent"] = noEvent, ["hookTwice"] = hookTwice, ["stayActive"] = stayActive };
 
     /// <summary>One launch of the fake as agy: its tools, the report it answers with and what it says on stderr.</summary>
-    internal static IReadOnlyDictionary<string, object?> Launch(IReadOnlyList<IReadOnlyDictionary<string, object?>>? tools = null, string? answer = null, string conversation = "", string stderr = "", int exit = 0, int tokensIn = 100, int tokensOut = 10, int sleepMs = 0, int holdMs = 0, string denied = "", IReadOnlyList<string>? reads = null, IReadOnlyList<string>? tries = null)
+    internal static IReadOnlyDictionary<string, object?> Launch(IReadOnlyList<IReadOnlyDictionary<string, object?>>? tools = null, string? answer = null, string conversation = "", string stderr = "", int exit = 0, int tokensIn = 100, int tokensOut = 10, int sleepMs = 0, int holdMs = 0, bool fifoRecords = false, string denied = "", IReadOnlyList<string>? reads = null, IReadOnlyList<string>? tries = null)
     {
         var entry = new Dictionary<string, object?>
         {
@@ -76,6 +76,11 @@ internal sealed class AgyCoderBed
         if (holdMs > 0)
         {
             entry["agyHoldMs"] = holdMs;
+        }
+
+        if (fifoRecords)
+        {
+            entry["agyFifoRecords"] = "1";
         }
 
         if (conversation.Length > 0)
