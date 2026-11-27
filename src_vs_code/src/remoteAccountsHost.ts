@@ -58,6 +58,8 @@ export interface TerminalAccountsTestDoor {
   /** Whether the timer would be armed outside test mode: what `timerFor` makes of `armFor`'s answer now (never without the permission). In test mode no timer ever runs. */
   readonly armed: () => Promise<boolean>;
   readonly memoryHosts: () => readonly string[];
+  /** Whether a round is in flight: a scenario lets it end before it puts the profile back, so no round of it writes or reads after the next scenario began. */
+  readonly running: () => boolean;
   /** The model the open tab holds now, or `undefined` while no tab is open. */
   readonly lastModel: () => TableModel | undefined;
   /** Whether the tab is open. */
@@ -96,6 +98,7 @@ class AccountsWindow implements TerminalAccounts {
       runRoundNow: (trigger) => this.driver.runNow(trigger),
       armed: () => this.driver.armedNow(),
       memoryHosts: () => [...this.driver.memory().keys()].sort(byCodeUnit),
+      running: () => this.driver.isRunning(),
       lastModel: () => this.tab.current,
       tabOpen: () => this.tab.isOpen,
       noticeShown: () => noticesRaised,

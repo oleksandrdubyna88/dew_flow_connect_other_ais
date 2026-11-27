@@ -213,7 +213,15 @@ test('A1-T14/B25/B27: the host raises the notice of an unsaved refusal, and the 
   const door = host.slice(host.indexOf('export const testDoorOf'));
   const files = host.slice(host.indexOf('async function restoreFiles'));
   assert.ok(files.includes('rm(join(folder, REFUSED_FILE)') && files.includes('writeFile(join(folder, REFUSED_FILE)'), 'restore does not put the refusals file back');
-  assert.match(door, /await state\.update\(TERMINAL_HOSTS_KEY, before\.list\);\n {4}await state\.update\(STATE_KEY, before\.row\);\n {4}await restoreFiles\(folder, before\);/u, 'restore does not put the list, the row and the files back in order');
+  const putBack = host.slice(host.indexOf('async function putBack('), host.indexOf('export const testDoorOf'));
+  assert.match(putBack, /await state\.update\(TERMINAL_HOSTS_KEY, before\.list\);\n {2}await state\.update\(STATE_KEY, before\.row\);\n {2}await restoreFiles\(folder, before\);/u, 'restore does not put the list, the row and the files back in order');
+  assert.ok(door.includes('await putBack(state, folder, before);') && door.includes('putBackUntilHeld('), 'restore does not put back with the one function, and read until the profile stands');
+  const waits = [...door.matchAll(/await sessions\.keeper\.held\(\);/gu)].map((one) => one.index);
+  assert.equal(waits.length, 2, 'restore does not wait for the keeper\'s queue both before its first write and before each write of the loop');
+  const writes = [...door.matchAll(/await putBack\(state, folder, before\);/gu)].map((one) => one.index);
+  assert.equal(writes.length, 2, 'restore does not put back in exactly two places (the first write and the loop)');
+  assert.ok(waits.every((at, n) => at !== undefined && writes[n] !== undefined && at < (writes[n] as number)), 'restore writes before the keeper\'s queue is let finish');
+  assert.ok(door.indexOf('signalChange?.()') > door.indexOf('putBackUntilHeld('), 'restore tells the listeners before the loop that can write again has settled');
   assert.ok(files.includes('MARKER_PREFIX') && files.includes('WITHDRAWN_PREFIX') && door.includes('forgetHeld()'), 'restore leaves markers, withdrawal files or what the window holds');
 });
 

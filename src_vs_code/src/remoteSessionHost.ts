@@ -18,6 +18,7 @@ import { PermissionRow } from './remoteKeeperDoor';
 import { PickRow, Picked, Purpose, RemoteAnswer, RoadSeams, onePerTerminal, reachOf, readsKey, remoteRoad } from './remoteRead';
 import { refusalsDiskOver } from './remoteRefusalsDisk';
 import { refusalsStore } from './remoteRefusalsStore';
+import { SETTLE, foundQuiet, putBackUntilHeld } from './storeSettle';
 import { runRemote } from './remoteSsh';
 import { liveTerminals } from './terminalHost';
 import { registerCommand } from './shellBridge';
@@ -529,8 +530,14 @@ export interface RemoteSessionsTestDoor {
   /** What is stored, as it is, for the `finally`: the list, the state row, the TEXT of the file, and every withdrawal file with its text. */
   readonly stored: () => Promise<StoredBefore>;
   /**
+   * What is stored as it is FOUND: `stored`, read again a step later until two reads agree. A scenario takes its `before` from this, so what an earlier
+   * scenario's last writes are still doing in the editor is not taken for the profile it must put back (`storeSettle.ts`).
+   */
+  readonly found: () => Promise<StoredBefore>;
+  /**
    * TEST ONLY. Puts all four back by raw writes, removes every other withdrawal file, every marker and the lock, empties what this window holds as
-   * not saved and what it remembers of the file, and sends the change signal a commit sends.
+   * not saved and what it remembers of the file, and sends the change signal a commit sends. Then it reads, and puts back again whatever differs,
+   * until the profile has stood as found for a quiet time: the editor can take a `globalState` write away with the late news of an older one.
    */
   readonly restore: (before: StoredBefore) => Promise<void>;
   /** The Stop, through the product's own road. */
@@ -579,6 +586,22 @@ async function restoreFiles(folder: string, before: StoredBefore): Promise<void>
   }
 }
 
+/** What a scenario put back, as text, so two reads compare: the list, the row, the file's text and the withdrawal files. */
+const sampleText = (stored: StoredBefore): string => JSON.stringify(stored);
+
+const pauseFor = (ms: number): Promise<void> => new Promise((resolve) => { setTimeout(resolve, ms); });
+
+/** The raw writes of a restore, in the order the wiring test holds: the list, the row, then the folder. */
+async function putBack(state: vscode.Memento, folder: string, before: StoredBefore): Promise<void> {
+  await state.update(TERMINAL_HOSTS_KEY, before.list);
+  await state.update(STATE_KEY, before.row);
+  await restoreFiles(folder, before);
+}
+
+/** What is stored, as it is: the list, the state row, the TEXT of the file, and every withdrawal file with its text. */
+const storedOf = async (state: vscode.Memento, folder: string): Promise<StoredBefore> =>
+  ({ list: state.get(TERMINAL_HOSTS_KEY), row: state.get(STATE_KEY), file: await textOrNothing(join(folder, REFUSED_FILE)), withdrawn: await withdrawnOf(folder) });
+
 export const testDoorOf = (sessions: RemoteSessions, state: vscode.Memento, folder: string): RemoteSessionsTestDoor => ({
   replaceRun: (run) => { boundRun = run ?? runRemote; },
   replaceQuestion: (raise) => { boundQuestion = raise; },
@@ -592,14 +615,27 @@ export const testDoorOf = (sessions: RemoteSessions, state: vscode.Memento, fold
   permission: sessions.permission,
   withdrawnFiles: () => namesOf(folder, WITHDRAWN_PREFIX),
   standings: sessions.hostStandings,
-  stored: async () => ({ list: state.get(TERMINAL_HOSTS_KEY), row: state.get(STATE_KEY), file: await textOrNothing(join(folder, REFUSED_FILE)), withdrawn: await withdrawnOf(folder) }),
+  stored: () => storedOf(state, folder),
+  found: () => foundQuiet({ read: () => storedOf(state, folder), same: (a, b) => sampleText(a) === sampleText(b), pause: pauseFor, now: Date.now }),
   restore: async (before) => {
-    await state.update(TERMINAL_HOSTS_KEY, before.list);
-    await state.update(STATE_KEY, before.row);
-    await restoreFiles(folder, before);
+    // What the keeper has queued is let finish first, so no operation of this window runs in the middle of the raw writes below.
+    await sessions.keeper.held();
+    await putBack(state, folder, before);
     sessions.keeper.forgetHeld();
     void setReadsKey(sessions);
-    // The raw writes above sent no change signal: tell the listeners (the accounts window's known hosts and generation) what the store now holds, as a commit does.
+    // The editor may take a write away with the late news of an older one, and the keeper may put a refusal back from what it read before: read, and put back, until it stands.
+    await putBackUntilHeld(sampleText(before), {
+      read: async () => sampleText(await storedOf(state, folder)),
+      putBack: async () => {
+        await sessions.keeper.held();
+        await putBack(state, folder, before);
+        sessions.keeper.forgetHeld();
+      },
+      pause: pauseFor,
+      now: Date.now,
+    }, SETTLE);
+    // The raw writes sent no change signal: tell the listeners (the accounts window's known hosts and generation) what the store now holds, as a commit does.
+    // Last, because the loop above can write again, and a listener told before it would read a store that is not the one that stands.
     signalChange?.();
   },
   stopRound: sessions.stopRound,

@@ -6,6 +6,7 @@ import * as vscode from 'vscode';
 import type { CoaiExports } from '../../extension';
 import type { RemoteRun } from '../../remoteSsh';
 import { until, activated } from './hostHelpers';
+import { closedAll, committedAndHeld } from './hostStoreHelpers';
 
 /**
  * The two terminal doors of a `Creds:` terminal, in a real editor (S4-H1 of the E2 stories document): the context key that shows the
@@ -55,7 +56,7 @@ async function front(terminal: vscode.Terminal): Promise<void> {
 /** The context key of the terminal items follows the active terminal and the host's answer. */
 export async function theTerminalItemsFollowTheActiveTerminalAndTheAnswer(): Promise<void> {
   const door = await boundDoor();
-  const before = await door.stored();
+  const before = await door.found();
   const creds = vscode.window.createTerminal({ name: `Creds: ${HOST} / ${SESSION}` });
   const plain = vscode.window.createTerminal({ name: 'plain shell' });
   try {
@@ -69,19 +70,19 @@ export async function theTerminalItemsFollowTheActiveTerminalAndTheAnswer(): Pro
     // An answer written to the real globalState changes the key without the active terminal changing.
     await door.commit({ kind: 'person', host: HOST, answer: 'no' });
     await until(() => door.readsKey() === false, 'a "no" for the host is written and the items are still shown (the key is not set after an answer is written)');
-    await door.commit({ kind: 'forget', host: HOST });
+    // The list is a copy in the real `globalState`, and the editor may take a write away (`storeSettle.ts`): the Forget is made again until it stays.
+    await committedAndHeld(door, { kind: 'forget', host: HOST }, (rows) => !rows.some((row) => row.host === HOST && row.answer === 'no'), 'a "Read this host again" for the host did not lift the "no"');
     await until(() => door.readsKey() === true, 'a "Read this host again" for the host is written and the items are still hidden');
   } finally {
+    await closedAll([creds, plain]);
     await door.restore(before);
-    creds.dispose();
-    plain.dispose();
   }
 }
 
 /** A real press of *CoAI: take the question* on a Creds terminal reaches the bound road once — or stops at the chat's own readiness, and reaches nothing. */
 export async function aPressOnACredsTerminalReachesTheBoundRoadOnce(): Promise<void> {
   const door = await boundDoor();
-  const before = await door.stored();
+  const before = await door.found();
   const calls: (readonly string[])[] = [];
   door.replaceRun(async (_host, _session, operands) => {
     calls.push(operands);
@@ -106,7 +107,7 @@ export async function aPressOnACredsTerminalReachesTheBoundRoadOnce(): Promise<v
     }
   } finally {
     door.replaceRun(undefined);
+    await closedAll([terminal]);
     await door.restore(before);
-    terminal.dispose();
   }
 }
