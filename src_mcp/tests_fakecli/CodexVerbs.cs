@@ -19,13 +19,26 @@ internal static class CodexVerbs
     /// <summary>Whether <paramref name="args"/> are one of the three verbs.</summary>
     public static bool Handles(string[] args) => args is ["sandbox", ..] or ["doctor", ..] or ["debug", "prompt-input", ..];
 
-    /// <summary>Runs the verb and answers its exit code.</summary>
-    public static int Run(string[] args) => args[0] switch
+    /// <summary>Runs the verb and answers its exit code. Every call is one line of <c>fake-verbs.log</c> in the <c>CODEX_HOME</c> it ran with (when it has one): a test reads which of the vendor's programs a preflight started.</summary>
+    public static int Run(string[] args)
     {
-        "sandbox" => Sandbox(args),
-        "doctor" => Doctor(args),
-        _ => PromptInput(args),
-    };
+        Log(args[0]);
+
+        return args[0] switch
+        {
+            "sandbox" => Sandbox(args),
+            "doctor" => Doctor(args),
+            _ => PromptInput(args),
+        };
+    }
+
+    private static void Log(string verb)
+    {
+        if (CodexHome() is { Length: > 0 } home && Directory.Exists(home))
+        {
+            File.AppendAllText(Path.Combine(home, "fake-verbs.log"), verb + "\n");
+        }
+    }
 
     /// <summary>The steering value <paramref name="name"/> (the environment first, then the minimal-environment file), or empty.</summary>
     private static string Steering(string name)
@@ -82,6 +95,12 @@ internal static class CodexVerbs
         }
 
         var command = args[(dash + 1)..];
+        if (mode == "blind")
+        {
+            // A sandbox in which the tools of a probe are not there: the probe prints nothing but its start and its end, which no row may read as "nothing was found".
+            return Run("bwrap", [.. BwrapArguments([]).Select(argument => argument == "/usr/bin:/bin" ? "/nonexistent" : argument), .. command]);
+        }
+
         var leaks = mode.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToHashSet(StringComparer.Ordinal);
 
         return Run(mode == "none" ? command[0] : "bwrap", mode == "none" ? command[1..] : [.. BwrapArguments(leaks), .. command]);

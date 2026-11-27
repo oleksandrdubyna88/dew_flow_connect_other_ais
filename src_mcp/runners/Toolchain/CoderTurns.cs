@@ -73,8 +73,15 @@ public sealed class CoderTurns(CoderBoundary boundary, FilesystemInvariant invar
 
         var before = await SnapshotAsync(job.Tree.MainCheckout, ct);
         var run = await bound.RunAsync((BoundaryAdmission.Admitted)admission, job, request, part, ct);
-        bound.CollectLaunch(job, original, request);
-        var after = await SnapshotAsync(job.Tree.MainCheckout, ct);
+        if (run.Gone)
+        {
+            // Only from a unit that is gone: with a live one a link could be put at the report between the look and the copy (pass 6, S47).
+            bound.CollectLaunch(job, original, request);
+        }
+
+        // A launch that the caller's cancel cut keeps its result: the snapshot after it is taken with a time of its own, never with the cancelled token (a cancelled one throws, and a throw here would replace the stream of the turn by an empty one; pass 5 re-check, M11 leg a).
+        using var own = new CancellationTokenSource(AfterCancelBudget);
+        var after = await SnapshotAsync(job.Tree.MainCheckout, ct.IsCancellationRequested ? own.Token : ct, ct.IsCancellationRequested);
         var evidence = CoderMainEvidence.Of(before.Snapshot, after.Snapshot, before.Why.Length > 0 ? before.Why : after.Why);
 
         return Classify(run, evidence);
@@ -92,14 +99,21 @@ public sealed class CoderTurns(CoderBoundary boundary, FilesystemInvariant invar
                 : $"The coder launch stands in '{request.WorkingDirectory}', which is not where the coder of job {job.JobId} starts ({expected}); it was not started.";
     }
 
+    private static readonly TimeSpan AfterCancelBudget = TimeSpan.FromSeconds(30);
+
     private sealed record Snapped(FilesystemSnapshot? Snapshot, string Why);
 
     /// <summary>A snapshot of the main checkout, or why there is none. Evidence is best effort and never the reason a job fails; only a cancel passes through.</summary>
-    private async Task<Snapped> SnapshotAsync(string main, CancellationToken ct)
+    private async Task<Snapped> SnapshotAsync(string main, CancellationToken ct, bool afterACancel = false)
     {
         try
         {
             return new Snapped(await invariant.SnapshotAsync(main, ct), string.Empty);
+        }
+        catch (OperationCanceledException) when (afterACancel)
+        {
+            // The snapshot of a cancelled launch has only its own time: when that runs out there is no evidence, and the stream of the turn is still kept.
+            return new Snapped(null, "the snapshot after a cancelled launch ran out of its own time");
         }
         catch (ContextException e)
         {

@@ -22,7 +22,7 @@ internal static class CodexPreflightScript
         vendor=$1; chome=$2; auth=$3; otherjob=$4; port=$5; placeholder=$6; expconf=$7; expenv=$8; ohost=$9; shift 9
         oport=$1; ourl=$2; keylist=$3; flagtext=$4; shift 4
         net=host
-        row() { printf '%s\t%s\t%s\n' "$1" "$2" "$3"; }
+        row() { printf '%s\t%s\t%s\n' "$1" "$2" "$3"; if [ "$2" = bad ]; then anybad=1; fi; }
         probe=.coai-preflight-probe
         tcp() { timeout 3 bash -c "exec 3<>/dev/tcp/$1/$2" >/dev/null 2>&1; }
         """;
@@ -43,6 +43,18 @@ internal static class CodexPreflightScript
         else row coder-root-hidden ok "only the job's own worktree is beside it, over an empty tmpfs"; fi
         """;
 
+    /// <summary>
+    /// Written AFTER the two rows above have looked (the rows list the folders): one marker in the main checkout and one beside the worktree. Inside a covered unit they land in the unit's own tmpfs and are gone with it; where a folder is not covered they land on the disk, and the HOST looks for them after the unit has ended
+    /// (<see cref="CodexPreflightRows"/>), because the type of the file system a folder is on is no proof that it is the unit's (a tmpfs disk is a tmpfs; pass 6, S40).
+    /// </summary>
+    private const string CoverMarkers = """
+        { printf x > "$main/.coai-preflight-cover"; } 2>/dev/null
+        { printf x > "$root/.coai-preflight-cover"; } 2>/dev/null
+        """;
+
+    /// <summary>The name of the marker of <see cref="CoverMarkers"/>.</summary>
+    internal const string CoverMarker = ".coai-preflight-cover";
+
     private const string TempRow = """
         if [ -e "/tmp/.coai-job-$job" ]; then row tmp-is-the-jobs bad "the job's temp folder is bound at /tmp, which this unit covers with its own tmpfs"
         elif [ "$(stat -f -c %T /tmp)" != tmpfs ]; then row tmp-is-the-jobs bad "/tmp is not a tmpfs of the unit"
@@ -51,8 +63,8 @@ internal static class CodexPreflightScript
         """;
 
     private const string SignInAbsentRow = """
-        if [ -e "$rh/.claude/.credentials.json" ]; then row sign-in-not-in-unit bad "the person's claude sign-in file is visible inside the codex unit"
-        else row sign-in-not-in-unit ok "the person's claude sign-in file is not in the codex unit"; fi
+        if head -c 1 "$rh/.claude/.credentials.json" >/dev/null 2>&1 || head -c 1 "$rh/.gemini/antigravity-cli/antigravity-oauth-token" >/dev/null 2>&1; then row sign-in-not-in-unit bad "a real sign-in file of another vendor (claude, agy) can be read inside the codex unit"
+        else row sign-in-not-in-unit ok "the real sign-in files of claude and agy cannot be read inside the codex unit"; fi
         """;
 
     private const string KeysRow = """
@@ -66,6 +78,9 @@ internal static class CodexPreflightScript
         fi
         """;
 
+    /// <summary>
+    /// U7: the names of the unit's environment against the vendor's allow-list, and the values. The unit is the preflight's, started with the allow-list alone: a LAUNCH can hold up to ten names more that cross by name (the proxy, certificate and time-zone names of coai's own environment, <c>CoderUnit.PassableNames</c>), which this row did not see (pass 6, S49).
+    /// </summary>
     private const string EnvironmentRow = """
         have=$(env | sed 's/=.*//' | grep -vxE 'PWD|OLDPWD|_|SHLVL' | sort | tr '\n' ' ')
         want=$(printf '%s\n' "$expenv" | sed 's/=.*//' | sort | tr '\n' ' ')
@@ -97,6 +112,10 @@ internal static class CodexPreflightScript
     private const string SandboxProbe = """
         sbscript='wt=$1; main=$2; vendor=$3; auth=$4; cfile=$5; root=$6; port=$7; pid=$8
         echo sb-started
+        head -c 1 "$wt/.git" >/dev/null 2>&1 && echo sb-saw-wt-file
+        [ -n "$(ls -A "$wt" 2>/dev/null)" ] && echo sb-list-wt
+        [ -e /proc/self ] && echo sb-proc-self
+        command -v timeout >/dev/null 2>&1 && command -v bash >/dev/null 2>&1 && command -v grep >/dev/null 2>&1 && echo sb-tools
         { true > "$wt/.coai-preflight-probe"; } 2>/dev/null && echo sb-wt-write
         { true > "$vendor/.coai-preflight-probe"; } 2>/dev/null
         { true > "$root/.coai-preflight-probe"; } 2>/dev/null
@@ -139,12 +158,15 @@ internal static class CodexPreflightScript
           elif [ -e "$vendor/$probe" ] || [ -e "$root/$probe" ]; then row vendor-sandbox-writes bad "a write of the vendor sandbox into the job folder or beside the worktree reached the disk"
           else row vendor-sandbox-writes ok "a write in the worktree works, and a write into the job folder or beside the worktree did not reach the disk"; fi
           if [ -z "$ctl_read" ]; then row vendor-sandbox-reads bad "the canary file could not be read from the unit itself, so nothing was observed"
+          elif ! has sb-tools || ! has sb-saw-wt-file || ! has sb-list-wt; then row vendor-sandbox-reads bad "the probe could not read or list its own worktree inside the vendor sandbox, so nothing was observed"
           elif has sb-read-auth || has sb-read-canary || has sb-list-vendor || has sb-list-main; then row vendor-sandbox-reads bad "the vendor sandbox can read or list the job's sign-in, the job folder or the main checkout"
           else row vendor-sandbox-reads ok "the job's sign-in, the job folder and the main checkout cannot be read or listed from inside the vendor sandbox"; fi
           if [ -z "$ctl_net" ]; then row vendor-sandbox-network bad "the listener of coai on the host loopback could not be reached from the unit itself, so nothing was observed"
+          elif ! has sb-tools; then row vendor-sandbox-network bad "the tools of the probe were not found inside the vendor sandbox, so nothing was observed"
           elif has sb-net; then row vendor-sandbox-network bad "the vendor sandbox reached a listener on the host loopback"
           else row vendor-sandbox-network ok "a listener on the host loopback is reached from the unit and not from the vendor sandbox"; fi
           if [ -z "$ctl_proc" ]; then row vendor-sandbox-processes bad "the canary process could not be seen from the unit itself, so nothing was observed"
+          elif ! has sb-tools || ! has sb-proc-self; then row vendor-sandbox-processes bad "the probe could not look at its own processes inside the vendor sandbox, so nothing was observed"
           elif has sb-proc-canary || has sb-env-canary; then row vendor-sandbox-processes bad "the vendor sandbox sees a process or an environment of the unit"
           else row vendor-sandbox-processes ok "no process and no environment of the unit is visible inside the vendor sandbox"; fi
           if [ -e "$wt/.agents/$probe" ] || [ -e "$wt/.codex/$probe" ] || [ "$gitsum" != "$(cksum < "$wt/.git" 2>/dev/null)" ]; then row vendor-sandbox-protected-names bad "the vendor sandbox could change .git, .agents or .codex of the worktree"
@@ -165,8 +187,7 @@ internal static class CodexPreflightScript
         set -f
         set -- $flagtext
         set +f
-        IFS='
-        '
+        unset IFS
         data tools-worktree "$(cd "$wt" && timeout -k 2 40 "$prog" debug prompt-input "$@" x 2>/dev/null | base64 -w0)"
         sp=/tmp/coai-pf-standin
         rm -rf "$sp"; mkdir -p "$sp/.codex" 2>/dev/null
@@ -204,6 +225,6 @@ internal static class CodexPreflightScript
 
     /// <summary>The whole program for a job: with the submodule row when the job has a mount (its pairs are the arguments after the fixed ones).</summary>
     internal static string For(BoundaryJob job) =>
-        BoundaryPreflight.Join(Header, BoundaryPreflight.WorktreeRow, MainHidden, CoderRootHidden, BoundaryPreflight.GitRow, BoundaryPreflight.ManagerRow, BoundaryPreflight.ExeRow, BoundaryPreflight.SocketsRow,
-            BoundaryPreflight.HomeRow, TempRow, SignInAbsentRow, KeysRow, EnvironmentRow, OtherJobRow, ProgramRow, job.Mounts.Count == 0 ? string.Empty : BoundaryPreflight.SubmodulesRow(0), Sandbox, Probes, ConfigRow, OverrideRow, CopyRow);
+        BoundaryPreflight.Join(Header, BoundaryPreflight.WorktreeRow, MainHidden, CoderRootHidden, CoverMarkers, BoundaryPreflight.GitRow, BoundaryPreflight.ManagerRow, BoundaryPreflight.ExeRow, BoundaryPreflight.SocketsRow,
+            BoundaryPreflight.HomeRow, TempRow, SignInAbsentRow, KeysRow, EnvironmentRow, OtherJobRow, ProgramRow, job.Mounts.Count == 0 ? string.Empty : BoundaryPreflight.SubmodulesRow(0), "if [ -z \"$anybad\" ]; then", Sandbox, Probes, "fi", ConfigRow, OverrideRow, CopyRow);
 }

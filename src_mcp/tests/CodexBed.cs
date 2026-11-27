@@ -57,6 +57,11 @@ internal sealed class CodexBed : IAsyncDisposable
     public static async Task<CodexBed> CreateAsync(params (string Name, string Value)[] steering)
     {
         var coder = await CoderBed.CreateAsync();
+        // The real sign-in files of the other two vendors, made up in the stand-in for the real home: no row of a codex unit may find them (S42).
+        Directory.CreateDirectory(Path.Combine(coder.RealHome, ".codex"));
+        await File.WriteAllTextAsync(Path.Combine(coder.RealHome, ".codex", "auth.json"), "made-up-real-codex-sign-in-line\n");
+        Directory.CreateDirectory(Path.Combine(coder.RealHome, ".gemini", "antigravity-cli"));
+        await File.WriteAllTextAsync(Path.Combine(coder.RealHome, ".gemini", "antigravity-cli", "antigravity-oauth-token"), "made-up-real-agy-sign-in-line\n");
         var otherJobFile = coder.Inner.UseJobsFolderWithAnotherJob();
         var vendor = CodexCoderVendor.Instance;
         Directory.CreateDirectory(CodexCoderVendor.CodexHome(coder.Job));

@@ -221,14 +221,17 @@ internal sealed class CoderWork : IRoleWork
     /// <summary>The loop ended with something to show: list the files from git, compare the generation again, and make the envelope — a success when it is green, a failure carrying the same envelope when it is not.</summary>
     private async Task<RoleWorkOutcome> EnvelopeAsync(IRoleRun run, GitHistory git, Prepared prepared, CoderOsLayer layer, CoderLoopEnd.Done end, CoderChecksReport checks, CoderInstructionsRecord instructions, CoderPromptRecord prompt, CoderCliRecord cli, CancellationToken ct)
     {
-        var changes = end.Head == prepared.BaseSha ? [] : await CoderCommits.ChangesAsync(git, prepared.Tree, prepared.BaseSha, end.Head, ct);
+        // A boundary that a cut turn proved is the job's end even when the job's own token was cancelled by then (M11 leg a): the end is written with a short time of its own, and the budget's word does not replace it.
+        var cutBoundary = ct.IsCancellationRequested && end.Stop == RoleStopWords.CoderBoundary;
+        using var own = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var changes = end.Head == prepared.BaseSha ? [] : await CoderCommits.ChangesAsync(git, prepared.Tree, prepared.BaseSha, end.Head, cutBoundary ? own.Token : ct);
         if (changes is null)
         {
-            return ct.IsCancellationRequested ? new RoleWorkOutcome.Stopped() : new RoleWorkOutcome.Failed("coder-commit", "git could not list the files the commit changed");
+            return ct.IsCancellationRequested && !cutBoundary ? new RoleWorkOutcome.Stopped() : new RoleWorkOutcome.Failed("coder-commit", "git could not list the files the commit changed");
         }
 
         Boundary?.Invoke("before-result");
-        if (ct.IsCancellationRequested || !run.StillWriter())
+        if ((ct.IsCancellationRequested && !cutBoundary) || !run.StillWriter())
         {
             return new RoleWorkOutcome.Stopped();
         }

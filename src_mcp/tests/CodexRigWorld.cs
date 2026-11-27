@@ -86,7 +86,7 @@ internal static class CodexScript
     };
 
     /// <summary>One launch of FakeCli as codex: the edits it makes below the worktree, the stream it prints, the report it writes to the output file and the rollout it leaves.</summary>
-    internal static object Turn(IReadOnlyDictionary<string, string>? edits, string report, string thread = ThreadId, string[]? items = null, IReadOnlyDictionary<string, string>? rollout = null, string stderr = "", int exit = 0, IReadOnlyList<string>? tryWrites = null)
+    internal static object Turn(IReadOnlyDictionary<string, string>? edits, string report, string thread = ThreadId, string[]? items = null, IReadOnlyDictionary<string, string>? rollout = null, string stderr = "", int exit = 0, IReadOnlyList<string>? tryWrites = null, int holdAfterMs = 0)
     {
         var entry = new Dictionary<string, object?>
         {
@@ -103,6 +103,11 @@ internal static class CodexScript
         if (stderr.Length > 0)
         {
             entry["stderr"] = stderr;
+        }
+
+        if (holdAfterMs > 0)
+        {
+            entry["holdAfterMs"] = holdAfterMs;
         }
 
         if (tryWrites is not null)

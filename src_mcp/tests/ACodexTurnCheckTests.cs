@@ -221,4 +221,129 @@ public sealed class ACodexTurnCheckTests
         ((ICoderVendor)ClaudeCoderVendor.Instance).CheckTurn(Stream(Item("web_search", string.Empty)), string.Empty, world.Job).Should().BeOfType<CoderTurnVerdict.Fine>("claude's tools are the five of its flags");
         ((ICoderVendor)CodexCoderVendor.Instance).CheckTurn(Stream(Started(), Item("web_search", string.Empty)), string.Empty, world.Job).Should().BeOfType<CoderTurnVerdict.Boundary>();
     }
+
+    // ---------- M16 of pass 6: a turn that ended badly is a CUT stream ----------
+
+    private static ProcessResult Ended(int exit, bool timedOut, bool cancelled, params string[] lines) => new(exit, string.Join('\n', lines) + "\n", string.Empty, timedOut, cancelled);
+
+    public static TheoryData<string> BadEnds => ["exit 1", "deadline", "cancel"];
+
+    private static ProcessResult BadEnd(string how, params string[] lines) => how switch
+    {
+        "exit 1" => Ended(1, false, false, lines),
+        "deadline" => Ended(0, true, false, lines),
+        _ => Ended(0, false, true, lines),
+    };
+
+    [Theory]
+    [MemberData(nameof(BadEnds))]
+    public void M16_ABadItem_IsABoundaryOnABadEndToo_EvenInAStreamThatNamesNoThread_SoACrashNeverHidesIt(string how)
+    {
+        using var world = new World();
+
+        CodexTurnCheck.Check(BadEnd(how, Event("turn.started"), Item("web_search", ",\"query\":\"\"")), string.Empty, world.Job).Should().BeOfType<CoderTurnVerdict.Boundary>("a violation the stream proves alone is a boundary whatever the end was");
+        CodexTurnCheck.Check(BadEnd(how, Started(Other), Item("web_search", string.Empty)), Thread, world.Job).Should().BeOfType<CoderTurnVerdict.Boundary>("and not the crash of a thread that is not the handle's");
+        CodexTurnCheck.Check(Stream(Event("turn.started"), Item("web_search", string.Empty)), string.Empty, world.Job).Should().BeOfType<CoderTurnVerdict.Boundary>("the same on a clean end: items first, then the thread");
+    }
+
+    [Theory]
+    [MemberData(nameof(BadEnds))]
+    public void M16_ARolloutOfAnotherThread_OrAnAgentCall_IsABoundaryOnABadEnd(string how)
+    {
+        var stream = BadEnd(how, Started(), Item("agent_message", string.Empty));
+        using (var another = new World())
+        {
+            another.Rollout(Thread, World.Call("exec"));
+            another.Rollout(Other, World.Call("exec"));
+            CodexTurnCheck.Check(stream, string.Empty, another.Job).Should().BeOfType<CoderTurnVerdict.Boundary>("a second thread is a child of the session, proved by the files alone");
+        }
+
+        using (var agent = new World())
+        {
+            agent.Rollout(Thread, World.Call("exec"), World.Call("collaboration.spawn_agent"));
+            CodexTurnCheck.Check(stream, string.Empty, agent.Job).Should().BeOfType<CoderTurnVerdict.Boundary>();
+        }
+
+        using (var agentWithNoThread = new World())
+        {
+            agentWithNoThread.Rollout(Thread, World.Call("collaboration.spawn_agent"));
+            CodexTurnCheck.Check(BadEnd(how, Event("turn.started")), string.Empty, agentWithNoThread.Job).Should().BeOfType<CoderTurnVerdict.Boundary>("an agent call is proved by the file with no thread named at all");
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(BadEnds))]
+    public void M16_WhatACutExplains_IsNotABoundary_NoThread_NoRollout_ACutLastLine_AUnreadableRollout_ATruncatedStream_SoTheLaunchsOwnStopIsRead(string how)
+    {
+        using var world = new World();
+        var calm = new[] { Started(), Item("agent_message", string.Empty) };
+
+        CodexTurnCheck.Check(BadEnd(how, Event("turn.started")), string.Empty, world.Job).Should().BeOfType<CoderTurnVerdict.Fine>("no thread on a bad end is the crash, the limit or the lost sign-in of the launch's own stop");
+        CodexTurnCheck.Check(BadEnd(how, calm), string.Empty, world.Job).Should().BeOfType<CoderTurnVerdict.Fine>("no rollout of the thread on a bad end is not proved wrong");
+        CodexTurnCheck.Check(BadEnd(how, [.. calm, "{\"type\":\"item.completed\",\"item\":{\"type\":\"agent_mes"]), string.Empty, world.Job).Should().BeOfType<CoderTurnVerdict.Fine>("a last line cut by the deadline");
+        CodexTurnCheck.Check(BadEnd(how, calm) with { Truncated = true }, string.Empty, world.Job).Should().BeOfType<CoderTurnVerdict.Fine>("a stream cut at its ceiling");
+        world.Rollout(Thread, "this is not json");
+        CodexTurnCheck.Check(BadEnd(how, calm), string.Empty, world.Job).Should().BeOfType<CoderTurnVerdict.Fine>("a rollout cut in the middle of a line");
+        CodexTurnCheck.Check(BadEnd(how, calm), string.Empty, null).Should().BeOfType<CoderTurnVerdict.Fine>("no job to read: not proved");
+        // The controls on a clean end: every one of these ends the job.
+        CodexTurnCheck.Check(Stream(Event("turn.started")), string.Empty, world.Job).Should().BeOfType<CoderTurnVerdict.Crash>();
+        CodexTurnCheck.Check(Stream(calm), string.Empty, world.Job).Should().BeOfType<CoderTurnVerdict.Boundary>("a rollout that cannot be read ends a clean turn");
+        CodexTurnCheck.Check(Stream(calm) with { Truncated = true }, string.Empty, world.Job).Should().BeOfType<CoderTurnVerdict.Boundary>("a clean turn whose stream was cut at its ceiling cannot be checked");
+    }
+
+    // ---------- S43 to S45 ----------
+
+    [Fact]
+    public void S43_ACompletedListCallWithNoResult_AndAnItemEventWithNoItem_EndTheJob_AStartedOneWithNoResultDoesNot()
+    {
+        Fine(Mcp("codex", "list_mcp_resources", type: "item.started")).Should().BeOfType<CoderTurnVerdict.Fine>("a started call has no answer yet");
+        Fine(Mcp("codex", "list_mcp_resources")).Should().BeOfType<CoderTurnVerdict.Boundary>("a completed one must carry one text block");
+        Fine("{\"type\":\"item.completed\"}").Should().BeOfType<CoderTurnVerdict.Boundary>("an item event with no item cannot be told from a tool outside the list");
+    }
+
+    [Fact]
+    public void S44_AFileThatIsNotARollout_ALinkAsTheSessionsFolder_AndTheOtherNamesOfAnAgentCall_EndTheJob()
+    {
+        var stream = Stream(Started(), Item("agent_message", string.Empty));
+        using (var stray = new World())
+        {
+            stray.Rollout(Thread, World.Call("exec"));
+            File.WriteAllText(Path.Combine(CodexCoderVendor.CodexHome(stray.Job), "sessions", "notes.txt"), "x\n");
+            CodexTurnCheck.Check(stream, string.Empty, stray.Job).Should().BeOfType<CoderTurnVerdict.Boundary>("a file that is not a rollout is not what the CLI makes");
+        }
+
+        using (var linked = new World())
+        {
+            var target = Path.Combine(CodexCoderVendor.CodexHome(linked.Job), "elsewhere");
+            Directory.CreateDirectory(target);
+            File.CreateSymbolicLink(Path.Combine(CodexCoderVendor.CodexHome(linked.Job), "sessions"), target);
+            CodexTurnCheck.Check(stream, string.Empty, linked.Job).Should().BeOfType<CoderTurnVerdict.Boundary>("a link is not the sessions folder; it is not followed");
+        }
+
+        foreach (var line in new[]
+        {
+            "{\"type\":\"response_item\",\"payload\":{\"type\":\"function_call\",\"namespace\":\"collaboration\",\"name\":\"spawn_agent\"}}",
+            "{\"type\":\"response_item\",\"payload\":{\"type\":\"function_call\",\"name\":\"spawn_agent\",\"arguments\":\"{}\"}}",
+        })
+        {
+            using var world = new World();
+            world.Rollout(Thread, World.Call("exec"), line);
+            CodexTurnCheck.Check(stream, string.Empty, world.Job).Should().BeOfType<CoderTurnVerdict.Boundary>(line);
+        }
+    }
+
+    [Fact]
+    public void M16_AFreshLaunch_ReadsTheRolloutsBeforeItDeletesThem_AnAgentCallKeepsTheFolderAndRefusesTheLaunch()
+    {
+        using var world = new World();
+        world.Rollout(Other, World.Call("collaboration.spawn_agent"));
+        var sessions = Path.Combine(CodexCoderVendor.CodexHome(world.Job), "sessions");
+
+        CodexSessions.Clear(CodexCoderVendor.CodexHome(world.Job)).Should().Contain("agent call").And.Contain("was not launched");
+        Directory.Exists(sessions).Should().BeTrue("the record of a child is never deleted unread");
+
+        File.WriteAllText(Directory.EnumerateFiles(sessions, "*", SearchOption.AllDirectories).Single(), World.Call("exec") + "\n");
+        CodexSessions.Clear(CodexCoderVendor.CodexHome(world.Job)).Should().BeEmpty();
+        Directory.Exists(sessions).Should().BeFalse("a folder with no agent call is removed, as before");
+    }
 }

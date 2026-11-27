@@ -31,6 +31,15 @@ internal static class CodexPreflightRows
         var doctor = CodexDoctorReport.Read(Text(data, "doctor"));
         var profile = CodexDoctorReport.ProfileProblem(doctor);
         var mcp = CodexDoctorReport.McpProblem(doctor);
+        // The host looks for what the unit wrote into the main checkout and beside the worktree: a marker on the disk means the folder was not covered, whatever the unit's own listing said (S40).
+        foreach (var (item, folder) in new[] { ("main-hidden", job.Tree.MainCheckout), ("coder-root-hidden", job.CoderRoot) })
+        {
+            if (Removed(Path.Combine(folder, CodexPreflightScript.CoverMarker)))
+            {
+                byItem[item] = new PreflightRow(item, false, "a file the unit wrote into this folder reached the disk of the host, so the folder is not covered by the unit's own tmpfs");
+            }
+        }
+
         var computed = new Dictionary<string, PreflightRow>(StringComparer.Ordinal)
         {
             ["tool-list"] = worktree.Length + standIn.Length == 0
@@ -45,6 +54,26 @@ internal static class CodexPreflightRows
         };
 
         return [basic[0], .. items.Select(item => computed.TryGetValue(item, out var made) ? made : byItem[item])];
+    }
+
+    /// <summary>Whether a marker file is there; it is removed by its own name (a link is unlinked, never followed).</summary>
+    private static bool Removed(string marker)
+    {
+        if (Files.RealPath.Lstat(marker).Kind is not (Files.EntryKind.File or Files.EntryKind.Link))
+        {
+            return false;
+        }
+
+        try
+        {
+            File.Delete(marker);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // Still there: it is a bad row all the same, and the job's folders are removed with the job.
+        }
+
+        return true;
     }
 
     private static IReadOnlyList<string>? Names(Dictionary<string, string> data, string name) => CodexToolList.NamesOf(Text(data, name));

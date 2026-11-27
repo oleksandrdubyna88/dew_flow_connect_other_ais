@@ -32,6 +32,9 @@ internal sealed class CodexCoderVendor : ICoderVendor
     /// <summary>The name of the file a codex home must NOT hold (judgement 13.11, CX-C1 launch half): a third program of the folder runs commands as an "environment" it names.</summary>
     public const string EnvironmentsFile = "environments.toml";
 
+    /// <summary>The largest report file that is copied to the host: the file is the CLI's own, in a folder its commands could write (pass 6, S47).</summary>
+    public const long MostReportBytes = 1024 * 1024;
+
     /// <summary>The 19 features CX1 disables (results section 2): the account's connectors, plugins, browsers, computer use, image tools, the agent tool, goals, the sleep tool, the tool suggestions, skills search, hooks and the in-app tools.</summary>
     public static IReadOnlyList<string> DisabledFeatures { get; } =
     [
@@ -227,9 +230,9 @@ internal sealed class CodexCoderVendor : ICoderVendor
         }
 
         var program = CoderProgram.Resolve(request.Executable, host.Path, job);
-        if (program.Problem.Length > 0)
+        if (program.Problem.Length > 0 || program.HomeProblem(host.ResolvedHome) is { Length: > 0 })
         {
-            return Refused(request, $"the codex coder was not launched: {program.Problem}");
+            return Refused(request, $"the codex coder was not launched: {(program.Problem.Length > 0 ? program.Problem : program.HomeProblem(host.ResolvedHome))}");
         }
 
         var folder = ProgramFolder(program);
@@ -263,7 +266,7 @@ internal sealed class CodexCoderVendor : ICoderVendor
     public void CollectLaunch(BoundaryJob job, ProcessRequest original, ProcessRequest launched)
     {
         var output = original.Arguments.ToList().IndexOf("-o");
-        if (output < 0 || output + 1 >= original.Arguments.Count || RealPath.Lstat(ReportFile(job)).Kind != EntryKind.File)
+        if (output < 0 || output + 1 >= original.Arguments.Count || RealPath.Lstat(ReportFile(job)).Kind != EntryKind.File || new FileInfo(ReportFile(job)).Length > MostReportBytes)
         {
             return;
         }

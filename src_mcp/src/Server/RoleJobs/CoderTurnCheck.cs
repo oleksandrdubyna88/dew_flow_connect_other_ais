@@ -24,6 +24,27 @@ internal static class CoderTurnCheck
             ? Stop(vendors, model, launched, expectedSession, job)
             : null;
 
+    /// <summary>How long a check of a turn that the job's own token cut may take: the check is a few reads of files, and it is never given the cancelled token (a check that is cancelled checks nothing).</summary>
+    public static readonly TimeSpan CutCheckBudget = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// <see cref="StopFirst"/> for a turn that the JOB's token cut (its budget ran out, or the person stopped it), with a short time of its own (pass 5 re-check, M11 leg a): such a turn is checked like any other, and only a boundary comes of it — the job's own word (<c>timeout</c>, <c>stopped</c>) stands for everything else.
+    /// A boundary outranks it, because a model that keeps a turn going until the budget would otherwise hide what broke. Null when nothing is proved, or when the check did not finish in its time.
+    /// </summary>
+    public static async Task<RoleStop?> StopOfACutTurnAsync(CoderVendorSet vendors, ModelRef model, RoleLaunched launched, string expectedSession, Runners.Toolchain.BoundaryJob? job)
+    {
+        try
+        {
+            var stop = await Task.Run(() => StopFirst(vendors, model, launched, expectedSession, job), CancellationToken.None).WaitAsync(CutCheckBudget, CancellationToken.None);
+
+            return stop is { Word: RoleStopWords.CoderBoundary } ? stop : null;
+        }
+        catch (TimeoutException)
+        {
+            return null;
+        }
+    }
+
     /// <summary>
     /// The stop a finished turn came to by its own stream, or null when the stream says nothing wrong. A wrong answer ends the job <c>coder-boundary</c> (never green, never a failover: the next model would meet the same layer); a session that is not the
     /// handle's, or is lost, is a <c>crash</c>, so the next model starts from the last coai commit.

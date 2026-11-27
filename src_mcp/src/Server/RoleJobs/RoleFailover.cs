@@ -400,6 +400,14 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
 
             if (ct.IsCancellationRequested)
             {
+                // A turn the job's own budget cut is checked too, with a time of its own: a boundary outranks the word of the budget (M11 leg a).
+                if (Coder is not null && await CoderTurnCheck.StopOfACutTurnAsync(Vendors, model, launched, turn == 0 ? string.Empty : attempt.Handle, OsLayer?.Job) is { } broken)
+                {
+                    KeepTurn(attempt, turn, launched);
+
+                    return Finished(model, attempt, launched, broken, string.Empty);
+                }
+
                 return Interrupted(model, attempt, launched);
             }
 

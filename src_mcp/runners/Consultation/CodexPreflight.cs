@@ -62,6 +62,22 @@ internal static class CodexPreflight
         var folder = CodexCoderVendor.ProgramFolder(program);
         var listener = LoopbackListener.Start();
         var other = CheckBoundary.PlantAnotherJob(job);
+        try
+        {
+            return Made(host, job, program, windowsCopy, vendor, model, folder, listener, other);
+        }
+        catch
+        {
+            // A plan that cannot be finished must not leave the listener open or the stand-in of another job on the disk.
+            listener.Dispose();
+            CheckBoundary.RemoveAnotherJob(other);
+
+            throw;
+        }
+    }
+
+    private static CoderPreflightPlan Made(BoundaryHost host, BoundaryJob job, CoderProgram program, string windowsCopy, CodexCoderVendor vendor, string model, string folder, LoopbackListener listener, string other)
+    {
         var override_ = new Uri(CodexCoderVendor.RefreshOverrideUrl);
         var environment = string.Join('\n', vendor.Environment(host, job).Select(pair => $"{pair.Key}={pair.Value}"));
         var port = listener.Port.ToString(System.Globalization.CultureInfo.InvariantCulture);

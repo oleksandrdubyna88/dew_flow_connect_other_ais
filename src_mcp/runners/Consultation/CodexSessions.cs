@@ -22,9 +22,16 @@ internal static class CodexSessions
             case EntryKind.Missing:
                 return string.Empty;
             case EntryKind.Directory:
+                // The record of a child is never deleted unread (pass 6, M16): an agent call in an earlier turn's rollout refuses the launch and keeps the folder, whatever stop that turn came to.
+                if (CodexTurnCheck.HoldsAnAgentCall(sessions))
+                {
+                    return "a rollout file of an earlier turn in the sessions of the job's CODEX_HOME holds an agent call (collaboration.*), so the folder was kept and the codex coder was not launched (CX-T5)";
+                }
+
                 try
                 {
-                    GitScratch.DeleteEvenIfReadOnly(sessions);
+                    // The folder is written by the CLI, not by coai: what is deleted is by its own name, and the target of a link in it is never read.
+                    GitScratch.DeleteLeavingLinkTargetsUnread(sessions);
 
                     return string.Empty;
                 }

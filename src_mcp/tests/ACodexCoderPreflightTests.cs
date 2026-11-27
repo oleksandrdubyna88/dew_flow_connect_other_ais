@@ -318,4 +318,117 @@ public sealed class ACodexCoderPreflightTests
         var refused = outcome.Should().BeOfType<CoderTurnOutcome.Refused>(outcome.ToString()).Subject;
         refused.Sentence.Should().Contain("user-manager").And.Contain("refused before the coder was launched");
     }
+
+    // ---------- pass 6: M17, S39, S40, S42, S46 ----------
+
+    [Theory]
+    [InlineData(".codex/auth.json", "sign-in-is-the-copy")]
+    [InlineData(".gemini/antigravity-cli/antigravity-oauth-token", "sign-in-not-in-unit")]
+    public async Task S42_TheRealCodexFile_AndTheRealAgyFile_AreEachReadFromInside_AndTheRowGoesRedWhenEitherIsBoundBack(string file, string row)
+    {
+        NeedAUserManager();
+        await using var bed = await CodexBed.CreateAsync();
+        var real = Path.Combine(bed.Coder.Host.ResolvedHome, file);
+        var broken = bed.Boundary(arguments => UnitArguments.Replace(arguments, $"InaccessiblePaths=-{real}", $"BindReadOnlyPaths={real}"));
+
+        var refused = Refused(await bed.AdmitAsync(broken));
+
+        refused.Record.Preflight.Single(item => item.Item == row).Held.Should().BeFalse($"the real file {file} was bound back and a read of it works");
+    }
+
+    [Fact]
+    public async Task M17_TheHomeRow_GoesRedWhenTheRealHomeIsBoundBackIntoTheUnit_ForCodexAndForClaude()
+    {
+        NeedAUserManager();
+        await using var codex = await CodexBed.CreateAsync();
+        var codexBroken = codex.Boundary(arguments => UnitArguments.Replace(arguments, "PrivateNetwork=no", $"BindReadOnlyPaths={codex.Coder.RealHome}"));
+
+        var refused = Refused(await codex.AdmitAsync(codexBroken));
+
+        refused.Record.Preflight.Single(row => row.Item == "home-is-the-jobs").Held.Should().BeFalse("the home is listed inside the unit: it can be READ, whatever the write says");
+        refused.Record.Preflight.Single(row => row.Item == "home-is-the-jobs").Detail.Should().Contain("READ");
+
+        await using var claude = await CoderBed.CreateAsync();
+        var claudeBroken = claude.Boundary(arguments => UnitArguments.Replace(arguments, "PrivateNetwork=no", $"BindReadOnlyPaths={claude.RealHome}"));
+        var claudeRefused = (await claudeBroken.AdmitAsync(claude.Job, FakeCliInvocations.Exe)).Should().BeOfType<BoundaryAdmission.Refused>().Subject;
+
+        claudeRefused.Record.Preflight.Single(row => row.Item == "home-is-the-jobs").Held.Should().BeFalse("the row is the shared fragment of every coder's preflight");
+    }
+
+    [Fact]
+    public async Task M17_AProgramWhoseFolderIsTheHome_OrAFolderAboveIt_IsRefusedBeforeAnyUnit_AndOneInANarrowFolderOfTheHomeIsNot()
+    {
+        NeedAUserManager();
+        using var top = TempDir.For("m17-");
+        var home = Path.Combine(top.Path, "home");
+        var narrow = Path.Combine(home, ".codex", "packages", "bin");
+        Directory.CreateDirectory(narrow);
+        string Program(string folder)
+        {
+            var path = Path.Combine(folder, "codex");
+            File.WriteAllText(path, "#!/bin/sh\nexit 0\n");
+            CodexBed.SetMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+
+            return path;
+        }
+
+        await using var bed = await CodexBed.CreateAsync();
+        var host = bed.Coder.Host with { RealHome = home };
+        var launches = bed.Coder.Launcher.Requests.Count;
+
+        foreach (var wide in new[] { home, top.Path })
+        {
+            var admission = await bed.Boundary(host: host).AdmitAsync(bed.Job, Program(wide), TestContext.Current.CancellationToken, false, TimeSpan.FromSeconds(60));
+
+            var sentence = Refused(admission).Sentence;
+            sentence.Should().Contain("home").And.Contain(wide, "the sentence names the folder that would bring the home back");
+        }
+
+        bed.Coder.Launcher.Requests.Skip(launches).Select(request => request.Executable).Should().NotContain("systemd-run", "the refusal is made before any unit starts");
+        CoderProgram.Resolve(Program(narrow), string.Empty, bed.Job).HomeProblem(host.ResolvedHome).Should().BeEmpty("a narrow folder of the home is what the measured install is");
+        CoderProgram.Resolve(Program(home), string.Empty, bed.Job).HomeProblem(host.ResolvedHome).Should().Contain("home");
+        CoderProgram.Resolve(Program(narrow), string.Empty, bed.Job).HomeProblem(string.Empty).Should().BeEmpty("no home named, nothing to compare");
+    }
+
+    [Fact]
+    public async Task S39_ASandboxInWhichTheProbesToolsAreNotThere_IsNotAGreenRow_ForTheThreeRowsThatReadATokenlessProbe()
+    {
+        NeedAUserManager();
+        await using var bed = await CodexBed.CreateAsync(("FAKECLI_CODEX_SANDBOX", "blind"));
+
+        var refused = Refused(await bed.AdmitAsync());
+
+        refused.Record.Preflight.Where(row => !row.Held).Select(row => row.Item).Should().Contain(["vendor-sandbox-reads", "vendor-sandbox-network", "vendor-sandbox-processes"], "a probe that could not run its tools printed nothing, and nothing printed is not nothing found");
+    }
+
+    [Fact]
+    public async Task S40_ACoderRootBoundWritableOnATmpfsDisk_LooksCoveredInside_AndTheHostSeesTheMarkerOnTheDisk()
+    {
+        NeedAUserManager();
+        await using var bed = await CodexBed.CreateAsync();
+        var broken = bed.Boundary(arguments => UnitArguments.Replace(arguments, $"TemporaryFileSystem={bed.Job.CoderRoot}", $"BindPaths={bed.Job.CoderRoot}"));
+
+        var refused = Refused(await bed.AdmitAsync(broken));
+
+        var row = refused.Record.Preflight.Single(item => item.Item == "coder-root-hidden");
+        row.Held.Should().BeFalse();
+        row.Detail.Should().Contain("reached the disk", "what the unit wrote beside the worktree is on the disk: the host looks after the unit has ended, whatever the type of the file system said inside");
+        File.Exists(Path.Combine(bed.Job.CoderRoot, ".coai-preflight-cover")).Should().BeFalse("the marker is removed");
+    }
+
+    [Fact]
+    public async Task S46_WhenARowOfTheUnitIsAlreadyBad_NoProgramOfTheVendorIsStarted()
+    {
+        NeedAUserManager();
+        await using var healthy = await CodexBed.CreateAsync();
+        (await healthy.AdmitAsync()).Should().BeOfType<BoundaryAdmission.Admitted>();
+        File.ReadAllLines(Path.Combine(healthy.CodexHome, "fake-verbs.log")).Should().Contain(["sandbox", "doctor"], "a control: on a healthy machine the vendor's programs ran");
+
+        await using var bed = await CodexBed.CreateAsync();
+        var broken = bed.Boundary(arguments => UnitArguments.Drop(arguments, $"BindPaths={bed.Worktree}"));
+
+        Refused(await bed.AdmitAsync(broken)).Record.Preflight.Single(row => row.Item == "worktree-write").Held.Should().BeFalse();
+
+        File.Exists(Path.Combine(bed.CodexHome, "fake-verbs.log")).Should().BeFalse("doctor contacts the vendor: it is not asked in a unit that did not hold");
+    }
 }

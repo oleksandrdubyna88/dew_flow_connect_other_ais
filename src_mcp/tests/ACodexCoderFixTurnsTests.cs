@@ -284,6 +284,136 @@ public sealed class ACodexCoderFixTurnsTests
         vendor.PrepareLaunch(host, job, fresh).Problem.Should().Contain("sessions").And.Contain("was not launched");
     }
 
+    // ---------- M16 of pass 6: a turn that ended badly is checked too ----------
+
+    [Fact]
+    public async Task M16_ATurnThatExitsOneAfterAWebSearch_EndsTheJobCoderBoundary_AndTheNextModelIsNotAsked()
+    {
+        await using var world = await CodexRigWorld.CreateAsync();
+        var rig = world.Rig;
+        rig.SaysRaw("terra", Turn(Writes(CoderRig.Green), Report(), items: [Message(), OfType("web_search", ",\"query\":\"\"")], exit: 1, stderr: "the CLI fell over"))
+            .SaysRaw("astra", Turn(Writes(CoderRig.Green), Report(), OtherThread, rollout: Rollout(OtherThread)));
+        var job = rig.NewJob(route: Two);
+
+        var (_, ended) = await rig.RunAsync(job);
+
+        (ended.State, ended.Stop).Should().Be((RoleJobStates.Failed, RoleStopWords.CoderBoundary), ended.Reason);
+        rig.Launches(job).Should().ContainSingle("a violation the stream proves is not hidden behind the crash that would have failed over");
+    }
+
+    [Fact]
+    public async Task M16_ABadItemInAStreamThatNamesNoThread_OnABadEnd_IsABoundary_NotTheCrashThatFailsOver()
+    {
+        await using var world = await CodexRigWorld.CreateAsync();
+        var rig = world.Rig;
+        rig.SaysRaw("terra", new Dictionary<string, object?> { ["stdout"] = "{\"type\":\"turn.started\"}\n" + OfType("web_search", ",\"query\":\"\"") + "\n", ["exit"] = 1, ["stderr"] = "the CLI fell over" })
+            .SaysRaw("astra", Turn(Writes(CoderRig.Green), Report(), OtherThread, rollout: Rollout(OtherThread)));
+        var job = rig.NewJob(route: Two);
+
+        var (_, ended) = await rig.RunAsync(job);
+
+        (ended.State, ended.Stop).Should().Be((RoleJobStates.Failed, RoleStopWords.CoderBoundary), ended.Reason);
+        rig.Launches(job).Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task M16_ATurnThatExitsOneWithASecondRolloutFile_EndsTheJobCoderBoundary()
+    {
+        await using var world = await CodexRigWorld.CreateAsync();
+        var rig = world.Rig;
+        rig.SaysRaw("terra", Turn(Writes(CoderRig.Green), Report(), exit: 1, rollout: new Dictionary<string, string>([.. Rollout(ThreadId), .. Rollout(OtherThread)])))
+            .SaysRaw("astra", Turn(Writes(CoderRig.Green), Report(), OtherThread, rollout: Rollout(OtherThread)));
+        var job = rig.NewJob(route: Two);
+
+        var (_, ended) = await rig.RunAsync(job);
+
+        (ended.State, ended.Stop).Should().Be((RoleJobStates.Failed, RoleStopWords.CoderBoundary), ended.Reason);
+        rig.Launches(job).Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task M16_ATurnThatCrashedWithAnAgentCallInItsRollout_IsSeenBeforeTheNextFreshLaunchDeletesTheFolder()
+    {
+        await using var world = await CodexRigWorld.CreateAsync();
+        var rig = world.Rig;
+        rig.SaysRaw("terra", Turn(Writes(CoderRig.Green), Report(), exit: 1, rollout: Rollout(ThreadId, "{\"type\":\"response_item\",\"payload\":{\"type\":\"function_call\",\"name\":\"collaboration.spawn_agent\"}}")))
+            .SaysRaw("astra", Turn(Writes(CoderRig.Green), Report(), OtherThread, rollout: Rollout(OtherThread)));
+        var job = rig.NewJob(route: Two);
+
+        var (_, ended) = await rig.RunAsync(job);
+
+        (ended.State, ended.Stop).Should().Be((RoleJobStates.Failed, RoleStopWords.CoderBoundary), ended.Reason);
+        rig.Launches(job).Should().ContainSingle("the second model never started: nothing was deleted unread and nothing was passed");
+    }
+
+    [Fact]
+    public void S47_AReportFileOfMoreThanAMebibyte_IsNotCopiedToTheHost()
+    {
+        using var dir = TempDir.For("cxs-");
+        var job = new BoundaryJob("job-x", new CoderTree(Path.Combine(dir.Path, "wt", "coai-coder-job-x"), Path.Combine(dir.Path, "main"), string.Empty), Path.Combine(dir.Path, "jobs", "job-x"), NetworkChoice.None("t"), NetworkChoice.None("t"), 100);
+        Directory.CreateDirectory(CodexCoderVendor.CodexHome(job));
+        Directory.CreateDirectory(CodexCoderVendor.Instance.Home(job).Home);
+        Directory.CreateDirectory(job.CoderVendorFolder("codex"));
+        var host = Path.Combine(dir.Path, "answer.txt");
+        var request = new ProcessRequest("/bin/true", ["exec", "-o", host, "-"], dir.Path);
+
+        File.WriteAllText(CodexCoderVendor.ReportFile(job), "a small report\n");
+        CodexCoderVendor.Instance.CollectLaunch(job, request, request);
+        File.Exists(host).Should().BeTrue("a control: a small report is copied");
+
+        File.Delete(host);
+        File.WriteAllText(CodexCoderVendor.ReportFile(job), new string('x', 1024 * 1024 + 1));
+        CodexCoderVendor.Instance.CollectLaunch(job, request, request);
+        File.Exists(host).Should().BeFalse("the report is the CLI's own file in a folder its commands could write: its size is bounded before it is read");
+    }
+
+    // ---------- M11 leg (a) of the re-check of pass 5: a turn that the job's own budget cuts is checked too ----------
+
+    [Fact]
+    public async Task M11a_ATurnThatTheJobsBudgetCuts_AfterAViolation_EndsTheJobCoderBoundary_NotTimeout()
+    {
+        await using var world = await CodexRigWorld.CreateAsync();
+        var rig = world.Rig;
+        rig.AttemptTimeout = TimeSpan.FromMinutes(5);
+        rig.SaysRaw("terra", Turn(Writes(CoderRig.Green), Report(), items: [Message(), OfType("web_search", ",\"query\":\"\"")], holdAfterMs: 150_000));
+        var job = rig.NewJob(route: ["codex/terra"], timeoutMinutes: 1);
+
+        var (_, ended) = await rig.RunAsync(job);
+
+        (ended.State, ended.Stop).Should().Be((RoleJobStates.Failed, RoleStopWords.CoderBoundary), ended.Reason);
+        rig.Launches(job).Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task M11a_AFixTurnThatTheJobsBudgetCuts_AfterAViolation_EndsTheJobCoderBoundary_NotTimeout()
+    {
+        await using var world = await CodexRigWorld.CreateAsync();
+        var rig = world.Rig;
+        rig.AttemptTimeout = TimeSpan.FromMinutes(5);
+        rig.SaysRaw("terra", Turn(Writes(CoderRig.Red + " a"), Report()), Turn(Writes(CoderRig.Green), Report(), items: [Message(), OfType("web_search", ",\"query\":\"\"")], holdAfterMs: 150_000));
+        var job = rig.NewJob(route: ["codex/terra"], timeoutMinutes: 1);
+
+        var (_, ended) = await rig.RunAsync(job);
+
+        (ended.State, ended.Stop).Should().Be((RoleJobStates.Failed, RoleStopWords.CoderBoundary), ended.Reason);
+        rig.Launches(job).Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task M11a_ACalmTurnThatTheBudgetCuts_StillEndsTheJobTimeout_TheCheckAddsNothingOfItsOwn()
+    {
+        await using var world = await CodexRigWorld.CreateAsync();
+        var rig = world.Rig;
+        rig.AttemptTimeout = TimeSpan.FromMinutes(5);
+        rig.SaysRaw("terra", Turn(Writes(CoderRig.Green), Report(), holdAfterMs: 150_000));
+        var job = rig.NewJob(route: ["codex/terra"], timeoutMinutes: 1);
+
+        var (_, ended) = await rig.RunAsync(job);
+
+        ended.State.Should().Be(RoleJobStates.Failed);
+        ended.Stop.Should().NotBe(RoleStopWords.CoderBoundary, "a stream that proves nothing is not a boundary: the budget's own word stands");
+    }
+
     // ---------- d4: the prompt ----------
 
     private static string[] LinesOf(string resource) => PromptTemplate.Embedded(resource).Split('\n');

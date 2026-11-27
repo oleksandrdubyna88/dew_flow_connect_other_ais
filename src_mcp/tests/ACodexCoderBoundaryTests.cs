@@ -104,9 +104,6 @@ public sealed class ACodexCoderBoundaryTests
         var anotherWorktree = Path.Combine(bed.Job.CoderRoot, "coai-coder-someone-elses-job");
         Directory.CreateDirectory(anotherWorktree);
         await File.WriteAllTextAsync(Path.Combine(anotherWorktree, "theirs.txt"), "theirs\n");
-        Directory.CreateDirectory(Path.Combine(bed.Coder.RealHome, ".codex"));
-        await File.WriteAllTextAsync(Path.Combine(bed.Coder.RealHome, ".codex", "auth.json"), "made-up-real-codex-sign-in-line\n");
-
         return anotherWorktree;
     }
 

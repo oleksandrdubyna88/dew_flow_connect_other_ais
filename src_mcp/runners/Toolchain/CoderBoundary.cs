@@ -30,6 +30,14 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
     /// <summary>The seam of the vendor this boundary bounds (epoch 3 E3 s7 t1): its unit's properties, working directory, environment, home and program. claude by default, which is what the boundary was before the seam.</summary>
     internal ICoderVendor Vendor { get; init; } = CoderVendors.Claude;
 
+    /// <summary>The program of a launch as the unit must be given it: the vendor's own resolution, refused when its folder would show the person's home (pass 6, M17).</summary>
+    private CoderProgram ProgramOf(string executable, BoundaryJob job)
+    {
+        var program = Vendor.Program(executable, host.Path, job);
+
+        return program.Problem.Length == 0 && program.HomeProblem(host.ResolvedHome) is { Length: > 0 } wide ? program with { Problem = wide } : program;
+    }
+
     /// <summary>For a test only: rewrites the finished <c>systemd-run</c> argument list of every unit this boundary starts, so a RED can drop one property and see the preflight refuse. Production never sets it.</summary>
     internal Func<IReadOnlyList<string>, IReadOnlyList<string>>? Degrade { get; init; }
 
@@ -44,7 +52,7 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
     /// <summary>The properties a coder launch of this job runs with — the list the result records. Empty when the program cannot be given to a unit. <paramref name="withKey"/>: the launch carries a pool key, so no sign-in file is bound and the key folder is hidden.</summary>
     public IReadOnlyList<string> PropertiesFor(BoundaryJob job, string executable, TimeSpan runtimeMax, bool withKey = false)
     {
-        var program = Vendor.Program(executable, host.Path, job);
+        var program = ProgramOf(executable, job);
 
         return program.Problem.Length > 0 ? [] : Vendor.UnitProperties(HostFor(withKey), job, program, runtimeMax);
     }
@@ -192,7 +200,7 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
             return Refuse(early, []);
         }
 
-        var program = Vendor.Program(executable, host.Path, job);
+        var program = ProgramOf(executable, job);
         if (program.Problem.Length > 0)
         {
             return Refuse($"The coder was not launched: {program.Problem}.", []);
@@ -287,7 +295,7 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
             throw new ArgumentException("the unit's part name is 1 to 16 characters of a-z, 0-9 and '-', starting with a letter or a digit", nameof(part));
         }
 
-        var program = Vendor.Program(request.Executable, host.Path, job);
+        var program = ProgramOf(request.Executable, job);
         if (program.Problem.Length > 0)
         {
             throw new InvalidOperationException($"the coder's program cannot be run in the unit: {program.Problem}");

@@ -307,6 +307,13 @@ if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor" || minimal is
         Console.Out.Write(Placeholders.Fill(stdoutText, prompt.Text));
     }
 
+    // A turn that says its piece and then does not end (model map `holdAfterMs`): what the stream holds is flushed first, so a deadline that cuts the turn finds it (epoch 3 E3, the turn check of a turn the job's budget cut).
+    if (int.TryParse(steering.Get("HOLD_AFTER_MS"), out var holdAfterMs) && holdAfterMs > 0)
+    {
+        Console.Out.Flush();
+        Thread.Sleep(holdAfterMs);
+    }
+
     VibeShape.Write(args, steering.Get("EXPORT_TEXT"), read("FAKECLI_RECORD_ENV"), read("FAKECLI_HOME_WRITE"));
 
     // A vendor that writes where it was told not to. A consultant runs in the LIVE working tree

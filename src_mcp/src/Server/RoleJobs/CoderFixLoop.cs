@@ -162,7 +162,7 @@ internal sealed class CoderFixLoop(IRoleRun run, GitHistory git, CoderOsLayer la
         var ended = run.Clock.GetUtcNow().UtcDateTime;
         Keep(folder, "prompt.txt", prompt, turn);
         var stop = ct.IsCancellationRequested
-            ? new RoleStop("stopped", "the job was stopped while this model ran", "stopped", false, false)
+            ? await CoderTurnCheck.StopOfACutTurnAsync(Vendors, session.Model, launched, session.Handle, layer.Job) ?? new RoleStop("stopped", "the job was stopped while this model ran", "stopped", false, false)
             : CoderTurnCheck.StopFirst(Vendors, session.Model, launched, session.Handle, layer.Job) ?? RoleFailover.StopOfLaunch(session.Model, launched);
         if (launched.CliVersion.Length > 0)
         {
@@ -178,10 +178,15 @@ internal sealed class CoderFixLoop(IRoleRun run, GitHistory git, CoderOsLayer la
         }
 
         RoleFailover.RecordLedger(run, session.Model, launched, stop, ended - begun, share);
-        ct.ThrowIfCancellationRequested();
+        if (stop is not { Word: RoleStopWords.CoderBoundary })
+        {
+            ct.ThrowIfCancellationRequested();
+        }
+
         if (stop is not null)
         {
-            if (OverBudget())
+            // A boundary outranks the budget's word: it is what the job ends with, as it is on a turn that was not cut (M11 leg a).
+            if (OverBudget() && stop.Word != RoleStopWords.CoderBoundary)
             {
                 return new FixTurn(report, new FixStop("timeout", TimeoutReason(), null));
             }
