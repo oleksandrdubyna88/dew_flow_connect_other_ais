@@ -1,7 +1,7 @@
 # Spec — epoch 3, E4 "Adapters dotnet + node + coder hardening"
 
 > Status: **plan only, nothing built, 2026-11-25.** Plan gate: `proceed`, 2026-11-25; its 5 accepted findings are section P. The
-> owner answered questions 1, 2, 4 and 5 of section N on 2026-11-25; question 3 is open. After the gate one `doneWhen` line came
+> owner answered questions 1, 2, 4 and 5 of section N on 2026-11-25, and question 3 on 2026-11-27. After the gate one `doneWhen` line came
 > from the security judgement of E3 (section Q). Scope: the server half (`src_mcp`, `shared/`,
 > `.coai/toolchain.yaml`). Written by the planner (Fable) from `v2/` and the code at `feat/v2-ep3-e2-coder` `f19a7fcb`, read-only.
 > Parent plan: [PLAN.md](../../PLAN.md); architecture: [server.md](../../architecture/server.md) §10, §11, §12, §15, §16 row 9, §23.
@@ -492,7 +492,7 @@ Risks:
     before that story is planned, or before the measure says that no vendor works behind a proxy.
 
 Questions for the owner. Four were answered on 2026-11-25 (owner decision 38 of the v2 decisions list); each answer stands under
-its question. Question 3 is open, and its line says what the plan does until there is an answer.
+its question. Question 3 was open until 2026-11-27; its answer of that day stands under it.
 
 1. **The coder's default `timeoutMinutes`: 45 or 30.** Proposed: 45 (one round of this repository is 9 minutes). Until the owner
    answers it stays 30; s6 t3 builds the one table and takes the number from the answer.
@@ -502,7 +502,12 @@ its question. Question 3 is open, and its line says what the plan does until the
    **Answered 2026-11-25: npm only.** pnpm, yarn and bun stay refused by name. Nothing in the plan changes.
 3. **This repository's file** gets `testFiles` and `testFor` (s5 t6), and `src_vs_code` is NOT made a node project of it (its
    tests need a compile step, its scenarios a VS Code host). s5 t6 starts after the answer.
-   **Open.** Decision 38 does not name it.
+   **Answered 2026-11-27: yes** (the owner's word as the lead gave it, in translation; decision 38 did not name this
+   question, so it was open until that day). This repository's file gets `testFiles` and `testFor`, and `src_vs_code` is
+   not made a node project of it. s5 t6 d1 has its answer. The answer is not a plan change and not a ledger entry: the
+   question was open in the plan, and the plan said what follows the answer. **s5 t6 does not start yet:** the parent
+   plan is stopped for re-review since 2026-11-27 (ledger entry 2.2 of `v2/PLAN.md` on `feat/v2-ep3-e3-roles`, commit
+   `62c6878c`; this branch does not hold that ledger yet). It starts when ledger epoch 3 is open.
 4. **The paid proof** (s7 t3): one real coder job on claude haiku, 2 runs and 0.30 USD at most, on a pool key named through
    `COAI_CLAUDE_KEYS_FILE`. It needs a usable key of the pool on this machine, and it starts after the answer.
    **Answered 2026-11-25: allowed** — haiku, 2 runs and 0.30 USD at most, on a pool key. s7 t3 d1 says so.
