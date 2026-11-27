@@ -45,7 +45,7 @@ public static class ClaudeModels
     /// </summary>
     /// <remarks>
     /// Empty whenever it cannot tell: a row that asks for no family this code can name (<c>opusplan</c>, an empty model, a non-claude id), a
-    /// result without a readable <c>modelUsage</c>, ids that parse to no family (a gateway's own names), and any run in which the asked
+    /// result without a readable <c>modelUsage</c>, ids that parse to no family (a gateway's own names) — even beside a known family — and any run in which the asked
     /// family is among the models that answered (a helper model beside the main one is not a mismatch). Never throws: it runs on the
     /// path of a run that has already been paid for.
     /// </remarks>
@@ -58,14 +58,16 @@ public static class ClaudeModels
         }
 
         var answered = Answered(stdOut);
-        var families = answered.Select(ModelFamily.OfModel).Where(Named).Distinct(StringComparer.Ordinal).ToList();
+        var families = answered.Select(ModelFamily.OfModel).Distinct(StringComparer.Ordinal).ToList();
 
-        return families.Count == 0 || families.Contains(family, StringComparer.Ordinal)
+        // Said only when EVERY answering model's family is known and none is the asked one: an id that names no family (a gateway's own
+        // name) may be the asked model under another name, so one such answer ends the claim — unless the asked family is already there.
+        return families.Count == 0 || families.Contains(family, StringComparer.Ordinal) || families.Any(Unnamed)
             ? string.Empty
             : $"asked for {asked} ({family}), but the CLI's own result says it ran {string.Join(", ", answered)}; that is another family, billed as that model";
     }
 
-    private static bool Named(string family) => family is not (ModelFamily.Other or ModelFamily.Unknown);
+    private static bool Unnamed(string family) => family is ModelFamily.Other or ModelFamily.Unknown;
 
     /// <summary>The model ids the result's <c>modelUsage</c> names — none when it is absent or is not an object.</summary>
     private static List<string> Answered(string stdOut)

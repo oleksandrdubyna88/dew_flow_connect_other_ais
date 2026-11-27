@@ -213,6 +213,19 @@ public sealed class AClaudePlanLaunchNeverSendsTheHaikuAliasTests
     public void AnswersThatNameNoFamily_AreNeverFlagged(string answered) =>
         Flagged("haiku", Envelope(Used(answered))).Should().BeEmpty();
 
+    /// <summary>
+    /// A helper of a known family beside an id that names no family: the unknown one could be the asked family under a gateway's name, so the
+    /// run is not called a mismatch. A note is for a run in which EVERY answering model's family is known and none is the asked one.
+    /// </summary>
+    [Fact]
+    public void AKnownHelperBesideAnUnknownGatewayId_IsNeverFlagged() =>
+        Flagged("haiku", Envelope("{\"claude-sonnet-5-5\":{\"outputTokens\":57},\"my-gateway-model\":{\"outputTokens\":3}}")).Should().BeEmpty();
+
+    /// <summary>The same run with the asked family among the answers is no mismatch either way, and two known other families still are.</summary>
+    [Fact]
+    public void EveryAnswerKnownAndNoneTheAskedFamily_IsStillFlagged() =>
+        Flagged("haiku", Envelope("{\"claude-sonnet-5-5\":{\"outputTokens\":57},\"claude-opus-5-5\":{\"outputTokens\":3}}")).Should().Contain("claude-sonnet-5-5").And.Contain("claude-opus-5-5");
+
     /// <summary>The check reads what is there and says nothing of what is not — and never throws on the path of an answered run.</summary>
     [Theory]
     [InlineData("""{"type":"result","result":"no modelUsage at all"}""")]
