@@ -84,6 +84,23 @@ Narrowed: yes — the release pin, the agy program store and the refusal of a he
 
 > Epoch 2 · approved 2026-11-26 · by owner · state: open
 
+- 2.1 · 2026-11-27 · owner · contract, approach, dod, epics, stories, build-order — a codex name with no version (`terra`, `astra`) is the newest model of its family that the installed CLI lists, resolved when a job reaches the entry, so a new model needs no hand edit; a name that cannot be used ends the entry with the new stop word `model-unavailable`, which fails over, and not `coder-boundary`; the tool list of a codex coder passes when it holds no tool outside the known set, in place of exactly the 11 measured names (epoch 3 E3, SPEC_CHANGES section Q; new task s2 t5; a new doneWhen line of epoch 4 e4-local-pages)
+  (The owner's words of 2026-11-27, as the lead gave them, in translation: "Default: the latest terra. When 6.2 or 7 comes
+  out, it must pick up the latest available one by itself." The planner has them from the lead, not in the owner's own
+  language. What made the decision needed: the default name `terra` is no model of the codex CLI, so the default codex coder
+  could not be launched, and the row `tool-list` refused every model but `gpt-6.1-terra`; the facts are in
+  epoch-3/e3-roles-complete/RESULTS_e3_real_codex_pass7.md.)
+  (One cause, one entry. The owner's words name the model. The stop word and the tool rule are the lead's reading of what
+  the decision needs: with the rule of exactly 11 names a new model that shows another list is refused, and "by itself" is
+  then not true. If the owner or the lead reads the tool rule as a cause of its own, it is a second entry of this epoch
+  and the plan stops.)
+  (Count: this is the first change of ledger epoch 2. The rule allows one change: it is recorded and the work goes on. The
+  plan is not stopped. The next change of this epoch is the second: it stops the plan for a whole re-review.)
+  (What it changed in E3, and what it did not: section Q of
+  [SPEC_CHANGES.md](epoch-3/e3-roles-complete/SPEC_CHANGES.md). The security reading of "fewer tools pass" there is the
+  planner's, not a judgement addendum. Not counted here, and for the lead to decide: section P of the same file lists
+  changes that the security verify made on 2026-11-27, after the approval of this epoch, and none of them is an entry.)
+
 ## Goal
 
 Make coai one product the owner can run on every machine from one Windows VS Code, that never waits for a person, starts

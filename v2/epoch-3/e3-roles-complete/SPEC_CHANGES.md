@@ -414,3 +414,204 @@ These changes came after the plan gates, from the passes of the security verify 
 - **What a unit can write, the host reads by one road** (passes 7 to 9, M18, M19, M20, S55): `UnitWrittenFile` — no wait, no link, a regular file, a size limit, a time bound. It covers the guard's records, the sign-in copy, the codex rollouts and `report.txt`, `CodexSessions.Clear`, and the worktree's `.coai/toolchain.yaml`. `ICoderVendor.HostReadEntries` names the entries a vendor's unit can write; after every turn each must still be a plain file, else the job ends `coder-boundary`. Every vendor's turn check has one fixed limit of 30 seconds and answers `coder-boundary` when it does not finish.
 - **`checks-changed-tree` has a second meaning** (pass 9, M20): the worktree's toolchain file is a FIFO, or cannot be read. A FIFO there proves no command of the model (a check can make it), so the word is `checks-changed-tree` and not `coder-boundary`: the tree is not what coai committed and expected. It is never sent to the coder and never fails over.
 - **Both vendors are launchable** (codex: s5 t5; agy: s8 t6): the `launchable` marks of `shared/coder-boundary-releases.json` are on.
+
+## Q. The owner's decision of 2026-11-27 — a codex name with no version is the newest model of its family; the tool list is a known set (ledger entry 2.1)
+
+**The decision.** The owner's words of 2026-11-27, as the lead gave them, in translation: "Default: the latest terra. When
+6.2 or 7 comes out, it must pick up the latest available one by itself." The planner has the words from the lead, not in
+the owner's own language. It is entry 2.1 of the parent plan's ledger ([PLAN.md](../../PLAN.md)): the first change of
+ledger epoch 2. The plan is not stopped. The next change of epoch 2 stops it.
+
+**The facts it answers** (`RESULTS_e3_real_codex_pass7.md`, `RESULTS_model_lists.md`):
+
+- The default codex coder name of the plan is `terra` (SPEC.md section D, `shared/role-defaults.json`,
+  `shared/role-route-vectors.json`). The codex CLI has no model of that name: its own list holds `gpt-6.1-terra` and
+  `gpt-5.6-terra`. With `-m terra` the row `tool-list` of the preflight could not read the tool list. The job was refused
+  `coder-boundary`, which never fails over, so the agy entry behind it was never tried.
+- The row `tool-list` asks for exactly the 11 names measured with `gpt-6.1-terra`. `gpt-5.6-terra` shows 9 of them and no
+  other name, and it is refused. So every new codex model needs a hand edit and a measure before it can be a coder.
+- `astra` has the same fault by the list: the CLI lists `gpt-6.2-astra` and `gpt-6-astra` and no name `astra`. No launch
+  with the name `astra` was made for this section. `sol` and `luna` are in `shared/role-model-names.json` as names, and
+  the CLI lists them only with a version too.
+- The owner's rule of 2026-11-26 (entry 1.8): a new version of a CLI stops nothing and nobody measures again. This
+  decision says the same for a model: a new model needs no hand edit.
+
+### Q1. The name
+
+1. **A family.** A codex name with no version is a family: `terra`, `astra`, `sol`, `luna`. The families are data: a
+   list `families` in the codex part of `shared/role-model-names.json`. A family means "the newest model of this family
+   that the installed CLI lists". The defaults keep the family names: the tables of SPEC.md section D do not change.
+2. **Where the list comes from.** The CLI's own command `codex debug models` (s4 t1; `RESULTS_model_lists.md`: a network
+   call, no model call). It is the live list, without `--bundled`: the live list is what this account is offered today,
+   and the bundled list holds `gpt-5.5`, which the account is not offered. The command runs with the same home and the
+   same environment as the launch that follows. For a coder it runs in a unit with the property list of the launch,
+   with the job's own `CODEX_HOME` and its sign-in copy, never with the real home. It has a deadline and a size limit.
+3. **Which name is the newest.** Only a name of the exact shape `gpt-<version>-<family>` with `visibility` `list` is a
+   candidate. `<version>` is numbers with dots between them. Versions are compared number by number, a missing number
+   is 0: 7 is newer than 6.2, 6.10 is newer than 6.9, 6.1 is newer than 6. Two candidates with equal versions: the one
+   the CLI lists first. A name with other words (`gpt-terra-latest`, `gpt-6.1-terra-preview`) and a hidden name are
+   never taken. So the text that reaches the argv after `-m` always has this shape, whatever the list holds.
+4. **When.** When the job reaches the entry: for the first entry of a route that is the start of the job; for a later
+   entry it is when the failover reaches it. Never before: a route whose first model answers makes no codex call. The
+   resolved name is written into the job's record. Every later turn of that session uses the recorded name: a fix turn,
+   a repair turn, a resumed session. A resume never resolves again, so a model that comes out in the middle of a job
+   changes nothing in that job. The next job takes it.
+5. **A name given in full is used as given.** `gpt-6.1-terra` in `COAI_ROLES_MODELS`, in `COAI_ROLES_BANDS` or in the
+   `model` argument is never replaced by a newer one. A person who writes the family (`terra`) gets the family rule.
+6. **Every codex entry of every role.** The coder, the scout, `important`, the BA, the orchestrator and the bands use
+   the same names, so they use the same rule. The read-only roles were not measured with a real launch for this section.
+7. **What is recorded.** The envelope, the job's record and the line of a model switch name the name as asked and the
+   name as resolved. The usage line names the resolved name.
+
+**The rule of `shared/role-model-names.json`: a resolved name needs no hand edit.** Before a folder is made (as today) a
+codex name is accepted when (a) it is in `names`, or (b) it is a family of `families`, or (c) it has the exact shape
+`gpt-<version>-<family>` with a family of `families`. Any other name is `route-invalid`, as today, and the sentence
+names the setting. Whether the installed CLI really has a name of shape (c) is asked when the job reaches the entry
+(Q2). The key `measured` stays what it is: history. It gates nothing. Why a shape is right here and wrong for claude:
+the codex CLI refuses a name it does not know before any paid call (`codex-bad-model.json`), and the name must also be
+in the CLI's own list. The claude CLI runs and bills its default model for a name it does not know. So **the claude
+rule does not change: a claude id is never accepted by its shape.** The agy list does not change.
+
+### Q2. The stop word `model-unavailable`
+
+A new word of `attempts[].stop`. It means: this entry's model cannot be used on this machine now, and nothing was
+launched. **It fails over at once**, like `limit`, `refusal` and `crash`. On the last entry the job ends `failed` with
+this word and does not wait.
+
+| Case | When | Word | What follows |
+|---|---|---|---|
+| a name that is in no list and has not the shape (a typing error) | before a folder is made, as today | `route-invalid` | the job ends; the sentence names the setting. This is the person's configuration error |
+| a family, and the list of the CLI holds no model of it | the job reaches the entry | `model-unavailable` | the next entry at once; the other models of the vendor are still tried |
+| a full name of the shape, and the list of the CLI does not hold it | the job reaches the entry | `model-unavailable` | the same; the sentence names the setting when a person gave the name |
+| the list of the CLI cannot be read: an exit that is not 0, the deadline, not the expected JSON, over the size limit | the job reaches the entry | `model-unavailable` | the next entry; the other models of the vendor are skipped, they would stop the same way |
+| the tool list of a codex coder cannot be read, or holds no name, in both reads, and every other row holds (Q3) | the preflight | `model-unavailable` | the next entry; the other models of the vendor are still tried |
+| a tool outside the known set, or the two reads of the tool list differ (Q3) | the preflight | `coder-boundary` | the job ends, as for every row; the notice `coder-tool-unknown` names the tool |
+
+- **The run that reads the list is read by the classifier of a launch first.** A missing CLI, a lost sign-in and a
+  spent quota keep their words and their sentences. Only what is left is `model-unavailable`.
+- **Why not `coder-boundary`.** That word says that the OS layer or a row of the boundary refused. Here no boundary was
+  asked and none broke. The word would send a person to look for a security fault, and it ends the job with the next
+  entry not tried.
+- **Why not `crash`.** Nothing was launched and nothing ended without an answer. The person must see in the attempt
+  that the cause is the model name.
+- **Why not `route-invalid` for a name that does not resolve.** `route-invalid` ends the whole job and names a setting
+  of the person. A family name is a default of coai, and a model can leave the vendor's list with no error of the
+  person. The entry behind it can do the work.
+- **Why the failover is safe.** Nothing ran with this model: no session, no write, no commit. The next entry has its
+  own preflight. A coder restarts from the last coai commit, as after every failover.
+
+### Q3. The tool list: no tool outside the known set
+
+The row `tool-list` (id CX-T1) and the row `no-project-tools` (id CX-C3) change. The known set is the 11 names of the
+judgement's section 13.3.
+
+1. **A name outside the known set refuses the launch**: `coder-boundary`, row `tool-list`. This is all of the row's
+   security work, and it is kept whole: no `collaboration.*`, no `mcp__`, no web tool, no image tool, no name that
+   nobody measured.
+2. **Fewer names pass.** A list of 9 of the 11 is admitted. The envelope names the known tools that this model does
+   not have. They are coai's own strings, so they can be shown.
+3. **The two reads must be equal.** The list in the worktree and the list in the stand-in project with its own MCP
+   config must hold the same names. Before, both had to be the 11, so they were equal. Now it is asked. A project that
+   adds OR removes a tool is a project whose config the CLI read: `coder-boundary`, row `no-project-tools`.
+4. **A list that cannot be read, or that holds no name, passes nothing.** With the new rule an empty list would hold
+   no outside name. So it is not a list. In both reads, with every other row holding: `model-unavailable` (Q2). In one
+   read only: item 3, `coder-boundary`. With another row red too: `coder-boundary`, the boundary row wins.
+5. **The person is told the name of the tool.** The stop sentence, the envelope and ONE notice `coder-tool-unknown`
+   for the job: the job, the vendor, the name as asked and as resolved, the installed CLI version, the names. A name
+   is text that a program printed. So it is shown only when it is 1 to 64 characters of letters, digits, `_`, `.` and
+   `-`; any other name is "a name that cannot be shown" with its length. At most 5 names are shown, then the count.
+   This is the one exception to s5 t3 d4 ("a row never carries the output of a program it ran"). The tab that shows
+   the notice is epoch 4 `e4-local-pages` (a new `doneWhen` line there). Until it is built, the stop sentence and the
+   envelope name the tool, and the notice is one row among the other notices.
+
+**Does "fewer tools" open a hole? The planner's reading: no.** A tool of the list is something the model can DO. A guard
+is something that stops the model. If a measured tool were a guard, a model without it could do more. None of the 11 is:
+
+| Tool | What it is | Guard? | Without it |
+|---|---|---|---|
+| `functions.exec` | runs the model's JavaScript, which calls the nested tools | no | no nested tool is reached that way |
+| `functions.wait` | waits for a running `exec` | no | less |
+| `functions.request_user_input`, `functions.request_user_input_async` | a question to the person; nobody answers in a job | no | less. Approvals are closed by the argv (`approval_policy="never"`) and seen by the row `permission-profile`, not by these tools |
+| `apply_patch` | changes a file | no | the model writes with a shell command, under the same vendor sandbox (CX-V2) |
+| `exec_command`, `write_stdin` | a shell command | no | less |
+| `list_mcp_resources`, `list_mcp_resource_templates`, `read_mcp_resource` | reads of MCP resources; measured empty | no | less |
+| `clock__curr_time` | the time | no | less |
+
+What limits a codex coder is not in the tool list, and each part has its own row or check, which does not change: the
+unit (U1 to U9), the vendor sandbox tried with `codex sandbox` (CX-V1 to CX-V6), the profile and the approval policy
+read from `codex doctor` (CX-C4), the flags of the argv (CX-C2), the config read back (CX-C1), the sign-in copy (CX-R2
+to CX-R4), and after every turn the stream rule (CX-T4) and the rollout files (CX-T5). So no measured tool is kept
+required.
+
+What the planner cannot say, and what the row no longer says:
+
+- **This is not a judgement.** Section 13.3 of the judgement says of CX-T1: "A list that differs for another model
+  refuses the job; that is the row working, and the lead then has a measure to order, not a list to widen." The
+  owner's decision replaces "a measure to order" for a list that is SMALLER. For a list that is larger the sentence
+  stands. The judge did not read this rule. The task is `security: true`, so it runs on the `important` list; an
+  addendum of the judgement is the lead's to order.
+- **Another mode of the CLI.** A model that does not work through `functions.exec` would show its tools with other
+  names, for example `functions.exec_command`. Those names are outside the known set, so it is refused. This was not
+  seen: `gpt-5.6-terra` showed 0 names outside the set.
+- **The coder prompt of codex names `apply_patch` and shell commands** (SPEC.md C7 item 3). A model without one of them
+  gets a prompt that names a tool it does not have. This is not a hole. The envelope names the missing tools.
+
+### Q4. What "by itself" does not cover
+
+Two checks stay as protection (entry 1.17) and can stop a new model until a person looks:
+
+- **A new model with a tool that is not in the known set** is refused `coder-boundary`, and the job ends. The notice
+  names the tool. The known set grows by a look at that tool and one commit.
+- **A new model whose stream holds an item type that nobody measured** (rule 4 of CX-T4) ends the job after its turn.
+  The measured streams hold no `reasoning` item (pass 7, `gpt-6.1-terra`, effort medium).
+
+A model that the CLI lists and nobody priced is launched like any other: the usage line names it.
+
+### Q5. Risk 14, scenarios, tasks
+
+**Risk 14 (new; SPEC.md H).** A codex model that nobody measured runs as a coder on the day the CLI lists it. It is
+risk 13 for a model: the properties of class `release` were measured with `gpt-6-luna` (two calls of pass 7 ran
+`gpt-6.1-terra`) and are assumed for the next model. What asks every job, for whatever model: the preflight rows, with the tool rule of Q3, and
+the checks of every turn. The envelope names the resolved model. The decision of 2026-11-27 brings this risk with it;
+it is written here so that the owner sees the choice whole.
+
+**Scenarios** (the test plan of SPEC.md section I now counts V1 to V35):
+
+- **V30** a family resolves to the newest listed model of the exact shape (Q1 items 3 and 4); a full name is used as
+  given; the recorded name is the name of every later turn.
+- **V31** the names that `shared/role-model-names.json` accepts without an edit, and the claude rule that does not change.
+- **V32** `model-unavailable`: every row of the table of Q2, the failover, the last entry, zero launches.
+- **V33** the tool list: fewer names pass; an outside name, two reads that differ and an empty list do not.
+- **V34** the name of an unknown tool in the stop sentence, the envelope and the notice; a name that cannot be shown.
+- **V35** the real preflight with 0 model calls: the default `terra`, the full name `gpt-5.6-terra`, the family `astra`.
+
+**Tasks.** One task is new: `s2-scout-judge-roles` / `t5-codex-model-name-and-tool-set`. 8 stories, 45 tasks. It is
+in s2 because s5, s7 and s8 each hold 6 tasks, the limit of the device (`maxTasksPerStory`), and E3 holds 8 stories,
+the limit too. The plan did the same with s8 t6. s2 has room, and its roles use the same names: the scout fails over
+to codex `terra` and the judge to codex `astra`. So `s2-scout-judge-roles` now depends on `s5-codex-coder`: the task
+changes rows that s5 t3 built. The order of SPEC.md section G holds for the first four tasks of s2; s2 t5 comes after
+s5. Two dod items of s5 t3 (d3, d4) point to the new rule. Growth: nothing new. The notice is one record in the notice
+ledger of E1, and the resolved name is one more member of the job's record.
+
+**Where it is in SPEC.md.** The status block; B12 of C1; C2 item 3; C6 (the codex must-changes); D (the rule of the
+failover and one paragraph under the main-AI table); G (the tab, the order); H (risk 14); I (V1 to V35). To keep
+SPEC.md under 64 KiB, two records of what is gone moved here word for word (H-7 and F-S, below).
+
+**For the lead, not done here.** (1) The lead asked for the task in s5 or s8. Both are at the limit, so it is in s2.
+A move is one `git mv` if a limit changes. (2) The band 0 to 2 of the codex main-AI row is the full name `gpt-6-luna`.
+By the same decision it could be the family `luna`. It is not changed. (3) agy has no family names: its defaults are
+full ids of one generation (`gemini-4-argon-medium`). The decision names terra, so agy is not changed. (4) Section 13.3
+of the judgement is not edited. (5) `EPIC_BUNDLE.md` is the bundle of plan commit `6125f2ce`; it is not made again
+here, so it holds 44 tasks. (6) Section P lists changes that the security verify made after the approval of epoch 2.
+They are not entries of the ledger. If one of them is counted, entry 2.1 is not the first of the epoch.
+
+## H-7. Risk 7 of SPEC.md, section H (moved from SPEC.md on 2026-11-27, word for word)
+
+7. (Gone on 2026-11-26; it said that an update of a CLI refuses that vendor's coder until the new release is measured. No
+   version refuses anything now: C2 item 2. What came in its place is risk 13.)
+
+## F-S. The row of the agy program store of SPEC.md, section F (moved from SPEC.md on 2026-11-27, word for word)
+
+| What grows | Size | Who retires it | When interrupted |
+|---|---|---|---|
+| ~~the agy program store (judgement G9)~~ | not built: no pin and no store since the owner's decision of 2026-11-26 (C2 item 2) | — | — |

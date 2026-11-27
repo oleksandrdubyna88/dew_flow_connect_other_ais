@@ -4,12 +4,12 @@
 > `proceed`, 2026-11-25 (section J); the changes after it (section K); second plan round: `proceed`, 2026-11-26 (section L).
 > The owner's decisions of 2026-11-26 (sections M and O) are plan changes in the parent plan's ledger
 > ([PLAN.md](../../PLAN.md), `## Plan changes`). The re-review round of E3: `proceed`, 2026-11-26, 3 findings accepted
-> (section N). The owner accepted the revised plan on 2026-11-26; epoch 2 of the ledger is open. Sections J to O are in
+> (section N). The owner accepted the revised plan on 2026-11-26; epoch 2 of the ledger is open; its entry 2.1 (2026-11-27) is section Q. Sections J to Q are in
 > [SPEC_CHANGES.md](SPEC_CHANGES.md): a spec file may hold 64 KiB (B item 5). Scope: the server half (`src_mcp`, `shared/`,
 > `.coai/toolchain.yaml`). Written by the planner
 > (Fable) from `v2/` and the code at `feat/v2-ep3-e2-coder` `0e8e8941`, read-only. Parent plan: [PLAN.md](../../PLAN.md);
 > architecture: [server.md](../../architecture/server.md) §2, §8, §10, §19, §20, §23. Stories and tasks: the YAML tree under
-> `stories/` (8 stories, 44 tasks, no task above complexity 6). Two cornerstones: **s3** (what a plan round over a folder
+> `stories/` (8 stories, 45 tasks, no task above complexity 6). Two cornerstones: **s3** (what a plan round over a folder
 > approves) and **s4** (the codex and agy write boundary: measure first, then a security judgement).
 
 ## 0. Goal, and what is there today
@@ -186,7 +186,7 @@ preflight) and `KEY_POOL_SPEC.md` §1.
 | B9 | no command leaves the limit: no new unit, no D-Bus, no Windows `.exe` | **claude has no shell** (M5) |
 | B10 | the model has no network tool of its own | **the tool list** (M5: five file tools) |
 | B11 | the model cannot read the sign-in or the launch's secret | flags (B6); KEY_POOL_SPEC §1 C6 |
-| B12 | the tools are exactly the measured list; no MCP server, connector or plugin | M5 |
+| B12 | the tools are exactly the measured list (codex since section Q: no tool outside it); no MCP server, connector or plugin | M5 |
 | B13 | files of the repository at the base commit do not run code and do not widen the limit | `--restricted` (t3 d0) |
 | B14 | a resumed turn has the same limit; the handle is bound to the job and the worktree | R11 resumed, M7, `CoderHandle` |
 | B15 | only the allow-list environment reaches the CLI | E2 s2 t3 d4, t5 |
@@ -223,7 +223,7 @@ own sandbox, seen working INSIDE the unit. The unit of E2 binds the main checkou
    each job. It has one row for each id of class `pre` of the table: what is hidden from a child command, the sign-in files,
    the network limit where one exists (for codex: a command of the model has no network, CX-V4), no user manager inside, the
    vendor's own sandbox or guard where the verdict relies on it. A wrong answer ends `coder-boundary`
-   before any launch and names the row. A test holds the rows and the `pre` ids of the table equal, and each row goes red when
+   before any launch and names the row (a codex tool list that cannot be read: `model-unavailable`, section Q). A test holds the rows and the `pre` ids of the table equal, and each row goes red when
    its property is dropped.
 4. **The other ids are asked where they can be asked** (the judgement, section 8). Class `launch`: by coai before every launch,
    turn 0 and every fix turn, on the files the unit will get. Class `turn`: read by coai from the CLI's own stream after every
@@ -305,7 +305,7 @@ and green (C2 item 1). The owner named four of them; the rest are the lists 13.1
 
 - codex. The argv is the set of 13.4 on EVERY turn: the set CX1 and `-c agents.enabled=false` (s5 t2 d1). **Before every
   launch the job's `CODEX_HOME` holds no `environments.toml`; one that is there refuses the launch** (CX-C1, s5 t2 d2). The
-  preflight asks the tool list with the job's own model (11 names, none of `collaboration.*`) and reads `codex doctor`
+  preflight asks the tool list with the job's own model (no name outside the 11 known ones; fewer pass: section Q) and reads `codex doctor`
   (CX-C4, CX-C3); the tool list says nothing about the web search (s5 t3 d3). **The exact rule of CX-T4 after every turn**
   (s5 t4 d3): `agent_message`, `command_execution`, `file_change` and `error` items pass; an `mcp_tool_call` passes only
   for the two list tools of the server `codex` with an empty list and no error; a `web_search` and a `collab_tool_call`
@@ -465,7 +465,7 @@ Tasks: s7 t3 (the key, the run, the refusal, the envelope, this repository's fil
 
 **The rule does not change** (E1 spec A): a limit, a refusal or a crash goes to the next model at once; only the last model waits;
 a spent quota, a missing CLI or a lost sign-in skips that vendor's other models; `cancelled`, `tree-changed`, `output-invalid` and
-the coder's own stops never fail over. A read-only role restarts from turn 0. A coder restarts from the last coai commit.
+the coder's own stops never fail over. `model-unavailable` (section Q) goes to the next model too. A read-only role restarts from turn 0. A coder restarts from the last coai commit.
 
 **The lists** (main AI claude; `shared/role-defaults.json`). The names there are the owner's, so the right column is a proposal
 (section H, question 3):
@@ -501,6 +501,10 @@ row (`whenVendorRow`); a coder entry only while the table of coder boundaries sh
 | ba | `astra` → claude `fable` | `gemini-4-argon-high` → claude `fable` |
 | bands 0–2, 3–6, 7–10 | `gpt-6-luna`, `terra`, `astra` | `gemini-3.8-flash-low`, `gemini-4-argon-medium`, `gemini-4-argon-high` |
 
+**A codex name with no version is a family** (the owner, 2026-11-27; ledger entry 2.1): when a job reaches the entry,
+`terra` or `astra` becomes the newest `gpt-<version>-terra` or `-astra` that the installed CLI lists. A name given in
+full is used as given. `SPEC_CHANGES.md`, section Q.
+
 Why these names, and why agy's Neon, Carbon, Hydrogen and Orchestrator names are not used: `SPEC_CHANGES.md`, section M.
 `agy models` also lists Claude models, which the vendor-routing rule never runs there.
 
@@ -529,7 +533,6 @@ Every switch is one log line and one `role-model-switched` notice that names the
 | scout and judge job folders | the E1 job folder (attempts cut at 20 MB) | E1 retention: 30 days, 200 at most | E1 lease and sweep |
 | a codex or agy coder home (session files, caches) under the job's coder folder | not measured; s4 records it | the sweep that removes the coder worktree and job folder (E2) | a killed job leaves it for that sweep |
 | the agy write guard folder | 3 small files per job, inside the job folder | with the job folder | written and read back before every launch |
-| ~~the agy program store (judgement G9)~~ | not built: no pin and no store since the owner's decision of 2026-11-26 (C2 item 2) | — | — |
 | the history of measures in `shared/coder-boundary-releases.json` | one small record for each measure that is made; nothing adds one by itself | kept: it is the history | a static file |
 | the sign-in copy of a job (judgement S3) | one small file per job, in the job's coder home | deleted when the job ends, and by the E2 sweep after a kill | the same sweep |
 | the agy guard's decision records (G4) | one line per tool call, in the job's coder folder | with the job folder | a record that cannot be written is a deny |
@@ -552,13 +555,13 @@ Every switch is one log line and one `role-model-switched` notice that names the
 | A status that coai writes into `task.yaml` | E5 / epoch 4 E5 | it would change the approval id of a scope; that epic decides how |
 | What a coder may change of its own checks (E4 SPEC section A4, scenarios D12 and D13; the owner, 2026-11-26) | E4: the checks run the head's OWN definitions; nothing the head changed is refused; every difference from the base is REPORTED (`definitionsChanged`, the changed definition files, the tests changed or deleted); the restore step takes packages from the internet itself, with no proxy and no address list | none: E3 builds no gate on a changed definition and no network limit for a restore. E3 agrees with it in C9 item 2, in risk 10 and in C6 (the seam changes neither the fix loop nor the check boundary) |
 | A short form of the rule resolver's output, so that this repository can declare its instruction step inside 64 KiB (C9 item 9; the owner, 2026-11-26) | a follow-up outside epoch 3: the resolver is `tools/rules.mjs` of the conventions repository (mounted at `.agents/conventions`), so the short form is a plan there. Here the rest is a data edit (`.coai/toolchain.yaml`, the test of s7 t3 d5) | none: E3 keeps the limit and declares no step for this repository |
-| The tab of the extension's notifications for the secret findings of jobs (C9 item 10) | epoch 4 `e4-local-pages` (extension half; its `doneWhen`). Epoch 3 has no extension epic; its 5 epics and E3's 8 stories are the device limits | s7 t3 d6 writes what the tab reads: the notice `instructions-secret` |
+| The tab of the extension's notifications for the secret findings of jobs (C9 item 10) | epoch 4 `e4-local-pages` (extension half; its `doneWhen`). Epoch 3 has no extension epic; its 5 epics and E3's 8 stories are the device limits | s7 t3 d6 writes what the tab reads: the notice `instructions-secret`. s2 t5 d6 writes `coder-tool-unknown` (section Q), which the page lists |
 
 Also not in E3: a pool of codex or agy credentials; `cons`, `consask` and reviewers on the pool; a coder on native Windows or macOS;
 `review_feature(featureFolder)` (server.md §8 names it; no epic's `doneWhen` holds it); a document written by the judge; attachments;
 the extension showing a `folder` source (extension half).
 
-Order inside the epic: s1 → s2; s3 alone; s4 → s7 → s5 and s6 (side by side, neither needs the other); s8 last. s3 and s4 can
+Order inside the epic: s1 → s2; s3 alone; s4 → s7 → s5 and s6 (side by side, neither needs the other); s8 last; s2 t5 (section Q) after s5. s3 and s4 can
 start at once. The story numbers are not the order: s7 comes before s5 and s6. The codex and agy stories need E2's coder, and
 `epic.yaml` of E3 now names `e2-coder-one-task` in `dependsOn`.
 
@@ -574,8 +577,7 @@ Risks:
    d5); the ledger records what was spent, after the fact.
 5. A plan valid on one device can be invalid on another (limits are per device); the refusal names the source.
 6. The fable judge is the most costly model. The proof runs the judge on haiku through a scratch `important` list.
-7. (Gone on 2026-11-26; it said that an update of a CLI refuses that vendor's coder until the new release is measured. No
-   version refuses anything now: C2 item 2. What came in its place is risk 13.)
+7. (Gone on 2026-11-26: `SPEC_CHANGES.md`, H-7. What came in its place is risk 13.)
 8. A change of `feature.yaml` or of the plan file after an approval refuses every coder start under that approval (B7). The cure
    is a new plan round.
 9. **The accepted risks of the judgement** (its sections 7, 13.8 and 14.7). **The owner accepted all of them on 2026-11-26:
@@ -611,6 +613,8 @@ Risks:
     stream of every turn. What is only ASSUMED on a version that was not measured: every property of class `release`
     (it cannot be asked without a model turn), and that a flag of the same name still does what it did. The envelope
     names the installed version beside the measured one, so a person can see how far apart they are.
+14. **A codex model that nobody measured runs as a coder on the day the CLI lists it** (the owner, 2026-11-27):
+    `SPEC_CHANGES.md`, section Q.
 
 The questions that were put to the owner on 2026-11-25 (questions 1 to 5, which task files cite as "SPEC section H,
 question n") and the answers of that day (decisions 35 to 40) are in `SPEC_CHANGES.md`, section H-Q, word for word.
@@ -640,7 +644,7 @@ addendum adds (risk 9).
 Build order: the story order of section G; in a story the `dependsOn` of its tasks. Measure tasks come before the code that
 depends on them, and the judgement comes before any codex or agy launch code.
 
-Test plan: every scenario S1 to S12, P1 to P13 and V1 to V29 has a test that carries its number in its name, or the task result says
+Test plan: every scenario S1 to S12, P1 to P13 and V1 to V35 (V30 to V35: section Q) has a test that carries its number in its name, or the task result says
 which test covers it. FakeCli is the only double; the units, git, the detached runner and stdio are real. Structural scans have a
 companion that proves they match something. The whole MCP suite runs through the MTP executable, never `dotnet test`.
 
