@@ -131,30 +131,73 @@ Narrowed: yes — the release pin, the agy program store and the refusal of a he
 
 ### Re-review for epoch 3
 
-Narrowed: yes — the tool list of a codex coder no longer has to be the exact 11 measured names (entry 2.1), and a tool outside the known set no longer ends a job (entry 2.2); the owner has not approved yet
+Narrowed: yes — the tool list of a codex coder no longer has to be the exact 11 names (entry 2.1), and a tool outside the known set no longer ends a job (entry 2.2); the planner's reading of SPEC_CHANGES R2, copied by the judge; the owner approves
 
 | Work | Where | Verdict | Action |
 |---|---|---|---|
-| the revision of the plan (2026-11-27): section S of the E3 SPEC_CHANGES, the E3 SPEC, and the tasks s2 t5, s8 t5 d4 and s6 t3 d3 | feat/v2-ep3-e3-roles, pushed | — | nothing of it is built; the plan round and the owner read it |
-  (This record is not complete, and ledger epoch 3 is not open. The steps of the rule, and where each stands on 2026-11-27.
-  Done: the stop, commit 62c6878c. Done: the consultation, id aee9490c9c834b51a284184a36a53427, one turn, advice only; each
-  of its points was checked by reading the code before it was used. Done: the revision of the whole plan, in section S of
-  [SPEC_CHANGES.md](epoch-3/e3-roles-complete/SPEC_CHANGES.md): the goal, the Definition of Done, the merge conditions, the
-  epics and the build order were read again, each of the nine open points of section R has its disposition, and the three
-  answers of the owner that are no entries are folded in. What the revision changes is the baseline of epoch 3 and is not
-  an entry. Not done when this was written: the rows of the Opus judge, who sorts every commit made since the approval of
-  epoch 2, commit 6125f2ce, as fits or cut; the cuts, if the judge names one; the plan round; the owner's approval, which
-  a narrower plan needs.)
+| the work since the approval of epoch 2 on E3: 53 commits (47 and 6 merges), `9157dc94` to `62c6878c`, with `39229214` of feat/v2-ep3-e2-coder and the commits of feat/v2-ep3-e3-agy; one row each in RESULTS_epoch2_done_code_sorting.md | feat/v2-ep3-e3-roles, pushed | fits | kept |
+| the work since the approval of epoch 2 on E4: 12 commits (10 and 2 merges), `c1cbd7c5` to `9897dc2b` | feat/v2-ep3-e4-plan, pushed | fits | kept |
+| `62685e2b`, in part: a codex tool outside the known set ends the job `coder-boundary` (`CodexToolList.UnknownToolFailsOver = false`) with ONE `coder-tool-unknown` notice for the job; that is entry 2.1, which entry 2.2 replaced | feat/v2-ep3-e3-roles, local, never pushed | cut | local: may be dropped; or a new commit on top, before it is pushed, sets the constant to true, gives one notice for each refused entry and adds the tests of s2 t5 d4 to d6 |
+| `62685e2b`, the rest: E3 s2 t5 under entry 2.1 (the families, the shape rule, `model-unavailable`, the known set, the tool name in the notice) | feat/v2-ep3-e3-roles, local, never pushed | fits | kept as local work; it goes on only when epoch 3 is open |
+| `dee4b684`: E4 s5 t6, this repository's `testFiles` and `testFor` (the owner's answer to question 3 of E4 SPEC N) | wip/e4-s5-t6-plan-stop-20261127, local, never pushed | fits | kept as local work; it goes on only when epoch 3 is open |
+  (Step 2 of the rule, the halt: deviation, recorded. Three commits were made after the stop commit `62c6878c` of 16:08:31.
+  On E4, `9897dc2b` at 16:08:44, pushed: plan text only, the owner's answer to question 3 of E4 SPEC N; its message names
+  the stop; it is on a branch that does not hold the stop commit. On E3, `62685e2b` at 16:10:38, local: product code of s2 t5,
+  committed "at the plan stop"; R3 says the rest of s2 t5 waits. On E4, `dee4b684` at 16:18:34, local branch: the file and
+  tests of E4 s5 t6, which R3 names as waiting; the same diff is also uncommitted in the E4 worktree, written at 16:12:25.)
+  (Seen, not sorted, for the planner: `02fb2b36` at 16:18:13 on fix/claude-haiku-alias-in-plan-mode, pushed, one commit on
+  origin/main. It sends the claude alias haiku as its full id in plan mode. It fixes what the paid proof of E3 s8 t3 found
+  (the alias ran Sonnet 5.5). It is on the main line, not on a branch of this plan. The halt allows work outside the plan.
+  If the planner counts it as work of this plan, it is a fourth deviation.)
+  (The security verify fixes are sorted as fits by their must-change or should of the verify. Whether the changes of
+  SPEC_CHANGES section P are ledger entries is an open point of section R; this sorting does not decide it.)
+  (Carried, not cut. First: `src_mcp/src/Tools.cs:583` still says that neither codex nor agy is launchable today; the flips
+  `85134aec` and `b9df00dc` did not change it, and s7 t4 d3 asks the tool text to name the vendors that can be launched; one
+  line, after the stop. Second: `AgyCoderVendor.TurnDeadline` is 45 minutes; the owner's 30 minutes waits for the end of the
+  stop (R3). Third: the default codex name `terra` still cannot be launched; s2 t5 is the fix. Fourth: the proof of E3 s8 t3
+  ran on Sonnet 5.5 and not on haiku, because the CLI maps the alias in plan mode; s8 t3 d1 asks haiku. Fifth: the 5 paid
+  agy turns of `4466732e`: passes 7 and 8 of the verify recommended them and left their number to the owner; the record holds
+  no owner's word on the number; no cap was broken, because the 30 USD of entry 1.11 names s8 t3 and t4 only.)
+  (The Narrowed line, the table and the four notes above are the record of the Opus judge, read only, moved here word for
+  word on 2026-11-27. Its file is [RESULTS_epoch2_done_code_sorting.md](epoch-3/RESULTS_epoch2_done_code_sorting.md),
+  copied unchanged, with one row for each of the 67 commits. Of 67 commits 66 fit and one, local and never pushed, is cut
+  in part. No pushed commit is cut. The judge read the plan at 62c6878c, before the revision.)
+  (The planner on the points that the judge left to the planner or to the owner, with facts that the lead gave on
+  2026-11-27. First: the commit 02fb2b36 is on a branch from main, for the released product, and the owner ordered it. It
+  is work outside the plan, which the halt allows. It is not a deviation. Second: the 5 paid agy turns of 4466732e. The
+  owner's cap for the agy measures is 30 turns (2026-11-26; entry 1.2), 16 of the 30 are used, and the lead chose the
+  number inside that cap. The open point is closed. Third: the three deviations of the halt stand as the judge wrote
+  them. 9897dc2b is plan text. 62685e2b and dee4b684 are local, are not pushed, and go on only when epoch 3 is open.)
+  (The cut. The part of 62685e2b that ends a job coder-boundary for a tool outside the known set, and its text of ONE
+  notice for the job, contradict entry 2.2. Action: fix forward by a new commit on top of it, when epoch 3 is open and
+  before any push. No pushed history is touched. Against the revision the same commit also lacks four rules that are
+  not built yet, which is not a cut: the lookup of every codex name that is not a family, one launch of a model in a
+  job, the tool inventory read whole, and the terminal rule after a turn; they are items 5, 6, 8 and 12 of section S4.)
+  (The revision, step 4 of the rule: commit c59b3a51, in section S of
+  [SPEC_CHANGES.md](epoch-3/e3-roles-complete/SPEC_CHANGES.md). The goal, the Definition of Done, the merge conditions, the
+  epics and the build order were read again; each of the nine open points of section R has its disposition; the three
+  answers of the owner that are no entries are folded in. What the revision changes is the baseline of epoch 3 and is
+  not an entry. The consultation of step 3: id aee9490c9c834b51a284184a36a53427, one turn, advice only; each of its
+  points was checked by reading the code before it was used. The bundle for the plan round: commit c730151a.)
   (What the whole reading found for the parts of this file. The goal holds. The owner's decisions of 2026-11-22 hold. The
   five epochs and the 24 epics hold: none is added, removed or moved; one doneWhen line of epoch 4 e4-local-pages came with
   entry 2.1. The build order of the epochs holds. Inside epoch 3 E3 the build order has one new step, the task s2 t5 after
   the story s5. The status paragraph of this file still says "plan, nothing built, 2026-11-22": the planner did not read
   the epochs 1, 2, 4 and 5 against their code, so it is not rewritten.)
-  (A deviation, recorded. Two changes of the security verify of 2026-11-27 are contract changes by the rule, and they were
-  not written as entries on their day: after a turn a host-read entry that is not a plain file, and a turn check that takes
-  more than 30 seconds, end a job coder-boundary; and the stop word checks-changed-tree got a second meaning. They are in
-  section P of the same file. With them counted, the stop was due at entry 2.1. They are part of the baseline of epoch 3.
-  Whether they become entries is the lead's decision.)
+  (A deviation of the count, recorded. Two changes of the security verify of 2026-11-27 are contract changes by the rule,
+  and they were not written as entries on their day: after a turn a host-read entry that is not a plain file, and a turn
+  check that takes more than 30 seconds, end a job coder-boundary; and the stop word checks-changed-tree got a second
+  meaning. They are in section P of the same file. With them counted, the stop was due at entry 2.1. They are part of the
+  baseline of epoch 3. Whether they become entries is the lead's decision.)
+  (Carried into epoch 3, not cut, from the judge's list and from the lead. The tool text at src_mcp/src/Tools.cs:583
+  still says that codex and agy are not launchable: one line, E3 s7 t4 d3. The turn of an agy coder is still cut at 45
+  minutes in the code: E3 s6 t3 d3 now names 30. The default codex name terra cannot be launched until E3 s2 t5 is built.
+  The proof of E3 s8 t3 ran on Sonnet and not on haiku: the fix of the alias is 02fb2b36 on the main line, and s8 t3 d1
+  is met only by a run after it. Three findings of the local E4 commit dee4b684 on the selection of tests are in
+  section S of the E4 SPEC, on feat/v2-ep3-e4-plan, commit 3995acc6: the revision corrected one task text and added two
+  dod items to E4 s5 t6.)
+  (Not done when this was written: the plan round, and the owner's approval, which a narrower plan needs. The line of
+  epoch 3 is not written, and the plan stays stopped.)
 
 ## Goal
 

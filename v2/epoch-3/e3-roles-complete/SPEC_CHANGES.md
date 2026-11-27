@@ -823,6 +823,25 @@ only".
 4. The number 30 for an agy turn is in the task text and not in the code.
 5. The parent plan's status paragraph (S1, last lines).
 
+### S7. After the judge's sorting (added the same day, with the record in PLAN.md)
+
+The Opus judge sorted 67 commits made since the approval of epoch 2: 66 fit, and one, local and never pushed, is cut in
+part. The record is `### Re-review for epoch 3` of [PLAN.md](../../PLAN.md); the file with one row for each commit is
+[RESULTS_epoch2_done_code_sorting.md](../RESULTS_epoch2_done_code_sorting.md), copied unchanged. The judge read the plan at
+`62c6878c`, before this revision.
+
+- **The cut:** the part of the local commit `62685e2b` that ends a job `coder-boundary` for a tool outside the known set,
+  with ONE notice for the job. It is entry 2.1, which entry 2.2 replaced. Fix forward by a new commit on top of it, when
+  epoch 3 is open and before any push.
+- **Not a cut, not built:** against this revision the same commit lacks items 5, 6, 8 and 12 of S4.
+- **Three commits were made during the stop** (the deviations of the record): `9897dc2b` (plan text, E4), `62685e2b` and
+  `dee4b684` (local).
+- **`02fb2b36`** (the claude alias `haiku` in plan mode) is on a branch from `main`, for the released product, by the
+  owner's order: work outside the plan, not a deviation.
+- **The 5 paid agy turns of `4466732e`** are inside the owner's cap of 30 agy turns (entry 1.2): 16 of 30 are used.
+- **E4:** three findings of its task s5 t6 are in section S of the E4 SPEC, commit `3995acc6` on `feat/v2-ep3-e4-plan`.
+- **Carried:** the tool text at `src_mcp/src/Tools.cs:583` still says that codex and agy are not launchable (s7 t4 d3).
+
 ## 0-S. The status block of SPEC.md as it stood until the revision of 2026-11-27 (moved from SPEC.md, word for word)
 
 > Status: **s1 to s3 are built (s3 t6 is open) and s4 is measured and judged; s5 to s8 are plan only, 2026-11-26.** Plan gate:
