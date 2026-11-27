@@ -35,7 +35,7 @@ holds this window's dialog place". Neither was worked around. A restart of the o
 A first after-read of `agy` showed 4096 bytes: `command -v agy` found nothing in a non-login ssh shell, so the
 read measured the home folder. The read by the full path above is the one that counts.
 
-The logged-in state was not read again. So this row shows that no process was restarted and no file changed; it does not show by itself that no session was asked to sign in again. The 14 sessions ran on through the whole night, and nobody reported a sign-in prompt.
+The logged-in state was not read again. So this row shows that no process was restarted and that the recorded indicators (the settings hash, the MCP names, the `agy` size and time, the backup count) did not change; it does not show by itself that no session was asked to sign in again. The 14 sessions ran on through the whole night, and nobody reported a sign-in prompt.
 
 ## R10 — the places that lack `jq`
 
@@ -51,7 +51,10 @@ root find `/usr/bin/jq` now. Whether the next round reads the accounts in the ta
 is the input of E6: of the places measured, none lacks `jq` now, and none has `sudo` without a password.
 
 **R10 (f), root of the WSL distro, 2026-11-27 13:2x UTC:** `command -v` finds none of `claude`, `codex` and `agy` for
-root, and `/root/.claude` and `/root/.codex` do not exist. So root is a place with no AI tool: E6 would install nothing
+root, and `/root/.claude` and `/root/.codex` do not exist. The `PATH` of that call was root's login `PATH` in the distro: the
+system folders, then the Windows folders WSL appends. A second check, 2026-11-27 21:1x UTC, looked by full path: `/root/.local/bin`
+does not exist; none of `claude`, `codex` and `agy` is in `/usr/local/bin`, `/usr/bin` or `/root/.npm-global/bin`; and
+`/root/.gemini` does not exist either. So root is a place with no AI tool: E6 would install nothing
 there. With the rows above, E6 would install on no measured place of the owner.
 
 ## R12 — two windows — OPEN
