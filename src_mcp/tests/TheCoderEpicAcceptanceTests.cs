@@ -225,7 +225,7 @@ public sealed class TheCoderEpicAcceptanceTests
     }
 
     [Fact]
-    public async Task D2_TheRouteHoldsClaudeModelsOnly_TheFakeSawResumeOnce_NothingOutsideTheWorktreeChanged_FilesChangedIsTheDiffOfBaseToHead()
+    public async Task D2_TheRouteHoldsTheClaudeAndTheAgyModel_OnlyClaudeIsLaunched_TheFakeSawResumeOnce_NothingOutsideTheWorktreeChanged_FilesChangedIsTheDiffOfBaseToHead()
     {
         await using var world = await World.CreateAsync(
         [
@@ -240,8 +240,8 @@ public sealed class TheCoderEpicAcceptanceTests
             await StdioServer.InitializeAsync(server);
             var started = await world.StartAsync(server, 2);
             var jobId = started.GetProperty("jobId").GetString()!;
-            // The agy model of the list is not a coder's model yet (its mark launchable is off): the route keeps the claude one.
-            started.GetProperty("route").EnumerateArray().Select(model => model.GetString()).Should().Equal(["claude/sonnet"]);
+            // The agy model of the list is a coder's model since the flip of agy (s8 t6): the route holds it after the claude one, which answers first here and is the only one launched.
+            started.GetProperty("route").EnumerateArray().Select(model => model.GetString()).Should().Equal(["claude/sonnet", "agy/gemini-4-argon-medium"]);
 
             var status = await world.WaitEndAsync(server, jobId);
 

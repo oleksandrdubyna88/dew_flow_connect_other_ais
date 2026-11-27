@@ -169,15 +169,15 @@ public sealed class ACodexCoderBoundaryTests
     // ---------- d4: the mark is on (the flip commit), and what the flip rests on is built ----------
 
     [Fact]
-    public void D4_TheCodexRowIsLaunchableByData_AfterTheFlipCommitOfTheStory_AndAgyIsStillOff()
+    public void D4_TheCodexRowIsLaunchableByData_AfterTheFlipCommitOfTheStory_AndAgyAfterItsOwn()
     {
         var row = CoderBoundaryTable.Shipped.Row("codex");
 
         row.Should().NotBeNull();
         row!.Verdict.Should().Be("ship");
         row.Launchable.Should().BeTrue("ONE commit turns the mark on, the last of the story, after the must-changes are built and green: this test holds it off until then and that commit changes it");
-        CoderVendors.Shipped.Launchable.Should().Contain("codex").And.NotContain("agy");
-        CoderBoundaryTable.Shipped.Row("agy")!.Launchable.Should().BeFalse("the flip commit changes nothing for agy");
+        CoderVendors.Shipped.Launchable.Should().Contain("codex").And.Contain("agy");
+        CoderBoundaryTable.Shipped.Row("agy")!.Launchable.Should().BeTrue("the flip commit of agy (s8 t6) is its own, after codex's");
     }
 
     [Fact]
@@ -204,10 +204,10 @@ public sealed class ACodexCoderBoundaryTests
 
     /// <summary>
     /// S57: the must-changes of passes 6 and 7 are part of the list the flip rests on. Each line is the smallest proof that the fix is in place; the full tests are in their own classes (M15 <c>ABoundaryFoldersNeverWriteThroughALinkTests</c>, M16 <c>ACodexTurnCheckTests</c>, M17 <c>ACodexCoderPreflightTests</c>,
-    /// M11 a <c>ACodexCoderFixTurnsTests</c>, M11 b <c>AAgyCoderFixTurnsTests</c>, R-M15 <c>AVendorsHaveTheirOwnTempFoldersTests</c>). M18 is a gap of the agy road only and is closed on the agy branch.
+    /// M11 a <c>ACodexCoderFixTurnsTests</c>, M11 b <c>AAgyCoderFixTurnsTests</c>, R-M15 <c>AVendorsHaveTheirOwnTempFoldersTests</c>). M18 and M19 (a FIFO at the agy records, a FIFO or a link at a host-read entry) are built with the agy branch and are in this list too.
     /// </summary>
     [Fact]
-    public void D4_EveryMustChangeOfPassesSixAndSeven_IsBuilt_ThisIsTheRestOfTheListTheFlipRestsOn()
+    public async Task D4_EveryMustChangeOfPassesSixAndSeven_IsBuilt_ThisIsTheRestOfTheListTheFlipRestsOn()
     {
         Assert.SkipWhen(OperatingSystem.IsWindows(), "a symbolic link needs a privilege on Windows");
         using var bed = TempDir.For("coai-d4-passes-six-seven-");
@@ -248,6 +248,20 @@ public sealed class ACodexCoderBoundaryTests
         var init = "{\"event\":\"init\",\"conversation_id\":\"c\",\"init\":{\"permission_mode\":\"request-review\"}}";
         var step = "{\"event\":\"step_update\",\"step_update\":{\"conversation_id\":\"c\",\"step_index\":2,\"state\":\"ERROR\",\"step_type\":\"tool\",\"tool_name\":\"run_command\"}}";
         AgyTurnCheck.Check(new ProcessResult(1, init + "\n" + step + "\n", string.Empty, false), string.Empty, string.Empty).Should().BeOfType<CoderTurnVerdict.Boundary>("M11 b");
+
+        // M18 and M19: a FIFO at the guard's records, or at a sign-in copy, is never waited on; the records of such an entry are "cannot be read", the copy gives no tokens.
+        var fifo = Path.Combine(outside, "a-fifo");
+        using (var made = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("mkfifo", [fifo]) { UseShellExecute = false })!)
+        {
+            made.WaitForExit();
+        }
+
+        var reading = Task.Run(() => AgyGuardRecords.Read(fifo));
+        (await Task.WhenAny(reading, Task.Delay(TimeSpan.FromSeconds(5))) == reading).Should().BeTrue("M18: the records are never opened to wait on");
+        AgyGuardRecords.Read(fifo).Should().BeNull("M18: a FIFO is a records file that cannot be read, and that is a boundary");
+        SignInCopy.TokensOf((CoderSignInRecipe.CopyForJob)vendor.SignIn, fifo).Should().BeEmpty("M19: the copy of a sign-in is read by the one road, which never waits on a FIFO");
+        CoaiMcp.Runners.Files.UnitWrittenFile.Read(fifo, 1024).Should().BeOfType<CoaiMcp.Runners.Files.FileReadResult.Unreadable>("M19, S55");
+        CoderTurnCheck.CheckBudget.Should().Be(TimeSpan.FromSeconds(30), "S61");
 
         // R-M15: the temp sources lie beside the coder's folder, never inside it, and a link at one of the names is refused.
         job.CoderTempOf("codex").Should().StartWith(job.CoderTempRoot);

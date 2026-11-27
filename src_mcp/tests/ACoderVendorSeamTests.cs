@@ -209,28 +209,29 @@ public sealed class ACoderVendorSeamTests
     // ---------- d3: the table ----------
 
     [Fact]
-    public void D3_TheShippedTable_HoldsTheVerdictShipAndTheHistoryOfOneMeasureForCodexAndAgy_TheMarkOnForCodexAfterTheFlipAndOffForAgy()
+    public void D3_TheShippedTable_HoldsTheVerdictShipAndTheHistoryOfOneMeasureForCodexAndAgy_TheMarkOnForCodexAfterS5T5AndForAgyAfterS8T6()
     {
         var table = CoderBoundaryTable.Shipped;
 
         table.Vendors.Select(row => row.Id).Should().Equal("codex", "agy");
         table.Vendors.Should().OnlyContain(row => row.Verdict == "ship" && row.Measured.Count == 1, "the owner's condition of 2026-11-26: the verdict is ship and the history of the measure is there");
         table.Row("codex")!.Launchable.Should().BeTrue("the commit of s5 t5 turned the mark of codex on");
-        table.Row("agy")!.Launchable.Should().BeFalse("the mark of agy stays off until the commit of s8 t6");
-        table.LaunchableVendors.Should().Equal("claude", "codex");
-        CoderVendors.Shipped.Launchable.Should().Equal(["claude", "codex"]);
+        table.Row("agy")!.Launchable.Should().BeTrue("the commit of s8 t6 turned the mark of agy on");
+        table.LaunchableVendors.Should().Equal("claude", "codex", "agy");
+        CoderVendors.Shipped.Launchable.Should().Equal(["claude", "codex", "agy"]);
     }
 
     [Theory]
+    [InlineData("codex")]
     [InlineData("agy")]
-    public void D3_AVendorWhoseMarkIsOff_IsRefusedWithASentenceThatNamesTheLaunchableVendors_AndNeverForItsHistoryOrItsRelease(string vendor)
+    public void D3_EveryVendorOfTheProductsTable_IsLaunchableAfterTheFlips_AndAVendorWithNoRowIsRefusedWithASentenceThatNamesTheLaunchableVendors(string vendor)
     {
-        var said = CoderBoundaryTable.Shipped.WhyNot(vendor);
-
-        said.Should().Contain($"'{vendor}'").And.Contain("not launchable yet").And.Contain("launchable are claude").And.NotContain("release");
-        CoderVendors.Shipped.Resolve(vendor).Should().BeOfType<CoderVendorResolution.Refused>().Which.Sentence.Should().Be(said);
+        // The marks of both vendors are on (s5 t5 and s8 t6); the sentence of a mark that is off is held by the tests of a table of a test's own (D3_AVendorIsLaunchableOnlyWhenTheVerdictIsShipAndTheMarkIsOn...).
+        CoderBoundaryTable.Shipped.WhyNot(vendor).Should().BeEmpty();
+        CoderVendors.Shipped.Resolve(vendor).Should().BeOfType<CoderVendorResolution.Launchable>();
         CoderBoundaryTable.Shipped.WhyNot("claude").Should().BeEmpty();
-        CoderBoundaryTable.Shipped.WhyNot("gemini-cli").Should().Contain("has no row");
+        var said = CoderBoundaryTable.Shipped.WhyNot("gemini-cli");
+        said.Should().Contain("has no row").And.Contain("launchable are claude, codex, agy").And.NotContain("release");
     }
 
     [Fact]
@@ -249,11 +250,11 @@ public sealed class ACoderVendorSeamTests
     }
 
     [Fact]
-    public void D3_TheMarkLaunchable_IsOnForCodexAfterS5T5_AndOffForAgyUntilS8T6()
+    public void D3_TheMarkLaunchable_IsOnForCodexAfterS5T5_AndForAgyAfterS8T6()
     {
         var text = File.ReadAllText(Path.Combine(Repo(), "shared", "coder-boundary-releases.json"));
 
-        System.Text.RegularExpressions.Regex.Matches(text, "\"launchable\":\\s*(true|false)").Select(match => match.Groups[1].Value).Should().Equal("true", "false");
+        System.Text.RegularExpressions.Regex.Matches(text, "\"launchable\":\\s*(true|false)").Select(match => match.Groups[1].Value).Should().Equal("true", "true");
     }
 
     [Fact]

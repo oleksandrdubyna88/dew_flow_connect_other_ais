@@ -78,12 +78,12 @@ public sealed class AAgyCoderLaunchTests
     }
 
     [Fact]
-    public void TheMarkLaunchable_IsOffInTheProductsTable_SoNoProductJobLaunchesAgyYet_AndOneCommitOfS8T6TurnsItOn()
+    public void TheMarkLaunchable_IsOnInTheProductsTable_AfterTheFlipCommitOfS8T6()
     {
-        // s8 t6 d4 turns the mark on, after the must-changes are built and green; nothing here does.
-        CoderBoundaryTable.Shipped.Row("agy")!.Launchable.Should().BeFalse();
-        CoderVendors.Shipped.Resolve("agy").Should().BeOfType<CoderVendorResolution.Refused>().Which.Sentence.Should().Contain("launchable");
-        CoderVendors.Shipped.Implemented.Select(vendor => vendor.Id).Should().Contain("agy", "the type exists; only the mark is off");
+        // s8 t6 d4 turned the mark on, after the must-changes (the list in AAgyCoderFixTurnsTests.D4_...) were built and green.
+        CoderBoundaryTable.Shipped.Row("agy")!.Launchable.Should().BeTrue();
+        CoderVendors.Shipped.Resolve("agy").Should().BeOfType<CoderVendorResolution.Launchable>();
+        CoderVendors.Shipped.Implemented.Select(vendor => vendor.Id).Should().Contain("agy");
     }
 
     [Fact]
@@ -443,5 +443,33 @@ public sealed class AAgyCoderLaunchTests
         var outcome = await unit.RunAsync("echo ran");
 
         outcome.Should().BeOfType<CoderTurnOutcome.Finished>(outcome.ToString());
+    }
+
+    /// <summary>
+    /// The list the flip of agy (s8 t6) rests on: each must-change of the passes of the security verify, with the smallest proof that it is in place; the full tests are in their own classes (M11 <c>AAgyCoderFixTurnsTests</c>, M12 <c>AAgyCoderPreflightTests</c>, M13 and R-M15 <c>AVendorsHaveTheirOwnTempFoldersTests</c>, M14 here,
+    /// M18 <c>AAgyTurnCheckDoesNotWaitTests</c>, M19 and S55 <c>AUnitWrittenEntriesTests</c>, the expiry row <c>TheSignInInTheShapeOfTheRealFile_…</c> above).
+    /// </summary>
+    [Fact]
+    public void D4_EveryMustChangeOfTheAgyJudgement_IsBuilt_ThisIsTheListTheFlipOfAgyRestsOn()
+    {
+        var job = BoundaryJob.ForCoder("r20261127101010-0000000c", new CoaiMcp.Runners.Worktrees.CoderTree(Path.Combine(Path.GetFullPath("roots"), "coai-coder-r20261127101010-0000000c"), Path.GetFullPath("main"), "gitdir: x"), Path.Combine(Path.GetFullPath("jobs"), "r20261127101010-0000000c"));
+        var init = "{\"event\":\"init\",\"conversation_id\":\"c\",\"init\":{\"permission_mode\":\"request-review\"}}\n";
+        var other = "{\"event\":\"step_update\",\"step_update\":{\"conversation_id\":\"c\",\"step_index\":2,\"state\":\"ACTIVE\",\"step_type\":\"tool\",\"tool_name\":\"run_command\"}}\n";
+
+        // M11: the check runs for a cut turn, and an event of a tool outside the three is a boundary in every state.
+        AgyTurnCheck.Check(new ProcessResult(1, init + other, string.Empty, false), string.Empty, string.Empty).Should().BeOfType<CoderTurnVerdict.Boundary>("M11, leg b");
+        // M12: the rows of the keys, the sign-in and the other vendors' folders.
+        AgyCoderPreflight.ExtraItems.Should().Contain(["keys-folder-hidden", "sign-in-not-in-unit", "other-vendor-folder-hidden"], "M12");
+        // M13 and R-M15: a vendor's own temp sources, outside every folder a unit binds writable.
+        job.CoderTempOf("agy").Should().StartWith(job.CoderTempRoot).And.NotStartWith(job.CoderFolder + Path.DirectorySeparatorChar, "M13, R-M15");
+        // M14: the recipe refreshes through `models` on a copy made stale.
+        ((CoderSignInRecipe.CopyForJob)AgyCoderBed.Vendor().SignIn).RefreshArgv.Should().Equal("models");
+        // M18: the stream is judged before the records are read.
+        var read = false;
+        AgyTurnCheck.Check(new ProcessResult(0, init + other, string.Empty, false), string.Empty, () => { read = true; return string.Empty; }).Should().BeOfType<CoderTurnVerdict.Boundary>("M18");
+        read.Should().BeFalse("M18, part 1");
+        // M19: the limit of a check is one fixed 30 seconds, and the sign-in copy is read by the road that never waits.
+        CoderTurnCheck.CheckBudget.Should().Be(TimeSpan.FromSeconds(30));
+        AgyCoderBed.Vendor().HostReadEntries(job).Select(entry => entry.Path).Should().Contain(AgyCoderUnit.SignInFile(job), "M19");
     }
 }

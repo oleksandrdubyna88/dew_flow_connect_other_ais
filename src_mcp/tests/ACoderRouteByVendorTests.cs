@@ -86,9 +86,9 @@ public sealed class ACoderRouteByVendorTests
     }
 
     [Fact]
-    public void D2_TheProductsOwnTable_ShipsCodexAfterTheFlip_AndNotAgyYet_SoAProductRouteKeepsClaudeAndCodex()
+    public void D2_TheProductsOwnTable_ShipsCodexAfterTheFlipAndAgyAfterItsOwn_SoAProductRouteKeepsAllThree()
     {
-        CoderRoute.Narrow(Routed(Sonnet, Terra, Argon)).Should().BeOfType<RouteResult.Routed>().Which.Models.Should().Equal(Sonnet, Terra);
+        CoderRoute.Narrow(Routed(Sonnet, Terra, Argon)).Should().BeOfType<RouteResult.Routed>().Which.Models.Should().Equal(Sonnet, Terra, Argon);
     }
 
     // ---------- d3 ----------

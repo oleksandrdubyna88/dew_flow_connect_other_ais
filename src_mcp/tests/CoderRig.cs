@@ -247,11 +247,11 @@ internal sealed class CoderRig : IAsyncDisposable
     internal static IReadOnlyDictionary<string, string> Edits(params string[] names) => names.ToDictionary(name => name, name => $"the coder wrote {name}\n");
 
     internal RoleDescriptor Descriptor(Action<string>? boundary = null) =>
-        new(RoleDescriptors.Coder, "the coder", () => new CoderWork { Boundary = boundary, Vendors = Vendors, Turns = TurnsOf(Host, Degrade), AttemptTimeout = AttemptTimeout, Ladder = [TimeSpan.FromMinutes(5)] }, RouteAs: "coder", Check: CoderTask.Refusal);
+        new(RoleDescriptors.Coder, "the coder", () => new CoderWork { Boundary = boundary, Vendors = Vendors, Turns = TurnsOf(Host, Degrade, OnLauncher), AttemptTimeout = AttemptTimeout, Ladder = [TimeSpan.FromMinutes(5)] }, RouteAs: "coder", Check: CoderTask.Refusal);
 
     /// <summary>The job's turns over the stand-in machine: the real boundary code, the host and the degrade this rig holds at the moment the descriptor is made.</summary>
-    private static Func<IProcessLauncher, CoderTurns> TurnsOf(BoundaryHost host, Func<IReadOnlyList<string>, IReadOnlyList<string>>? degrade) =>
-        launcher => new CoderTurns(new CoderBoundary(launcher, host) { Degrade = degrade }, new FilesystemInvariant(launcher));
+    private static Func<IProcessLauncher, CoderTurns> TurnsOf(BoundaryHost host, Func<IReadOnlyList<string>, IReadOnlyList<string>>? degrade, Func<IProcessLauncher, IProcessLauncher> wrap) =>
+        launcher => new CoderTurns(new CoderBoundary(wrap(launcher), host) { Degrade = degrade }, new FilesystemInvariant(launcher));
 
     internal RoleJobRecord NewJob(string baseSha = "", IReadOnlyList<string>? route = null, int timeoutMinutes = 5) =>
         World.Store.Create(
@@ -259,7 +259,20 @@ internal sealed class CoderRig : IAsyncDisposable
             new RoleJobPlan(route ?? ["claude/sonnet"], 4, false));
 
     /// <summary>The folder of one job's own files — the coder's home, temp folders and caches — where the layer makes them.</summary>
-    internal string JobFolder(RoleJobRecord job) => Path.Combine(_jobs.Path, job.JobId);
+    internal string JobFolder(RoleJobRecord job) => Path.Combine(_jobsFolder ?? _jobs.Path, job.JobId);
+
+    private string? _jobsFolder;
+
+    /// <summary>A folder of the test's own for the job folders (the real-run tests need one outside <c>/tmp</c>, where a job's folder can be covered); the layer is told, and <see cref="JobFolder"/> follows.</summary>
+    internal void UseJobsFolder(string folder)
+    {
+        _jobsFolder = folder;
+        Directory.CreateDirectory(folder);
+        _inner.Setting(CoderOsLayer.JobsVariable, folder);
+    }
+
+    /// <summary>A test-only wrap of the launcher every unit of the job is started through (a real-run test counts and records the turns there); null leaves it as it is.</summary>
+    internal Func<IProcessLauncher, IProcessLauncher> OnLauncher { get; set; } = launcher => launcher;
 
     /// <summary>The vendors a rig stages its fake for: each has its own <c>/tmp</c> (pass 5, M13).</summary>
     internal static readonly string[] StagedVendors = ["claude", "codex", "agy"];
