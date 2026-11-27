@@ -314,10 +314,10 @@ public sealed class ACodexCoderLaunchTests
     }
 
     [Fact]
-    public void TheCodexRow_IsNotLaunchableByData_SoTheProductsSetRefusesIt_UntilTheMarkIsTurnedOn()
+    public void TheCodexRow_IsLaunchableByData_SoTheProductsSetResolvesIt_AfterTheFlipCommit()
     {
         var resolution = CoderVendors.Shipped.Resolve("codex");
 
-        resolution.Should().BeOfType<CoderVendorResolution.Refused>().Which.Sentence.Should().Contain("not launchable yet");
+        resolution.Should().BeOfType<CoderVendorResolution.Launchable>();
     }
 }

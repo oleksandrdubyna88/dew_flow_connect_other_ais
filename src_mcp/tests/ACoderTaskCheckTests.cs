@@ -98,7 +98,7 @@ public sealed class ACoderTaskCheckTests
         var answer = Parse(await Start(ServiceFor(world), repo, file));
 
         answer.TryGetProperty("error", out var error).Should().BeFalse(error.ToString());
-        Route(answer).Should().Equal("claude/sonnet", "claude/opus");
+        Route(answer).Should().Equal("claude/sonnet", "claude/opus", "codex/terra"); // codex is launchable since the flip commit of s5 t5; the default coder list names it
     }
 
     [Fact]
@@ -268,7 +268,7 @@ public sealed class ACoderTaskCheckTests
         using var repo = await RepoAsync();
         var settings = new Dictionary<string, string?>
         {
-            ["COAI_ROLES_MODELS"] = """{"coder":[{"model":"gpt-5.5","vendor":"codex"},{"model":"opus","vendor":"claude"}],"important":[{"model":"fable","vendor":"claude"},{"model":"astra","vendor":"codex"}]}""",
+            ["COAI_ROLES_MODELS"] = """{"coder":[{"model":"AGY","vendor":"agy"},{"model":"opus","vendor":"claude"}],"important":[{"model":"fable","vendor":"claude"},{"model":"AGY","vendor":"agy"}]}""".Replace("AGY", "gemini-4-argon-medium"),
         };
 
         Route(Parse(await StartWith(world, repo, TaskOf("t1-a", complexity: 4), settings))).Should().Equal("claude/sonnet", "claude/opus");
@@ -282,13 +282,13 @@ public sealed class ACoderTaskCheckTests
         using var repo = await RepoAsync();
         var settings = new Dictionary<string, string?>
         {
-            ["COAI_ROLES_MODELS"] = """{"coder":[{"model":"gpt-5.5","vendor":"codex"}]}""",
-            ["COAI_ROLES_BANDS"] = """[{"min":0,"max":10,"model":"gpt-5.5","vendor":"codex"}]""",
+            ["COAI_ROLES_MODELS"] = """{"coder":[{"model":"AGY","vendor":"agy"}]}""".Replace("AGY", "gemini-4-argon-medium"),
+            ["COAI_ROLES_BANDS"] = """[{"min":0,"max":10,"model":"AGY","vendor":"agy"}]""".Replace("AGY", "gemini-4-argon-medium"),
         };
 
         var answer = Parse(await StartWith(world, repo, TaskOf(complexity: 4), settings));
 
-        Error(answer).Should().Contain("claude").And.Contain("COAI_ROLES_MODELS").And.Contain("codex/gpt-5.5");
+        Error(answer).Should().Contain("claude").And.Contain("COAI_ROLES_MODELS").And.Contain("agy/gemini-4-argon-medium");
         NoJobFolder(world);
     }
 
@@ -298,9 +298,9 @@ public sealed class ACoderTaskCheckTests
         using var world = new RoleJobWorld();
         using var repo = await RepoAsync();
 
-        var answer = Parse(await StartWith(world, repo, TaskOf(complexity: 4), model: "gpt-5.5"));
+        var answer = Parse(await StartWith(world, repo, TaskOf(complexity: 4), model: "gemini-4-argon-medium"));
 
-        Error(answer).Should().StartWith("the coder cannot run gpt-5.5 on codex: ").And.Contain("launchable are claude").And.NotContain("claude only", "the caller asked for that model: it is refused, never swapped for another one");
+        Error(answer).Should().StartWith("the coder cannot run gemini-4-argon-medium on agy: ").And.Contain("launchable are claude").And.NotContain("claude only", "the caller asked for that model: it is refused, never swapped for another one");
         NoJobFolder(world);
     }
 
@@ -316,9 +316,9 @@ public sealed class ACoderTaskCheckTests
     [Fact]
     public void Narrow_RefusesTheModelTheCallerNamed_WhenItIsNotClaude_AndDropsTheListEntriesThatAreNot()
     {
-        var routed = new RouteResult.Routed([new ModelRef("gpt-5.5", "codex"), new ModelRef("sonnet", "claude")], "the model the caller named, then the coder list");
+        var routed = new RouteResult.Routed([new ModelRef("gemini-4-argon-medium", "agy"), new ModelRef("sonnet", "claude")], "the model the caller named, then the coder list");
 
-        CoderRoute.Narrow(routed, "gpt-5.5").Should().BeOfType<RouteResult.Refused>().Which.Reason.Should().StartWith("the coder cannot run gpt-5.5 on codex: ").And.Contain("COAI_ROLES_MODELS");
+        CoderRoute.Narrow(routed, "gemini-4-argon-medium").Should().BeOfType<RouteResult.Refused>().Which.Reason.Should().StartWith("the coder cannot run gemini-4-argon-medium on agy: ").And.Contain("COAI_ROLES_MODELS");
         CoderRoute.Narrow(routed, "sonnet").Should().BeOfType<RouteResult.Routed>().Which.Models.Should().BeEquivalentTo(new[] { new ModelRef("sonnet", "claude") }, "a claude name asked for is not a refusal; the list entry of another vendor is dropped as before");
         CoderRoute.Narrow(routed).Should().BeOfType<RouteResult.Routed>().Which.Models.Should().BeEquivalentTo(new[] { new ModelRef("sonnet", "claude") }, "no model named by the caller: the entries of other vendors are dropped as before");
     }
@@ -330,8 +330,8 @@ public sealed class ACoderTaskCheckTests
 
         var narrowed = CoderRoute.Narrow(routed).Should().BeOfType<RouteResult.Routed>().Subject;
 
-        narrowed.Models.Should().Equal(new ModelRef("opus", "claude"), new ModelRef("sonnet", "claude"));
-        narrowed.Why.Should().StartWith("the band, then the coder list").And.Contain("codex/gpt-5.5").And.Contain("agy/gemini-3");
+        narrowed.Models.Should().Equal(new ModelRef("gpt-5.5", "codex"), new ModelRef("opus", "claude"), new ModelRef("sonnet", "claude"));
+        narrowed.Why.Should().StartWith("the band, then the coder list").And.Contain("agy/gemini-3").And.NotContain("codex/gpt-5.5", "codex is launchable since the flip, so it is kept");
         CoderRoute.Narrow(new RouteResult.Routed([new ModelRef("opus", "claude")], "x")).Should().BeOfType<RouteResult.Routed>().Which.Why.Should().Be("x", "nothing dropped, nothing said");
         CoderRoute.Narrow(new RouteResult.Refused("because")).Should().BeOfType<RouteResult.Refused>().Which.Reason.Should().Be("because");
     }

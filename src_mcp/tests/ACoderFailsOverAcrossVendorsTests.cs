@@ -374,12 +374,12 @@ public sealed class ACoderFailsOverAcrossVendorsTests
     }
 
     [Fact]
-    public async Task D2_TheProductsOwnTable_HoldsTheVerdictShipAndTheMarkLaunchableOffForCodexAndAgy_SoNothingLaunchesThem()
+    public async Task D2_TheProductsOwnTable_HoldsTheVerdictShipAndTheMarkLaunchableOnForCodexAfterTheFlipAndOffForAgy_SoAgyIsNotLaunched()
     {
         await using var rig = await CoderRig.CreateAsync(needsLayer: false);
         var service = ServiceFor(rig, CoderVendors.Shipped);
 
-        foreach (var (vendor, model) in new[] { ("codex", "terra"), ("agy", Argon) })
+        foreach (var (vendor, model) in new[] { ("agy", Argon) })
         {
             var named = Parse(await service.StartAsync(RoleDescriptors.Coder, rig.Repo, CoderRig.TaskFile, null, model, null, null, null, TestContext.Current.CancellationToken));
 
@@ -387,8 +387,10 @@ public sealed class ACoderFailsOverAcrossVendorsTests
         }
 
         rig.World.Store.JobIds().Should().BeEmpty();
-        CoderVendors.Shipped.Launchable.Should().Equal("claude");
-        CoderVendors.Shipped.Table.Vendors.Should().OnlyContain(row => row.Verdict == "ship" && !row.Launchable && row.Measured.Count == 1, "both marks are off, and the history of each measure is there and decides nothing");
+        CoderVendors.Shipped.Launchable.Should().Equal("claude", "codex");
+        CoderVendors.Shipped.Table.Vendors.Should().OnlyContain(row => row.Verdict == "ship" && row.Measured.Count == 1, "the history of each measure is there and decides nothing");
+        CoderVendors.Shipped.Table.Row("codex")!.Launchable.Should().BeTrue("the flip commit of s5 t5");
+        CoderVendors.Shipped.Table.Row("agy")!.Launchable.Should().BeFalse("the mark of agy stays off until s8 t6");
     }
 
     private static string CoderList => """{"coder":[{"model":"sonnet","vendor":"claude"},{"model":"opus","vendor":"claude"},{"model":"terra","vendor":"codex"},{"model":"gemini-4-argon-medium","vendor":"agy"}]}""";
