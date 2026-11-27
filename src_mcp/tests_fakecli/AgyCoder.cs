@@ -12,7 +12,7 @@ namespace CoaiMcp.FakeCli;
 /// </summary>
 /// <remarks>
 /// The script is the model-map field <c>agyTools</c>, an array of objects with <c>tool</c> (the name the hook sees), <c>path</c> (absolute, or relative to the <c>--add-dir</c> folder), <c>content</c>, <c>target</c> and <c>replacement</c>; and the flags <c>skipHook</c> (an event with no hook call), <c>noEvent</c>
-/// (a hook call with no event) and <c>hookTwice</c> (two hook calls for one step), which are how a test makes the stream and the records disagree. The usage a turn reports is the running sum of the conversation, as agy reports it.
+/// (a hook call with no event) <c>hookTwice</c> (two hook calls for one step) and <c>stayActive</c> (an event that never ends), which are how a test makes the stream and the records disagree. The usage a turn reports is the running sum of the conversation, as agy reports it.
 /// </remarks>
 internal static class AgyCoder
 {
@@ -118,6 +118,7 @@ internal static class AgyCoder
         var skipHook = call["skipHook"]?.GetValue<bool>() ?? false;
         var noEvent = call["noEvent"]?.GetValue<bool>() ?? false;
         var hookTwice = call["hookTwice"]?.GetValue<bool>() ?? false;
+        var stayActive = call["stayActive"]?.GetValue<bool>() ?? false;
         var decision = skipHook ? Decision.Allowed : AskHook(cwd, addDir, conversation, step, tool, path);
         if (hookTwice)
         {
@@ -134,6 +135,12 @@ internal static class AgyCoder
         {
             output.AppendLine(Event(conversation, step, "ERROR", tool, path, $"tool call denied by pre-tool hook: {decision.Reason}"));
 
+            return;
+        }
+
+        if (stayActive)
+        {
+            // A command that does not return (a listener, a sleep): the event never ends.
             return;
         }
 

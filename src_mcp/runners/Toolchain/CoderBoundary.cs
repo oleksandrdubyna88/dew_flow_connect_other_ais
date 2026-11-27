@@ -186,7 +186,7 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
     public async Task<BoundaryAdmission> AdmitAsync(BoundaryJob job, string executable, CancellationToken ct = default, bool withKey = false, TimeSpan? runtimeMax = null)
     {
         var launchHost = HostFor(withKey);
-        var early = host.PlatformRefusal() is { Length: > 0 } platform ? platform : KeyedLaunch(withKey) && job.KeysFolderProblem() is { Length: > 0 } hidden ? hidden : job.CoderProblem() is { Length: > 0 } problem ? problem : job.MountsOnDiskProblem();
+        var early = host.PlatformRefusal() is { Length: > 0 } platform ? platform : KeyedLaunch(withKey) && job.KeysFolderProblem() is { Length: > 0 } hidden ? hidden : job.CoderProblem() is { Length: > 0 } problem ? problem : job.MountsOnDiskProblem() is { Length: > 0 } mounts ? mounts : job.CoderTempOnDiskProblem(Vendor.Id);
         if (early.Length > 0)
         {
             return Refuse(early, []);

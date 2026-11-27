@@ -212,10 +212,10 @@ internal static class AgyCoderPreflight
         }
     }
 
-    /// <summary>The folders of the other vendors of the job, each made when it is not there (and a canary in it), so that "not visible from inside" is an observation and not an absent folder; with the ones that were made here, which are removed after.</summary>
+    /// <summary>The folders of the other vendors of the job (their coder folder and their temp sources), each made when it is not there (and a canary in it), so that "not visible from inside" is an observation and not an absent folder; with the ones that were made here, which are removed after.</summary>
     internal static (IReadOnlyList<string> Folders, IReadOnlyList<string> Made) PlantOtherVendors(BoundaryJob job)
     {
-        var folders = CoderVendors.Shipped.Implemented.Select(vendor => vendor.Id).Distinct(StringComparer.Ordinal).Where(id => id != AgyCoderVendor.VendorId).Select(job.CoderVendorFolder).ToList();
+        var folders = CoderVendors.Shipped.Implemented.Select(vendor => vendor.Id).Distinct(StringComparer.Ordinal).Where(id => id != AgyCoderVendor.VendorId).SelectMany(id => new[] { job.CoderVendorFolder(id), job.CoderTempVendorFolder(id) }).ToList();
         var made = new List<string>();
         foreach (var folder in folders)
         {

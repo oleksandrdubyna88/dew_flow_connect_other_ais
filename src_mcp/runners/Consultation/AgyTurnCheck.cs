@@ -83,18 +83,19 @@ internal static partial class AgyTurnCheck
 
     // ---------- a cut stream ----------
 
-    /// <summary>What a cut stream shows by one side alone: a <c>DONE</c> event of a tool outside the three, a <c>DONE</c> event with no record or with a record that is not <c>allow</c>, and records that cannot be read beside a <c>DONE</c> event. An event that did not end, and a record with no event, are what a cut explains.</summary>
+    /// <summary>What a cut stream shows by one side alone: an event of a tool outside the three in any state, a <c>DONE</c> event with no record or with a record that is not <c>allow</c>, and records that cannot be read beside a <c>DONE</c> event. An event that did not end, and a record with no event, are what a cut explains.</summary>
     private static string Cut(List<ToolEvent> events, string? records)
     {
+        // A tool outside the three is a break in EVERY state (re-check leg b): a cut explains a missing END of an event, never that such a tool was started at all.
+        if (events.FirstOrDefault(item => !Tools.Contains(item.Tool, StringComparer.Ordinal)) is { } foreign)
+        {
+            return $"the cut agy turn has a tool event (step {foreign.Step.ToString(CultureInfo.InvariantCulture)}) for a tool outside read_file, write_file and edit_file, so the coder's boundary did not hold (G15, AG-A2); nothing of this turn was committed";
+        }
+
         var done = events.Where(item => item.State == "DONE").ToList();
         if (done.Count == 0)
         {
             return string.Empty;
-        }
-
-        if (done.FirstOrDefault(item => !Tools.Contains(item.Tool, StringComparer.Ordinal)) is { } foreign)
-        {
-            return $"the cut agy turn has a DONE tool event (step {foreign.Step.ToString(CultureInfo.InvariantCulture)}) for a tool outside read_file, write_file and edit_file, so the coder's boundary did not hold (G15, AG-A2); nothing of this turn was committed";
         }
 
         var written = records is null ? null : Parse(records);

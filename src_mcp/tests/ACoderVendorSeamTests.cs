@@ -68,7 +68,7 @@ public sealed class ACoderVendorSeamTests
         string[] e2 =
         [
             "ProtectSystem=strict", "ProtectHome=tmpfs", "TemporaryFileSystem=/run/user", "TemporaryFileSystem=/mnt", "TemporaryFileSystem=/dev/shm", "InaccessiblePaths=-/run/WSL",
-            $"BindReadOnlyPaths={M}", "BindReadOnlyPaths=/w", $"BindPaths={W}", $"BindReadOnlyPaths={W}/.git", $"TemporaryFileSystem={J}:ro", $"BindPaths={J}/coder/claude", $"BindPaths={J}/coder/claude/tmp:{BoundaryUnit.UnitTemp}", $"BindPaths={J}/coder/claude/vartmp:{BoundaryUnit.UnitVarTemp}",
+            $"BindReadOnlyPaths={M}", "BindReadOnlyPaths=/w", $"BindPaths={W}", $"BindReadOnlyPaths={W}/.git", $"TemporaryFileSystem={J}:ro", $"BindPaths={J}/coder/claude", $"BindPaths={J}/coder-temp/claude/tmp:{BoundaryUnit.UnitTemp}", $"BindPaths={J}/coder-temp/claude/vartmp:{BoundaryUnit.UnitVarTemp}",
             // C3 item 2: the real sign-in file of codex (whose coder gets a copy) is in no unit, claude's coder unit included.
             "InaccessiblePaths=-/nonexistent/home/.codex/auth.json",
             "InaccessiblePaths=-/nonexistent/home/.gemini/antigravity-cli/antigravity-oauth-token",
