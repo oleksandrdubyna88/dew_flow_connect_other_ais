@@ -2965,7 +2965,8 @@ VM half of R7 had a result.
 
 **K.43 and K.44 are passages moved for room**, so that the plan stays under 100 KB: the new tests of the
 test plan, and the sections of E2, E3 and E4 in *Epics* with their real-window rows. Both are of the three
-epics that extension 2.1.0 holds. They hold as written; the plan keeps the names of what is tested, the goal
+epics that extension 2.1.0 holds. They hold as written — but entry 7.1 narrows K.43's root test: as UID 0 a `claude`, `codex` or `agy` in a folder
+another user can write is started, with a warning that names it. The plan keeps the names of what is tested, the goal
 of each epic and the number of each row, and cites these sections. The tests of E6 are in its own document,
 § 6.
 
@@ -3524,6 +3525,9 @@ on root's own programs, and item 1 of § K.55. There, "as UID 0 the script check
 program" still says what is checked. Since entry 7.1 a check that fails stops a basic tool only —
 `timeout`, `tail`, `sed`, `grep`, `sleep`, `sha256sum`, `jq`; a vendor program — `claude`, `codex`, `agy` —
 is started, and its row warns and names the folder.
+
+**One scope note on K.56.** "The VM half of R7 passed after it" means: on processes and files. The
+sign-in state was not read again (`research/RESULTS_accounts_e5_long_runs.md`, R7).
 
 ### K.56 — *Merge conditions*: for the pull request of E2, E3 and E4, for E4, for the cut and for the release 2.1.0
 

@@ -718,8 +718,8 @@ All of it is in a place's FIRST call: the mode `claude-usage` still reads Claude
 3. **agy's account is ONE line of agy's own log**: the last line `applyAuthResult: email=` of
    `~/.gemini/antigravity-cli/cli.log`, and of that line the address only, by a pattern the spec fixes. No
    other text of the log is printed. agy's token file is never opened.
-4. **Each new start has its own limit, with its KILL second**; the sums of revision 2's time table are
-   counted again, under the same ceiling and the same test.
+4. **Each new start has its own limit, with its KILL second**; the sums are counted again: 2 s under the
+   ceiling, held by a test — as root 1 s (entry 7.1).
 
 **The users script** (E3.S1, the security spec): a second fixed text with its own sha256 and no operand. It
 opens `/etc/passwd` and no other file, starts no program, and prints the name and the UID of each user that

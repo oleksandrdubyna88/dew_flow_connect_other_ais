@@ -41,8 +41,8 @@ The logged-in state was not read again. So this row shows that no process was re
 
 | Place | `jq` | Package manager | root, or `sudo` with no password |
 |---|---|---|---|
-| WSL `Ubuntu`, the default user | missing | `apt-get` | `sudo` asks for a password |
-| WSL `Ubuntu`, root | missing (the same file system) | `apt-get` | is root |
+| WSL `Ubuntu`, the default user | missing at 05:29 UTC; present since 07:39 UTC (the owner installed it) | `apt-get` | `sudo` asks for a password |
+| WSL `Ubuntu`, root | as the default user (the same file system) | `apt-get` | is root |
 | VM `ai1-dev3`, the ssh user | present (`/usr/bin/jq`) | `apt-get` | `sudo` asks for a password |
 
 The tab showed the fixed command `sudo apt-get install -y jq` for the Ubuntu rows. The owner ran it on
