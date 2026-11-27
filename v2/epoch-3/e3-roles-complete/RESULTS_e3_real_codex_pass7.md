@@ -126,3 +126,48 @@ cover markers left in the coder root: 0
 
 test exit code: 2
 real ~/.codex/auth.json before and after: equal
+
+(Calls run with gpt-6.1-terra, now a name of shared/role-model-names.json.)
+
+## calls run, started 2026-11-27T04:26:52+01:00
+
+job r20261127032654-a436fdc2; route codex/gpt-6.1-terra; fix rounds 1; effort medium
+[1 s] launch prepared; problem ''; argv (the worktree path is replaced by <worktree>):
+`exec --json -m gpt-6.1-terra -c model_reasoning_effort=medium --disable apps --disable plugins --disable remote_plugin --disable browser_use --disable browser_use_external --disable browser_use_full_cdp_access --disable computer_use --disable image_generation --disable view_image --disable multi_agent --disable goals --disable sleep_tool --disable tool_suggest --disable skill_search --disable skill_mcp_dependency_install --disable hooks --disable in_app_browser --disable in_app_chat --disable in_app_local_automation -c approval_policy="never" -c shell_environment_policy.inherit="core" -c web_search="disabled" -c agents.enabled=false -o /tmp/testsToDelete-u1000-coai-run-WbsN3B/coai-coder-jobs-mjAZvH/r20261127032654-a436fdc2/coder/codex/report.txt --output-schema /tmp/testsToDelete-u1000-coai-run-WbsN3B/coai-coder-jobs-mjAZvH/r20261127032654-a436fdc2/coder/codex/report.schema.json -`
+[21 s] turn check 1: exit 0, timedOut False, cancelled False, stdout 3668 bytes
+  event types: item.completed x5, item.started x3, thread.started x1, turn.completed x1, turn.started x1
+  item types: agent_message x2, command_execution x4, file_change x2
+  a reasoning item appears: False
+  the turn check answers: Fine
+[21 s] launch prepared; problem ''; argv (the worktree path is replaced by <worktree>):
+`exec resume --json -m gpt-6.1-terra -c model_reasoning_effort=medium --disable apps --disable plugins --disable remote_plugin --disable browser_use --disable browser_use_external --disable browser_use_full_cdp_access --disable computer_use --disable image_generation --disable view_image --disable multi_agent --disable goals --disable sleep_tool --disable tool_suggest --disable skill_search --disable skill_mcp_dependency_install --disable hooks --disable in_app_browser --disable in_app_chat --disable in_app_local_automation -c approval_policy="never" -c shell_environment_policy.inherit="core" -c web_search="disabled" -c agents.enabled=false -o /tmp/testsToDelete-u1000-coai-run-WbsN3B/coai-coder-jobs-mjAZvH/r20261127032654-a436fdc2/coder/codex/report.txt 01a21b0a-c705-7ea3-862d-c9c3e18af141 --output-schema /tmp/testsToDelete-u1000-coai-run-WbsN3B/coai-coder-jobs-mjAZvH/r20261127032654-a436fdc2/coder/codex/report.schema.json -`
+[36 s] turn check 2: exit 0, timedOut False, cancelled False, stdout 1554 bytes
+  event types: item.completed x3, item.started x1, thread.started x1, turn.completed x1, turn.started x1
+  item types: agent_message x2, file_change x2
+  a reasoning item appears: False
+  the turn check answers: Fine
+the job ended after 36 s: exit 0, state succeeded, stop '', reason ''
+envelope (the product's own result of the job):
+```json
+{"jobId":"r20261127032654-a436fdc2","baseSha":"3553e1262a57521bd331ce084d5905e106f583cf","headSha":"717c77a2baeb8739ad49164caa73e0f65d53b2f9","branch":"coder/r20261127032654-a436fdc2","schemaValid":true,"fixTurns":1,"filesChanged":[{"status":"A","path":"src/thing.txt"}],"report":{"status":"ok","dod":[{"id":"d1","met":false,"evidence":"The file contains the required line and the additional word required by the failing test, so it no longer contains exactly one line."},{"id":"d2","met":true,"evidence":"Only the requested file was changed."}],"notes":"The configured test requires content that conflicts with the original exact-content requirement. Tests were not run, as instructed."},"mainCheckout":{"taken":true,"changed":false,"changes":[],"note":"the main checkout looked the same before and after the coder ran"},"green":true,"checksState":"green","checksNote":"2 step(s) ran and every one exited 0","format":{"state":"not_configured","note":"the toolchain file has no formatter step (it names a build and a test per project), so no format was run"},"checks":[{"project":"app","step":"build","argv":["/bin/sh","-c","echo built"],"exitCode":0,"durationMs":83,"logRef":"checks/round-1/01-app-build.log"},{"project":"app","step":"test","argv":["/bin/sh","-c","if [ -f src/thing.txt ] \u0026\u0026 grep -q \u0027state: ready\u0027 src/thing.txt \u0026\u0026 grep -qi kestrel src/thing.txt; then echo tested; else echo \u0027FAILED thing: src/thing.txt must hold the line state: ready and also the word kestrel\u0027; exit 1; fi"],"exitCode":0,"durationMs":91,"logRef":"checks/round-1/02-app-test.log"}],"rounds":[{"turn":0,"headSha":"2fb04317419899c6791aa337ca27ecd6568763b5","state":"failed"},{"turn":1,"headSha":"717c77a2baeb8739ad49164caa73e0f65d53b2f9","state":"green"}],"fixRounds":{"cap":1,"note":""},"lastDigest":[],"instructions":{"declared":false,"argv":[],"exitCode":0,"bytes":0,"sha256":"","ms":0},"prompt":{"id":"coder.codex","sha256":"25fd984512c81a1035ed1708ee5c09c9e59dda26a3ed0fb3565f3960507ce343"},"cli":{"vendor":"codex","installed":"0.171.0","lastMeasured":"codex-cli 0.171.0"},"signIn":[{"vendor":"codex","before":{"sha256":"c295529f444c2dec9ddac0bf740338d59481a1f4be610825bdcf861d604d3132","modifiedUtc":"2026-11-24T13:30:51.172Z"},"after":{"sha256":"c295529f444c2dec9ddac0bf740338d59481a1f4be610825bdcf861d604d3132","modifiedUtc":"2026-11-24T13:30:51.172Z"},"changed":false,"refreshes":0}]}
+```
+
+test exit code: 0
+real ~/.codex/auth.json before and after: equal
+
+## Final summary (written by the coder, after the owner's decision A)
+
+| Step | Result |
+|---|---|
+| 1. Preflight with the plan's default name `terra`, real codex, 0 model calls | **Refused.** Rows `tool-list` ("the tool list of the CLI could not be read", in the worktree and in the stand-in project) and `no-project-tools` (same sentence). The other 26 rows held. The bare name `terra` is not a model id the CLI accepts, so its tool-list probe could not run. The plan's default codex coder can not launch with this name. |
+| 2. `gpt-6.1-terra` added to `shared/role-model-names.json` (codex `names`, `measured`, `source`) | Done, nothing else changed in the file. Role-model-name and router classes: 136 of 136 green. |
+| 3. Two paid calls through the product's road, model `gpt-6.1-terra`, effort medium | **Done: 2 calls (turn 0 and one fix turn), no third.** Job `succeeded`, `green` true, `fixTurns` 1, 36 s wall. Turn 0 (exit 0, 21 s): the checks were red as designed; the stream held item.completed x5, item.started x3, thread.started, turn.started, turn.completed; item types agent_message x2, command_execution x4, file_change x2. The turn check answered **Fine**. Fix turn (resumed session, exit 0, 15 s): item types agent_message x2, file_change x2. The turn check answered **Fine**. The envelope: `filesChanged` = src/thing.txt (A), `mainCheckout.changed` false, `schemaValid` true. |
+| Did a `reasoning` item appear? | **No**, in neither turn (`codex exec --json` at effort medium printed no item of type `reasoning`). |
+| Real `~/.codex/auth.json`, sha256 before and after | equal |
+| Paid calls of the codex measure | 25 of 30 (23 before, +2 here; the two refused runs made 0). |
+
+Note on the made-up task: the hidden check (the word kestrel) made turn 0 red. The model first wrote the exact line, then the fix turn added the word, and its report says d1 is not met, because the test now conflicts with the exact-content line of the task. This is the task design of this harness, not a fault of the road.
+
+## Finding (for the security verifier and the owner; the row is NOT changed)
+
+The `tool-list` row asks for the exact 11 names that were measured with `gpt-6.1-terra`. With `gpt-5.6-terra` the CLI shows only 9 of them (2 missing), and with the bare name `terra` the CLI shows none (the list could not be read). So a codex coder with `gpt-5.6-terra` or with `terra` is ALWAYS refused before the CLI is started; only `gpt-6.1-terra` can launch. Consequences: (a) the plan's default codex coder name `terra` (shared/role-defaults.json, role-route-vectors.json) can not launch as it stands; (b) a new codex model needs its own tool-list measure before it can be a coder. The row was not changed.
