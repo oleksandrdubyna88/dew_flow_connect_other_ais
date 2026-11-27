@@ -19,8 +19,7 @@ public static partial class TestSelection
     /// <summary>The files of <paramref name="changed"/> (added or modified paths) inside the project and under one of <paramref name="testFiles"/> (folder prefixes relative to the project).</summary>
     public static SelectedFiles Select(IEnumerable<string> changed, string projectFolder, IReadOnlyList<string> testFiles)
     {
-        var prefixes = testFiles.Select(prefix => Combine(projectFolder, prefix)).ToList();
-        var files = changed.Where(path => prefixes.Any(prefix => prefix.Length == 0 || path.StartsWith(prefix + "/", StringComparison.Ordinal))).Distinct(StringComparer.Ordinal).ToList();
+        var files = changed.Where(path => IsUnder(path, projectFolder, testFiles)).Distinct(StringComparer.Ordinal).ToList();
         if (files.Count == 0)
         {
             return SelectedFiles.None;
@@ -75,9 +74,12 @@ public static partial class TestSelection
         return dot > 0 ? name[..dot] : name;
     }
 
-    /// <summary>Whether <paramref name="path"/> is inside one of the <paramref name="testFiles"/> prefixes (relative to the repository root; an empty prefix is everything).</summary>
-    public static bool IsUnder(string path, IReadOnlyList<string> testFiles) =>
-        testFiles.Any(prefix => prefix.Trim('/').Length == 0 || path.StartsWith(prefix.Trim('/') + "/", StringComparison.Ordinal));
+    /// <summary>
+    /// Whether <paramref name="path"/> (relative to the repository root) is inside one of the <paramref name="testFiles"/> prefixes. The prefixes are relative to the PROJECT (<paramref name="projectFolder"/>, relative to the repository root; empty or <c>.</c> is the root):
+    /// the selected run (<see cref="Select"/>) and the narrowed re-run read them through this one method, so they cannot read them two ways (E4 s5 t6 d3). An empty prefix is the whole project.
+    /// </summary>
+    public static bool IsUnder(string path, string projectFolder, IReadOnlyList<string> testFiles) =>
+        testFiles.Select(prefix => Combine(projectFolder, prefix)).Any(prefix => prefix.Length == 0 || path.StartsWith(prefix + "/", StringComparison.Ordinal));
 
     /// <summary>A path a test tool may be given: a closed set of characters, no segment starting with <c>-</c> and none that is <c>.</c> or <c>..</c>, and a stem of letters, digits and underscores.</summary>
     public static bool IsSafe(string path)

@@ -19,3 +19,15 @@ projects:
     test:
       - ./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests
     memoryMb: 3000
+    # The tests of a changed file run first (epoch 3 E4 s5 t6): a folder prefix of testFiles is relative to the project, so "tests" is src_mcp/tests.
+    # {stem} is an item of its own and becomes one item per changed file (a test file A<Name>Tests.cs holds the class CoaiMcp.Tests.A<Name>Tests); the script turns each stem into one --filter-class.
+    # A test command with no match exits 8 ("no test ran"): the full command then runs. The full command never runs after a red selected run.
+    # src_vs_code is NOT a project of this file: its tests need a compile step and its scenarios need a VS Code host, so no command here could run them in a check unit.
+    testFor:
+      - /bin/sh
+      - -c
+      - 'x=./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests; for s in "$@"; do x="$x --filter-class CoaiMcp.Tests.$s"; done; exec $x'
+      - sel
+      - "{stem}"
+    testFiles:
+      - tests

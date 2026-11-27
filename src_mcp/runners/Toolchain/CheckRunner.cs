@@ -269,7 +269,7 @@ public sealed class CheckRunner(IProcessLauncher launcher, CheckBoundary? bounda
 
         foreach (var file in files)
         {
-            if (!TestSelection.IsUnder(file, step.TestFiles) || !TestSelection.IsSafe(file) || !await inHead(file, ct))
+            if (!TestSelection.IsUnder(file, step.Project, step.TestFiles) || !TestSelection.IsSafe(file) || !await inHead(file, ct))
             {
                 return false;
             }

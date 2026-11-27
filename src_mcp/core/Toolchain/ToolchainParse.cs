@@ -226,7 +226,7 @@ internal sealed partial class ToolchainParse
         return new ToolchainCommand(true, argv);
     }
 
-    /// <summary>The placeholders a command may hold: <c>{jobs}</c> anywhere; <c>{file}</c> in <c>format</c> (an item of its own: it becomes one item per file) and in <c>testFor</c>; <c>{stem}</c> in <c>testFor</c>. Any other <c>{name}</c> is refused, so a typo is not started as text.</summary>
+    /// <summary>The placeholders a command may hold: <c>{jobs}</c> anywhere; <c>{file}</c> in <c>format</c> and <c>{stem}</c> and <c>{file}</c> in <c>testFor</c>, each as an item of its own (it becomes one item per file; a longer item that holds one is refused). Any other <c>{name}</c> is refused, so a typo is not started as text.</summary>
     private void Placeholders(List<string> argv, YamlEntry entry, string key, string where)
     {
         var allowed = key switch
@@ -244,6 +244,12 @@ internal sealed partial class ToolchainParse
             {
                 // A typed placeholder is never spelled back (it may be a name somebody pasted a secret into): the item's position and what the key may hold.
                 Fault($"line {entry.Line}: item {position.ToString(CultureInfo.InvariantCulture)} of '{key}' of {where} holds a placeholder that '{key}' may not hold (it may hold {string.Join(", ", allowed)})");
+            }
+
+            if (key == "testFor" && item is not ("{file}" or "{stem}") && (item.Contains("{file}", StringComparison.Ordinal) || item.Contains("{stem}", StringComparison.Ordinal)))
+            {
+                // E4 s5 t6 d4 (SPEC section S): coai builds no string from a name of the repository, so an item that holds a placeholder AND more would reach the tool as a literal placeholder. The item is named by its position, never spelled back.
+                Fault($"line {entry.Line}: item {position.ToString(CultureInfo.InvariantCulture)} of 'testFor' of {where} holds {{file}} or {{stem}} inside a longer item; each must be an item of its own, because it is replaced by one item per file (wrap the command in a script that builds the string)");
             }
 
             if (key == "format" && item.Contains("{file}", StringComparison.Ordinal) && item != "{file}")

@@ -19,10 +19,10 @@ public sealed class AFlakyRerunTests
 
     private const string Passing = "echo 'Test run summary: Passed!'; echo '  total: 5'; echo '  failed: 0'; echo '  succeeded: 5'; echo '  skipped: 0'; exit 0";
 
-    private static string Toolchain(string secondRun, string? narrowed = null, string firstRun = Failing)
+    private static string Toolchain(string secondRun, string? narrowed = null, string firstRun = Failing, string projectPath = ".")
     {
         var full = $"mkdir -p .flaky; if [ -f .flaky/seen ]; then {secondRun}; else touch .flaky/seen; {firstRun}; fi";
-        var text = new StringBuilder("version: 1\nprojects:\n  - path: \".\"\n    adapter: dotnet\n");
+        var text = new StringBuilder($"version: 1\nprojects:\n  - path: \"{projectPath}\"\n    adapter: dotnet\n");
         text.Append("    build:\n      - \"/bin/sh\"\n      - \"-c\"\n      - \"echo built\"\n");
         text.Append($"    test:\n      - \"/bin/sh\"\n      - \"-c\"\n      - {ToolchainFixture.Quote(full)}\n");
         if (narrowed is not null)
@@ -109,6 +109,24 @@ public sealed class AFlakyRerunTests
     {
         const string narrowed = "echo \"passed Flaky.Tests.Sometimes (1ms)\"; echo 'Test run summary: Passed!'; echo '  total: 1'; echo '  failed: 0'; echo '  succeeded: 1'; echo '  skipped: 0'";
         await using var rig = await CoderRig.CreateAsync(toolchain: Toolchain(Failing, narrowed), extra: Base());
+        rig.Says("sonnet", Writes((CoderRig.StateFile, CoderRig.Green + "\n")));
+        var job = rig.NewJob();
+
+        var (_, ended) = await rig.RunAsync(job);
+
+        ended.State.Should().Be(RoleJobStates.Succeeded, ended.Reason);
+        var flaky = rig.Envelope(job).GetProperty("flaky").EnumerateArray().Should().ContainSingle().Subject;
+        (flaky.GetProperty("rerun").GetString(), flaky.GetProperty("proof").GetString()).Should().Be(("narrowed", "named"));
+    }
+
+    [Fact]
+    public async Task K1_ANarrowedReRun_OfAProjectThatIsNotAtTheRoot_ReadsTestFilesRelativeToTheProject_NotTheWholeStep()
+    {
+        // E4 s5 t6 d3: the project is "sub", testFiles is "tests", the failed test's file is sub/tests/FlakyTests.cs. Before the fix the re-run compared "tests" with a path from the root, never matched, and ran the WHOLE step again (rerun "whole").
+        const string narrowed = "echo \"passed Flaky.Tests.Sometimes (1ms)\"; echo 'Test run summary: Passed!'; echo '  total: 1'; echo '  failed: 0'; echo '  succeeded: 1'; echo '  skipped: 0'";
+        var failing = Failing.Replace("tests/FlakyTests.cs", "sub/tests/FlakyTests.cs", StringComparison.Ordinal);
+        var extra = new Dictionary<string, string> { [".gitignore"] = Ignore, ["sub/tests/FlakyTests.cs"] = "class FlakyTests {}\n" };
+        await using var rig = await CoderRig.CreateAsync(toolchain: Toolchain(Passing, narrowed, failing, "sub"), extra: extra);
         rig.Says("sonnet", Writes((CoderRig.StateFile, CoderRig.Green + "\n")));
         var job = rig.NewJob();
 

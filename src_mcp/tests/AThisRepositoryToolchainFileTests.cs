@@ -47,6 +47,40 @@ public sealed class AThisRepositoryToolchainFileTests
     }
 
     [Fact]
+    public void TheCommittedFile_NamesTheTestFolderAndTheSelectedRunCommand_AndTheBuildAndTestArgvAreUnchanged()
+    {
+        // Epoch 3 E4 s5 t6 d1 (the owner's answer to question 3 of SPEC section N): the tests of src_mcp/tests are selected by file. A folder prefix of testFiles is relative to the project (src_mcp), so it is written tests.
+        var project = Committed().Projects.Should().ContainSingle().Subject;
+
+        project.TestFiles.Should().Equal("tests");
+        project.TestFor.Stated.Should().BeTrue();
+        project.TestFor.Argv.Should().Contain("{stem}", "the class of a test file is named by the stem of the file");
+        project.TestFor.Argv.Should().NotContain("{file}");
+        project.Build.Argv.Should().Equal("dotnet", "build", "dew_flow_connect_other_ais.slnx", "-c", "Debug", "-m:{jobs}");
+        project.Test.Argv.Should().Equal("./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests");
+        project.Path.Should().Be("src_mcp");
+        Committed().Projects.Should().ContainSingle("src_vs_code is not a project of this file: its tests need a compile step and its scenarios a VS Code host");
+        CommittedText().Should().Contain("src_vs_code");
+    }
+
+    [Fact]
+    public async Task TheSelectedRunCommand_GivenAChangedTestFile_StartsOnlyThatClass_AndItIsGreen()
+    {
+        var executable = Path.Combine(RepoPaths.Root(), "src_mcp", "tests", "bin", "Debug", "net10.0", OperatingSystem.IsWindows() ? "CoaiMcp.Tests.exe" : "CoaiMcp.Tests");
+        Assert.SkipUnless(File.Exists(executable) && !OperatingSystem.IsWindows(), "the Debug executable the committed file names is not built here");
+        var project = Committed().Projects.Single();
+        var selected = TestSelection.Select(["src_mcp/tests/AToolchainSchemaAgreesWithTheReaderTests.cs", "src_mcp/src/Server/Program.cs", "src_vs_code/tests/Other.ts"], project.Path, project.TestFiles);
+        selected.State.Should().Be("files");
+        selected.Files.Should().Equal("src_mcp/tests/AToolchainSchemaAgreesWithTheReaderTests.cs");
+        var argv = TestSelection.Argv(project.TestFor.Argv, selected.Files, ".", 4);
+
+        var result = await new ProcessLauncher().RunAsync(new ProcessRequest(argv[0], [.. argv.Skip(1)], RepoPaths.Root()) { Timeout = TimeSpan.FromMinutes(2) });
+
+        result.ExitCode.Should().Be(0, result.StdOut + result.StdErr);
+        result.StdOut.Should().Contain("Test run summary: Passed!").And.NotContain("total: 0");
+    }
+
+    [Fact]
     public void TheTestArgv_NamesTheMtpExecutableOfTheTestProject_NeverDotnetTest()
     {
         var test = Committed().Projects.Single().Test.Argv;
@@ -71,7 +105,7 @@ public sealed class AThisRepositoryToolchainFileTests
         // The strict reader refuses a flow list or map by name (a test of it is AToolchainFileTests); this holds the committed text to it where it can be seen without the reader.
         var flow = CommittedText().Split('\n').Where(line => !line.TrimStart().StartsWith('#')).Where(line => line.Contains('[') || line.Contains('{')).ToList();
 
-        flow.Should().OnlyContain(line => (line.Contains("{jobs}", StringComparison.Ordinal) || line.Contains("{file}", StringComparison.Ordinal)) && line.TrimStart().StartsWith("- \"", StringComparison.Ordinal), "only the quoted {jobs} and {file} placeholders carry a brace");
+        flow.Should().OnlyContain(line => (line.Contains("{jobs}", StringComparison.Ordinal) || line.Contains("{file}", StringComparison.Ordinal) || line.Contains("{stem}", StringComparison.Ordinal)) && line.TrimStart().StartsWith("- \"", StringComparison.Ordinal), "only the quoted {jobs}, {file} and {stem} placeholders carry a brace");
     }
 
     [Fact]

@@ -332,7 +332,7 @@ public sealed class AToolchainFileTests
 
     // ---- epoch 3 E4 s3 t1: restore, format, testFor, testFiles ----
 
-    private const string FourNames = "    restore:\n      - npm\n      - ci\n    format:\n      - prettier\n      - --write\n      - \"{file}\"\n    testFor:\n      - jest\n      - \"{file}\"\n      - --testNamePattern={stem}\n    testFiles:\n      - tests\n      - src/tests\n";
+    private const string FourNames = "    restore:\n      - npm\n      - ci\n    format:\n      - prettier\n      - --write\n      - \"{file}\"\n    testFor:\n      - jest\n      - \"{file}\"\n      - \"{stem}\"\n    testFiles:\n      - tests\n      - src/tests\n";
 
     [Fact]
     public void TheFourNames_AreRead_AsArgvListsAndFolderPrefixes()
@@ -341,7 +341,7 @@ public sealed class AToolchainFileTests
 
         project.Restore.Argv.Should().Equal("npm", "ci");
         project.Format.Argv.Should().Equal("prettier", "--write", "{file}");
-        project.TestFor.Argv.Should().Equal("jest", "{file}", "--testNamePattern={stem}");
+        project.TestFor.Argv.Should().Equal("jest", "{file}", "{stem}");
         project.TestFiles.Should().Equal("tests", "src/tests");
         project.StatesACommand.Should().BeTrue();
         project.Build.Stated.Should().BeFalse("a name the file does not state stays not stated: only the stated steps run");
@@ -388,9 +388,22 @@ public sealed class AToolchainFileTests
     }
 
     [Fact]
-    public void JobsIsAllowedInEveryCommand_AndFileAndStemInTestForInsideAnItem()
+    public void JobsIsAllowedInsideAnItemOfEveryCommand_AndFileAndStemInTestForAreItemsOfTheirOwn()
     {
-        Right(OneProject("    restore:\n      - tool\n      - \"-j{jobs}\"\n    testFor:\n      - tool\n      - \"--only={file}:{stem}\"\n    testFiles:\n      - t\n")).Projects.Single().TestFor.Argv.Should().Contain("--only={file}:{stem}");
+        Right(OneProject("    restore:\n      - tool\n      - \"-j{jobs}\"\n    testFor:\n      - tool\n      - \"-j{jobs}\"\n      - \"{file}\"\n      - \"{stem}\"\n    testFiles:\n      - t\n")).Projects.Single().TestFor.Argv.Should().Equal("tool", "-j{jobs}", "{file}", "{stem}");
+    }
+
+    [Theory]
+    [InlineData("--only={file}")]
+    [InlineData("CoaiMcp.Tests.{stem}")]
+    [InlineData("--only={file}:{stem}")]
+    [InlineData("{stem}.cs")]
+    public void AnItemOfTestForLongerThanAPlaceholderThatHoldsOne_IsRefused_NamingTheItem_AndNeverReachesATool(string item)
+    {
+        // E4 s5 t6 d4 (SPEC section S, finding 3): coai builds no string from a name of the repository, so such an item would reach the tool as a literal placeholder.
+        var sentence = RefusedBy(OneProject($"    testFor:\n      - tool\n      - \"{item}\"\n    testFiles:\n      - t\n"));
+
+        sentence.Should().Contain("testFor").And.Contain("item 2").And.Contain("item of its own").And.NotContain(item, "the item is named by its position, never spelled back");
     }
 
     [Fact]
@@ -425,18 +438,19 @@ public sealed class AToolchainFileTests
     }
 
     [Fact]
-    public void TheVersionStaysOne_AndThisRepositorysCommittedFile_ReadsToTheSameModelAsBefore()
+    public void TheVersionStaysOne_AndThisRepositorysCommittedFile_ReadsToTheSameBuildAndTestAsBefore_AndNamesTheSelectedRun()
     {
         ToolchainTables.Version.Should().Be(1);
         var read = ToolchainFile.Read(new WorkFile.Text(File.ReadAllText(Path.Combine(RepoPaths.Root(), ".coai", "toolchain.yaml"))));
 
         var project = read.Should().BeOfType<ToolchainRead.Configured>().Subject.Toolchain.Projects.Should().ContainSingle().Subject;
-        project.Should().BeEquivalentTo(new ToolchainProject("src_mcp", "dotnet", new ToolchainCommand(true, ["dotnet", "build", "dew_flow_connect_other_ais.slnx", "-c", "Debug", "-m:{jobs}"]), new ToolchainCommand(true, ["./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests"]), 3000));
+        // E4 s5 t6: the build and the test are what they were; the file now also names testFor and testFiles (a prefix relative to the project).
+        project.Should().BeEquivalentTo(new ToolchainProject("src_mcp", "dotnet", new ToolchainCommand(true, ["dotnet", "build", "dew_flow_connect_other_ais.slnx", "-c", "Debug", "-m:{jobs}"]), new ToolchainCommand(true, ["./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests"]), 3000), options => options.Excluding(member => member.TestFor).Excluding(member => member.TestFiles));
         project.StatesACommand.Should().BeTrue();
         project.Restore.Stated.Should().BeFalse();
         project.Format.Stated.Should().BeFalse();
-        project.TestFor.Stated.Should().BeFalse();
-        project.TestFiles.Should().BeEmpty();
+        project.TestFor.Stated.Should().BeTrue();
+        project.TestFiles.Should().Equal("tests");
     }
 
     [Fact]
