@@ -19,7 +19,23 @@ one of them arriving wrong.
 
 Target: the released **extension** version — `--target 0.33.1`. The MCP binary ships on its own tag and its own number, so item 1 reads `MCP_VERSION` (`mcp-v<version>`) rather than the target.
 
-Last verified: 2026-11-18 · extension **0.88.0** (released: `extension-v0.88.0` on 5b9ab66c, cut by a release-please
+Last verified: 2026-11-27 · extension **2.1.0** (released: `extension-v2.1.0` on 9060cb87, cut by a release-please
+dispatch after release PR #1057; release run 45934474822, its `extension` job green with "Publish to the Marketplace"; every
+other job skipped, as on an extension-only tag) · mcp **2.0.0** unchanged · server **0.16.3** served by the box (0.16.4 is
+released but not deployed: `SERVER_VERSION=0.16.4` printed `FAIL 10 — 200 {"ok":true,"version":"0.16.3"}`, which is that, not
+this release). Run locally: `MCP_VERSION=2.0.0 SERVER_VERSION=0.16.3 node .agents/conventions/tools/post-deploy-check.mjs
+--target 2.1.0`. The first run, at 03:34 UTC, printed `FAIL 2 — marketplace serves 2.0.0` (the Marketplace's own delay);
+re-run each minute, it printed every automated item PASS at 03:42:45 UTC: `PASS 1`, `PASS 2 — marketplace serves 2.1.0`,
+`PASS 6`, `PASS 9` and `PASS 10`. The released vsix (`connect-other-ais-2.1.0.vsix`, sha256
+`f1500fba9c0c9e15325704d430bc4d9c1b7f733abba5a86c8b001abd89235cd7`) was opened: `package.json` says 2.1.0, contributes
+`coai.terminalAccounts` and no longer holds `coai.terminalAccountsAllowNewHosts`; the bundled `dist/modules/chat.js` holds
+"Allow reading" and "Group by". The release carries #1047, #1051, #1055 and #1058 (the accounts tab: one permission, WSL on
+this PC, the Claude usage). The owner checked the pre-release VSIX 2.0.904 in a real window (the table's columns, colours
+and reset dates were changed on that check, in 2.0.905); the long run R7 passed on the WSL side (six live Claude Code
+sessions unchanged over two hours), its VM side and the two-window gate R12 were not run by hand before the tag. Manual
+items 3, 4, 5, 7, 8, 11 and 12 were not run.
+
+Previously verified: 2026-11-18 · extension **0.88.0** (released: `extension-v0.88.0` on 5b9ab66c, cut by a release-please
 dispatch after release PR #1013; release run 44360357872, its `extension` job green with "Publish to the Marketplace" at
 17:38:57 UTC; every other job skipped, as on an extension-only tag) · mcp **0.66.0** unchanged · server **0.16.3** served
 by the box. Run locally: `MCP_VERSION=0.66.0 SERVER_VERSION=0.16.3 node .agents/conventions/tools/post-deploy-check.mjs
