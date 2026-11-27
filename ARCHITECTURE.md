@@ -132,12 +132,25 @@ with `validate_work`'s rules over an overlay, sends the errors back to the same 
 
 **The envelope** (`result.json`, built by coai from the answer and its checks, never copied from the model): the answer with `verified` and `why` on every evidence item, `exists` on every listed file, `counts`, `repairTurns` and the `commit` HEAD was at when the job began. Every text passes `Redaction.SafeText`.
 
+## review_plan over a feature folder (v2, epoch 3)
+
+`review_plan(repoPath, branch, featureFolder, workItem?)` reviews a work plan that is COMMITTED. Give exactly one of `planText`, `committedPlan` or `featureFolder`. No new tool.
+
+- **Read from git.** The server resolves the tip of the branch once. That commit is the commit of the round. `GitWorkFolder` reads the folder from it: one `ls-tree`, each blob checked against its id. It follows no link and no submodule. The working tree is never read for the text.
+- **Validate first.** The server checks the whole feature with the rules of `validate_work` and the limits of this device. A folder that is not valid is refused with at most 10 errors (code, node, message), their total and the source of the limits. No reviewer is launched, no round row is written, the stage does not move and no worktree is made.
+- **The scope.** `workItem` names an epoch, an epic or a story of the folder. With no `workItem` the scope is the whole feature. A `workItem` that names no node of the folder is refused.
+- **The pack** (`core/Work/WorkPack.cs`, pure code). The order is: `feature.yaml`; the `plan` file of the feature; the ancestors of the scope (`epoch.yaml`, `epic.yaml`, the `spec` file of the epic); then each story after the stories it depends on and, in a story, each task after the tasks it depends on. Ties go by the number in the id (`s2` before `s10`). The same commit gives the same bytes. The pack of every scope has one line (node and title) for each node outside the scope that a node of the scope depends on. Each file is one section, `## <path>`, in a fence one backtick longer than the longest run of backticks in the file. The reviewers also read a line **Not sent**: the files the pack does not hold.
+- **The limits.** A YAML file, a `plan` file and a `spec` file: 64 KiB each. The folder: 2000 entries. The pack: 256 KiB. Over a limit the round is refused, with the size and the three largest sections. Nothing is cut.
+- **What is approved.** The round records an approval id. It is the SHA-256 of one line for the pack format, one line (blob id and path) for each file in the pack, and one line for each outside dependency. A file that is not in the pack, such as a `RESULTS_*.md`, is not in the id. A new pack format changes every id once.
+- **The working tree guard.** When HEAD is the commit of the round, every file of the pack is compared with the working tree. An edited, a staged or a deleted file is a refusal that names the files. So is a new `.yaml` file under the scope. When HEAD is another commit, the note says that the working tree was not compared.
+- **The coder binding.** A coder job started under a folder round is bound when its task file is inside the scope, its base descends from the commit of the round and the approval id computed at the base is the approved one. After the approval, a change of a file the reviewers read refuses the start; the sentence names the first path or node that differs. The cure is a new plan round. An approval made under an older pack format binds no coder job.
+
 ## The coder (v2, epoch 3)
 
-`start_role role: "coder"` runs ONE task of a work plan on a claude model, in its own git worktree, until the repository's own checks are green. The `taskFile` is a `task.yaml` inside the repository that passes `validate_work`'s task rules.
+`start_role role: "coder"` runs ONE task of a work plan in its own git worktree, on a model of claude, codex or agy, until the repository's own checks are green. The `taskFile` is a `task.yaml` inside the repository that passes `validate_work`'s task rules.
 There is no `start_coder` tool: the coder is one role case of `start_role`, with the same `role_status` and `role_cancel`. A request that fails the check (no `taskFile`, a file not called `task.yaml`, an invalid task) is refused with a sentence before any folder is made.
 
-**The route.** The task's `complexity` picks the model (the band model, then the `coder` list of `COAI_ROLES_MODELS`); `security: true` or `complexity: 10` takes the `important` list. Only `claude` models stay in a coder route, and a route with none is refused naming `COAI_ROLES_MODELS`.
+**The route.** The task's `complexity` picks the model (the band model, then the `coder` list of `COAI_ROLES_MODELS`); `security: true` or `complexity: 10` takes the `important` list. A coder route keeps the models of the vendors that are launchable for the coder (claude always; codex and agy as the next part says). A model of another vendor is dropped, with the reason. A route with none left is refused, naming `COAI_ROLES_MODELS`. A model the caller names in `model` on a vendor that is not launchable is refused, naming the model and the vendor.
 
 **The worktree and who commits.** coai makes `coder/<jobId>` at `baseSha` (the `HEAD` of `repoPath` at the start, unless `baseSha` is given) under a machine-local folder (`COAI_CODER_ROOT` moves it), at most 20 live per repository (the next is refused, none is evicted). The coder edits files. coai commits the work (one commit per turn), builds and tests; the coder never does. A coder that turns out invalid gets ONE repair turn in the same session (`shared/coder-report.schema.json`: `{status: "ok", dod: [{id, met, evidence}], notes}` or `{status: "refused", reason}`).
 
@@ -145,10 +158,73 @@ There is no `start_coder` tool: the coder is one role case of `start_role`, with
 
 **`.coai/toolchain.yaml`** is the repository's checks (`shared/toolchain.schema.json`; this repository's own file is the example). Keys: `version: 1`; `projects[]` with `path`, `adapter` (`dotnet`, `node`, `php`, `rust`, `python`, `java`), `build` and `test` (an argv, one item to a line), `memoryMb`; `skip` (`restore`, `lint`, `format`, `formatCheck`, `audit`, `coverage`; never `build` or `test`); `timeouts` (`build`, `test`, a whole number and `s`, `m` or `h`; defaults 15m and 30m). It is read by the strict YAML subset reader, which refuses a flow list other than `[]` and every flow map. An argv starts with no shell, from the repository root, with a minimal environment; `{jobs}` is the number of build workers. The file is read at the BASE commit, so a coder cannot change its own checks: a change it makes is reported in `checksNote` and does not run for that job. No file is `not_configured`; a file that is there and wrong is `toolchain_refused`. Neither is ever green.
 
-**The fix loop.** After each turn coai commits, then runs the base toolchain's build and test on that exact commit. A red step sends a digest of the failure (at most 40 items and 16 KB: MSBuild errors, one item per failed test of the test executable, else the last raw lines) to the SAME claude session (`--resume` with the handle of turn 0). At most `COAI_FIX_ROUNDS` fix turns (default 3; a whole number from 0 to 10, anything else is 3 and `fixRounds.note` says so). The whole job stays inside `timeoutMinutes` (default 30). A model that stops with a limit, a refusal or a crash in any turn hands the worktree, put back to the last coai commit, to the next claude model of the route, from turn 0 in a new session; the fix-turn count belongs to the job, not to the model.
-**Stop words** (`role_status` `attempts[].stop`, and the job's `stop`): `not-green` (red after the last fix turn), `not-configured`, `toolchain-refused`, `checks-changed-tree` (the tree is not what coai committed and expected, so what the checks said is not trusted: the checks changed it, or the worktree's `.coai/toolchain.yaml` — read by coai every round — is a FIFO or cannot be read; never sent to the coder as a fix and never fails over), `coder-boundary` (the OS layer stopped a write or refused to start), `timeout`, `output-invalid`, `cancelled`; `limit`, `refusal` and `crash` fail over. Not built here: a re-run of a test that failed once, a stop on a repeated failure, test selection from the changed files (every round runs the whole suite), and resuming a codex or agy session.
+**The fix loop.** After each turn coai commits, then runs the base toolchain's build and test on that exact commit. A red step sends a digest of the failure (at most 40 items and 16 KB: MSBuild errors, one item per failed test of the test executable, else the last raw lines) to the SAME session of the same vendor: claude `--resume <session of turn 0>`, codex `exec resume <thread of turn 0>`, agy `--conversation <id of turn 0>`. A handle of another vendor, job or worktree is refused before a process starts. A fix turn that finds its session lost is a `crash`. At most `COAI_FIX_ROUNDS` fix turns (default 3; a whole number from 0 to 10, anything else is 3 and `fixRounds.note` says so). The whole job stays inside `timeoutMinutes` (default 30). A model that stops with a limit, a refusal or a crash in any turn hands the worktree, put back to the last coai commit, to the next model of the route, from turn 0 in a new session; the next model may be of another vendor. The fix-turn count belongs to the job, not to the model. When the job leaves a vendor, what that vendor's sign-in left in the job's home is deleted before the next vendor starts, and a copy that cannot be deleted ends the job `coder-boundary`.
+**Stop words** (`role_status` `attempts[].stop`, and the job's `stop`): `not-green` (red after the last fix turn), `not-configured`, `toolchain-refused`, `instructions-failed` (a step that the repository declares could not run, see *The instruction step*; no model was launched), `checks-changed-tree` (the tree is not what coai committed and expected, so what the checks said is not trusted: the checks changed it, or the worktree's `.coai/toolchain.yaml` — read by coai every round — is a FIFO or cannot be read; never sent to the coder as a fix and never fails over), `coder-boundary` (the OS layer stopped a write or refused to start, a preflight row was bad, a launch check failed or a turn check found a stream that is not what was measured), `timeout`, `output-invalid`, `cancelled`; `limit`, `refusal` and `crash` fail over. Not built here: a re-run of a test that failed once, a stop on a repeated failure and test selection from the changed files (every round runs the whole suite).
 
-**The write boundary** has three layers, and its limits are measured, not assumed.
+**Which vendors can be a coder.** One table decides: `shared/coder-boundary-releases.json`. Only `CoderBoundaryTable` and `CoderVendorSet` read it.
+
+- claude is not in the table. claude is always launchable.
+- Another vendor is launchable only when its verdict is `ship` AND its row has the mark `launchable: true`.
+- The owner set this rule on 2026-11-26. The mark stays off until the must-changes of the judgement are built and green. ONE commit turns the mark on. Both marks are on for codex and for agy.
+- For each vendor the table holds the ids of the properties that its verdict relies on. Each id has a class: `pre`, `launch`, `turn` or `release`.
+- The table also holds the history of the measures, in the key `measured`. A record has the release, the date, the headings of the results and of the judgement, and the sha256 of the programs.
+- The history is a record only. Nothing compares an installed release or hash with it.
+
+**No version of a CLI gates anything.** The owner decided this on 2026-11-26, for claude, codex and agy alike.
+
+- An older, a newer and an unnamed release of a CLI is launched like the measured one.
+- No release refuses a job, stops it, asks for a new measure or a new judgement, or needs a doc to change.
+- A person sees the installed release beside the last measured one in two places. One is `cli {vendor, installed, lastMeasured}` in the coder envelope. The other is `cliVersion` and `lastMeasuredVersion` of an attempt in `role_status`.
+- What still refuses a coder asks the installed CLI what it DOES. It never asks which release it is. There are five checks:
+  1. The verdict and the mark of the table.
+  2. A flag of the argv that the help of the installed CLI does not declare. The refusal names the flag.
+  3. A preflight row. It is a probe with no model, in the exact launch unit, with one row for each id of class `pre`. A bad row ends the job `coder-boundary` and names the row.
+  4. A launch check, made before every launch. It looks at the sign-in copy and its margin, the files of the vendor in its home and, for agy, the guard folder.
+  5. A turn check, made after every turn on the stream of the CLI itself. It runs before anything of the turn is committed.
+- One of these checks may stop a job after a CLI has updated itself. The owner accepted that as protection. It is not a version gate.
+
+**The codex coder.** The verdict is `ship`. It was measured on `codex-cli 0.171.0` (the rows B1 to B15 on 2026-11-25, the open rows on 2026-11-26). History: `v2/spikes/RESULTS_codex_coder.md`. Judgement: section 13 of `v2/spikes/RESULTS_codex_agy_write_boundary_judgement.md`.
+
+- *Argv.* The same flags on every turn: `codex exec --json -m <model>`, the measured `-c` keys and `--disable` switches, `-c approval_policy="never"`, `-c web_search="disabled"`, `-c agents.enabled=false` and `-o <file>`. A fix turn is `codex exec resume <thread of turn 0>` with the same flags.
+- *Unit.* The unit hides the main checkout and the coder root with an empty tmpfs. The worktree is bound back. Besides the worktree, only `<job>/coder/codex` and a `/var/tmp` of the job are writable. `/tmp` is an empty tmpfs.
+- *Sign-in.* The job's home holds a COPY of `~/.codex/auth.json`. A placeholder takes the place of the refresh token. Before every launch the access token must live at least as long as the unit plus 60 minutes. The refresh address is set to a local address that refuses connections. A preflight row asks that.
+- *Commands of the model.* They run in the vendor's own sandbox (`codex sandbox`, profile `coai`). A preflight row tries it before every job.
+- *Turn check.* After every turn coai reads the stream and the rollout file of the thread. These end the job `coder-boundary`: an item type that nobody measured, a web search, a call of an agent, and a thread that is not the handle's.
+- *Measured limits.*
+  - For a command of the model, the vendor's sandbox is the ONE layer between the command and the sign-in copy (C1).
+  - The codex process itself has the whole network and the loopback of the host (C2).
+  - The JavaScript that the model writes runs outside that sandbox. It runs in a process that can read the copy and has the network (C5).
+  - What an agent does is not visible in the stream (C7).
+  - The `AGENTS.md` of the repository reaches the model (C4).
+
+**The agy coder.** The verdict is `ship`, by the owner's decision. It was measured on `agy 1.5.18` on 2026-11-26. The rows of 1.5.17 are of 2026-11-25 and of a program that is no longer installed. History: `v2/spikes/RESULTS_agy_coder.md`. Judgement: section 14 of the file named above.
+
+- *Argv.* The flag set AG1 on every turn: `--print=`, `--input-format stream-json`, `--output-format stream-json`, `--mode accept-edits`, `--agent coai-coder`, `--model` and `--add-dir <worktree>`. A fix turn adds `--conversation <id of turn 0>`.
+- *Unit.* The unit starts in a GUARD folder of the job. That folder is bound read-only. The unit never starts in the worktree. It hides the main checkout and the coder root. Besides the worktree, only `<job>/coder/agy` is writable.
+- *Guard.* The agent file lists three tools: `read_file`, `write_file` and `edit_file`. It lists no command tool. The hook of the guard is coai's own program (`coai-mcp --agy-hook`). For every tool call it answers with an explicit decision. It allows a write only inside the worktree, and not under `.git`, `.agents` or `.codex` of it. It records each decision with the conversation id and the step index.
+- *Turn check.* After every turn coai compares the records with the tool events of the stream. A tool that is not one of the three ends the job `coder-boundary`. So does an event with no record. So do the signs that the mode did not hold.
+- *Sign-in.* The job's home holds a COPY with the access token only. Before every launch the access token must live at least as long as the unit plus 5 minutes. When the real file has no such margin, a refresh runs. It runs in a unit of coai's own, never in the coder's.
+- *Measured limits.*
+  - For agy the OS layer does not keep a command from the sign-in copy (A1). Only the agent file, the guard and the mode keep a command from existing. They rest on the behaviour of agy.
+  - The agy process has the whole network and the loopback of the host (A2).
+  - The real tool list of a turn cannot be asked before a job (A3).
+  - The hook of agy is open on "exit 0, no output". The handler of coai never answers so (A4).
+  - The mode that a turn ran in cannot be read from the stream. Only the signs after the turn show it (A9).
+  - An agy coder cannot edit `.git`, `.agents` or `.codex` of its worktree (A8).
+  - The `.agents` rules of the repository steer the model (A7).
+
+**The instruction step.** A repository may declare ONE command that coai runs before any model.
+
+- *Declare.* Use the key `instructions` of `.coai/toolchain.yaml`: `argv`, `perFile` with `{file}`, and `timeoutSeconds` from 1 to 300 (60 when absent).
+- *Run.* coai reads the key at the base commit. It runs the command once for the job, in a check unit: no network, the home of the job, no credential, the worktree at the base.
+- *Output.* The standard output (UTF-8, at most 64 KiB, exit 0) goes into the prompt of turn 0 of EVERY vendor, claude too. It is one block under the heading "Run by coai before your turn". A fix turn does not repeat it.
+- *Failure.* A step that cannot run ends the job `instructions-failed`. The causes are: a non-zero exit, a time out, more than 64 KiB, bytes that are not UTF-8 and a changed tree. No model is launched, and no vendor is tried. The envelope names the argv, the exit code, the size and the last lines of standard error.
+- *No step.* A claude coder is sent no block. A codex or agy coder is sent a block that says that nothing was run.
+- *Secrets.* A secret-shaped text in the output stops nothing. coai records the class and the line in the envelope and in one `instructions-secret` notice. It never records the value.
+- *Envelope.* `instructions {declared, argv, exitCode, bytes, sha256, ms}` and `prompt {id, sha256}`. Each vendor has its own prompt: `coder` for claude, `coder.codex` and `coder-agy`. They differ in the lines about tools and about the instruction files.
+- *This repository* declares no step. The output of its rule resolver for a task is larger than 64 KiB.
+
+**The write boundary of the claude coder** has three layers, and its limits are measured, not assumed. (The first two layers below are claude's; the codex and agy coders have their own, described above. The other items below are common to every vendor.)
 
 - *The launch flags* (`v2/spikes/RESULTS_coder_write_boundary.md`, set R11, claude 2.1.330): `--restricted`, `--tools Read,Edit,Write,Glob,Grep` (no shell), `--permission-mode acceptEdits`, `--permission-prompts none`, no MCP server, `--add-dir` and the cwd = the worktree. They refuse an edit or a read outside the worktree, a link out of it and `.git`. A shell is not in the tool list; with one, the flags would not confine it.
 - *The OS layer.* The claude process itself runs in a named `systemd-run --user` unit (`CoderBoundary`): `ProtectSystem=strict`, `ProtectHome=tmpfs`, `TemporaryFileSystem=/run/user`, `/mnt` and `/dev/shm`, `InaccessiblePaths=-/run/WSL` (that stops WSL interop; hiding `/mnt` did not), `BindPaths` of the worktree only, `BindReadOnlyPaths` of the main checkout and of the worktree's `.git`, `NoNewPrivileges`, `PrivateUsers`, `MemoryMax` with `MemorySwapMax=0`, and a home of the coder's own. One file of the real home is bound read-only, and only when the job has no pool key: `~/.claude/.credentials.json` (with a pool key it is not bound; see *The claude key pool*). A write the OS refuses ends the job as `coder-boundary` (never green, never failed over). The layer stops WRITES: a read of any file the unit can see is not stopped. For the real CLI the outcome does not say "stopped", because the CLI reports a failed tool in its transcript, not on stderr; the checkout is still unwritten.

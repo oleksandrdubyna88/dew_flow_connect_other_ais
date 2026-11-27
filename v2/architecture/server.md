@@ -436,3 +436,42 @@ Built and measured in `v2/epoch-3/e2-coder-one-task/` (`RESULTS_s1_toolchain.md`
 - Only the repository's `.coai/toolchain.yaml` path is built: its reader, the check runner and the digest of MSBuild lines and of the `CoaiMcp.Tests` executable. There is no detection, no `shared/toolchains.json` and no adapter code; the `adapter` key is read and checked against a list, and today it only adds the .NET switches (`DOTNET_NOLOGO` and the like) to a `dotnet` step. Left to E4: detection, default argv, parsers for the other stacks and the reverse-graph test selection.
 - The file is the strict YAML subset: one argv item to a line; a flow list other than `[]` and every flow map are refused by name (`yaml-forbidden`). `build` and `test` cannot be skipped. `not_configured` (no file, or no command) and `toolchain_refused` (a file that is there and wrong, or a base commit that cannot be read) are never green.
 - The file is read at the BASE commit and run in the worktree, so a coder cannot change its own checks; a change it makes is reported and does not run for that job.
+
+## 24. What epoch 3 E3 (roles complete) decided differently from sections 2, 8, 10, 19, 20 and 23 (2026-11-27)
+
+Planned in `v2/epoch-3/e3-roles-complete/` (`SPEC.md`, the changes in `SPEC_CHANGES.md`), built and measured with the files `v2/spikes/RESULTS_codex_coder.md`, `v2/spikes/RESULTS_agy_coder.md` and `v2/spikes/RESULTS_codex_agy_write_boundary_judgement.md`. Where this section and §§ 2, 8, 10, 19, 20 or 23 differ, this section is what was built.
+
+**Section 2 (tool surface and coder delegation).**
+- The role is called `judge`. Its model list is still `important`. `start_role` has these roles: `ba`, `coder`, `scout`, `judge` and `probe` (a diagnostic that asks no model). There is no tool of its own for the scout or the judge.
+- `review_plan` takes `workItem` besides `featureFolder`. The scope of the round is the node that `workItem` names (an epoch, an epic or a story); with none it is the whole feature.
+- A coder is launched on a vendor only when `shared/coder-boundary-releases.json` makes it launchable: the verdict is `ship` AND the row has the mark `launchable` (the owner's condition of 2026-11-26). claude is always launchable. codex and agy are launchable. A model that the caller names on a vendor that is not launchable is refused, naming the model and the vendor; the models of such a vendor are dropped from a route, with the reason.
+- The coder envelope has four more members: `instructions {declared, argv, exitCode, bytes, sha256, ms}`, `prompt {id, sha256}`, `cli {vendor, installed, lastMeasured}` and, for a vendor that signs in with a file, `signIn` (hashes and times of the real file, never text). An attempt in `role_status` has `cliVersion` and `lastMeasuredVersion` when they are known.
+- New stop word: `instructions-failed`. `coder-boundary` now also covers a bad preflight row, a failed launch check and a turn check of codex or agy.
+
+**Section 8 (`review_plan(featureFolder)`).**
+- The folder is read from git at the branch tip, validated first with the device limits (an invalid folder is refused with at most 10 errors; no reviewer, no round row, no worktree), and packed in topological order.
+- The pack has a size limit of 256 KiB, a file limit of 64 KiB and a folder limit of 2000 entries. Over a limit the round is refused with the size and the three largest sections; nothing is cut.
+- The pack of every scope (epoch, epic and story) has one line for each node outside the scope that a node of the scope depends on.
+- What is approved is everything the reviewers read: the approval id is the SHA-256 of a line for the pack format, a line (blob id and path) for each packed file, and a line for each outside dependency. It is not the git tree id: a `RESULTS_*.md` is not in it. The pack format has a version in the id; an approval made under an older format binds no coder job.
+- When HEAD is the commit of the round, every file of the pack is compared with the working tree before the round; a difference is a refusal that names the files.
+
+**Section 10 (build and test, the fix loop, session kept).**
+- The same-session fix turn is built for all three vendors: claude `--resume`, codex `exec resume <thread of turn 0>` and agy `--conversation <id of turn 0>`. It was left to E4 in § 23. The codex fix turn does not use `-c sandbox_mode=workspace-write`: the argv of codex is the same measured flag set on every turn, and the commands of the model run in the vendor's sandbox profile `coai`.
+- A session that is lost on a fix turn is a `crash`: the next model starts from the last coai commit. No fix turn starts a new session by itself.
+- The turn of a codex or an agy coder is checked after it ends, on the stream of the CLI and before anything is committed (codex: the item types and the rollout file; agy: the records of the guard and the signs of the mode). A wrong stream ends the job `coder-boundary`.
+- New: the instruction step. A repository may declare one command in `.coai/toolchain.yaml` (`instructions`). coai runs it once before any model and puts its output (at most 64 KiB) after the prompt of turn 0 of every vendor. A step that cannot run ends the job `instructions-failed` with no model launched. A secret-shaped text in the output stops nothing; coai records the class and the line.
+
+**Section 19 (external roles).**
+- The evidence of the scout and of the judge is an object `{file, line, text}`, not a string `file:line`. coai checks it against the file and writes `verified` and `why`; a model's own `verified` is an error of the answer. A blank `text` and a path that leaves the repository are errors of the answer.
+- The judge answers `verdict` (`approve`, `revise`, `reject`), `summary`, `findings` (the four severity words of the gate) and, only when the brief asks to choose, `decision`. A `brief` is required and at most 64 KiB. Both roles are read-only (Read, Glob, Grep), compare the tree around every attempt (`tree-changed` never fails over) and allow at most two repair turns in the same session.
+- Resuming a codex or an agy coder session is built here, for one task. E4 keeps the hardening.
+
+**Section 20 (the important role and the failover of vendors).**
+- The judge runs only on the `important` list. A `model` that the caller names outside that list is refused before any folder, naming `COAI_ROLES_MODELS`.
+- A coder route may cross vendors. When the job leaves a vendor, what that vendor's sign-in left in the job's home is deleted before the next vendor starts. A spent quota, a missing CLI or a lost sign-in skips the other models of that vendor. `cancelled`, `tree-changed`, `output-invalid` and the own stops of the coder (including `coder-boundary` and `instructions-failed`) never fail over.
+
+**Section 23 (epoch 3 E2).**
+- "Only `claude` models stay in a coder route" is gone. The table above decides.
+- The write boundary of codex and agy is not the one of claude. In the unit of codex and of agy the main checkout and the coder root are HIDDEN (an empty tmpfs), not read-only. A sign-in reaches the unit only as a COPY made for the job: for codex with a placeholder in place of the refresh token, for agy with the access token only. For codex the commands of the model are held by the vendor's sandbox. For agy the agent file, the guard and the mode are the rest. The measured limits (the risks C1 to C7 of codex and A1 to A13 of agy) are in the judgement file, and the owner accepted them.
+- No version of a CLI gates anything, for claude, codex and agy alike (the owner, 2026-11-26). The floor of claude is a record. What was measured is history in the key `measured` of the table. What still refuses a coder asks the CLI what it does: the verdict and the mark, a flag the help does not declare, a preflight row, a launch check, a turn check. A new version of a CLI is no reason to change a doc or the table.
+- The coder runs on Linux and WSL only, as in § 23. Native Windows and macOS are still refused before any process starts.
