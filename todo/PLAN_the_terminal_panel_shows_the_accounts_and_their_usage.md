@@ -1078,7 +1078,10 @@ What is kept, reworked and retired of it: *Re-review for epoch 3*, above.
 **Not built in this release.** The owner, 2026-11-26: the installer of decision 17, its one-time "yes" (Q3)
 and its gate R18 go to the next release, under a later plan or epic of its own. This release shows the
 install command with a copy button (§ 1); R10 of E5 stays as its input. The epic as approved for epoch 4:
-the appendix, § K.38; its design: § E.
+the appendix, § K.38; its design: § E. Its stories and its spec, written on 2026-11-27 for that next
+release, plan only:
+[PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E6.md](PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E6.md).
+The cornerstone line above is not changed by that document: its mark waits for the owner (its § 11, O1).
 
 ### Candidates
 
