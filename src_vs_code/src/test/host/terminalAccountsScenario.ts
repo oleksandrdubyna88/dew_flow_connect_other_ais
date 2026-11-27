@@ -8,6 +8,7 @@ import type { WslPort } from '../../remoteWslRound';
 import type { WslRun } from '../../remoteWslRun';
 import { GOOD } from '../accountsFrames';
 import { until, activated } from './hostHelpers';
+import { closedAll } from './hostStoreHelpers';
 
 /**
  * E2S4-H1 of the accounts plan (E2.S4): the round under the permission, in a real editor, through the real keeper. With no permission four terminals
@@ -36,16 +37,28 @@ async function doorsOf(): Promise<Doors> {
 }
 
 /**
- * The call and the profile put back. The road's `restore` sends the change signal a commit sends, so the window's known hosts and its generation follow
- * the restored store. Without it the next scenario's round writes its own automatic "yes", the window sees a known host gone, reads it as a Forget and
- * bumps the generation: the round's result is dropped, its memory stays empty, and a list has no group to draw.
+ * What the scenario found, put back EXACTLY, with nothing of it left running for the scenario after. In this order:
+ * the tab is closed (a live webview redraws on every change and reads the store); the terminals are closed and the window has seen it; the round that an *Allow*
+ * started is let END (a round still calling, or still landing its news, writes and reads after the next scenario began); then the calls are put back, and the
+ * road's `restore` puts the profile back and reads it until it has stood so for a quiet time (the editor can take a `globalState` write away with the late news
+ * of an older one, `storeSettle.ts`). The restore sends the change signal a commit sends, so the window's known hosts and its generation follow the restored
+ * store. Without it the next scenario's round writes its own automatic "yes", the window sees a known host gone, reads it as a Forget and bumps the generation:
+ * the round's result is dropped, its memory stays empty, and a list has no group to draw. Last, the window reads the store as it is now.
  */
-async function putBack(accounts: Doors['accounts'], sessions: Doors['sessions'], before: Awaited<ReturnType<Doors['sessions']['stored']>>): Promise<void> {
+async function putBack(
+  accounts: Doors['accounts'],
+  sessions: Doors['sessions'],
+  before: Awaited<ReturnType<Doors['sessions']['stored']>>,
+  terminals: readonly vscode.Terminal[],
+): Promise<void> {
+  await closeTheTab();
+  await closedAll(terminals);
+  await until(() => !accounts.running(), 'the round of the scenario did not end').catch(() => undefined);
   accounts.replaceCall(undefined);
   accounts.replaceWsl(undefined);
   await sessions.restore(before);
   await seesTheStore(accounts);
-  await closeTheTab();
+  await until(() => !accounts.running(), 'a round was still running after the profile was put back').catch(() => undefined);
 }
 
 /** A tab this scenario opened does not stay open for the scenarios after it (a live webview slows every later one down). */
@@ -67,7 +80,7 @@ async function seesTheStore(accounts: Doors['accounts']): Promise<void> {
 
 export async function theAccountsRoundRunsOnlyUnderThePermission(): Promise<void> {
   const { accounts, sessions } = await doorsOf();
-  const before = await sessions.stored();
+  const before = await sessions.found();
   const calls: string[] = [];
   accounts.replaceCall(async (host, mode): Promise<RemoteRun> => {
     calls.push(`${host} ${mode}`);
@@ -96,10 +109,7 @@ export async function theAccountsRoundRunsOnlyUnderThePermission(): Promise<void
 
     assert.deepEqual([...calls].sort(byCodeUnit), [`${HOST_A} no-claude-usage`, `${HOST_B} no-claude-usage`], 'the first round did not call each host once, and none else (wsl is never called)');
   } finally {
-    for (const one of terminals) {
-      one.dispose();
-    }
-    await putBack(accounts, sessions, before);
+    await putBack(accounts, sessions, before, terminals);
   }
 }
 
@@ -111,7 +121,7 @@ export async function theAccountsRoundRunsOnlyUnderThePermission(): Promise<void
  */
 export async function theIconOpensOneTabAndItsModelHoldsBothHosts(): Promise<void> {
   const { accounts, sessions } = await doorsOf();
-  const before = await sessions.stored();
+  const before = await sessions.found();
   const calls: string[] = [];
   accounts.replaceCall(async (host, mode): Promise<RemoteRun> => {
     calls.push(`${host} ${mode}`);
@@ -137,10 +147,7 @@ export async function theIconOpensOneTabAndItsModelHoldsBothHosts(): Promise<voi
     assert.deepEqual([...calls].sort(byCodeUnit), [`${HOST_A} no-claude-usage`, `${HOST_B} no-claude-usage`], 'each host was not called exactly once');
     assert.equal(vscode.window.tabGroups.all.flatMap((group) => group.tabs).filter((tab) => tab.label === TAB_LABEL).length, 1, 'a second press opened a second tab');
   } finally {
-    for (const one of terminals) {
-      one.dispose();
-    }
-    await putBack(accounts, sessions, before);
+    await putBack(accounts, sessions, before, terminals);
   }
 }
 
@@ -161,7 +168,7 @@ const FAKE_WSL: WslPort = {
  */
 export async function theWslPlacesAreInTheTabsModel(): Promise<void> {
   const { accounts, sessions } = await doorsOf();
-  const before = await sessions.stored();
+  const before = await sessions.found();
   accounts.replaceCall(async (): Promise<RemoteRun> => ({ kind: 'answered', code: 0, stdout: '' }));
   accounts.replaceWsl(FAKE_WSL);
   const name = 'Creds: wsl / s1';
@@ -180,7 +187,6 @@ export async function theWslPlacesAreInTheTabsModel(): Promise<void> {
     assert.deepEqual(model?.blocks.map((block) => block.shown), ['wsl', 'Ubuntu · alice', 'Ubuntu · bob', 'Ubuntu · root']);
     assert.deepEqual(model?.blocks[0]?.wsl?.distros.map((one) => `${one.name}: ${one.said}`), ['Ubuntu: 3 users', 'Debian: not running, so not read']);
   } finally {
-    terminal.dispose();
-    await putBack(accounts, sessions, before);
+    await putBack(accounts, sessions, before, [terminal]);
   }
 }

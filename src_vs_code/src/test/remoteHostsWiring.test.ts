@@ -213,7 +213,10 @@ test('A1-T14/B25/B27: the host raises the notice of an unsaved refusal, and the 
   const door = host.slice(host.indexOf('export const testDoorOf'));
   const files = host.slice(host.indexOf('async function restoreFiles'));
   assert.ok(files.includes('rm(join(folder, REFUSED_FILE)') && files.includes('writeFile(join(folder, REFUSED_FILE)'), 'restore does not put the refusals file back');
-  assert.match(door, /await state\.update\(TERMINAL_HOSTS_KEY, before\.list\);\n {4}await state\.update\(STATE_KEY, before\.row\);\n {4}await restoreFiles\(folder, before\);/u, 'restore does not put the list, the row and the files back in order');
+  const putBack = host.slice(host.indexOf('async function putBack('), host.indexOf('export const testDoorOf'));
+  assert.match(putBack, /await state\.update\(TERMINAL_HOSTS_KEY, before\.list\);\n {2}await state\.update\(STATE_KEY, before\.row\);\n {2}await restoreFiles\(folder, before\);/u, 'restore does not put the list, the row and the files back in order');
+  assert.ok(door.includes('await putBack(state, folder, before);') && door.includes('putBackUntilHeld('), 'restore does not put back with the one function, and read until the profile stands');
+  assert.ok(door.indexOf('await sessions.keeper.held();') < door.indexOf('await putBack(state, folder, before);'), 'restore writes before the keeper\'s queue is let finish');
   assert.ok(files.includes('MARKER_PREFIX') && files.includes('WITHDRAWN_PREFIX') && door.includes('forgetHeld()'), 'restore leaves markers, withdrawal files or what the window holds');
 });
 
