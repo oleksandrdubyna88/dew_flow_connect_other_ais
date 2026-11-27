@@ -3,7 +3,7 @@
 > Status: **plan, nothing built, 2026-11-22.** Branch `feat/v2-plan`. Built with the v2 work method itself: a feature
 > folder → epochs (≤ 5 epics each, MVP first) → epics → stories → tasks, each node with a YAML file. Stories and tasks
 > are written for an epic when it starts (now: epoch 1). The split was re-decided by Fable on 2026-11-22: 5 epochs, MVP epics with measurable pass criteria, 10 cornerstone stories (feature.yaml `cornerstones`; 12 since 2026-11-25, when the E3 plan gate added E3 s3 and s4).
-> **Stopped for re-review, 2026-11-27** (the ledger below, entry 2.2): the plan is stopped for re-review after the second change of ledger epoch 2. No new code on any epic of this plan, and no merge of its work, until epoch 3 of the ledger is open. The revision of the whole plan is written (the record "Re-review for epoch 3" below; section S of the E3 SPEC_CHANGES); the plan round and the owner's approval are not done.
+> **Stopped for re-review, 2026-11-27** (the ledger below, entry 2.2): the plan is stopped for re-review after the second change of ledger epoch 2. No new code on any epic of this plan, and no merge of its work, until epoch 3 of the ledger is open. The revision of the whole plan is written (the record "Re-review for epoch 3" below; sections S and T of the E3 SPEC_CHANGES) and its plan round said proceed; the owner's approval is not given yet.
 
 ## Plan changes
 
@@ -170,9 +170,9 @@ Narrowed: yes — the tool list of a codex coder no longer has to be the exact 1
   them. 9897dc2b is plan text. 62685e2b and dee4b684 are local, are not pushed, and go on only when epoch 3 is open.)
   (The cut. The part of 62685e2b that ends a job coder-boundary for a tool outside the known set, and its text of ONE
   notice for the job, contradict entry 2.2. Action: fix forward by a new commit on top of it, when epoch 3 is open and
-  before any push. No pushed history is touched. Against the revision the same commit also lacks four rules that are
-  not built yet, which is not a cut: the lookup of every codex name that is not a family, one launch of a model in a
-  job, the tool inventory read whole, and the terminal rule after a turn; they are items 5, 6, 8 and 12 of section S4.)
+  before any push. No pushed history is touched. Against the revised plan the same commit also lacks rules that are not
+  built yet, which is not a cut: the tool inventory read whole, the redactor on a tool name, the terminal rule after the
+  first launch of an entry, and the folder of the run that reads the list of models; items 8, 11, 12 and 13 of section S4.)
   (The revision, step 4 of the rule: commit c59b3a51, in section S of
   [SPEC_CHANGES.md](epoch-3/e3-roles-complete/SPEC_CHANGES.md). The goal, the Definition of Done, the merge conditions, the
   epics and the build order were read again; each of the nine open points of section R has its disposition; the three
@@ -196,8 +196,22 @@ Narrowed: yes — the tool list of a codex coder no longer has to be the exact 1
   is met only by a run after it. Three findings of the local E4 commit dee4b684 on the selection of tests are in
   section S of the E4 SPEC, on feat/v2-ep3-e4-plan, commit 3995acc6: the revision corrected one task text and added two
   dod items to E4 s5 t6.)
-  (Not done when this was written: the plan round, and the owner's approval, which a narrower plan needs. The line of
-  epoch 3 is not written, and the plan stays stopped.)
+  (The plan round, step 8 of the rule: passed. coai session da911775, on the ref plan/v2-ep3-e3-rereview-2, read the
+  bundle of commit cdda0526 and said proceed. Finding F0 is accepted: a tool name that passes the character rule can
+  still have the shape of a secret, so the shared secret redactor runs on the name before it is shown; E3 s2 t5 d6 has
+  the test. Finding F1 is rejected, with the lead's reason: the argv of the instruction step is the repository's own
+  text, its unit holds no secret of coai, and the owner's rule of 2026-11-26 applies. The planner has the round from the
+  lead.)
+  (The lead's own Opus review of the revised plan said revise, with small changes. The lead decided each item, and the
+  decisions are folded in; the list, item by item, is section T of the same file. Added: after the first launch of an
+  entry a red preflight ends the job, with no failover; the run that reads the list of models has a folder with no text
+  of the repository; the grammar of the tool inventory is named; the notice has a second reason; the commit of the tool
+  rows lands only with addendum 4 of the judgement, verdict ship, which is a judge job of its own. Cut from the revision:
+  the look-up of every full codex name in the live list, and the skip of a second launch of the same model. What the
+  round and the review changed is the baseline of epoch 3 and is not an entry, by the rule; the entries 1.9 to 1.14 of
+  epoch 1 were written for such findings by the lead's order, and the same order would make entries of these.)
+  (Not done when this was written: the owner's approval, which a narrower plan needs. The line of epoch 3 is not written,
+  and the plan stays stopped. After the approval that line says by owner, and epoch 2 becomes closed.)
 
 ## Goal
 

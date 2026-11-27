@@ -1,12 +1,15 @@
 # Spec — epoch 3, E3 "Roles complete: scout, important/judge, codex + agy rows, review_plan(featureFolder)"
 
-> Status: **stopped for re-review, 2026-11-27. This is the REVISED plan; it is not approved yet** (ledger entries 2.1 and
-> 2.2 of [PLAN.md](../../PLAN.md)). [SPEC_CHANGES.md](SPEC_CHANGES.md) holds sections J to S — Q, R and S are the two
-> entries and the revision — and the earlier status (0-S): a spec file may hold 64 KiB. By the git history of
-> this branch: s1 to s7 have their code, and the codex and the agy coder are launchable since 2026-11-27 (`85134aec`,
-> `b9df00dc`); of s8, t1, t2, t5 and t6 are built and t3 has its real runs. **Open:** s2 t5 (not built); s7 t4 d4 (the
-> main-AI rows of codex and agy are empty: their coder runs through the failover of the claude row or a person's
-> setting); s8 t4. Scope: the server half (`src_mcp`, `shared/`, `.coai/toolchain.yaml`). Parent plan:
+> Status: **stopped for re-review, 2026-11-27. This is the REVISED plan. Its plan round said `proceed` (coai session
+> `da911775`); the owner has not approved it yet** (ledger entries 2.1 and 2.2 of [PLAN.md](../../PLAN.md)).
+> [SPEC_CHANGES.md](SPEC_CHANGES.md) holds sections J to T — Q and R are the two entries, S the revision, T the plan
+> round and the lead's review — and the records moved out of this file: a spec file may hold 64 KiB. By the git
+> history of this branch: s1 to s7 have their code, and the codex and the agy coder are launchable since 2026-11-27
+> (`85134aec`, `b9df00dc`); of s8, t1, t2 and t6 are built, t5 is built but for d4, and the real runs of t3 ran on
+> Sonnet, not on haiku. **Open:** s2 t5 (not built); s6 t3 d3 (the 30 minutes); s7 t4 d3 (the tool text still says
+> that codex and agy are not launchable) and d4 (the main-AI rows of codex and agy are empty: their coder runs
+> through the failover of the claude row or a person's setting); s8 t3 d1 (a new run after the fix of the `haiku`
+> alias); s8 t4; s8 t5 d4. Scope: the server half (`src_mcp`, `shared/`, `.coai/toolchain.yaml`). Parent plan:
 > [PLAN.md](../../PLAN.md); architecture: [server.md](../../architecture/server.md) §2, §8, §10, §19, §20, §23. Stories
 > and tasks: the YAML tree under `stories/` (8 stories, 45 tasks, no task above complexity 6). Cornerstones: s3 and s4.
 
@@ -221,7 +224,7 @@ own sandbox, seen working INSIDE the unit. The unit of E2 binds the main checkou
    each job. It has one row for each id of class `pre` of the table: what is hidden from a child command, the sign-in files,
    the network limit where one exists (for codex: a command of the model has no network, CX-V4), no user manager inside, the
    vendor's own sandbox or guard where the verdict relies on it. A wrong answer ends `coder-boundary`
-   before any launch and names the row (a codex tool list that cannot be read or holds an unknown tool: `model-unavailable`, section Q). A test holds the rows and the `pre` ids of the table equal, and each row goes red when
+   before any launch and names the row (a codex tool list that cannot be read or holds an unknown tool, at the first launch of an entry: `model-unavailable`, section S). A test holds the rows and the `pre` ids of the table equal, and each row goes red when
    its property is dropped.
 4. **The other ids are asked where they can be asked** (the judgement, section 8). Class `launch`: by coai before every launch,
    turn 0 and every fix turn, on the files the unit will get. Class `turn`: read by coai from the CLI's own stream after every
@@ -268,11 +271,8 @@ other. The judgement commit applies its own verdicts:
 | refuse | ship | folder removed | built | claude → agy | agy resumed; a start on codex is refused | the owner narrows it to agy |
 | refuse | refuse | folder removed | folder removed | claude models only | a start on each is refused; no paid coder run | not met; the owner decides |
 
-"Folder removed" means: the judgement commit deletes the story folder of the refused vendor and its entry in the `dependsOn` of
-s8, and writes the reason in the judgement file. `validate_work` accepts the folder after that commit, and no story waits for one
-that is not built. The plan changed, so the epic gets a new plan round. A refused vendor is never a required launch: the route
-drops it, the tests of s7 and s8 run all four combinations with an injected table, and in every one the fake CLI records zero
-launches of a refused vendor.
+"Folder removed" (the judgement commit deletes the story folder of a refused vendor; no vendor was refused):
+`SPEC_CHANGES.md`, C5-F.
 
 ### C6. The launch and the resume (the shape; the argv is frozen by s4)
 
@@ -303,7 +303,7 @@ and green (C2 item 1). The owner named four of them; the rest are the lists 13.1
 
 - codex. The argv is the set of 13.4 on EVERY turn: the set CX1 and `-c agents.enabled=false` (s5 t2 d1). **Before every
   launch the job's `CODEX_HOME` holds no `environments.toml`; one that is there refuses the launch** (CX-C1, s5 t2 d2). The
-  preflight asks the tool list with the job's own model (no name outside the 11 known ones; fewer pass when the inventory was read whole: sections Q, S) and reads `codex doctor`
+  preflight asks the tool list with the job's own model (no name outside the 11 known ones; fewer pass when the inventory was read whole: section S, S4) and reads `codex doctor`
   (CX-C4, CX-C3); the tool list says nothing about the web search (s5 t3 d3). **The exact rule of CX-T4 after every turn**
   (s5 t4 d3): `agent_message`, `command_execution`, `file_change` and `error` items pass; an `mcp_tool_call` passes only
   for the two list tools of the server `codex` with an empty list and no error; a `web_search` and a `collab_tool_call`
@@ -463,17 +463,16 @@ Tasks: s7 t3 (the key, the run, the refusal, the envelope, this repository's fil
 
 **The rule does not change** (E1 spec A): a limit, a refusal or a crash goes to the next model at once; only the last model waits;
 a spent quota, a missing CLI or a lost sign-in skips that vendor's other models; `cancelled`, `tree-changed`, `output-invalid` and
-the coder's own stops never fail over. `model-unavailable` (sections Q, S) goes to the next model too, and exists only before the first launch of an entry: a model list that cannot be read skips the vendor, every other case tries the next entry, the last entry fails at once. After a turn ran, a boundary stop is terminal: no commit of the turn, no failover. A read-only role restarts from turn 0. A coder restarts from the last coai commit.
+the coder's own stops never fail over. `model-unavailable` (section S, S4) goes to the next model too, and exists only before the first launch of an entry: a model list that cannot be read skips the vendor, every other case tries the next entry, the last entry fails at once. After the first launch of an entry, a red preflight and a boundary stop of a turn are terminal: no commit of the turn, no failover. A read-only role restarts from turn 0. A coder restarts from the last coai commit.
 
 **The lists of the claude row** are built as `shared/role-defaults.json` holds them. The table of the proposal and
 decision 35: `SPEC_CHANGES.md`, D-L.
 
 **The codex and agy main-AI rows: both are filled** (the owner, 2026-11-26: all three AIs are full ones; the words are in
 `SPEC_CHANGES.md`, section M). So claude, codex and agy each ship as a coder, a reviewer and a consultant, and each can be
-the main AI. The reviewer and the consultant of all three exist since before v2 (`src_mcp/runners/Reviewers/ClaudeRuntime.cs`,
-`CodexRuntime` in `ReviewerRuntime.cs:587`, `AntigravityRuntime.cs`; `src_mcp/runners/Consultation/ClaudeConsultant.cs`,
-`CodexConsultant.cs`, `AntigravityConsultant.cs`). E3 adds what was missing: the coder of codex and of agy (s5, s6) and the
-two main-AI rows (s7 t4 d4), from the lists that s4 t1 measured (`RESULTS_model_lists.md`). Nothing waits.
+the main AI. The reviewer and the consultant of all three exist since before v2 (the files: `SPEC_CHANGES.md`, D-F). E3
+adds what was missing: the coder of codex and of agy (s5, s6) and the two main-AI rows (s7 t4 d4), from the lists that
+s4 t1 measured (`RESULTS_model_lists.md`).
 
 The owner's word names no model. The names below are the planner's proposal of 2026-11-26 for the whole review of epoch 3;
 a person's `COAI_ROLES_MODELS` and `COAI_ROLES_BANDS` go over them. The rule: a row starts with its own vendor's model and
@@ -569,20 +568,9 @@ Risks:
 7. (Gone on 2026-11-26: `SPEC_CHANGES.md`, H-7. What came in its place is risk 13.)
 8. A change of `feature.yaml` or of the plan file after an approval refuses every coder start under that approval (B7). The cure
    is a new plan round.
-9. **The accepted risks of the judgement** (its sections 7, 13.8 and 14.7). **The owner accepted all of them on 2026-11-26:
-   agy A1 to A9 and codex C1 to C4 first, then the risks the addenda added — codex C5 (the model's JavaScript runs outside
-   the vendor sandbox), C6 (no version gate), C7 (an agent's work is not in the stream) and C9 (a third program that can
-   run commands as an "environment"); agy A10 (no version gate on a CLI that replaces itself daily), A11 (an expired copy
-   opens a login prompt on the channel of the job's prompt), A12 (coai's refresh unit holds the refresh token) and A13
-   (the guard is tied to the stream by a step index).** C8 was closed by the measure. So G13 is answered. A9 is now real,
-   not conditional (C8). Only a risk that a later addendum adds or widens goes to the owner, and it alone. agy: A1 nothing of the OS stops a process inside the unit from reading the sign-in copy — with G10 an access
-   token of at most one hour, without it the owner's Google refresh token; A2 the agy process has the whole network and the
-   host's loopback; A3 the tool list cannot be asked before a job; A4 agy is open on "exit 0, no output", which coai's handler
-   never answers; A5 "a refresh does not rotate the token" is three observations; A6 the cost of the release pin (fell away on 2026-11-26: there is no pin); A7 rule text
-   of the repository steers the model; A8 an agy coder cannot edit `.git`, `.agents/**` or `.codex/**`; A9 (addendum 1, only
-   when the init line does not tell the modes apart) the mode a turn ran in cannot be read. codex: C1 for a command of the
-   model, B6 inside the job folder, B10 and B11 are one layer, the vendor sandbox; C2 the codex process has the whole network;
-   C3 a real refresh was never run; C4 `AGENTS.md` reaches the model.
+9. **The accepted risks of the judgement** (its sections 7, 13.8 and 14.7): agy A1 to A13, codex C1 to C7 and C9. **The
+   owner accepted all of them on 2026-11-26**; C8 was closed by the measure. The list, risk by risk: `SPEC_CHANGES.md`,
+   H-9. Only a risk that a later addendum adds or widens goes to the owner, and it alone.
 10. The prompt line of C7 tells a model not to run a command that the repository's own instructions order. coai runs that
     command only when the repository declares it (C9). A repository that orders a command in prose and declares no step gets
     a coder that worked without it: the prompt says so to the model, the envelope says `declared: false`, and the checks of
@@ -603,27 +591,15 @@ Risks:
     (it cannot be asked without a model turn), and that a flag of the same name still does what it did. The envelope
     names the installed version beside the measured one, so a person can see how far apart they are.
 14. **A codex model that nobody measured runs as a coder on the day the CLI lists it** (the owner, 2026-11-27;
-    accepted the same day): `SPEC_CHANGES.md`, sections Q, R, S.
+    accepted the same day): `SPEC_CHANGES.md`, sections Q to T.
 
 The questions that were put to the owner on 2026-11-25 (questions 1 to 5, which task files cite as "SPEC section H,
 question n") and the answers of that day (decisions 35 to 40) are in `SPEC_CHANGES.md`, section H-Q, word for word.
 
-**The owner's decisions of 2026-11-26** (each is a plan change; the owner's words and the ledger entries are in
-`SPEC_CHANGES.md`, section M):
-
-- **Caps.** s8 t3 and s8 t4 together: at most 30 USD. s5 t6: at most 30 codex calls. s6 t7: at most 30 agy turns. They
-  replace 8 calls (s5 t6), 12 turns (s6 t7), 4 calls and 0.10 USD (s8 t3), 2 runs for a vendor and 0.50 USD (s8 t4). Every
-  call and its spend is still written down. **The 30 USD cap is enforced BEFORE each call, not from the ledger afterwards**
-  (re-review round, F3): a call reserves its priced worst case — the vendor's smallest model, a bound on the tokens of the
-  call, the price of a table written down before the first call — and is not launched when the reservation is more than
-  what is left of the 30 USD; a call with no bound or no price is not launched; the reservation is recorded beside the
-  actual cost.
-- **Versions gate nothing**, for any vendor: what was measured is history (C2 item 2, risk 13; ledger entry 1.8).
-- **Launchable only after the must-changes are built and green** (C2 item 1, C6; entry 1.16), and **the property and
-  behaviour checks stay** as protection (C2 item 2; entry 1.17).
-- **Accepted:** the risks agy A1 to A9 and codex C1 to C4 (risk 9). **Three full vendors:** claude, codex and agy each ship
-  as coder, reviewer and consultant; the codex and agy main-AI rows: yes, both (section D).
-- The instruction step (C9 items 4, 9 and 10), the pack (B item 3) and a coder's checks in E4 (section G).
+**The owner's decisions of 2026-11-26** (each is a plan change; the words and the ledger entries are in `SPEC_CHANGES.md`,
+section M; the list as this section held it is H-D there): the caps of the paid runs — s8 t3 and s8 t4 together at most
+30 USD, reserved BEFORE each call; s5 t6 at most 30 codex calls; s6 t7 at most 30 agy turns — versions gate nothing; a
+vendor is launchable only after its must-changes; the risks are accepted; three full vendors.
 
 What waits for the owner: the approval of ledger epoch 3 (the status block). What can still come to the owner: a vendor an addendum refuses (C5), a risk an
 addendum adds (risk 9).
@@ -633,7 +609,7 @@ addendum adds (risk 9).
 Build order: the story order of section G; in a story the `dependsOn` of its tasks. Measure tasks come before the code that
 depends on them, and the judgement comes before any codex or agy launch code.
 
-Test plan: every scenario S1 to S12, P1 to P13 and V1 to V37 (V30 to V37: sections Q, S) has a test that carries its number in its name, or the task result says
+Test plan: every scenario S1 to S12, P1 to P13 and V1 to V36 (V30 to V36: sections Q, S) has a test that carries its number in its name, or the task result says
 which test covers it. FakeCli is the only double; the units, git, the detached runner and stdio are real. Structural scans have a
 companion that proves they match something. The whole MCP suite runs through the MTP executable, never `dotnet test`.
 
@@ -653,7 +629,9 @@ Definition of Done:
 - [ ] The codex and agy main-AI rows of `shared/role-defaults.json` are both filled, with names of the lists or families.
 - [ ] A codex family name becomes the newest listed model when a job reaches the entry. A model that cannot be used, or
       that offers a tool outside the known set, is not launched, and the job goes to the next model. Fewer tools pass
-      only when the inventory was read whole. After a turn ran, a boundary stop is terminal (section S, S4).
+      only when the inventory was read whole. After the first launch of an entry, a red preflight and a boundary stop
+      are terminal (section S, S4). The commit that changes the tool rows lands only with addendum 4 of the judgement,
+      verdict `ship`.
 - [ ] Each shipped vendor's coder gets its own prompt: its own tool names and the one added line; the claude prompt file is byte
       for byte what it was.
 - [ ] A command that a repository declares as its instruction step is run by coai before turn 0, and its output is in the
