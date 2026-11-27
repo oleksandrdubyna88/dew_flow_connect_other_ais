@@ -450,7 +450,8 @@ the known set no longer ends the job. The text below holds the rule as it stands
    same environment as the launch that follows. For a coder it runs in a unit with the property list of the launch,
    with the job's own `CODEX_HOME` and its sign-in copy, never with the real home. It has a deadline and a size limit.
 3. **Which name is the newest.** Only a name of the exact shape `gpt-<version>-<family>` with `visibility` `list` is a
-   candidate. `<version>` is numbers with dots between them. Versions are compared number by number, a missing number
+   candidate. `<version>` is numbers with dots between them, and no number has a leading zero (`gpt-06-terra` and
+   `gpt-6.01-terra` have not the shape; section T). Versions are compared number by number, a missing number
    is 0: 7 is newer than 6.2, 6.10 is newer than 6.9, 6.1 is newer than 6. Two candidates with equal versions: the one
    the CLI lists first. A name with other words (`gpt-terra-latest`, `gpt-6.1-terra-preview`) and a hidden name are
    never taken. So the text that reaches the argv after `-m` always has this shape, whatever the list holds.
@@ -461,6 +462,7 @@ the known set no longer ends the job. The text below holds the rule as it stands
    changes nothing in that job. The next job takes it.
 5. **A name given in full is used as given.** `gpt-6.1-terra` in `COAI_ROLES_MODELS`, in `COAI_ROLES_BANDS` or in the
    `model` argument is never replaced by a newer one. A person who writes the family (`terra`) gets the family rule.
+   A hidden model that a person names in full is allowed (section T): only the family rule reads `visibility`.
 6. **Every codex entry of every role.** The coder, the scout, `important`, the BA, the orchestrator and the bands use
    the same names, so they use the same rule. The read-only roles were not measured with a real launch for this section.
 7. **What is recorded.** The envelope, the job's record and the line of a model switch name the name as asked and the
@@ -573,6 +575,11 @@ Two checks stay as protection (entry 1.17) and can stop a new model until a pers
 - **A new model whose stream holds an item type that nobody measured** (rule 4 of CX-T4) ends the job after its turn.
   The measured streams hold no `reasoning` item (pass 7, `gpt-6.1-terra`, effort medium).
 
+- **A new name scheme** (section T). The family rule knows one shape, `gpt-<version>-<family>`, and four families. A
+  model that the vendor names in another way (a new family word, a version after the family, a name with no `gpt-`)
+  is not picked up by itself, and the name check refuses it when a person writes it. It needs one edit of
+  `shared/role-model-names.json`: a new family, or the name in `names`.
+
 A model that the CLI lists and nobody priced is launched like any other: the usage line names it.
 
 ### Q5. Risk 14, scenarios, tasks
@@ -623,7 +630,7 @@ language.
 |---|---|---|---|
 | "Move to the next model": a new codex model with a tool outside the known set fails over, with the notice `coder-tool-unknown`. It does not end the job `coder-boundary` | **yes, entry 2.2** (contract, dod) | entry 2.1 was accepted and pushed with `coder-boundary` for this case; a later decision changed that contract | Q2 (the table), Q3 items 1 and 5, Q4; s2 t5 title, d4, d5, d6; s5 t3 d4; the `doneWhen` line of epoch 4 `e4-local-pages` |
 | Risk 14: "I accept" | no | it changes no scope, goal, Definition of Done, merge condition, epic, story, build order, contract or approach: entry 2.1 already launches the newest model and nothing waited for this word. It is unlike entries 1.3 and 1.15, where a vendor could ship only after the owner's word | Q5; SPEC.md H, risk 14 |
-| The turn of an agy coder: 30 minutes, not 45 | no | the plan names no number. s6 t3 d3 says that the deadline of an agy turn fits under the life of a token, about one hour: 30 minutes, 1 minute of backstop and 5 minutes of margin are 36. The number 45 is in the code (`AgyCoderVendor.TurnDeadline`), and the security verify left it to the owner (question (b) of pass 5: "the 45-minute cap stays until the owner answers") | here. No task text changes. The code number changes after the stop (R3) |
+| The turn of an agy coder: 30 minutes, not 45 | no | the plan names no number. s6 t3 d3 says that the deadline of an agy turn fits under the life of a token, about one hour: 30 minutes, 1 minute of backstop and 5 minutes of margin are 36. The number 45 is in the code (`AgyCoderVendor.TurnDeadline`), and the security verify left it to the owner (question (b) of pass 5: "the 45-minute cap stays until the owner answers") | here. No task text changes (changed by S: s6 t3 d3 now names 30 minutes and its test). The code number changes after the stop (R3) |
 | E4 question 3 (this repository's `testFiles` and `testFor`; `src_vs_code` is not a node project): "yes" | no, and not E3's | an open question of the E4 plan, with the words "s5 t6 starts after the answer" | section N of the E4 SPEC, on `feat/v2-ep3-e4-plan` |
 
 If the lead or the owner reads one of the three as a change, it is one more entry of the stopped epoch. The count is two
@@ -695,6 +702,295 @@ incident fix that the owner orders.
 **Tasks.** None added, none removed: 8 stories, 45 tasks. Changed: s2 t5 (title, d4, d5, d6), s5 t3 d4 (its
 pointer), one `doneWhen` line of epoch 4 `e4-local-pages` (its words). No scenario number is new: V32 to V34 hold the
 rule as it stands.
+
+## S. The revision of the re-review for ledger epoch 3 (2026-11-27)
+
+The plan stopped on entry 2.2 (section R). This section is step 4 of the rule of plan changes: the whole plan read
+again and revised against what is known now. **What it changes is the baseline that ledger epoch 3 is approved on. It is
+not an entry.** Done before it: the consultation (step 3; consultation `aee9490c9c834b51a284184a36a53427`, codex
+`gpt-6.2-astra`, one turn; advice only). Each point of the advice was checked by reading the code before it was used
+(S3). Beside it: the Opus judge's sorting of the done work (step 5; the record is in [PLAN.md](../../PLAN.md),
+`### Re-review for epoch 3`). After it: the plan round and the owner's approval. Neither is in this commit, and epoch 3
+of the ledger is not open.
+
+### S1. The whole plan, read again
+
+| Part of the plan | What was read | Result |
+|---|---|---|
+| The goal (PLAN.md, `## Goal`) | the section | holds. Entries 2.1 and 2.2 serve "never waits for a person": no job waits for a hand edit of a model name |
+| The owner's decisions of 2026-11-22 | the section | hold |
+| Epochs and epics | `feature.yaml`, the 5 `epoch.yaml`, the `epic.yaml` files of epochs 3 and 4; a search of epochs 1, 2 and 5 and of E1, E2 and E5 of epoch 3 for the codex names, the tool list and the two stop words | 5 epochs, 24 epics; none added, removed or moved. No other epic depends on what changed. One `doneWhen` line of epoch 4 `e4-local-pages` came with entry 2.1 and holds the words of entry 2.2 |
+| The Definition of Done | SPEC.md section I of E3 | two lines are new and one changed (S4). The other epics: not changed |
+| The merge conditions | SPEC.md C2 item 1, C6; entry 1.16 | they hold: a vendor is launchable only after its must-changes are built and green. New in the baseline: the commit that changes the tool rows lands only with addendum 4 of the judgement (S2, point 3) |
+| The build order | SPEC.md section G; the `dependsOn` of the 8 stories | s1, then the first four tasks of s2; s3 alone; s4, s7, then s5 and s6; s2 t5 after s5; s8 last. The doc duty of s2 t5 moved to s8 t5, so no task of s2 waits for s8 |
+| The stories and tasks of E3 | the 54 YAML files | 8 stories, 45 tasks. No task added or removed by the revision. Changed: s2 t5, s8 t5, s6 t3 d3 (S5) |
+| Narrower? | entries 2.1 and 2.2 | **yes**: the tool list no longer has to be the exact 11 names, and a tool outside the set no longer ends a job. So the owner approves epoch 3 |
+
+Not checked, so not rewritten: the status paragraph of PLAN.md still says "plan, nothing built, 2026-11-22". The planner
+read epoch 3 E3 against the git history of this branch and section N of the E4 SPEC. It did not read epochs 1, 2, 4
+and 5 against their code.
+
+### S2. The nine points of R2, each with its disposition
+
+| # | Point | Disposition |
+|---|---|---|
+| 1 | Is entry 2.1 one cause or two? | **Kept as one entry.** An entry is never edited, and the count does not depend on it: entry 2.2 stopped the plan. The revision treats the two halves apart: the name (S4 items 1 to 6) and the tool list (items 7 to 11) |
+| 2 | Section P: changes of the security verify that are no entries | **Two of them are contract changes by the rule, and they were not recorded on their day:** a host-read entry that is not a plain file after a turn, and a turn check over 30 seconds, end the job `coder-boundary` (passes 7 to 9); `checks-changed-tree` has a second meaning (pass 9). The other items of P only make the plan true as written ("after every turn", "one row for every id of class `pre`"). No entry is written now: the plan is stopped, the judge sorts their commits, and they are part of this baseline. Said plainly: with them counted on 2026-11-27 morning, the stop was due at entry 2.1. Whether they become entries is the lead's decision, as the ledger says for sections J to L |
+| 3 | The tool rule goes against a sentence of the judgement's 13.3; risk 14 is new | **Addendum 4 of the judgement, by the important model, before the rows change.** It rules on: CX-T1 as a known set with the complete-inventory rule (S4 item 8), the failover before a launch (item 10), the terminal rule after a turn (item 12) and risk 14, which the owner accepted. Its verdict goes into the history of `shared/coder-boundary-releases.json` by the rule of SPEC.md C2 ("How the history grows"). A verdict other than `ship` stops s2 t5 and goes to the owner. It is s2 t5 d9. Since section T: the addendum is a judge job of its own, which the lead orders and commits unchanged; it is not written by the task, and it rules on the run that reads the list of models too |
+| 4 | An item type of the stream that nobody measured | **Stays terminal** (S4 item 12): `coder-boundary`, nothing of the turn is committed, no failover. The lead's order of 2026-11-27, and the consultant's advice. The reason is measured: a web search left the tool list of the preflight the same and showed only in the stream (judgement 13.11), so the stream check is the only check there |
+| 5 | s2 t5 is in s2, and s2 depends on s5 | **Kept.** s5, s7 and s8 hold 6 tasks, the limit. The consultant found one conflict and it is true: s8 depends on s2, and s2 t5 d9 waited for s8 t5. The doc duty is now s8 t5 d4; s2 t5 d9 is the addendum |
+| 6 | The band 0 to 2 is the full name `gpt-6-luna`; agy has no family names | **Baseline, not changed.** The owner's words name terra. A person can write `luna` in `COAI_ROLES_BANDS` today. agy's ids stay full ids. (The revision also made one name rule for `gpt-5.5`, S4 item 5; the lead's review cut it: section T) |
+| 7 | The three answers that are no entries | **Folded in.** Risk 14: accepted (SPEC.md H). The 30 minutes: s6 t3 d3 names the number; the code changes after the stop. E4 question 3: section N of the E4 SPEC, commit `9897dc2b` on `feat/v2-ep3-e4-plan` |
+| 8 | `EPIC_BUNDLE.md` is the bundle of `6125f2ce` | **Made again** from the commit of this revision, by the commit after it |
+| 9 | The status block of SPEC.md says that s5 to s8 are plan only | **Rewritten** from the git history of this branch. The block as it stood is 0-S below |
+
+### S3. What the consultation added, and what the check of each point found
+
+| The advice | Checked at | Found | Where it went |
+|---|---|---|---|
+| A shorter PARSED tool list does not prove fewer tools | `CodexToolList.cs:47-68` at `62c6878c`, and the same lines of the local commit `62685e2b` | **true.** The nested tools of `functions.exec` are read from the free text of its description with the pattern `### \`(\w+)\``. If that text changes its form, the nested names are not found, the list is 4 known names, both reads agree, and under "fewer pass" the row holds — with tools coai did not see. Under the exact 11 names this case was refused. By reading; no replay was run | S4 item 8; s2 t5 d5; V36 |
+| After a turn, an unknown item of the stream stays terminal | judgement 13.11 (CX-T4, CX-T6) | **true**, as point 4 of S2 says | S4 item 12 |
+| `model-unavailable` has two outcomes, and the last entry fails at once; say the three in SPEC.md D | section Q2 | they were in Q2 only | SPEC.md D |
+| `gpt-5.5` is accepted, is not in the live list, and is never looked up | `shared/role-model-names.json:19`; `RESULTS_model_lists.md:37`; `CodexEntryModel.AsksTheList` of `62685e2b` | **true.** `gpt-5.5` and `gpt-5.4` are in `names`, have no family, and section Q1 asked the list only for a family and for the shape. Not a hole: the CLI refuses the launch. But the person gets a crash where a clear sentence was possible | S4 item 5 — **cut by the lead's review** (section T): the CLI's own refusal and its classification answer it |
+| The router checks `important` and removes doubles BEFORE a family is resolved | `RoleRouter.cs:114-126` and `:172-180` at `62c6878c` | **true, both.** With `important` = [`astra`] a caller that names `gpt-6.2-astra` is refused, because the list is compared by the written name. And a route that holds `terra` and `gpt-6.1-terra` keeps both, so the same model can be launched twice | S4 item 6: lists are compared by the written name (s2 t5 d3). The skip of a second launch was **cut by the lead's review** (section T) |
+| s8 depends on s2, and s2 t5 d9 waits for s8 t5 | the two `story.yaml` files; s2 t5 d9 | **true** | S2 point 5 |
+| The status says "s5 to s8 are plan only" | SPEC.md line 3; the git history | **true, it was stale** | S2 point 9 |
+| Tell the shipped coder paths apart from the empty main-AI defaults of codex and agy | `shared/role-defaults.json` at `62c6878c`; s7 `todo.md` | **true.** The rows of codex and of agy as the main AI are empty: s7 t4 d4 is not built. A codex or agy coder runs today through the failover of the claude row, or through a person's setting | the status block of SPEC.md |
+
+### S4. The rule as it stands (sections Q and R, with what the revision changed, and what section T changed after the plan round)
+
+The item numbers are kept, so that a task text that names one stays right.
+
+The name:
+
+1. A codex name with no version (`terra`, `astra`, `sol`, `luna`) is a family. When a job reaches the entry it becomes
+   the newest `gpt-<version>-<family>` with `visibility` `list` of the live list of the installed CLI (Q1). A number of
+   the version has no leading zero.
+2. The resolved name is recorded once. Every later turn of the session uses it. A resume never resolves again.
+3. A name given in full is used as given and is never replaced by a newer one. A hidden model that a person names in
+   full is allowed: only the family rule reads `visibility`.
+4. `shared/role-model-names.json` accepts a name of `names`, a family, and the exact shape. The claude rule does not
+   change.
+5. (Cut by the lead's review, section T. The revision looked up every full codex name in the live list. Now: a full
+   name with no family, such as `gpt-5.5`, is NOT looked up. The CLI refuses a name it does not serve, and the
+   classifier of a launch reads that refusal as it does today. The look-up of a full name of the exact shape stays as
+   entry 2.1 wrote it in Q2.)
+6. The route is not changed by a resolution. The `important` list and every other list are compared by the written
+   name, before a folder is made, as today. So `gpt-6.2-astra` is not on a list that holds `astra`, and the refusal says
+   to name the family or to change the list. (The skip of a second launch of the same model was cut: section T.)
+
+The stop word and the tool list:
+
+7. `model-unavailable` fails over at once. Three outcomes (Q2): the list of models cannot be read — the other models of
+   the vendor are skipped; no model of the family, a name of the shape that the list does not hold, a tool list that
+   cannot be read, or a tool outside the known set — the next entry is tried, the same vendor's too; on the last entry
+   the job ends `failed` with the word and does not wait. The word exists only before the first launch of an entry
+   (item 12).
+8. **Fewer tools pass only when the tool inventory was read whole.** A read is whole when: the report is the expected
+   JSON; every tool entry has a name; a tool that holds tools is walked; and, when `functions.exec` is in the list,
+   EVERY line of its description that starts with `###` matches the grammar ``^### `[A-Za-z0-9_.-]+`$``, and there is
+   at least one such line. One `###` line of another form makes the read not whole. A read that is not whole is a list
+   that cannot be read (item 7) in both reads; in one read only it is `coder-boundary`. The person is told: the notice
+   `coder-tool-unknown` is raised for it too, with a reason of its own and no name. Two tests: the recorded report with
+   the nested inventory in another form in both copies does not hold; and the recorded reports of `gpt-6.1-terra` and
+   of `gpt-5.6-terra` ARE read whole. If a recorded report is not whole under this grammar, the task stops and says so.
+9. No name outside the known set of 11 is ever launched. The two reads must hold the same names; if they differ the
+   job ends `coder-boundary`.
+10. A tool outside the known set, the same in both reads, with every other row holding, at the first launch of an
+    entry: `model-unavailable`, the next entry, one notice `coder-tool-unknown` for the entry (entry 2.2).
+11. The name of a tool is shown only when BOTH hold: the shape rule of Q3 item 5, and the shared secret redactor
+    leaves the name as it is (finding F0 of the plan round, section T: a name of allowed characters only can still
+    have the shape of a secret). Any other name is "a name that cannot be shown", with its length.
+
+After the first launch of an entry:
+
+12. **`model-unavailable` exists only BEFORE the first launch of an entry.** After it, every boundary stop is
+    terminal: `coder-boundary`, nothing of that turn is committed, no failover. This holds for:
+    - **a red preflight of any later launch of the entry** — a repair turn, a fix turn, a resumed session — whatever
+      row is red, the tool rows too (section T). A tool that shows on a fix turn was not there at turn 0: the session
+      changed under the job.
+    - an item type of the stream that nobody measured (rule 4 of CX-T4), a `web_search` item, a `collab_tool_call`
+      item, and the rollout check (CX-T5).
+
+    A turn of a model was run and something outside the measure was seen: another model would go on in a worktree and
+    a session state that nobody can vouch for.
+
+The run that reads the list of models:
+
+13. (Section T.) For a coder, `codex debug models` runs in a folder that holds no text of the repository: the stand-in
+    project, or an empty folder of the job. Never in the worktree: the run talks to the vendor, and `AGENTS.md` and
+    `.codex` of a repository must not be beside it. It is a unit like a launch. A unit that is refused, a write that
+    the OS layer stopped, and a unit that does not stop, during the list read, are `coder-boundary`, not
+    `model-unavailable`. Addendum 4 of the judgement rules on this run.
+
+### S5. Scenarios, tasks, risks
+
+**Scenarios** (the test plan of SPEC.md section I counts V1 to V36): **V36** a tool inventory that is not read whole,
+in both reads and in one; the two recorded reports read whole. V31 also holds that `important` is compared by the
+written name. V32 also holds item 12 (after the first launch of an entry nothing fails over) and item 13. (V37, one
+launch of a model in a job, was cut: section T.)
+
+**Tasks.** None added, none removed: 8 stories, 45 tasks. Changed by the revision and by section T:
+
+- s2 t5: every dod item (the task text was written again from S4; d9 is the gate of addendum 4, it was the docs).
+- s5 t3 d3: a pointer to s2 t5 d5 ("fewer names pass only when the inventory was read whole").
+- s8 t5: d4 is new (the docs of the family rule, the stop word, the tool rule and the notice).
+- s6 t3 d3: the number 30 for the deadline of an agy turn (the owner, 2026-11-27), and the test that holds it.
+
+**Risks.** Risk 14 is accepted. One line is added to it (SPEC.md H): a tool inventory is read from text that the vendor
+writes for the model, and item 8 is what keeps a change of that text from passing as a smaller tool set.
+
+**The definition of done of E3** (SPEC.md I): one line is new (the name, the stop word, the tool rule, the terminal
+rule after a turn); the line of the main-AI rows says "names of the lists or families" where it said "measured names
+only".
+
+### S6. For the lead, not done here
+
+1. The plan round and the owner's approval. `Narrowed: yes`, so the line of epoch 3 says `by owner`.
+2. The code. Nothing of this section is built. The local commit `62685e2b` holds s2 t5 as entry 2.1 wrote it; items
+   8, 10, 11 (the redactor), 12 and 13 are not in it.
+3. Addendum 4 of the judgement is ordered by the lead (s2 t5 d9).
+4. The number 30 for an agy turn is in the task text and not in the code.
+5. The parent plan's status paragraph (S1, last lines).
+
+### S7. After the judge's sorting (added the same day, with the record in PLAN.md)
+
+The Opus judge sorted 67 commits made since the approval of epoch 2: 66 fit, and one, local and never pushed, is cut in
+part. The record is `### Re-review for epoch 3` of [PLAN.md](../../PLAN.md); the file with one row for each commit is
+[RESULTS_epoch2_done_code_sorting.md](../RESULTS_epoch2_done_code_sorting.md), copied unchanged. The judge read the plan at
+`62c6878c`, before this revision.
+
+- **The cut:** the part of the local commit `62685e2b` that ends a job `coder-boundary` for a tool outside the known set,
+  with ONE notice for the job. It is entry 2.1, which entry 2.2 replaced. Fix forward by a new commit on top of it, when
+  epoch 3 is open and before any push.
+- **Not a cut, not built:** against this revision the same commit lacks items 8, 12 and 13 of S4 (items 5 and the
+  launch-once half of 6 were cut after the plan round: section T).
+- **Three commits were made during the stop** (the deviations of the record): `9897dc2b` (plan text, E4), `62685e2b` and
+  `dee4b684` (local).
+- **`02fb2b36`** (the claude alias `haiku` in plan mode) is on a branch from `main`, for the released product, by the
+  owner's order: work outside the plan, not a deviation.
+- **The 5 paid agy turns of `4466732e`** are inside the owner's cap of 30 agy turns (entry 1.2): 16 of 30 are used.
+- **E4:** three findings of its task s5 t6 are in section S of the E4 SPEC, commit `3995acc6` on `feat/v2-ep3-e4-plan`.
+- **Carried:** the tool text at `src_mcp/src/Tools.cs:583` still says that codex and agy are not launchable (s7 t4 d3).
+
+## T. The plan round of the re-review, and the lead's review (2026-11-27)
+
+**The plan round.** coai session `da911775`, on the ref `plan/v2-ep3-e3-rereview-2`, read the bundle of commit
+`cdda0526`. Verdict: `proceed`. Two findings. The planner has the round and the decisions from the lead.
+
+- **F0, accepted.** A tool name that passes the character rule can still have the shape of a secret. The shared secret
+  redactor runs on the name before it is shown; a name it would change is "a name that cannot be shown" (S4 item 11).
+  s2 t5 d6 has a test with a secret-shaped name made only of allowed characters.
+- **F1, rejected.** It is about the argv of the instruction step. The lead's reason, as given: the instruction argv is
+  the repository's own text, the unit holds no secret of coai, and the owner's rule of 2026-11-26 applies. The planner
+  did not see the finding's own text.
+
+**The lead's own Opus review** said "revise", with small changes. The lead decided each item; the planner did not see
+the review's own text, only the decisions. What they changed is the baseline of ledger epoch 3, like the rest of the
+revision: none is an entry.
+
+| # | The lead's decision | Where it is |
+|---|---|---|
+| 1 | Must: a red preflight of any launch AFTER the first launch of an entry (repair, fix, resume) is `coder-boundary`, with no failover | S4 item 12; s2 t5 d4 and d5 (the test: a new tool shows on a fix turn, zero launches of the next entry) |
+| 2 | The coder's `codex debug models` runs in a folder with no repository text, not in the worktree; a unit refusal, a stopped write or a unit that does not stop during the list read stays `coder-boundary`; addendum 4 rules on this run | S4 item 13; s2 t5 d2, d4, d9 |
+| 3 | The inventory grammar is named: every `###` line of the description of `functions.exec` matches ``^### `[A-Za-z0-9_.-]+`$``, or the read is not whole; a positive test on the recorded reports of `gpt-6.1-terra` and `gpt-5.6-terra` | S4 item 8; s2 t5 d5. The repository holds no recorded report today, so the task records the two, with no model call |
+| 4 | d1 names the base of the red run (`62c6878c`) and the red reasons; it names the tests that are green on that base as guards, each with the mutation that turns it red | s2 t5 d1 |
+| 5 | Not needed (it fell with 13 b) | — |
+| 6 | The list "Open" of the status gets s6 t3 d3, s7 t4 d3, s8 t3 d1 (a new run after the fix of the `haiku` alias) and s8 t5 d4; "t5 built" and "t3 has its real runs" are corrected | the status block of SPEC.md |
+| 7 | The judgement file leaves the `files` of s2 t5: the addendum is a judge job of its own, which the lead orders and commits unchanged. A line of the definition of done: the commit of the tool rows lands only with addendum 4 = `ship` | s2 t5 `files` and d9; SPEC.md I |
+| 8 | The notice is raised too, with a reason of its own, when the inventory is not read whole | S4 item 8; s2 t5 d6; the `doneWhen` line of epoch 4 `e4-local-pages` |
+| 9 | (a) A leading zero in a version is refused. (b) A hidden model named in full is allowed; written and tested. (c) New name schemes are a limit of "by itself" | Q1 items 3 and 5, Q4; S4 items 1 and 3; s2 t5 d2 and d3 |
+| 10 | The row "30 minutes" of the table of R said "no task text changes"; S changed s6 t3 d3. The row is marked. s6 t3 d3 gets its test: a turn limit of 30 minutes and a V28 margin of 36 minutes | R; s6 t3 d3 |
+| 11 | s5 t3 d3 said only "fewer names pass": a pointer to s2 t5 d5 | s5 t3 d3 |
+| 12 | SPEC.md was 65,380 of 65,536 bytes: more records move here, so that the next plan edit fits | H-9, H-D, C5-F and D-F below; SPEC.md is now under 63,000 bytes |
+| 13 a | Cut: full codex names are not looked up in the live list. The consultant's point on `gpt-5.5` is answered by the CLI's own refusal and its classification | S4 item 5 |
+| 13 b | Cut: the skip of a second launch of the same model. Only "lists are compared by the written name" stays. V37 is gone | S4 item 6; S5 |
+
+**One reading of the planner, for the lead.** Decision 13 a says "do not look up full codex names". The planner took
+out item 5 of S4, which the revision had added, and the parts of d2 and d4 that came with it. The row of Q2 that entry
+2.1 wrote — a full name of the exact shape that the list does not hold ends the entry `model-unavailable` — is kept: it
+was in the plan the owner's entry made, and no decision names it. If 13 a means that row too, a full name is never
+looked up at all, and the CLI's own refusal answers every full name; that is one more edit of Q2, S4 item 7 and d4.
+
+**Scenarios and tasks after this section.** V1 to V36. 8 stories, 45 tasks; none added, none removed.
+
+## 0-S. The status block of SPEC.md as it stood until the revision of 2026-11-27 (moved from SPEC.md, word for word)
+
+> Status: **s1 to s3 are built (s3 t6 is open) and s4 is measured and judged; s5 to s8 are plan only, 2026-11-26.** Plan gate:
+> `proceed`, 2026-11-25 (section J); the changes after it (section K); second plan round: `proceed`, 2026-11-26 (section L).
+> The owner's decisions of 2026-11-26 (sections M and O) are plan changes in the parent plan's ledger
+> ([PLAN.md](../../PLAN.md), `## Plan changes`). The re-review round of E3: `proceed`, 2026-11-26, 3 findings accepted
+> (section N). The owner accepted the revised plan on 2026-11-26; epoch 2 of the ledger is **stopped for re-review** (entries 2.1 and 2.2, 2026-11-27: sections Q and R). Sections J to R are in
+> [SPEC_CHANGES.md](SPEC_CHANGES.md): a spec file may hold 64 KiB (B item 5). Scope: the server half (`src_mcp`, `shared/`,
+> `.coai/toolchain.yaml`). Written by the planner
+> (Fable) from `v2/` and the code at `feat/v2-ep3-e2-coder` `0e8e8941`, read-only. Parent plan: [PLAN.md](../../PLAN.md);
+> architecture: [server.md](../../architecture/server.md) §2, §8, §10, §19, §20, §23. Stories and tasks: the YAML tree under
+> `stories/` (8 stories, 45 tasks, no task above complexity 6). Two cornerstones: **s3** (what a plan round over a folder
+> approves) and **s4** (the codex and agy write boundary: measure first, then a security judgement).
+
+## D-L. The lists of the claude row, from SPEC.md section D (moved from SPEC.md on 2026-11-27, word for word)
+
+**The lists** (main AI claude; `shared/role-defaults.json`). The names there are the owner's, so the right column is a proposal
+(section H, question 3):
+
+| Role | Today | Proposed for E3 |
+|---|---|---|
+| scout | sonnet | sonnet → haiku → codex `terra` (only with a codex row) |
+| judge and important tasks (`important`) | fable → codex `astra` (only with a codex row) | no change |
+| ba | fable → opus | no change |
+| coder | the band model, then sonnet | the band model, then sonnet → opus → codex `terra` → agy `gemini-4-argon-medium` (each other vendor only with its row AND a shipped write launch) |
+
+The owner accepted the right column for scout and coder on 2026-11-25 (decision 35).
+
+## H-9. Risk 9 of SPEC.md, section H (moved from SPEC.md on 2026-11-27, word for word)
+
+9. **The accepted risks of the judgement** (its sections 7, 13.8 and 14.7). **The owner accepted all of them on 2026-11-26:
+   agy A1 to A9 and codex C1 to C4 first, then the risks the addenda added — codex C5 (the model's JavaScript runs outside
+   the vendor sandbox), C6 (no version gate), C7 (an agent's work is not in the stream) and C9 (a third program that can
+   run commands as an "environment"); agy A10 (no version gate on a CLI that replaces itself daily), A11 (an expired copy
+   opens a login prompt on the channel of the job's prompt), A12 (coai's refresh unit holds the refresh token) and A13
+   (the guard is tied to the stream by a step index).** C8 was closed by the measure. So G13 is answered. A9 is now real,
+   not conditional (C8). Only a risk that a later addendum adds or widens goes to the owner, and it alone. agy: A1 nothing of the OS stops a process inside the unit from reading the sign-in copy — with G10 an access
+   token of at most one hour, without it the owner's Google refresh token; A2 the agy process has the whole network and the
+   host's loopback; A3 the tool list cannot be asked before a job; A4 agy is open on "exit 0, no output", which coai's handler
+   never answers; A5 "a refresh does not rotate the token" is three observations; A6 the cost of the release pin (fell away on 2026-11-26: there is no pin); A7 rule text
+   of the repository steers the model; A8 an agy coder cannot edit `.git`, `.agents/**` or `.codex/**`; A9 (addendum 1, only
+   when the init line does not tell the modes apart) the mode a turn ran in cannot be read. codex: C1 for a command of the
+   model, B6 inside the job folder, B10 and B11 are one layer, the vendor sandbox; C2 the codex process has the whole network;
+   C3 a real refresh was never run; C4 `AGENTS.md` reaches the model.
+
+## H-D. The owner's decisions of 2026-11-26, from SPEC.md section H (moved from SPEC.md on 2026-11-27, word for word)
+
+**The owner's decisions of 2026-11-26** (each is a plan change; the owner's words and the ledger entries are in
+`SPEC_CHANGES.md`, section M):
+
+- **Caps.** s8 t3 and s8 t4 together: at most 30 USD. s5 t6: at most 30 codex calls. s6 t7: at most 30 agy turns. They
+  replace 8 calls (s5 t6), 12 turns (s6 t7), 4 calls and 0.10 USD (s8 t3), 2 runs for a vendor and 0.50 USD (s8 t4). Every
+  call and its spend is still written down. **The 30 USD cap is enforced BEFORE each call, not from the ledger afterwards**
+  (re-review round, F3): a call reserves its priced worst case — the vendor's smallest model, a bound on the tokens of the
+  call, the price of a table written down before the first call — and is not launched when the reservation is more than
+  what is left of the 30 USD; a call with no bound or no price is not launched; the reservation is recorded beside the
+  actual cost.
+- **Versions gate nothing**, for any vendor: what was measured is history (C2 item 2, risk 13; ledger entry 1.8).
+- **Launchable only after the must-changes are built and green** (C2 item 1, C6; entry 1.16), and **the property and
+  behaviour checks stay** as protection (C2 item 2; entry 1.17).
+- **Accepted:** the risks agy A1 to A9 and codex C1 to C4 (risk 9). **Three full vendors:** claude, codex and agy each ship
+  as coder, reviewer and consultant; the codex and agy main-AI rows: yes, both (section D).
+- The instruction step (C9 items 4, 9 and 10), the pack (B item 3) and a coder's checks in E4 (section G).
+
+## C5-F. What "folder removed" means, from SPEC.md section C5 (moved from SPEC.md on 2026-11-27, word for word)
+
+"Folder removed" means: the judgement commit deletes the story folder of the refused vendor and its entry in the `dependsOn` of
+s8, and writes the reason in the judgement file. `validate_work` accepts the folder after that commit, and no story waits for one
+that is not built. The plan changed, so the epic gets a new plan round. A refused vendor is never a required launch: the route
+drops it, the tests of s7 and s8 run all four combinations with an injected table, and in every one the fake CLI records zero
+launches of a refused vendor.
+
+## D-F. The files of the reviewer and the consultant of each vendor, from SPEC.md section D (moved from SPEC.md on 2026-11-27, word for word)
+
+The reviewer and the consultant of all three exist since before v2 (`src_mcp/runners/Reviewers/ClaudeRuntime.cs`,
+`CodexRuntime` in `ReviewerRuntime.cs:587`, `AntigravityRuntime.cs`; `src_mcp/runners/Consultation/ClaudeConsultant.cs`,
+`CodexConsultant.cs`, `AntigravityConsultant.cs`).
 
 ## H-7. Risk 7 of SPEC.md, section H (moved from SPEC.md on 2026-11-27, word for word)
 
