@@ -3,7 +3,7 @@
 > Status: **plan, nothing built, 2026-11-22.** Branch `feat/v2-plan`. Built with the v2 work method itself: a feature
 > folder → epochs (≤ 5 epics each, MVP first) → epics → stories → tasks, each node with a YAML file. Stories and tasks
 > are written for an epic when it starts (now: epoch 1). The split was re-decided by Fable on 2026-11-22: 5 epochs, MVP epics with measurable pass criteria, 10 cornerstone stories (feature.yaml `cornerstones`; 12 since 2026-11-25, when the E3 plan gate added E3 s3 and s4).
-> **Stopped for re-review, 2026-11-27** (the ledger below, entry 2.2): the plan is stopped for re-review after the second change of ledger epoch 2. No new code on any epic of this plan, and no merge of its work, until epoch 3 of the ledger is open.
+> **Stopped for re-review, 2026-11-27** (the ledger below, entry 2.2): the plan is stopped for re-review after the second change of ledger epoch 2. No new code on any epic of this plan, and no merge of its work, until epoch 3 of the ledger is open. The revision of the whole plan is written (the record "Re-review for epoch 3" below; section S of the E3 SPEC_CHANGES); the plan round and the owner's approval are not done.
 
 ## Plan changes
 
@@ -128,6 +128,33 @@ Narrowed: yes — the release pin, the agy program store and the refusal of a he
   are listed in section R of [SPEC_CHANGES.md](epoch-3/e3-roles-complete/SPEC_CHANGES.md).)
   (During the stop: no new code on any epic of this plan and no merge of a pull request that carries its work. Allowed: the
   re-review, its reverts, work outside the plan, and an incident fix that the owner orders.)
+
+### Re-review for epoch 3
+
+Narrowed: yes — the tool list of a codex coder no longer has to be the exact 11 measured names (entry 2.1), and a tool outside the known set no longer ends a job (entry 2.2); the owner has not approved yet
+
+| Work | Where | Verdict | Action |
+|---|---|---|---|
+| the revision of the plan (2026-11-27): section S of the E3 SPEC_CHANGES, the E3 SPEC, and the tasks s2 t5, s8 t5 d4 and s6 t3 d3 | feat/v2-ep3-e3-roles, pushed | — | nothing of it is built; the plan round and the owner read it |
+  (This record is not complete, and ledger epoch 3 is not open. The steps of the rule, and where each stands on 2026-11-27.
+  Done: the stop, commit 62c6878c. Done: the consultation, id aee9490c9c834b51a284184a36a53427, one turn, advice only; each
+  of its points was checked by reading the code before it was used. Done: the revision of the whole plan, in section S of
+  [SPEC_CHANGES.md](epoch-3/e3-roles-complete/SPEC_CHANGES.md): the goal, the Definition of Done, the merge conditions, the
+  epics and the build order were read again, each of the nine open points of section R has its disposition, and the three
+  answers of the owner that are no entries are folded in. What the revision changes is the baseline of epoch 3 and is not
+  an entry. Not done when this was written: the rows of the Opus judge, who sorts every commit made since the approval of
+  epoch 2, commit 6125f2ce, as fits or cut; the cuts, if the judge names one; the plan round; the owner's approval, which
+  a narrower plan needs.)
+  (What the whole reading found for the parts of this file. The goal holds. The owner's decisions of 2026-11-22 hold. The
+  five epochs and the 24 epics hold: none is added, removed or moved; one doneWhen line of epoch 4 e4-local-pages came with
+  entry 2.1. The build order of the epochs holds. Inside epoch 3 E3 the build order has one new step, the task s2 t5 after
+  the story s5. The status paragraph of this file still says "plan, nothing built, 2026-11-22": the planner did not read
+  the epochs 1, 2, 4 and 5 against their code, so it is not rewritten.)
+  (A deviation, recorded. Two changes of the security verify of 2026-11-27 are contract changes by the rule, and they were
+  not written as entries on their day: after a turn a host-read entry that is not a plain file, and a turn check that takes
+  more than 30 seconds, end a job coder-boundary; and the stop word checks-changed-tree got a second meaning. They are in
+  section P of the same file. With them counted, the stop was due at entry 2.1. They are part of the baseline of epoch 3.
+  Whether they become entries is the lead's decision.)
 
 ## Goal
 

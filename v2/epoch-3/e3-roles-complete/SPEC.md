@@ -1,16 +1,14 @@
 # Spec — epoch 3, E3 "Roles complete: scout, important/judge, codex + agy rows, review_plan(featureFolder)"
 
-> Status: **s1 to s3 are built (s3 t6 is open) and s4 is measured and judged; s5 to s8 are plan only, 2026-11-26.** Plan gate:
-> `proceed`, 2026-11-25 (section J); the changes after it (section K); second plan round: `proceed`, 2026-11-26 (section L).
-> The owner's decisions of 2026-11-26 (sections M and O) are plan changes in the parent plan's ledger
-> ([PLAN.md](../../PLAN.md), `## Plan changes`). The re-review round of E3: `proceed`, 2026-11-26, 3 findings accepted
-> (section N). The owner accepted the revised plan on 2026-11-26; epoch 2 of the ledger is **stopped for re-review** (entries 2.1 and 2.2, 2026-11-27: sections Q and R). Sections J to R are in
-> [SPEC_CHANGES.md](SPEC_CHANGES.md): a spec file may hold 64 KiB (B item 5). Scope: the server half (`src_mcp`, `shared/`,
-> `.coai/toolchain.yaml`). Written by the planner
-> (Fable) from `v2/` and the code at `feat/v2-ep3-e2-coder` `0e8e8941`, read-only. Parent plan: [PLAN.md](../../PLAN.md);
-> architecture: [server.md](../../architecture/server.md) §2, §8, §10, §19, §20, §23. Stories and tasks: the YAML tree under
-> `stories/` (8 stories, 45 tasks, no task above complexity 6). Two cornerstones: **s3** (what a plan round over a folder
-> approves) and **s4** (the codex and agy write boundary: measure first, then a security judgement).
+> Status: **stopped for re-review, 2026-11-27. This is the REVISED plan; it is not approved yet** (ledger entries 2.1 and
+> 2.2 of [PLAN.md](../../PLAN.md)). [SPEC_CHANGES.md](SPEC_CHANGES.md) holds sections J to S — Q, R and S are the two
+> entries and the revision — and the earlier status (0-S): a spec file may hold 64 KiB. By the git history of
+> this branch: s1 to s7 have their code, and the codex and the agy coder are launchable since 2026-11-27 (`85134aec`,
+> `b9df00dc`); of s8, t1, t2, t5 and t6 are built and t3 has its real runs. **Open:** s2 t5 (not built); s7 t4 d4 (the
+> main-AI rows of codex and agy are empty: their coder runs through the failover of the claude row or a person's
+> setting); s8 t4. Scope: the server half (`src_mcp`, `shared/`, `.coai/toolchain.yaml`). Parent plan:
+> [PLAN.md](../../PLAN.md); architecture: [server.md](../../architecture/server.md) §2, §8, §10, §19, §20, §23. Stories
+> and tasks: the YAML tree under `stories/` (8 stories, 45 tasks, no task above complexity 6). Cornerstones: s3 and s4.
 
 ## 0. Goal, and what is there today
 
@@ -305,7 +303,7 @@ and green (C2 item 1). The owner named four of them; the rest are the lists 13.1
 
 - codex. The argv is the set of 13.4 on EVERY turn: the set CX1 and `-c agents.enabled=false` (s5 t2 d1). **Before every
   launch the job's `CODEX_HOME` holds no `environments.toml`; one that is there refuses the launch** (CX-C1, s5 t2 d2). The
-  preflight asks the tool list with the job's own model (no name outside the 11 known ones; fewer pass: section Q) and reads `codex doctor`
+  preflight asks the tool list with the job's own model (no name outside the 11 known ones; fewer pass when the inventory was read whole: sections Q, S) and reads `codex doctor`
   (CX-C4, CX-C3); the tool list says nothing about the web search (s5 t3 d3). **The exact rule of CX-T4 after every turn**
   (s5 t4 d3): `agent_message`, `command_execution`, `file_change` and `error` items pass; an `mcp_tool_call` passes only
   for the two list tools of the server `codex` with an empty list and no error; a `web_search` and a `collab_tool_call`
@@ -465,19 +463,10 @@ Tasks: s7 t3 (the key, the run, the refusal, the envelope, this repository's fil
 
 **The rule does not change** (E1 spec A): a limit, a refusal or a crash goes to the next model at once; only the last model waits;
 a spent quota, a missing CLI or a lost sign-in skips that vendor's other models; `cancelled`, `tree-changed`, `output-invalid` and
-the coder's own stops never fail over. `model-unavailable` (section Q) goes to the next model too. A read-only role restarts from turn 0. A coder restarts from the last coai commit.
+the coder's own stops never fail over. `model-unavailable` (sections Q, S) goes to the next model too, and exists only before the first launch of an entry: a model list that cannot be read skips the vendor, every other case tries the next entry, the last entry fails at once. After a turn ran, a boundary stop is terminal: no commit of the turn, no failover. A read-only role restarts from turn 0. A coder restarts from the last coai commit.
 
-**The lists** (main AI claude; `shared/role-defaults.json`). The names there are the owner's, so the right column is a proposal
-(section H, question 3):
-
-| Role | Today | Proposed for E3 |
-|---|---|---|
-| scout | sonnet | sonnet → haiku → codex `terra` (only with a codex row) |
-| judge and important tasks (`important`) | fable → codex `astra` (only with a codex row) | no change |
-| ba | fable → opus | no change |
-| coder | the band model, then sonnet | the band model, then sonnet → opus → codex `terra` → agy `gemini-4-argon-medium` (each other vendor only with its row AND a shipped write launch) |
-
-The owner accepted the right column for scout and coder on 2026-11-25 (decision 35).
+**The lists of the claude row** are built as `shared/role-defaults.json` holds them. The table of the proposal and
+decision 35: `SPEC_CHANGES.md`, D-L.
 
 **The codex and agy main-AI rows: both are filled** (the owner, 2026-11-26: all three AIs are full ones; the words are in
 `SPEC_CHANGES.md`, section M). So claude, codex and agy each ship as a coder, a reviewer and a consultant, and each can be
@@ -614,7 +603,7 @@ Risks:
     (it cannot be asked without a model turn), and that a flag of the same name still does what it did. The envelope
     names the installed version beside the measured one, so a person can see how far apart they are.
 14. **A codex model that nobody measured runs as a coder on the day the CLI lists it** (the owner, 2026-11-27;
-    accepted the same day): `SPEC_CHANGES.md`, sections Q and R.
+    accepted the same day): `SPEC_CHANGES.md`, sections Q, R, S.
 
 The questions that were put to the owner on 2026-11-25 (questions 1 to 5, which task files cite as "SPEC section H,
 question n") and the answers of that day (decisions 35 to 40) are in `SPEC_CHANGES.md`, section H-Q, word for word.
@@ -636,7 +625,7 @@ question n") and the answers of that day (decisions 35 to 40) are in `SPEC_CHANG
   as coder, reviewer and consultant; the codex and agy main-AI rows: yes, both (section D).
 - The instruction step (C9 items 4, 9 and 10), the pack (B item 3) and a coder's checks in E4 (section G).
 
-Nothing here waits for the owner now. What can still come to the owner: a vendor an addendum refuses (C5), a risk an
+What waits for the owner: the approval of ledger epoch 3 (the status block). What can still come to the owner: a vendor an addendum refuses (C5), a risk an
 addendum adds (risk 9).
 
 ## I. Build order, test plan, Definition of Done
@@ -644,7 +633,7 @@ addendum adds (risk 9).
 Build order: the story order of section G; in a story the `dependsOn` of its tasks. Measure tasks come before the code that
 depends on them, and the judgement comes before any codex or agy launch code.
 
-Test plan: every scenario S1 to S12, P1 to P13 and V1 to V35 (V30 to V35: section Q) has a test that carries its number in its name, or the task result says
+Test plan: every scenario S1 to S12, P1 to P13 and V1 to V37 (V30 to V37: sections Q, S) has a test that carries its number in its name, or the task result says
 which test covers it. FakeCli is the only double; the units, git, the detached runner and stdio are real. Structural scans have a
 companion that proves they match something. The whole MCP suite runs through the MTP executable, never `dotnet test`.
 
@@ -661,7 +650,10 @@ Definition of Done:
 - [ ] The pack text of every scope that has an outside dependency names it, an epoch and an epic scope included; the
       approval id covers the pack format version, which was raised with it, and an approval of an older format binds no
       coder job and asks for a new plan round.
-- [ ] The codex and agy main-AI rows of `shared/role-defaults.json` are both filled, with measured names only.
+- [ ] The codex and agy main-AI rows of `shared/role-defaults.json` are both filled, with names of the lists or families.
+- [ ] A codex family name becomes the newest listed model when a job reaches the entry. A model that cannot be used, or
+      that offers a tool outside the known set, is not launched, and the job goes to the next model. Fewer tools pass
+      only when the inventory was read whole. After a turn ran, a boundary stop is terminal (section S, S4).
 - [ ] Each shipped vendor's coder gets its own prompt: its own tool names and the one added line; the claude prompt file is byte
       for byte what it was.
 - [ ] A command that a repository declares as its instruction step is run by coai before turn 0, and its output is in the

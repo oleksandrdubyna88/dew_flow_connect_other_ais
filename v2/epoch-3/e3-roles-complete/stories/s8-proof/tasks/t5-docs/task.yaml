@@ -11,6 +11,7 @@ files:
   - README.md
   - v2/architecture/server.md
   - research/module_server.md
+  - research/module_runners.md
 dod:
   - id: d1
     item: "ARCHITECTURE.md and README.md name the scout and judge roles with their envelopes, review_plan with featureFolder (validate first, the pack, the scope, the limits, what is approved) and the coder of each shipped vendor with the measured limits of its boundary and the release each was measured on (history); the list of roles in both files equals RoleDescriptors.Shipped (a test or a grep in the task result proves it)"
@@ -18,3 +19,5 @@ dod:
     item: "the docs say that no version of the CLI of claude, codex or agy refuses or stops anything and none asks for a new measure (the owner's decision of 2026-11-26), that shared/coder-boundary-releases.json holds the verdicts and the history of the measures (measured on which release, when), where a person sees the installed version beside the measured one, and what still refuses a coder (the verdict, a flag the help does not declare, a preflight row, a launch check, a turn check); a new version of a CLI is no reason to edit a doc"
   - id: d3
     item: "server.md gets a section that records what this epic decided differently from its sections 2, 8, 10, 19, 20 and 23; research/module_server.md describes the code as it is"
+  - id: d4
+    item: "(moved here from s2 t5 d9 by the revision of 2026-11-27: s8 depends on s2, so a task of s2 cannot wait for this one) after s2 t5 is built: v2/architecture/server.md section 20 and the module document of the runners name the family rule of the codex names, the word model-unavailable with its three outcomes, the tool rule with the complete inventory, the terminal rule after a turn and the notice coder-tool-unknown (SPEC_CHANGES section S, S4); the tab that shows the notice is not built here (epoch 4 e4-local-pages)"
