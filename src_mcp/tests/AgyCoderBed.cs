@@ -35,13 +35,17 @@ internal sealed class AgyCoderBed
     }
 
     /// <summary>The sign-in file in the shape the measure saw (<c>token</c> with the access token, its type, the refresh token, the expiry and the lifetime; <c>auth_method</c>; <c>id_token_email</c>), every value made up.</summary>
-    internal static string SignInFile(DateTime expires, string access = Access) =>
+    internal static string SignInFile(DateTime expires, string access = Access, bool realShape = false) =>
         new JsonObject
         {
-            ["token"] = new JsonObject { ["access_token"] = access, ["token_type"] = "Bearer", ["refresh_token"] = Refresh, ["expiry"] = expires.ToString("O"), ["expires_in"] = 3599 },
+            ["token"] = new JsonObject { ["access_token"] = access, ["token_type"] = "Bearer", ["refresh_token"] = Refresh, ["expiry"] = realShape ? RealShapeTime(expires) : expires.ToString("O"), ["expires_in"] = 3599 },
             ["auth_method"] = "oauth",
             ["id_token_email"] = "someone@example.invalid",
         }.ToJsonString();
+
+    /// <summary>The time as the REAL file spells it (seen in the first real run): nine fraction digits and an offset with a plus sign — <c>2026-11-26T23:04:58.302489051+01:00</c>.</summary>
+    internal static string RealShapeTime(DateTime utc) =>
+        new DateTimeOffset(utc.ToUniversalTime()).ToOffset(TimeSpan.FromHours(1)).ToString("yyyy-MM-dd'T'HH:mm:ss.fffffff'00'zzz", System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>A table in which agy ships and is launchable, with the one record of history that the product's table holds (a record, never a condition).</summary>
     internal static CoderBoundaryTable Table(bool launchable = true) =>
@@ -150,21 +154,21 @@ internal sealed class AgyUnit : IAsyncDisposable
 
     public string Guard => AgyCoderUnit.GuardFolder(Bed.Job);
 
-    public static async Task<AgyUnit> CreateAsync(DateTime? realExpiry = null, Func<IReadOnlyList<string>, IReadOnlyList<string>>? degrade = null, AgyCoderVendor? vendor = null)
+    public static async Task<AgyUnit> CreateAsync(DateTime? realExpiry = null, Func<IReadOnlyList<string>, IReadOnlyList<string>>? degrade = null, AgyCoderVendor? vendor = null, bool realShape = false)
     {
         Assert.SkipUnless(SystemdUser.Works(out var why), why);
         var bed = await CoderBed.CreateAsync();
         var chosen = vendor ?? AgyCoderBed.Vendor();
         var unit = new AgyUnit(bed, chosen, new CoderTurns(new CoderBoundary(bed.Launcher, bed.Host) { Vendor = chosen, Degrade = degrade }, bed.Evidence));
-        unit.WriteSignIn(realExpiry ?? DateTime.UtcNow.AddHours(2));
+        unit.WriteSignIn(realExpiry ?? DateTime.UtcNow.AddHours(2), realShape: realShape);
 
         return unit;
     }
 
-    public void WriteSignIn(DateTime expires, string access = AgyCoderBed.Access)
+    public void WriteSignIn(DateTime expires, string access = AgyCoderBed.Access, bool realShape = false)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(Real)!);
-        File.WriteAllText(Real, AgyCoderBed.SignInFile(expires, access));
+        File.WriteAllText(Real, AgyCoderBed.SignInFile(expires, access, realShape));
     }
 
     /// <summary>One launch of <paramref name="script"/> as the program, in the agy coder's unit: the sign-in copy, the guard folder and the preflight as the road makes them.</summary>

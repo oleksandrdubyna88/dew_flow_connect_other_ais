@@ -127,7 +127,8 @@ internal static class AgyCoderPreflight
     private const string CopyRow = """
         if grep -q 'refresh_token' "$cred" 2>/dev/null; then row sign-in-copy-has-no-refresh-token-and-the-margin bad "the sign-in copy holds a refresh token"
         else
-          exp=$(sed -n 's/.*"expiry" *: *"\([^"]*\)".*/\1/p' "$cred" 2>/dev/null | head -n 1)
+          # The copy is JSON: the plus of an offset (+01:00, as the real file has) is spelled \u002B there, which date(1) cannot read (found by the first real run).
+          exp=$(sed -n 's/.*"expiry" *: *"\([^"]*\)".*/\1/p' "$cred" 2>/dev/null | head -n 1 | sed 's/\\u002[bB]/+/g')
           at=$(date -d "$exp" +%s 2>/dev/null)
           if [ -z "$at" ]; then row sign-in-copy-has-no-refresh-token-and-the-margin bad "the expiry of the sign-in copy cannot be read"
           elif [ "$at" -lt "$deadline" ]; then row sign-in-copy-has-no-refresh-token-and-the-margin bad "the access token of the copy ends before the unit's end and its margin"

@@ -433,4 +433,15 @@ public sealed class AAgyCoderLaunchTests
 
         return BoundaryJob.ForCoder(job.JobId, tree, rig.JobFolder(job));
     }
+
+    [Fact]
+    public async Task TheSignInInTheShapeOfTheRealFile_NineFractionDigitsAndAPlusOffset_PassesTheCopyRowAndTheLaunchIsAdmitted()
+    {
+        // The first real run found it: the copy is written as JSON, which spells the plus of the offset as \u002B, and the row inside the unit read the time with date(1).
+        await using var unit = await AgyUnit.CreateAsync(realExpiry: DateTime.UtcNow.AddHours(2), realShape: true);
+
+        var outcome = await unit.RunAsync("echo ran");
+
+        outcome.Should().BeOfType<CoderTurnOutcome.Finished>(outcome.ToString());
+    }
 }

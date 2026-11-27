@@ -20,7 +20,7 @@ namespace CoaiMcp.Tests;
 [Collection("fakecli-env")]
 public sealed partial class TheRealAgyRunsTests
 {
-    [GeneratedRegex("[A-Za-z0-9_\\-\\.]{40,}", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 1000)]
+    [GeneratedRegex("(?=[A-Za-z0-9_\\-\\.]*[0-9A-Z])[A-Za-z0-9_\\-\\.]{40,}", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 1000)]
     private static partial Regex LongToken();
 
     private static string Redact(string text) => LongToken().Replace(text, "<redacted>");
@@ -53,16 +53,22 @@ public sealed partial class TheRealAgyRunsTests
         var realFile = Path.Combine(realHome, AgyCoderUnit.SignInRelative);
         Assert.SkipUnless(File.Exists(realFile), "needs a real agy sign-in file");
 
+        // The jobs' folder is a made-up folder of its own (never under /tmp, where a job's folder cannot be covered, and never the real data folder); everything in it, the sign-in copy included, is removed at the end.
+        var jobsFolder = Environment.GetEnvironmentVariable("COAI_REAL_AGY_JOBS");
+        Assert.SkipWhen(string.IsNullOrEmpty(jobsFolder), "COAI_REAL_AGY_JOBS names a made-up folder for the job's folders");
         var before = HashOf(realFile);
         var report = new StringBuilder();
         var log = new List<string>();
-        await using (var bed = await CoderBed.CreateAsync())
+        try
+        {
+        await using var bed = await CoderBed.CreateAsync();
         {
             var host = bed.Host with { RealHome = realHome };
             var launcher = new Recording(bed.Launcher, log);
             var vendor = AgyCoderBed.Vendor();
             var boundary = new CoderBoundary(launcher, host) { Vendor = vendor };
-            var job = bed.Job;
+            var job = bed.Job with { JobRoot = Path.Combine(jobsFolder!, bed.Job.JobId) };
+            Directory.CreateDirectory(jobsFolder!);
             var recipe = (CoderSignInRecipe.CopyForJob)vendor.SignIn;
             var relative = recipe.RealRelativePath.Length > 0 ? recipe.RealRelativePath : recipe.RelativePath;
             var program = vendor.Program(agy, host.Path, job);
@@ -117,6 +123,20 @@ public sealed partial class TheRealAgyRunsTests
             report.AppendLine($"main checkout stand-in untouched by the preflight marker: {(!File.Exists(Path.Combine(job.Tree.MainCheckout, ".coai-preflight-cover"))).ToString().ToLowerInvariant()}");
         }
 
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(jobsFolder!, recursive: true);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException or DirectoryNotFoundException)
+            {
+                report.AppendLine($"the made-up jobs folder could not be removed: {e.GetType().Name}");
+            }
+        }
+
+        report.AppendLine($"the made-up jobs folder (with the sign-in copy) is removed: {(!Directory.Exists(jobsFolder!)).ToString().ToLowerInvariant()}");
         var final = $"{report}\nprocesses the road started:\n{string.Join('\n', log)}\n";
         await File.WriteAllTextAsync(resultsFile!, final, TestContext.Current.CancellationToken);
         HashOf(realFile).Should().Be(before, "the real sign-in file was only read");
