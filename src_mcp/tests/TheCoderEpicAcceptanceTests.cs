@@ -85,7 +85,7 @@ public sealed class TheCoderEpicAcceptanceTests
             return new World(repo, baseSha);
         }
 
-        /// <summary>A real server on this world's data folder: the coder's list names a claude model AND a codex one (the coder keeps the claude one), the reviewers are codex and gemini, every CLI is the fake.</summary>
+        /// <summary>A real server on this world's data folder: the coder's list names a claude model AND an agy one (the coder keeps the claude one: the mark of agy is off), the reviewers are codex and gemini, every CLI is the fake.</summary>
         internal System.Diagnostics.Process Server() => StdioServer.Start(
             Data.Path,
             logLevel: "information",
@@ -93,7 +93,7 @@ public sealed class TheCoderEpicAcceptanceTests
             [
                 ("COAI_ROLE_LAUNCHER", "setsid"),
                 ("COAI_ROLE_CLAUDE_PERSON_SIGN_IN", "1"),
-                ("COAI_ROLES_MODELS", new JsonObject { ["coder"] = new JsonArray(new JsonObject { ["model"] = "gpt-5.5", ["vendor"] = "codex" }, new JsonObject { ["model"] = "sonnet", ["vendor"] = "claude" }) }.ToJsonString()),
+                ("COAI_ROLES_MODELS", new JsonObject { ["coder"] = new JsonArray(new JsonObject { ["model"] = "gemini-4-argon-medium", ["vendor"] = "agy" }, new JsonObject { ["model"] = "sonnet", ["vendor"] = "claude" }) }.ToJsonString()),
                 ("COAI_ROLE_CLAUDE_CLI", RoleJobWorld.FakeCli),
                 ("COAI_PROVIDERS", "codex,gemini"),
                 ("COAI_ROUND_WORKTREES", _temp.At("round-trees")),
@@ -240,7 +240,7 @@ public sealed class TheCoderEpicAcceptanceTests
             await StdioServer.InitializeAsync(server);
             var started = await world.StartAsync(server, 2);
             var jobId = started.GetProperty("jobId").GetString()!;
-            // The codex model of the list is not a coder's model in this epoch: the route keeps the claude one.
+            // The agy model of the list is not a coder's model yet (its mark launchable is off): the route keeps the claude one.
             started.GetProperty("route").EnumerateArray().Select(model => model.GetString()).Should().Equal(["claude/sonnet"]);
 
             var status = await world.WaitEndAsync(server, jobId);
