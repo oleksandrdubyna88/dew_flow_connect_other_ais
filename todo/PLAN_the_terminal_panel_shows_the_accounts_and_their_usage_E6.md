@@ -10,8 +10,8 @@
 > [PLAN_the_round_counter_tail_E6.md](PLAN_the_round_counter_tail_E6.md)). **It was written by Fable.**
 > `subagent-models.md` asks Opus for a stories document, so §§ 6 to 8 are a deviation, as E3's stories were.
 > § 5 is Fable's by that rule: **E6's spec is the cornerstone for area (f), "a change of a machine"**, and the
-> consent to it is authorisation (the security row). **The cornerstone mark waits for the owner (§ 11, O1):**
-> the parent's ledger line says 2 of 2. This document keeps no change ledger: a change to this epic is an
+> consent to it is authorisation (the security row). **The cornerstone mark is made: E6.S1, 3 of 3**
+> (the owner's answer to O1, the parent's entry 5.1). This document keeps no change ledger: a change to this epic is an
 > entry in the parent. **No code before gate E6-G1 (the Opus review of this document) and E6's plan round.**
 >
 > Scope: `src_vs_code`, one job of `.github/workflows/ci.yml`, `SECURITY.md`, `research/` and the help. Five
@@ -305,7 +305,7 @@ at the worst. How long a real install takes is not measured (R10). **A press** (
 
 Order: **S1 and S2 → S3 → S4 → S5.** S1 and S2 share no file and can be coded side by side.
 
-### E6.S1 — The install script and its reply (CORNERSTONE — the mark waits for O1)
+### E6.S1 — The install script and its reply (CORNERSTONE — 3 of 3, the parent's entry 5.1)
 
 `model: fable` (§ M4, § M5) · coder: sonnet · review: opus · area (f).
 
@@ -521,9 +521,10 @@ timer — after two "yes", each by a person's press. It is the only script of ou
   named `coai-e6-…`, run with `--rm`, and a sweep by that prefix opens the run. **Log lines and notices:** one
   log line for an install call, one notice for an install.
 
-## 11. Open questions for the owner
+## 11. The owner's questions, and the answers
 
-None is decided here. Each has the planner's recommended answer.
+**Answered by the owner on 2026-11-27, in one answer: every recommended answer below is taken.** O1 and O5
+change the parent: its entry 5.1. O2, O3, O4 and O6 are this epic's own and stand as written below.
 
 - **O1 — Is E6 the sixth epic of this plan again, or a plan of its own?** Entry 4.2 moved it "to the next
   release, under a later plan or epic of its own", and counted the quota for five epics: 2 of 2. As the sixth
@@ -547,7 +548,7 @@ None is decided here. Each has the planner's recommended answer.
 - **O6 — The go for the checks on real machines:** which VM for R10 (a) and (d), and a throw-away distro for
   H1. **Recommended: a VM that the owner can lose, and a distro made for the check, as W9 did.**
 
-No consultant was asked: the lead puts these questions to the consultants and to the owner.
+No consultant was asked before the owner answered.
 
 ## 12. Judgements for gate E6-G1
 

@@ -235,6 +235,16 @@ Narrowed: yes — E6, the `jq` installer, with its gate R18, left this release; 
 
 > Epoch 5 · approved 2026-11-26 · by owner · state: open
 
+- 5.1 · 2026-11-27 · owner · epics, merge-conditions — E6 is the sixth epic of this plan again, its spec the third cornerstone; R12 and the VM half of R7, run on E6's build, stand for 2.1.0 too
+  (Extension 2.1.0, with E2 to E4, was released on 2026-11-27. The owner answered the questions of E6's
+  document, its § 11, the same day, in one answer: every recommendation is taken. Two of them change this
+  plan. O1: E6 is the sixth epic of THIS plan, not a plan of its own; the cornerstone quota is counted again
+  for six epics, Q = ⌈2·6/5⌉ = 3, and E6.S1 takes the third mark, for area (f), as § K.38 planned. The plan
+  stays in `todo/` until E6 ships. O5: R12 and the VM half of R7 have no result on 2.1.0; their runs on E6's
+  build stand for 2.1.0 as well, and the E5 results say that 2.1.0 was released before them. The answers O2,
+  O3, O4 and O6 are E6's own and are recorded in its document. The first change of epoch 5: one more stops the
+  plan.)
+
 ## The goal
 
 The owner, 2026-11-19 (in Russian, translated): *"Next I want to add an icon, like the chats one. It should show a list
@@ -968,11 +978,12 @@ pull request.
 **For the cut of step 1** (merged, #1051): the appendix, § K.33.
 **For the release:** E5's rows recorded; **the gates R7 and R12 passed, once, on the head that is tagged** —
 the build of E2 to E4 (R18 goes with E6, to the next release); `review_feature` resolved; no extension release
-from main between #1047 and the cut.
+from main between #1047 and the cut. **2.1.0 was released before R12 and the VM half of R7 had a result: their runs on E6's build stand
+for it (entry 5.1).**
 
 ## Epics
 
-**Five epics in this release; one is done. The sixth, E6, moved to the next release (entry 4.2).**
+**Six epics. E1 to E5 are the release 2.1.0 (E5's R12 and the VM half of R7 run on E6's build, entry 5.1); E6 is the next release's (entries 4.2 and 5.1).**
 The split is Fable's, after both consultations of the stop (`78e6d44b`, `7315feb0`).
 The consultants' rule of 2026-11-19 holds for each, and it is why the split is as it is (the appendix, § K.3).
 The rows keep the numbers of the stopped plan where their
@@ -980,15 +991,15 @@ meaning is kept (the appendix, § I, *E2*); R11, the row of the retired setting,
 
 Stories documents are written by Opus when an epic starts:
 `todo/PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E<n>.md`. Cornerstone quota, counted again
-for five epics (entry 4.2): Q = ⌈2·E/5⌉ = ⌈2·5/5⌉ = 2. The cornerstone areas Fable names, each with its
+for six epics (entry 5.1): Q = ⌈2·E/5⌉ = ⌈2·6/5⌉ = 3. The cornerstone areas Fable names, each with its
 reason in the appendix, § K.14: **(a)** what a
 script touches there and what it prints; **(b)** the reply's frame and the parser; **(c)** who is contacted and
 when; **(d)** the different results of a read, and a missing number that is never a zero; **(e)** who runs as
 whom on this PC; **(f)** a change of a machine (E6, so the next release's). Areas (c) and (e) are
-authorisation: their specs are Fable's by the security row, outside the quota. Planned mark, made by its
-stories document: E3.S2 for (a) and (b).
+authorisation: their specs are Fable's by the security row, outside the quota. Marks made by the stories
+documents: E3.S2 for (a) and (b); E6.S1 for (f) (entry 5.1).
 
-Cornerstones: 2 of 2 — E1.S2, E3.S2
+Cornerstones: 3 of 3 — E1.S2, E3.S2, E6.S1
 
 ### E1 — The read-only feature, end to end · DONE, merged as #1047 (`d0241e45`)
 
@@ -1073,7 +1084,7 @@ What is kept, reworked and retired of it: *Re-review for epoch 3*, above.
 | R10 | Which places lack `jq` | A table: `jq` there or not, the manager word, root or `sudo` without a password. A place without `jq` shows the fixed command; after the owner runs it, the next round reads the accounts. The count is the input of E6 |
 | W8 | A start of `agy` (§ 5) | A record |
 
-### E6 — The `jq` installer · MOVED to the next release (entry 4.2)
+### E6 — The `jq` installer · the next release (entries 4.2 and 5.1)
 
 **Not built in this release.** The owner, 2026-11-26: the installer of decision 17, its one-time "yes" (Q3)
 and its gate R18 go to the next release, under a later plan or epic of its own. This release shows the
@@ -1081,7 +1092,7 @@ install command with a copy button (§ 1); R10 of E5 stays as its input. The epi
 the appendix, § K.38; its design: § E. Its stories and its spec, written on 2026-11-27 for that next
 release, plan only:
 [PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E6.md](PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E6.md).
-The cornerstone line above is not changed by that document: its mark waits for the owner (its § 11, O1).
+Its spec is the third cornerstone (entry 5.1); the owner's answers to its questions are in its § 11.
 
 ### Candidates
 
