@@ -23,7 +23,7 @@ namespace CoaiMcp.Tests;
 [Collection("fakecli-env")]
 public sealed class TheRealCodexCoderRunTests
 {
-    private const string Model = "gpt-5.6-terra";
+    private static string Model => Environment.GetEnvironmentVariable("COAI_REAL_CODEX_MODEL") is { Length: > 0 } named ? named : "gpt-6.1-terra";
 
     private static string Env(string name) => Environment.GetEnvironmentVariable(name) ?? string.Empty;
 
