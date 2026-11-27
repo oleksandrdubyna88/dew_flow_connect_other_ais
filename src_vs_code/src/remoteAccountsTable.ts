@@ -1,6 +1,6 @@
 import { byCodeUnit } from './codeUnitOrder';
 import { ACCOUNTS_SECONDS, ACCOUNTS_UNREADABLE_SAID, plainValue } from './remoteAccountsReply';
-import type { AccountsRead, ManagerWord } from './remoteAccountsReply';
+import type { AccountsRead, AgyGroup, ManagerWord } from './remoteAccountsReply';
 import { NO_MANAGER_SAID, forList, unreadableClause, unsafeSaid } from './remoteAccountsRows';
 import type { HostMemory, Memory, UsageMiss } from './remoteAccountsRound';
 import type { HostStanding } from './remoteHosts';
@@ -9,6 +9,7 @@ import { isWslKey, splitWslKey } from './remotePlaces';
 import type { WslFacts } from './remoteWslRound';
 import type { Permission } from './remotePermission';
 import { percentLeft, windowLabel } from './usageWords';
+import { VENDOR_PALETTE, vendorPalette } from './vendorColour';
 
 /**
  * The model of the accounts tab (E2.S2, contract C4). PURE: what the window holds goes in, and ONE JSON-serialisable value comes out, so the
@@ -44,6 +45,17 @@ export interface Account {
   /** The account as it is said: email and organization, or the sentence that stands for it. */
   readonly text: string;
   readonly plan: string | null;
+  /** The email the text starts with, as it is drawn; `''` when the account is not known (the text is then a sentence). */
+  readonly email: string;
+  /** The closed class of this email's colour, `em-1` to `em-12`, the same for the same email in every tool and place; `null` for no email. Made by `marked`, never from a reply. */
+  readonly tone: string | null;
+}
+
+/** One group of models of Antigravity's quota, with its two windows. */
+export interface GroupCells {
+  readonly name: string;
+  readonly five: Cell;
+  readonly week: Cell;
 }
 
 /** One tool's row at one place. */
@@ -63,12 +75,10 @@ export interface ToolRow {
   readonly models: readonly NamedCell[];
   /** A Codex window of another length. */
   readonly others: readonly NamedCell[];
+  /** Antigravity: one entry for each group of models whose quota was read, in a fixed order; `five` and `week` above are the first group's. Empty for every other row. */
+  readonly groups: readonly GroupCells[];
   /** Why the two window cells are empty: spans both, with its own sentence. `null` when the numbers are shown. */
   readonly span: string | null;
-  /** Codex: the instant of its session file or record. */
-  readonly session: number | null;
-  /** A Codex session whose time was not read because the host has no `stat`. */
-  readonly note: string | null;
   /** The tool was found and its account is the row's: `false` for a row that only says why it could not be read (signed out, a credential-shaped value). */
   readonly found: boolean;
   /** The instant of the read that this row comes from: the older read for a place whose last read failed. */
@@ -185,11 +195,9 @@ const NO_CLAUDE_SAID = 'no Claude Code found';
 const NOT_SHOWN_SAID = 'not shown: a value in the answer looked like a credential';
 const NOT_KNOWN = 'not known';
 const ACCOUNT_NOT_KNOWN = 'account not known';
-const CODEX_ACCOUNT_SAID = 'account name not shown by Codex';
-const AGY_ACCOUNT_SAID = 'its account is not read';
-const AGY_USAGE_SAID = 'agy states no usage';
+const AGY_ACCOUNT_SAID = 'account not read';
 const NO_FIGURE_SAID = 'no figure was read for this tool';
-const NO_STAT_SAID = 'this host has no stat, so the time of the Codex session file was not read';
+const GROUP_NAMES: Readonly<Record<AgyGroup, string>> = { gemini: 'Gemini', 'third-party': 'Claude and GPT' };
 export const PERMISSION_NONE_SAID = 'CoAI reads nothing yet. With your permission it logs in over ssh, with your own keys, to every host of an open “Creds: <host> / <session>” terminal every 10 minutes, and reads which of Claude Code, Codex and Antigravity are there, with their accounts and usage.';
 export const PERMISSION_WAITING_SAID = HOSTS_SAID.waiting;
 
@@ -200,10 +208,9 @@ const CLAUDE_SIDE_SAID: Readonly<Record<string, string>> = {
   'credential-shape': NOT_SHOWN_SAID,
 };
 
-const CODEX_FAILED_SAID: Readonly<Record<'no-sessions' | 'none' | 'error', string>> = {
-  'no-sessions': 'no Codex session file is on this host',
-  none: 'no usage record is near the end of the newest Codex sessions',
-  error: 'the Codex session files could not be read',
+const CODEX_FAILED_SAID: Readonly<Record<'none' | 'error', string>> = {
+  none: 'Codex stated no rate limits',
+  error: 'Codex did not answer its account and rate-limit calls',
 };
 
 type Reading = Extract<AccountsRead, { kind: 'read' }>;
@@ -283,26 +290,25 @@ const readingNowAt = (round: RoundNow, key: string): boolean => round.kind === '
 type Shell = Omit<ToolRow, 'version' | 'account' | 'span'>;
 
 const base = (place: string, tool: ToolName, readAt: number): Shell => ({
-  place, tool, found: true, accountKey: null, sharedAcross: null, five: NO_CELL, week: NO_CELL, models: [], others: [], session: null, note: null, readAt,
+  place, tool, found: true, accountKey: null, sharedAcross: null, five: NO_CELL, week: NO_CELL, models: [], others: [], groups: [], readAt,
 });
 
+/** The account of a row: the email (cut through `forList`) with what follows it in the text, or the sentence when no email is known. The `tone` is set later, by `marked`. */
+const accountOf = (email: string, rest: string, plan: string | null, sentence: string): Account =>
+  (email === '' ? { text: sentence, plan, email: '', tone: null } : { text: rest === '' ? email : `${email} · ${rest}`, plan, email, tone: null });
+
 /** A row that only says why its tool could not be read. */
-const sentenceRow = (shell: Shell, said: string): ToolRow => ({ ...shell, found: false, version: null, account: { text: said, plan: null }, span: said });
+const sentenceRow = (shell: Shell, said: string): ToolRow => ({ ...shell, found: false, version: null, account: accountOf('', '', null, said), span: said });
 
 // ───────────────── Claude ─────────────────
 
 /** The key of a KNOWN Claude account: the vendor and the whole account text. `null` when the account is not known. */
 export const accountKeyOf = (found: Found): string | null => (found.email === '' ? null : JSON.stringify(['claude', 'account', plainValue(found.email), plainValue(found.org ?? '')]));
 
-function claudeAccountText(found: Found): string {
-  const email = forList(found.email, EMAIL_MAX);
-  const org = forList(found.org ?? '', NAME_MAX);
-
-  return email === '' ? ACCOUNT_NOT_KNOWN : org === '' ? email : `${email} · ${org}`;
-}
+const claudeAccount = (found: Found): Account => accountOf(forList(found.email, EMAIL_MAX), forList(found.org ?? '', NAME_MAX), planOf(found.plan), ACCOUNT_NOT_KNOWN);
 
 const claudeFoundRow = (shell: Shell, found: Found): ToolRow =>
-  ({ ...shell, version: versionText(found.version), account: { text: claudeAccountText(found), plan: planOf(found.plan) }, accountKey: accountKeyOf(found), span: null });
+  ({ ...shell, version: versionText(found.version), account: claudeAccount(found), accountKey: accountKeyOf(found), span: null });
 
 /** `no-jq` is the heading's: the host says `jq` is missing, and this tool has no row of its own. */
 function claudeSideRow(shell: Shell, claude: Exclude<Reading['claude'], { state: 'absent' | 'found' }>): ToolRow | undefined {
@@ -408,24 +414,66 @@ function codexWindows(row: ToolRow, codex: CodexFound): ToolRow {
     five: cellOf(usage.windows.find((one) => one.minutes === FIVE_HOURS)),
     week: cellOf(usage.windows.find((one) => one.minutes === WEEK)),
     others,
-    session: usage.asOf === null ? null : usage.asOf.ms,
-    note: usage.statMissing ? NO_STAT_SAID : null,
   };
 }
 
 const codexFoundRow = (shell: Shell, codex: CodexFound): ToolRow =>
-  codexWindows({ ...shell, version: null, account: { text: CODEX_ACCOUNT_SAID, plan: planOf(codex.plan) }, span: null }, codex);
+  codexWindows({ ...shell, version: null, account: accountOf(forList(codex.email, EMAIL_MAX), '', planOf(codex.plan), ACCOUNT_NOT_KNOWN), span: null }, codex);
 
-function codexRow(place: string, codex: Reading['codex'], readAt: number): ToolRow | undefined {
-  if (codex.state === 'absent') {
-    return undefined;
-  }
-  const shell = base(place, 'codex', readAt);
+/** A Codex that is not absent: its row, or nothing for `no-jq`, which is the heading's. */
+function codexSideRow(shell: Shell, codex: Exclude<Reading['codex'], { state: 'absent' }>): ToolRow | undefined {
   if (codex.state === 'found') {
     return codexFoundRow(shell, codex);
   }
+  if (codex.state === 'unsafe') {
+    return sentenceRow(shell, unsafeSaid(codex.path));
+  }
 
   return codex.why === 'credential-shape' ? sentenceRow(shell, NOT_SHOWN_SAID) : undefined;
+}
+
+const codexRow = (place: string, codex: Reading['codex'], readAt: number): ToolRow | undefined =>
+  (codex.state === 'absent' ? undefined : codexSideRow(base(place, 'codex', readAt), codex));
+
+// ───────────────── Antigravity ─────────────────
+
+type AgyFound = Extract<Reading['agy'], { state: 'found' }>;
+
+/** A cell of agy's quota: the percent LEFT as it states it (a missing number is `null`), and the reset instant, `null` for a window that has not started. */
+const agyCell = (window: { readonly leftPercent: number | null; readonly resetsAtMs: number | null } | undefined): Cell =>
+  ({ left: window === undefined ? null : instantOf(window.leftPercent), resetsAt: window === undefined ? null : instantOf(window.resetsAtMs) });
+
+/** The sentence of a quota that is not figures. `skipped` is only ever said for a host that the round was blocked at. */
+function agyMissSaid(agy: AgyFound): string {
+  const { usage } = agy;
+  const version = `Antigravity ${versionText(agy.version)}`;
+  const blocked = `Quota not read: the quota command of ${version} asked the model, so CoAI stopped asking this host`;
+  const failed: Readonly<Record<'timeout' | 'error' | 'model-call' | 'format' | 'no-jq', string>> = {
+    timeout: `Quota not read: Antigravity did not answer within ${ACCOUNTS_SECONDS.agyQuota} s`,
+    error: `Quota not read: the quota command of ${version} ended with an error`,
+    'model-call': blocked,
+    format: `Quota not read: ${version} printed no quota this version understands`,
+    'no-jq': 'Quota not read: jq is missing on this host',
+  };
+
+  return usage.state === 'failed' ? failed[usage.why] : blocked;
+}
+
+/** The groups of a quota that was read, in the fixed order of the closed words: one entry for each group that has a window. */
+function agyGroups(windows: readonly { readonly group: AgyGroup; readonly window: '5h' | 'weekly'; readonly leftPercent: number | null; readonly resetsAtMs: number | null }[]): readonly GroupCells[] {
+  return (Object.keys(GROUP_NAMES) as AgyGroup[]).flatMap((group) => {
+    const of = (window: '5h' | 'weekly') => windows.find((one) => one.group === group && one.window === window);
+
+    return of('5h') === undefined && of('weekly') === undefined ? [] : [{ name: GROUP_NAMES[group], five: agyCell(of('5h')), week: agyCell(of('weekly')) }];
+  });
+}
+
+function agyFoundRow(shell: Shell, agy: AgyFound): ToolRow {
+  const row = { ...shell, version: versionText(agy.version), account: accountOf(forList(agy.email, EMAIL_MAX), '', null, AGY_ACCOUNT_SAID) };
+  const groups = agy.usage.state === 'read' ? agyGroups(agy.usage.windows) : [];
+  const [first] = groups;
+
+  return first === undefined ? { ...row, span: agyMissSaid(agy) } : { ...row, five: first.five, week: first.week, groups, span: null };
 }
 
 function agyRow(place: string, agy: Reading['agy'], readAt: number): ToolRow | undefined {
@@ -433,12 +481,11 @@ function agyRow(place: string, agy: Reading['agy'], readAt: number): ToolRow | u
     return undefined;
   }
   const shell = base(place, 'agy', readAt);
-
   if (agy.state === 'unsafe') {
     return sentenceRow(shell, unsafeSaid(agy.path));
   }
 
-  return agy.state === 'unreadable' ? sentenceRow(shell, NOT_SHOWN_SAID) : { ...shell, version: versionText(agy.version), account: { text: AGY_ACCOUNT_SAID, plan: null }, span: AGY_USAGE_SAID };
+  return agy.state === 'unreadable' ? sentenceRow(shell, NOT_SHOWN_SAID) : agyFoundRow(shell, agy);
 }
 
 // ───────────────── a place ─────────────────
@@ -647,6 +694,26 @@ const seenOf = (input: TableInput, keys: readonly string[]): readonly Seen[] =>
     return reading === undefined ? [] : [{ host: key, read: reading.read, at: reading.atMs, ...usageContextOf(input.memory.get(key) ?? {}, readingNowAt(input.round, key)) }];
   });
 
+// ───────────────── the colour of an email ─────────────────
+
+/** The closed class of a palette colour: `em-1` to `em-12` by the colour's place in `VENDOR_PALETTE`; `null` for a colour that is not in it. The page holds the twelve rules. */
+const toneOfColour = (colour: string): string | null => {
+  const at = VENDOR_PALETTE.indexOf(colour);
+
+  return at < 0 ? null : `em-${at + 1}`;
+};
+
+/**
+ * Every email of the model gets ONE class, over the sorted and de-duplicated list of the emails of ALL rows (`vendorPalette`: the same email is the same colour in every
+ * tool and place, and up to twelve emails are twelve colours). The class is the extension's own closed name; no text of a reply is ever a class.
+ */
+export function marked(blocks: readonly Block[]): readonly Block[] {
+  const colour = vendorPalette(blocks.flatMap((block) => block.rows.map((row) => row.account.email)).filter((email) => email !== ''));
+  const mark = (row: ToolRow): ToolRow => (row.account.email === '' ? row : { ...row, account: { ...row.account, tone: toneOfColour(colour(row.account.email)) } });
+
+  return blocks.map((block) => ({ ...block, rows: block.rows.map(mark) }));
+}
+
 /** The model, from what the window holds. Deterministic: the same input gives the same model. */
 export function tableModel(input: TableInput): TableModel {
   const hosts = [...new Set(input.hosts)].sort(byCodeUnit);
@@ -658,7 +725,7 @@ export function tableModel(input: TableInput): TableModel {
     v: 1,
     toolbar: { stopped: input.stopped, round: roundPart(input.round) },
     permission: PERMISSION_OF(input.permission),
-    blocks: hosts.flatMap((host) => [blockFor(input, host, shared), ...(host === 'wsl' ? keys.map(placeBlock) : [])]),
+    blocks: marked(hosts.flatMap((host) => [blockFor(input, host, shared), ...(host === 'wsl' ? keys.map(placeBlock) : [])])),
     empty: hosts.length === 0 ? NO_TERMINAL_SAID : null,
   };
 }

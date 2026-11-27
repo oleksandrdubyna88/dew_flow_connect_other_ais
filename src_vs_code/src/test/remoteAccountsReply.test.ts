@@ -9,7 +9,7 @@ import {
 import { AccountsMode } from '../remoteAccountsScript';
 import { sourceOf } from './sourceReading';
 import {
-  ACCOUNT_LINES, FILE_TIME, GOOD, GOOD_LINES, LINES, NOW, RECORD_TIME, USAGE_GOOD, USAGE_GOOD_LINES, USAGE_READ_LINES, claudeOnlyOf, frame, ok, readOf,
+  ACCOUNT_LINES, GOOD, GOOD_LINES, LINES, NOW, USAGE_GOOD, USAGE_GOOD_LINES, USAGE_READ_LINES, claudeOnlyOf, frame, ok, readOf,
 } from './accountsFrames';
 
 /**
@@ -65,11 +65,12 @@ const SAMPLE: Readonly<Record<string, string>> = {
   unmatched: '0',
   'sign-in-file': 'present',
   window: '14 10080 1795518850',
-  'as-of': `${RECORD_TIME} ${FILE_TIME}`,
+  quota: 'gemini 5h 92 1795813241',
+  account: 'someone@example.test',
   path: '/home/a/.local/bin',
 };
 
-const TEXT_KEYS = ['email', 'org', 'plan', 'version', 'line'];
+const TEXT_KEYS = ['email', 'org', 'plan', 'version', 'line', 'account'];
 
 const sampleOf = (key: string): string => {
   const sample = SAMPLE[key];
@@ -78,12 +79,15 @@ const sampleOf = (key: string): string => {
   return sample;
 };
 
+/** What an agy that is found says when `jq` is missing: it asked for no quota. */
+const AGY_NO_JQ: readonly string[] = ['COAI-VENDOR agy found', ':version 1.5.12', ':sign-in-file present', 'COAI-USAGE agy failed no-jq'];
+
 interface Parts { jq: readonly string[]; claude: readonly string[]; codex: readonly string[]; agy: readonly string[] }
 const DEFAULT: Parts = { jq: GOOD_LINES.slice(0, 1), claude: GOOD_LINES.slice(1, 7), codex: GOOD_LINES.slice(7, 13), agy: GOOD_LINES.slice(13) };
 const USAGE_AFTER: Readonly<Record<string, readonly string[]>> = {
   claude: ['COAI-USAGE claude skipped'],
-  codex: GOOD_LINES.slice(10, 13),
-  agy: ['COAI-USAGE agy none'],
+  codex: GOOD_LINES.slice(11, 13),
+  agy: ['COAI-USAGE agy skipped'],
 };
 /** The rows of the usage mode: a reply with the Claude part and nothing else. */
 const USAGE_ROWS = ['COAI-USAGE claude read', 'COAI-USAGE claude failed timeout', 'COAI-USAGE claude failed error', 'COAI-USAGE claude skipped account-changed'];
@@ -97,7 +101,7 @@ function placed(row: string, data: readonly string[]): { readonly parts: Parts; 
   const [kind, vendor = '', state = ''] = row.split(' ');
   if (kind === 'COAI-JQ') {
     const missing = vendor === 'missing';
-    return { parts: { ...DEFAULT, jq: [row], claude: missing ? ['COAI-VENDOR claude absent'] : DEFAULT.claude, codex: missing ? ['COAI-VENDOR codex absent'] : DEFAULT.codex }, mode: MODE };
+    return { parts: { ...DEFAULT, jq: [row], claude: missing ? ['COAI-VENDOR claude absent'] : DEFAULT.claude, codex: missing ? ['COAI-VENDOR codex absent'] : DEFAULT.codex, agy: missing ? AGY_NO_JQ : DEFAULT.agy }, mode: MODE };
   }
   if (kind === 'COAI-BAD') {
     return { parts: { jq: [row, ...data], claude: [], codex: [], agy: [] }, mode: MODE };
@@ -110,7 +114,7 @@ function placed(row: string, data: readonly string[]): { readonly parts: Parts; 
     : [`COAI-VENDOR ${vendor} found`, ...(FOUND_DATA[vendor] ?? []), row, ...data];
 
   // A vendor that could not run `jq` goes with a `COAI-JQ missing` line, and then the other vendor of the two that need it is absent.
-  const noJq = row.endsWith('no-jq') ? { jq: ['COAI-JQ missing apt-get'], claude: ['COAI-VENDOR claude absent'], codex: ['COAI-VENDOR codex absent'] } : {};
+  const noJq = row.endsWith('no-jq') ? { jq: ['COAI-JQ missing apt-get'], claude: ['COAI-VENDOR claude absent'], codex: ['COAI-VENDOR codex absent'], agy: AGY_NO_JQ } : {};
 
   return { parts: { ...DEFAULT, ...noJq, [vendor]: block }, mode: MODE };
 }
@@ -166,7 +170,7 @@ test('A2-T15: each fault by its own word', () => {
   const at = USAGE_GOOD_LINES.indexOf(`:line ${LINES[0]}`);
   unreadableWith(run(text(...USAGE_GOOD_LINES.slice(0, at), ...Array.from({ length: 6 }, () => `:line ${LINES[0]}`), ...USAGE_GOOD_LINES.slice(at)), USAGE_MODE), 'key', 'nine :line');
   for (const [from, to] of [[':sign-in-file present', ':sign-in-file maybe'],
-    [':window 14 10080 1795518850', ':window 1 2'], [':as-of 2026-11-17T19:32:36.474Z 1794938000', ':as-of 1'], [':as-of 2026-11-17T19:32:36.474Z 1794938000', ':as-of - soon']] as const) {
+    [':window 14 10080 1795518850', ':window 1 2'], [':quota gemini weekly 60 1796283734', ':quota 1 2'], [':quota gemini weekly 60 1796283734', ':quota gemini weekly 60']] as const) {
     const lines = GOOD_LINES.map((line) => (line === from ? to : line));
     unreadableWith(run(text(...lines)), 'value', to);
   }
@@ -245,13 +249,17 @@ test('A2-T16: the marker-token test — no token in any value of any marker reac
   assert.ok(cases >= 4 * 13, `the derived walk ran ${cases} cases`);
 });
 
-test('A2-T16: a token as the record\'s time before a file time makes Codex unreadable and nothing else', () => {
+test('A2-T16: a token as the account of Codex makes Codex unreadable and nothing else; the same for the account of agy', () => {
   for (const token of TOKENS) {
-    const answer = run(text(...GOOD_LINES.map((line) => (line.startsWith(':as-of ') ? `:as-of ${token} ${FILE_TIME}` : line))));
-    assert.ok(!leaks(answer));
-    assert.deepEqual(readOf(answer).codex, { state: 'unreadable', why: 'credential-shape' });
-    assert.deepEqual(readOf(answer).claude, goodRead().claude);
-    assert.deepEqual(readOf(answer).agy, goodRead().agy);
+    const codex = run(text(...GOOD_LINES.map((line) => (line.startsWith(':account cox@') ? `:account ${token}` : line))));
+    assert.ok(!leaks(codex));
+    assert.deepEqual(readOf(codex).codex, { state: 'unreadable', why: 'credential-shape' });
+    assert.deepEqual(readOf(codex).claude, goodRead().claude);
+    assert.deepEqual(readOf(codex).agy, goodRead().agy);
+    const agy = run(text(...GOOD_LINES.map((line) => (line.startsWith(':account agy@') ? `:account ${token}` : line))));
+    assert.ok(!leaks(agy));
+    assert.deepEqual(readOf(agy).agy, { state: 'unreadable', why: 'credential-shape' });
+    assert.deepEqual(readOf(agy).codex, goodRead().codex);
   }
 });
 
@@ -335,7 +343,7 @@ test('A2-T17: each number of GOOD taken out is null, and no field of the result 
     ['- for used', without((line) => line.startsWith(':window '), ':window - 10080 1795518850')],
     ['- for reset', without((line) => line.startsWith(':window '), ':window 14 10080 -')],
     ['no reset zone', run(text(...USAGE_GOOD_LINES.flatMap((line) => (line.startsWith(':line Current session') ? [`:line Current session: 56% used · resets Nov 19, 3pm`] : [line]))), USAGE_MODE)],
-    ['no :as-of time', without((line) => line.startsWith(':as-of '), ':as-of - -')],
+    ['no quota reset', without((line) => line === ':quota gemini 5h 92 1795813241', ':quota gemini 5h 92 -')],
     ['no :version', without((line) => line === ':version 2.1.326')],
   ];
   for (const [name, answer] of variants) {
@@ -346,8 +354,8 @@ test('A2-T17: each number of GOOD taken out is null, and no field of the result 
   assert.ok(used.state === 'found' && used.usage.state === 'read' && used.usage.windows[0]?.usedPercent === null);
   const reset = readOf(variants[2]?.[1] as AccountsRead).codex;
   assert.ok(reset.state === 'found' && reset.usage.state === 'read' && reset.usage.windows[0]?.resetsAtMs === null);
-  const asOf = readOf(variants[4]?.[1] as AccountsRead).codex;
-  assert.ok(asOf.state === 'found' && asOf.usage.state === 'read' && asOf.usage.asOf === null);
+  const noReset = readOf(variants[4]?.[1] as AccountsRead).agy;
+  assert.ok(noReset.state === 'found' && noReset.usage.state === 'read' && noReset.usage.windows.find((one) => one.group === 'gemini' && one.window === '5h')?.resetsAtMs === null);
   const version = readOf(variants[5]?.[1] as AccountsRead).claude;
   assert.ok(version.state === 'found' && version.version === null);
   const zone = claudeOnlyOf(variants[3]?.[1] as AccountsRead).claude;
@@ -374,15 +382,15 @@ test('A2-T17: 300 replies from a seeded generator — the result equals the one 
     const used = pick(['-', '0', '49.5', '100']);
     const reset = pick(['-', '1795518850']);
     const minutes = pick(['300', '10080']);
-    const recordTime = pick(['-', RECORD_TIME]);
-    const fileTime = pick(['-', String(FILE_TIME)]);
+    const left = pick(['0', '49', '100']);
+    const quotaReset = pick(['-', '1795813241']);
     const version = pick(['', ':version 1.5.12']);
     const lines = GOOD_LINES.flatMap((line) => {
       if (line.startsWith(':window ')) {
         return [`:window ${used} ${minutes} ${reset}`];
       }
-      if (line.startsWith(':as-of ')) {
-        return [`:as-of ${recordTime} ${fileTime}`];
+      if (line === ':quota gemini 5h 92 1795813241') {
+        return [`:quota gemini 5h ${left} ${quotaReset}`];
       }
 
       return version === '' && line === ':version 1.5.12' ? [] : [line];
@@ -390,11 +398,10 @@ test('A2-T17: 300 replies from a seeded generator — the result equals the one 
     const codex = readOf(run(text(...lines))).codex;
     const agy = readOf(run(text(...lines))).agy;
     const windows = [{ minutes: Number(minutes), usedPercent: used === '-' ? null : Number(used), resetsAtMs: reset === '-' ? null : Number(reset) * 1000 }];
-    const asOf = recordTime !== '-'
-      ? { ms: Date.UTC(2026, 10, 17, 19, 32, 36, 474), from: 'record' }
-      : (fileTime === '-' ? null : { ms: FILE_TIME * 1000, from: 'file' });
-    assert.deepEqual(codex, { state: 'found', signInFile: true, plan: 'prolite', usage: { state: 'read', windows, asOf, statMissing: false } }, `case ${n}`);
-    assert.deepEqual(agy, { state: 'found', version: version === '' ? null : '1.5.12', signInFile: true, usage: { state: 'no-source' } }, `case ${n}`);
+    assert.deepEqual(codex, { state: 'found', signInFile: true, email: 'cox@example.test', plan: 'prolite', usage: { state: 'read', windows } }, `case ${n}`);
+    const gemini5h = { group: 'gemini', window: '5h', leftPercent: Number(left), resetsAtMs: quotaReset === '-' ? null : Number(quotaReset) * 1000 };
+    assert.ok(agy.state === 'found' && agy.usage.state === 'read' && agy.version === (version === '' ? null : '1.5.12') && agy.email === 'agy@example.test', `case ${n}`);
+    assert.deepEqual(agy.state === 'found' && agy.usage.state === 'read' ? agy.usage.windows[1] : undefined, gemini5h, `case ${n}`);
   }
 });
 
@@ -410,7 +417,7 @@ test('A2-T17: the parser files hold no ?? 0, no || 0 and no 100 -, and the scan 
 
 // ───────────────── A2-T20: one arm for each outcome, and the parser never throws ─────────────────
 
-const swapJq = (jq: string, claude: readonly string[], codex: readonly string[]): string => text(jq, ...claude, ...codex, ...GOOD_LINES.slice(13));
+const swapJq = (jq: string, claude: readonly string[], codex: readonly string[]): string => text(jq, ...claude, ...codex, ...(jq.startsWith('COAI-JQ missing') ? AGY_NO_JQ : GOOD_LINES.slice(13)));
 
 test('A2-T20: one frame for each outcome, all different, no key holds undefined, four absent-like values differ', () => {
   // The usage mode's replies hold the Claude part and nothing else (E3.S2, § R2.7).
@@ -435,11 +442,11 @@ test('A2-T20: one frame for each outcome, all different, no key holds undefined,
     'codex absent': run(swapJq('COAI-JQ found', DEFAULT.claude, ['COAI-VENDOR codex absent'])),
     'codex unreadable no-jq': run(swapJq('COAI-JQ missing yum', ['COAI-VENDOR claude absent'], ['COAI-VENDOR codex unreadable no-jq'])),
     'codex unreadable credential-shape': run(swapJq('COAI-JQ found', DEFAULT.claude, ['COAI-VENDOR codex found', ':sign-in-file present', `:plan ${TOKENS[1]}`, ...USAGE_AFTER.codex as readonly string[]])),
-    'codex failed no-sessions': run(swapJq('COAI-JQ found', DEFAULT.claude, ['COAI-VENDOR codex found', ':sign-in-file present', 'COAI-USAGE codex failed no-sessions'])),
+    'codex unsafe': run(swapJq('COAI-JQ found', DEFAULT.claude, ['COAI-VENDOR codex unsafe', ':path /root/.local/bin'])),
     'codex failed none': run(swapJq('COAI-JQ found', DEFAULT.claude, ['COAI-VENDOR codex found', ':sign-in-file present', 'COAI-USAGE codex failed none'])),
     'codex failed error': run(swapJq('COAI-JQ found', DEFAULT.claude, ['COAI-VENDOR codex found', ':sign-in-file absent', 'COAI-USAGE codex failed error'])),
     'agy absent': run(text(...GOOD_LINES.slice(0, 13), 'COAI-VENDOR agy absent')),
-    'agy unreadable credential-shape': run(text(...GOOD_LINES.slice(0, 13), 'COAI-VENDOR agy found', `:version ${TOKENS[1]}`, ':sign-in-file present', 'COAI-USAGE agy none')),
+    'agy unreadable credential-shape': run(text(...GOOD_LINES.slice(0, 13), 'COAI-VENDOR agy found', `:version ${TOKENS[1]}`, ':sign-in-file present', 'COAI-USAGE agy skipped')),
   };
   const seen = new Map<string, string>();
   for (const [name, answer] of Object.entries(outcomes)) {
@@ -599,12 +606,14 @@ test('A2-T27: the COAI-JQ line and the vendors agree', () => {
   const foundNoJq = ['COAI-JQ found', 'COAI-VENDOR claude unreadable no-jq', ...GOOD_LINES.slice(7)];
   unreadableWith(run(text(...foundNoJq)), 'shape', 'jq found with unreadable no-jq');
   for (const word of ['dnf', 'none']) {
-    const lines = [`COAI-JQ missing ${word}`, 'COAI-VENDOR claude unreadable no-jq', 'COAI-VENDOR codex absent', ...GOOD_LINES.slice(13)];
+    const agyNoJq = ['COAI-VENDOR agy found', ':version 1.5.12', ':sign-in-file present', 'COAI-USAGE agy failed no-jq'];
+    const lines = [`COAI-JQ missing ${word}`, 'COAI-VENDOR claude unreadable no-jq', 'COAI-VENDOR codex absent', ...agyNoJq];
     const answer = readOf(run(text(...lines)));
     assert.equal(answer.jqMissing, word);
     assert.deepEqual(answer.claude, { state: 'unreadable', why: 'no-jq' });
     assert.deepEqual(answer.codex, { state: 'absent' });
-    assert.equal(answer.agy.state, 'found');
+    assert.ok(answer.agy.state === 'found' && answer.agy.usage.state === 'failed' && answer.agy.usage.why === 'no-jq');
+    unreadableWith(run(text(`COAI-JQ missing ${word}`, 'COAI-VENDOR claude unreadable no-jq', 'COAI-VENDOR codex absent', ...GOOD_LINES.slice(13))), 'shape', 'jq missing and agy has read a quota');
   }
   assert.equal(readOf(run(GOOD)).jqMissing, undefined);
 });

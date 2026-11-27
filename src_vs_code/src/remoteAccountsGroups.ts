@@ -56,6 +56,9 @@ export interface AccountBlock {
   /** The account's key, or `null` for an account that is not known: that block belongs to one place. */
   readonly key: string | null;
   readonly text: string;
+  /** The email the text starts with and the closed class of its colour (`em-1` to `em-12`), or `''` and `null`: the model's, taken from the row. */
+  readonly email: string;
+  readonly tone: string | null;
   readonly usage: AccountUsage;
   readonly places: readonly AccountPlace[];
 }
@@ -175,7 +178,7 @@ export function viewOf(model: TableModel, state: ViewState, compare: Compare): V
       s: {
         name: source.row.account.text, account: source.row.account.text, left5h: usage.five.left, reset5h: usage.five.resetsAt, leftWeek: usage.week.left, resetWeek: usage.week.resetsAt, age: 0 - newest(group.members).row.readAt,
       },
-      v: { key: group.key, text: source.row.account.text, usage, places },
+      v: { key: group.key, text: source.row.account.text, email: source.row.account.email, tone: source.row.account.tone, usage, places },
     };
   }
 

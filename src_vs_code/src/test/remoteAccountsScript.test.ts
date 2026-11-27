@@ -6,8 +6,8 @@ import { join } from 'node:path';
 import test from 'node:test';
 import {
   ACCOUNTS_CEILING_SECONDS, ACCOUNTS_CONNECT_SECONDS, ACCOUNTS_DIGEST, ACCOUNTS_KILL_SECONDS, ACCOUNTS_LINES_MAX, ACCOUNTS_LINE_BYTES_MAX, ACCOUNTS_MODES,
-  ACCOUNTS_PATH, ACCOUNTS_PROTOCOL, ACCOUNTS_READ_SECONDS, ACCOUNTS_REPLY_BYTES_MAX, ACCOUNTS_SCRIPT, ACCOUNTS_SECONDS, ACCOUNTS_TOOLS, ACCOUNT_JSON_MAX,
-  CODEX_FILES_MAX, CODEX_TAIL_MAX, MANAGER_WORDS, USAGE_JSON_MAX, USAGE_LINES_MAX, isAccountsDigest, isAccountsMode, worstSeconds,
+  ACCOUNTS_PATH, ACCOUNTS_PROTOCOL, ACCOUNTS_READ_SECONDS, ACCOUNTS_REPLY_BYTES_MAX, ACCOUNTS_SCRIPT, ACCOUNTS_SECONDS, ACCOUNTS_SKIP_AGY, ACCOUNTS_TOOLS, ACCOUNT_JSON_MAX,
+  AGY_LOG_TAIL_MAX, AGY_QUOTA_JSON_MAX, AGY_WINDOWS_MAX, CODEX_JSON_MAX, MANAGER_WORDS, USAGE_JSON_MAX, USAGE_LINES_MAX, isAccountsDigest, isAccountsMode, operandFits, worstSeconds,
 } from '../remoteAccountsScript';
 import { SSH_OPTIONS } from '../remoteSsh';
 
@@ -22,7 +22,7 @@ import { SSH_OPTIONS } from '../remoteSsh';
  */
 
 /** The sha256 of `ACCOUNTS_SCRIPT`, as pinned by the E3.S2 spec (§ R2.3). A later change of the text moves the block, the pin and this literal in one commit. */
-const PINNED = '3159e39df42ad88d3240c4f64b4098b54fb345828d9e8089eadb53ff8497e9b9';
+const PINNED = 'e87bebc6620ce782455f790d6ba71758aabc28cbac71920120271f9d74baf2e2';
 
 const HERE = join(__dirname, '..', '..');
 const SPEC_NAME = 'PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E3_S2_spec.md';
@@ -57,13 +57,13 @@ function firstDifference(left: string, right: string): string {
 
 const sha256 = (text: string): string => createHash('sha256').update(text).digest('hex');
 
-test('E3S2-T1: the sha256 of ACCOUNTS_SCRIPT is the pinned value, and the text is 342 lines of ASCII ending with LF', () => {
+test('E3S2-T1: the sha256 of ACCOUNTS_SCRIPT is the pinned value, and the text is 341 lines of ASCII ending with LF', () => {
   assert.match(PINNED, /^[0-9a-f]{64}$/u, 'the test still holds a pin that is not a sha256');
   assert.equal(sha256(ACCOUNTS_SCRIPT), PINNED, 'the text of ACCOUNTS_SCRIPT changed without the pin');
-  assert.equal(ACCOUNTS_SCRIPT.split('\n').length - 1, 342, 'the text is 342 lines');
-  assert.equal(Buffer.byteLength(ACCOUNTS_SCRIPT), 11_379, 'the text is 11 379 bytes');
+  assert.equal(ACCOUNTS_SCRIPT.split('\n').length - 1, 341, 'the text is 341 lines');
+  assert.equal(Buffer.byteLength(ACCOUNTS_SCRIPT), 13_045, 'the text is 13 045 bytes');
   assert.equal(count(ACCOUNTS_SCRIPT, '${'), 12, 'the text holds ${ 12 times');
-  assert.equal(count(ACCOUNTS_SCRIPT, '\\'), 70, 'the text holds 70 backslashes');
+  assert.equal(count(ACCOUNTS_SCRIPT, '\\'), 77, 'the text holds 77 backslashes');
   assert.ok(ACCOUNTS_SCRIPT.endsWith('\n'), 'the text ends with a line end');
 });
 
@@ -95,8 +95,8 @@ test('E3S2-T4 (text): the modes are two words by a closed list, and the script h
   for (const word of ['', 'usage', 'Claude-usage', 'claude-usage ', 'claude-usage;id', 'constructor']) {
     assert.equal(isAccountsMode(word), false, JSON.stringify(word));
   }
-  const rows = ['    1:no-claude-usage) want= ;;', '    2:claude-usage)'];
-  assert.deepEqual(ACCOUNTS_MODES.map((mode) => rows.some((row) => row.includes(`:${mode})`))), [true, true], 'a mode has no case row');
+  const rows = ['    1:no-claude-usage:) want= ;;', '    2:no-claude-usage:no-agy-quota) want=; askq=no ;;', '    2:claude-usage:*)'];
+  assert.deepEqual(ACCOUNTS_MODES.map((mode) => rows.some((row) => row.includes(`:${mode}:`))), [true, true], 'a mode has no case row');
   for (const row of rows) {
     assert.equal(ACCOUNTS_SCRIPT.split('\n').filter((line) => line === row).length, 1, `the script has no line ${JSON.stringify(row)}`);
   }
@@ -106,7 +106,20 @@ test('E3S2-T4 (text): the modes are two words by a closed list, and the script h
     assert.equal(isAccountsDigest(word), false, JSON.stringify(word));
   }
   assert.equal(ACCOUNTS_DIGEST.source, '^[0-9a-f]{64}$');
-  assert.ok(ACCOUNTS_SCRIPT.includes('case $#:${1-} in\n'), 'the script does not count the operands with the case');
+  assert.ok(ACCOUNTS_SCRIPT.includes('case $#:${1-}:${2-} in\n'), 'the script does not count the operands with the case');
+});
+
+test('R3-T4: the second operand of the first mode is the one word, in TypeScript and in sh; no other word, and not for the usage mode', () => {
+  assert.equal(ACCOUNTS_SKIP_AGY, 'no-agy-quota');
+  assert.ok(ACCOUNTS_SCRIPT.includes(`    2:no-claude-usage:${ACCOUNTS_SKIP_AGY}) want=; askq=no ;;`));
+  assert.equal(operandFits('no-claude-usage', undefined), true);
+  assert.equal(operandFits('no-claude-usage', ACCOUNTS_SKIP_AGY), true);
+  for (const word of ['', 'no-agy', 'no-agy-quota ', 'NO-AGY-QUOTA', 'no-agy-quota;id', '0'.repeat(64), 'someone@example.test']) {
+    assert.equal(operandFits('no-claude-usage', word), false, JSON.stringify(word));
+  }
+  assert.equal(operandFits('claude-usage', '0'.repeat(64)), true);
+  assert.equal(operandFits('claude-usage', undefined), false);
+  assert.equal(operandFits('claude-usage', ACCOUNTS_SKIP_AGY), false);
 });
 
 // ───────────────── A2-T25: the script keeps its own rules ─────────────────
@@ -151,7 +164,7 @@ const NO_WRITE_RULES: readonly Rule[] = [
   ['one cd, and it is cd /', (t) => matches(t, /\bcd /gu) !== 1 || !t.includes('  cd / || ')],
   ['one export, and it is export PATH', (t) => matches(t, /\bexport\b/gu) !== 1 || !t.includes('  export PATH\n')],
   ['one TZ=, on the usage line', (t) => count(t, 'TZ=') !== 1 || !t.includes('TZ=UTC timeout -k 1 8 claude -p "/usage"')],
-  ['every LC_ALL=C stands before grep or sed, or before timeout and then sed or ls', (t) => matches(t, /LC_ALL=C/gu) !== matches(t, /LC_ALL=C (?:grep|sed|timeout -k 1 \d+ (?:sed|ls))\b/gu)],
+  ['every LC_ALL=C stands before grep or sed, or before timeout and then sed or grep', (t) => matches(t, /LC_ALL=C/gu) !== matches(t, /LC_ALL=C (?:grep|sed|timeout -k 1 \d+ (?:sed|grep))\b/gu)],
   ['no sudo, install, upgrade or add as a word', (t) => /\b(sudo|install|upgrade|add)\b/u.test(t)],
   ['the package managers stand only in the eight lines of coai_manager', (t) => {
     const named = linesOf(t).filter((line) => /\b(?:apt-get|dnf|yum|apk)\b/u.test(line));
@@ -167,14 +180,17 @@ const COMMAND_LINES = [
   'timeout -k 1 2 claude --version',
   'TZ=UTC timeout -k 1 8 claude -p "/usage" --output-format json --no-session-persistence --strict-mcp-config --setting-sources ""',
   'timeout -k 1 4 agy --version',
+  'timeout -k 1 4 agy -p /quota --output-format json',
+  'timeout -k 1 3 codex app-server',
 ] as const;
 
 const VENDOR_RULES: readonly Rule[] = [
-  ['the four vendor command lines are there, each once, word for word', (t) => COMMAND_LINES.some((line) => count(t, line) !== 1)],
-  ['claude follows timeout -k 1 <n> three times and agy once', (t) => matches(t, /timeout -k 1 \d+ claude /gu) !== 3 || matches(t, /timeout -k 1 \d+ agy /gu) !== 1],
+  ['the six vendor command lines are there, each once, word for word', (t) => COMMAND_LINES.some((line) => count(t, line) !== 1)],
+  ['claude follows timeout -k 1 <n> three times, agy twice and codex once', (t) => matches(t, /timeout -k 1 \d+ claude /gu) !== 3 || matches(t, /timeout -k 1 \d+ agy /gu) !== 2 || matches(t, /timeout -k 1 \d+ codex /gu) !== 1],
   ['no command is claude, agy or codex at the start of a line', (t) => linesOf(t).some((line) => /^\s*(?:claude|agy|codex)\s/u.test(line))],
-  ['the only codex in a command is command -v codex', (t) => /codex/u.test(t.replaceAll('command -v codex', '').replaceAll(/COAI-(?:VENDOR|USAGE) codex/gu, '').replaceAll('.codex', '').replaceAll('coai_codex', '').replaceAll('jq_codex', ''))],
-  ['no credential file of Claude or agy is named', (t) => ['.credentials.json', '.claude.json', 'cli.log'].some((name) => t.includes(name))],
+  ['the only codex in a command is codex app-server (and coai_vendor codex)', (t) => /codex/u.test(t.replaceAll('timeout -k 1 3 codex app-server', '').replaceAll('coai_vendor codex', '').replaceAll(/COAI-(?:VENDOR|USAGE) codex/gu, '').replaceAll('.codex', '').replaceAll('coai_codex', '').replaceAll('jq_codex', ''))],
+  ['no credential file of Claude or agy is named; cli.log once, as the log whose tail is searched', (t) => ['.credentials.json', '.claude.json'].some((name) => t.includes(name))
+    || count(t, 'cli.log') !== 1 || !t.includes('tail -c 1048576 "$HOME/.gemini/antigravity-cli/cli.log"')],
   ['auth.json and the agy token are named once each, as the argument of coai_sign_in', (t) => count(t, 'auth.json') !== 1 || count(t, 'antigravity-oauth-token') !== 1
     || !t.includes('coai_sign_in "$HOME/.codex/auth.json"') || !t.includes('coai_sign_in "$HOME/.gemini/antigravity-cli/antigravity-oauth-token"')],
   ['no jq program holds a word that prints a whole value, a key list or the environment', (t) => /\b(?:tojson|to_entries|input_filename|debug|keys|env)\b|@json|@text|\$ENV/u.test(t)],
@@ -182,13 +198,12 @@ const VENDOR_RULES: readonly Rule[] = [
 
 const COMPANION_RULES: readonly Rule[] = [
   ['</dev/null 2>/dev/null is there once', (t) => count(t, '</dev/null 2>/dev/null') !== 1],
-  ['|| return 0 is there twelve times', (t) => count(t, '|| return 0') !== 12],
-  ['the first set is set -f, and each set +f has a set -f two lines after it', (t) => {
+  ['|| return 0 is there thirteen times', (t) => count(t, '|| return 0') !== 13],
+  ['the first set is set -f, and there is no set +f: nothing is globbed any more', (t) => {
     const lines = linesOf(t);
     const first = lines.find((line) => /^\s*set /u.test(line));
-    const opens = lines.flatMap((line, index) => (line.trim() === 'set +f' ? [index] : []));
 
-    return first?.trim() !== 'set -f' || opens.length !== 2 || opens.some((index) => lines[index + 2]?.trim() !== 'set -f');
+    return first?.trim() !== 'set -f' || lines.some((line) => line.trim() === 'set +f');
   }],
 ];
 
@@ -215,19 +230,23 @@ const MUTATIONS: readonly (readonly [string, string, (text: string) => string])[
   ['one cd, and it is cd /', 'a second cd', (t) => t.replace('  unset IFS\n', '  unset IFS\n  cd /tmp\n')],
   ['one export, and it is export PATH', 'a second export', (t) => t.replace('  unset IFS\n', '  unset IFS\n  export LC_ALL\n')],
   ['one TZ=, on the usage line', 'TZ on another command', (t) => t.replace('timeout -k 1 2 claude --version', 'TZ=UTC timeout -k 1 2 claude --version')],
-  ['every LC_ALL=C stands before grep or sed, or before timeout and then sed or ls', 'LC_ALL before cat', (t) => t.replace('  unset IFS\n', '  unset IFS\n  LC_ALL=C cat\n')],
+  ['every LC_ALL=C stands before grep or sed, or before timeout and then sed or grep', 'LC_ALL before cat', (t) => t.replace('  unset IFS\n', '  unset IFS\n  LC_ALL=C cat\n')],
   ['no sudo, install, upgrade or add as a word', 'a sudo line', (t) => t.replace("      printf 'none'\n", "      printf 'none'\n      sudo apt-get install -y jq\n")],
   ['the package managers stand only in the eight lines of coai_manager', 'a package manager outside coai_manager', (t) => t.replace('  unset IFS\n', '  unset IFS\n  : dnf\n')],
-  ['the four vendor command lines are there, each once, word for word', 'a changed flag', (t) => t.replace('--strict-mcp-config', '--strict-mcp')],
-  ['claude follows timeout -k 1 <n> three times and agy once', 'a claude with no timeout', (t) => t.replace('timeout -k 1 3 claude auth status --json', 'claude auth status --json')],
+  ['the six vendor command lines are there, each once, word for word', 'a changed flag', (t) => t.replace('--strict-mcp-config', '--strict-mcp')],
+  ['the six vendor command lines are there, each once, word for word', 'a changed agy quota command', (t) => t.replace('agy -p /quota --output-format json', 'agy -p /quota')],
+  ['claude follows timeout -k 1 <n> three times, agy twice and codex once', 'a claude with no timeout', (t) => t.replace('timeout -k 1 3 claude auth status --json', 'claude auth status --json')],
+  ['claude follows timeout -k 1 <n> three times, agy twice and codex once', 'a codex with no timeout', (t) => t.replace('timeout -k 1 3 codex app-server', 'codex app-server')],
+  ['claude follows timeout -k 1 <n> three times, agy twice and codex once', 'an agy quota with no timeout', (t) => t.replace('timeout -k 1 4 agy -p /quota', 'agy -p /quota')],
   ['no command is claude, agy or codex at the start of a line', 'a bare claude command', (t) => t.replace('  unset IFS\n', '  unset IFS\n  claude auth status\n')],
-  ['the only codex in a command is command -v codex', 'a start of codex', (t) => t.replace('  unset IFS\n', '  unset IFS\n  : codex login status\n')],
-  ['no credential file of Claude or agy is named', 'the credential file named', (t) => t.replace('  unset IFS\n', '  unset IFS\n  : "$HOME/.claude/.credentials.json"\n')],
+  ['the only codex in a command is codex app-server (and coai_vendor codex)', 'a start of codex', (t) => t.replace('  unset IFS\n', '  unset IFS\n  : codex login status\n')],
+  ['no credential file of Claude or agy is named; cli.log once, as the log whose tail is searched', 'a second mention of the log', (t) => t.replace('  unset IFS\n', '  unset IFS\n  : "$HOME/.gemini/antigravity-cli/cli.log"\n')],
+  ['no credential file of Claude or agy is named; cli.log once, as the log whose tail is searched', 'the credential file named', (t) => t.replace('  unset IFS\n', '  unset IFS\n  : "$HOME/.claude/.credentials.json"\n')],
   ['auth.json and the agy token are named once each, as the argument of coai_sign_in', 'auth.json opened', (t) => t.replace('  unset IFS\n', '  unset IFS\n  : "$HOME/.codex/auth.json"\n')],
-  ['no jq program holds a word that prints a whole value, a key list or the environment', 'tojson', (t) => t.replace('(.rl.primary | win)', '(.rl.primary | tojson)')],
+  ['no jq program holds a word that prints a whole value, a key list or the environment', 'tojson', (t) => t.replace('($r.primary | win)', '($r.primary | tojson)')],
   ['</dev/null 2>/dev/null is there once', 'a second pair', (t) => t.replace('  unset IFS\n', '  unset IFS\n  : </dev/null 2>/dev/null\n')],
-  ['|| return 0 is there twelve times', 'a thirteenth', (t) => t.replace('  unset IFS\n', '  unset IFS\n  : || return 0\n')],
-  ['the first set is set -f, and each set +f has a set -f two lines after it', 'a set +f left open', (t) => t.replaceAll('    set -f\n    while', '    :\n    while')],
+  ['|| return 0 is there thirteen times', 'a fourteenth', (t) => t.replace('  unset IFS\n', '  unset IFS\n  : || return 0\n')],
+  ['the first set is set -f, and there is no set +f: nothing is globbed any more', 'a set +f', (t) => t.replace('  unset IFS\n', '  unset IFS\n  set +f\n')],
 ];
 
 test('A2-T25 companions: each rule is red for the one change it guards against, and only that rule', () => {
@@ -258,18 +277,24 @@ test('A2-T26: the vendor commands and the readers carry the numbers of the const
     ['the account command', `timeout -k 1 ${s.account} claude auth`],
     ['the version command', `timeout -k 1 ${s.version} claude --version`],
     ['the usage command', `timeout -k 1 ${s.usage} claude -p`],
-    ['agy', `timeout -k 1 ${s.agy} agy`],
+    ['agy', `timeout -k 1 ${s.agy} agy --version`],
+    ['the agy quota command', `timeout -k 1 ${s.agyQuota} agy -p /quota`],
+    ['codex app-server', `timeout -k 1 ${s.codex} codex app-server`],
     ['the account reader (tail)', `timeout -k 1 ${r.account} tail`],
     ['the account reader (jq)', `timeout -k 1 ${r.account} jq -n -r "$jq_auth"`],
     ['the version reader', `timeout -k 1 ${r.version} sed`],
     ['the usage reader (tail)', `timeout -k 1 ${r.usage} tail`],
     ['the usage reader (jq)', `timeout -k 1 ${r.usage} jq -n -r "$jq_usage"`],
     ['the agy reader', `timeout -k 1 ${r.agy} sed`],
-    ['the Codex list', `timeout -k 1 ${r.codexList} ls`],
-    ['the Codex file time', `timeout -k 1 ${r.codexTime} "$st" -c %Y`],
     ['the digest reader', `timeout -k 1 ${r.digest} sha256sum`],
-    ['the Codex file read', `timeout -k 1 ${r.codexFile} tail`],
-    ['the Codex record reader', `timeout -k 1 ${r.codexRecord} jq -n -R`],
+    ['the Codex reader (tail)', `timeout -k 1 ${r.codex} tail`],
+    ['the Codex reader (jq)', `timeout -k 1 ${r.codex} jq -n -R`],
+    ['the quota reader (tail)', `timeout -k 1 ${r.agyQuota} tail`],
+    ['the quota reader (jq)', `timeout -k 1 ${r.agyQuota} jq -n -r "$jq_agy"`],
+    ['the log reader (tail)', `timeout -k 1 ${r.agyLog} tail -c`],
+    ['the log reader (sed)', `timeout -k 1 ${r.agyLog} sed`],
+    ['the log reader (tail -n)', `timeout -k 1 ${r.agyLog} tail -n 1`],
+    ['the log reader (grep)', `timeout -k 1 ${r.agyLog} grep`],
   ] as const) {
     assert.ok(t.includes(text), `${what}: the text has no "${text}"`);
   }
@@ -281,10 +306,11 @@ test('A2-T26: the byte caps, the line caps and the protocol are the constants', 
   const t = ACCOUNTS_SCRIPT;
   assert.equal(count(t, `tail -c ${ACCOUNT_JSON_MAX}`), 1);
   assert.equal(ACCOUNT_JSON_MAX, 65536);
-  assert.equal(USAGE_JSON_MAX, CODEX_TAIL_MAX, 'the usage JSON and the Codex tail are the same number');
-  assert.equal(count(t, `tail -c ${USAGE_JSON_MAX}`), 2, 'the text holds the 1 MiB exactly twice: the usage pipe and the Codex read');
-  assert.equal(count(t, `tail -n ${CODEX_FILES_MAX}`), 1);
-  assert.equal(count(t, `1,${USAGE_LINES_MAX}p`), 1);
+  assert.deepEqual([CODEX_JSON_MAX, AGY_QUOTA_JSON_MAX, AGY_LOG_TAIL_MAX], [USAGE_JSON_MAX, USAGE_JSON_MAX, USAGE_JSON_MAX], 'the four 1 MiB reads are the same number');
+  assert.equal(count(t, `tail -c ${USAGE_JSON_MAX}`), 4, 'the text holds the 1 MiB exactly four times: the usage pipe, Codex, agy\'s quota and agy\'s log');
+  assert.equal(count(t, 'tail -n 1'), 1, 'the one line of the log');
+  assert.equal(AGY_WINDOWS_MAX, USAGE_LINES_MAX);
+  assert.equal(count(t, `1,${USAGE_LINES_MAX}p`), 2, 'the usage lines of Claude and the windows of agy');
   assert.equal(count(t, `-le ${USAGE_LINES_MAX}`), 1);
   assert.equal(count(t, `sent=${USAGE_LINES_MAX}`), 1);
   assert.ok(t.includes(`COAI-ACCOUNTS ${ACCOUNTS_PROTOCOL}`));
@@ -294,19 +320,20 @@ test('A2-T26: the byte caps, the line caps and the protocol are the constants', 
   assert.equal(ACCOUNTS_LINE_BYTES_MAX, 512);
 });
 
-test('A2-T26: no ls, stat or Codex tail runs without a timeout, and each reader\'s limit is at least its command\'s', () => {
+test('A2-T26: no Codex session file is read any more, every tail and the sleep follow their limits, and each reader\'s limit is at least its command\'s', () => {
   const t = ACCOUNTS_SCRIPT;
-  assert.equal(count(t, 'ls -tr'), 1);
-  assert.equal(count(t, '"$st" -c %Y'), 1);
-  assert.equal(matches(t, new RegExp(`tail -c ${CODEX_TAIL_MAX} <`, 'gu')), 1);
-  for (const word of ['ls -tr', '"$st" -c %Y', `tail -c ${CODEX_TAIL_MAX} <`]) {
-    assert.ok(new RegExp(`timeout -k 1 \\d+ ${word.replaceAll('$', '\\$')}`, 'u').test(t), `${word} does not follow a timeout -k 1 <n>`);
+  for (const gone of ['ls -tr', '"$st" -c %Y', 'sessions', 'rollout', 'as-of', 'no-stat', 'no-sessions', 'uuid']) {
+    assert.ok(!t.includes(gone), `the text still holds "${gone}", which served the session-file path`);
   }
+  assert.equal(matches(t, /(?<!timeout -k 1 \d )tail -[cn] /gu), 0, 'a tail that does not follow a timeout -k 1 <n>... except the first of a pipe');
   const s = ACCOUNTS_SECONDS;
   const r = ACCOUNTS_READ_SECONDS;
-  for (const part of ['account', 'version', 'usage', 'agy'] as const) {
+  for (const part of ['account', 'version', 'usage', 'agy', 'codex', 'agyQuota'] as const) {
     assert.ok(r[part] >= s[part], `the reader of ${part} (${r[part]} s) ends before its command (${s[part]} s)`);
   }
+  assert.ok(t.includes('        sleep 2\n'), 'the sleep that keeps stdin open for codex app-server');
+  assert.ok(s.codex > 2, `codex app-server (${s.codex} s) must outlast the 2 s of its input`);
+  assert.ok(r.agyQuota > s.agyQuota && r.codex > s.codex, 'the reader of a step with a KILL second is longer than its TERM');
 });
 
 const connectSeconds = (): number => {
@@ -316,23 +343,25 @@ const connectSeconds = (): number => {
   return Number(word?.split('=')[1]);
 };
 
-test('E3S2-T12 (T46, the sum): worstSeconds of each mode is the table of § R2.5 plus the connect time, and at most the ceiling minus 2 s', () => {
+test('E3S2-T12 (T46, the sum): worstSeconds of each mode is the table of § R3.5 plus the connect time, and at most the ceiling minus 2 s', () => {
   const r = ACCOUNTS_READ_SECONDS;
   assert.equal(connectSeconds(), 5);
   assert.equal(ACCOUNTS_CONNECT_SECONDS, connectSeconds(), 'the connect seconds are the ConnectTimeout of SSH_OPTIONS');
   assert.equal(ACCOUNTS_CEILING_SECONDS, 30);
   assert.deepEqual({ ...ACCOUNTS_KILL_SECONDS }, { version: 1, agy: 1 });
+  const table: Readonly<Record<(typeof ACCOUNTS_MODES)[number], number>> = { 'no-claude-usage': 22, 'claude-usage': 17 };
   for (const mode of ACCOUNTS_MODES) {
-    assert.equal(worstSeconds(mode), 17 + ACCOUNTS_CONNECT_SECONDS, `${mode}: the table of § R2.5 says 17 s and then the connect`);
+    assert.equal(worstSeconds(mode), table[mode] + ACCOUNTS_CONNECT_SECONDS, `${mode}: the table of § R3.5 says ${table[mode]} s and then the connect`);
     assert.ok(worstSeconds(mode) <= ACCOUNTS_CEILING_SECONDS - 2, `${mode}: ${worstSeconds(mode)} s is over the ceiling of ${ACCOUNTS_CEILING_SECONDS} s minus 2 s`);
   }
-  // the first mode, step by step, as the table says it: account 4; version 2 + 1; the Codex files 1 + 1 + 3; agy 4 + 1
-  assert.equal(r.account + r.version + ACCOUNTS_KILL_SECONDS.version + r.codexList + r.codexTime + Math.max(r.codexRecord, CODEX_FILES_MAX * r.codexFile) + r.agy + ACCOUNTS_KILL_SECONDS.agy, 17);
+  // the first mode, step by step, as the table says it: account 4; version 2 + 1; codex app-server 4; agy version 4 + 1, quota 5, log 1
+  assert.equal(r.account + r.version + ACCOUNTS_KILL_SECONDS.version + r.codex + r.agy + ACCOUNTS_KILL_SECONDS.agy + r.agyQuota + r.agyLog, 22);
   // the usage mode: account 4; version 2 + 1; the digest 1; usage 9
   assert.equal(r.account + r.version + ACCOUNTS_KILL_SECONDS.version + r.digest + r.usage, 17);
   const s = ACCOUNTS_SECONDS;
-  const vendor = s.account + s.version + s.usage + s.agy + 4 + connectSeconds();
-  assert.ok(vendor < ACCOUNTS_CEILING_SECONDS, `the four limits, one KILL second each and the connect are ${vendor} s`);
+  const first = s.account + s.version + s.codex + s.agy + s.agyQuota + 5 + connectSeconds();
+  const usage = s.account + s.version + s.usage + 3 + connectSeconds();
+  assert.ok(first < ACCOUNTS_CEILING_SECONDS && usage < ACCOUNTS_CEILING_SECONDS, `the limits of the first mode (${first} s) or of the usage mode (${usage} s), one KILL second each and the connect, reach the ceiling`);
 });
 
 test('A2-T26 / E3S2-T3: each tool of ACCOUNTS_TOOLS is in the text and no other is; the PATH line is ACCOUNTS_PATH; the manager words and paths are in the text in order', () => {

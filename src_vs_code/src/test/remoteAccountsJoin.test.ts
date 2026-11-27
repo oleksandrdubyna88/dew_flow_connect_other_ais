@@ -26,8 +26,8 @@ const Z = 'z@example.test';
 /** A usage read with a figure, so a place that shares it shows a number. */
 const FIGURES: ClaudeUsage = { state: 'read', windows: [{ name: '5h', usedPercent: 30, resetsAtMs: NOW + 3_600_000 }], unmatched: 0 };
 const KEY = (email: string, host = 'h'): string => claudeAccountKey(foundOf(claudeFound(email)), host);
-const CODEX: Extract<AccountsRead, { kind: 'read' }>['codex'] = { state: 'found', signInFile: true, plan: 'prolite', usage: { state: 'failed', why: 'none' } };
-const AGY: Extract<AccountsRead, { kind: 'read' }>['agy'] = { state: 'found', version: '1.5.12', signInFile: true, usage: { state: 'no-source' } };
+const CODEX: Extract<AccountsRead, { kind: 'read' }>['codex'] = { state: 'found', signInFile: true, email: 'cox@example.test', plan: 'prolite', usage: { state: 'failed', why: 'none' } };
+const AGY: Extract<AccountsRead, { kind: 'read' }>['agy'] = { state: 'found', version: '1.5.12', signInFile: true, email: '', usage: { state: 'skipped' } };
 const withOthers = (email: string): AccountsRead => ({ ...claudeFound(email), codex: CODEX, agy: AGY });
 
 /** Each host answers its first call with its account, and a usage call with what the test gives. */
@@ -99,7 +99,7 @@ test('E3S2-T18 (model): the cell says the reason — the three sentences, and th
   const spanOf = (block: Block): string | null => block.rows.find((row) => row.tool === 'claude-code')?.span ?? null;
   const said: readonly (readonly [HostMemory['usageMiss'], string])[] = [
     [{ why: 'call-failed', sentence: 'the host did not answer' }, 'Usage not read: the usage call failed — the host did not answer'],
-    [{ why: 'unreadable', word: 'tool' }, 'Usage not read: the usage reply could not be read (a tool the read needs (id, timeout, tail, ls, sed, grep or sha256sum) is not in a system folder there)'],
+    [{ why: 'unreadable', word: 'tool' }, 'Usage not read: the usage reply could not be read (a tool the read needs (id, timeout, tail, sleep, sed, grep or sha256sum) is not in a system folder there)'],
     [{ why: 'account-changed' }, 'Usage not read: the account changed between the two reads'],
     [{ why: 'no-account-lines' }, 'Usage not read: this reply names no account lines'],
   ];

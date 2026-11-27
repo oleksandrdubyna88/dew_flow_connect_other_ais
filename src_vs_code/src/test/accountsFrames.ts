@@ -39,7 +39,15 @@ export const USAGE_READ_LINES: readonly string[] = [
   ':unmatched 0',
 ];
 
-/** The FIRST mode's reply (§ A2.5, revision 2): the three parts, Claude's usage `skipped`. */
+/** The measured quota of agy: the Gemini group part-used with a reset, the third-party group full with none (a dash). */
+export const AGY_QUOTA_LINES: readonly string[] = [
+  ':quota gemini weekly 60 1796283734',
+  ':quota gemini 5h 92 1795813241',
+  ':quota third-party weekly 100 -',
+  ':quota third-party 5h 100 -',
+];
+
+/** The FIRST mode's reply (§ A2.5, revision 3): the three parts, Claude's usage `skipped`. */
 export const GOOD_LINES: readonly string[] = [
   'COAI-JQ found',
   ...ACCOUNT_LINES,
@@ -47,14 +55,16 @@ export const GOOD_LINES: readonly string[] = [
   'COAI-USAGE claude skipped',
   'COAI-VENDOR codex found',
   ':sign-in-file present',
+  ':account cox@example.test',
   ':plan prolite',
   'COAI-USAGE codex read',
   ':window 14 10080 1795518850',
-  ':as-of 2026-11-17T19:32:36.474Z 1794938000',
   'COAI-VENDOR agy found',
   ':version 1.5.12',
   ':sign-in-file present',
-  'COAI-USAGE agy none',
+  ':account agy@example.test',
+  'COAI-USAGE agy read',
+  ...AGY_QUOTA_LINES,
 ];
 
 /** `GOOD` is asserted ONCE (in the reply test) to be read, so each negative row changes one thing of a reply the parser accepts. */
@@ -85,8 +95,16 @@ export const codexLines = (...data: readonly string[]): string => frame(
   'COAI-VENDOR agy absent',
 );
 
-export const FILE_TIME = 1794938000;
-export const RECORD_TIME = '2026-11-17T19:32:36.474Z';
+/** A reply whose agy part holds these data lines under `COAI-USAGE agy read`; Claude and Codex are absent. */
+export const agyLines = (...data: readonly string[]): string => frame(
+  'COAI-JQ found',
+  'COAI-VENDOR claude absent',
+  'COAI-VENDOR codex absent',
+  'COAI-VENDOR agy found',
+  ':sign-in-file present',
+  'COAI-USAGE agy read',
+  ...data,
+);
 
 /** The `claude-only` arm of an answer to the usage mode, or a failure that says what it was instead. */
 export function claudeOnlyOf(answer: AccountsRead): Extract<AccountsRead, { kind: 'claude-only' }> {

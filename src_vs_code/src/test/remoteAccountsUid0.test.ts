@@ -10,7 +10,7 @@ import { ownedTemp } from './ownedTemp';
 
 /**
  * As UID 0, nothing that another user can write is started (E3.S1, spec § W8; E3S1-T20 to T26). These are tests of the TEXT of the accounts script's
- * revision 2 (the S2 spec, § R2.3): they run the real script by `sh -s`, with false programs in a temporary `HOME`.
+ * revision 3 (the S2 spec, § R2.3): they run the real script by `sh -s`, with false programs in a temporary `HOME`.
  *
  * <p><b>How a run that is not root stands for UID 0.</b> The test sends, BEFORE the pinned text, a prelude of two shell functions: `id` prints `0`, and
  * `stat` answers the real owner and mode with the test's own UID written as `0`, answers `0 755` for every folder ABOVE the test's root (a runner's
@@ -20,17 +20,17 @@ import { ownedTemp } from './ownedTemp';
  * <p>The script is given a made-up `jq` (a file in the test's own `~/.local/bin` that prints the account lines), so these runs need no real `jq`.</p>
  */
 
-const PIN2 = '3159e39df42ad88d3240c4f64b4098b54fb345828d9e8089eadb53ff8497e9b9';
+const PIN2 = 'e87bebc6620ce782455f790d6ba71758aabc28cbac71920120271f9d74baf2e2';
 const sha256 = (text: string): string => createHash('sha256').update(text).digest('hex');
 const ON_PATH = (name: string): string | undefined => (process.env['PATH'] ?? '').split(delimiter).map((dir) => join(dir, name)).find((path) => existsSync(path));
 const SH = ON_PATH('sh');
 const NO_SH = SH === undefined ? 'no POSIX sh on this machine' : false;
 const SYSTEM_PATH = '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin';
 
-/** The text that runs is the constant, which is the pinned revision 2 (the S2 spec, § R2.3). */
+/** The text that runs is the constant, which is the pinned revision 3 (the S2 spec, § R2.3). */
 const SCRIPT = ACCOUNTS_SCRIPT;
 
-test('E3S1-T20…T26: the constant ACCOUNTS_SCRIPT is the pinned revision 2 these runs use', () => {
+test('E3S1-T20…T26: the constant ACCOUNTS_SCRIPT is the pinned revision 3 these runs use', () => {
   assert.equal(sha256(SCRIPT), PIN2);
 });
 

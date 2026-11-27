@@ -1,6 +1,6 @@
 import { credsSession } from './credsSession';
 import type { AccountsRead, AccountsUnreadable } from './remoteAccountsReply';
-import { accountsDigest } from './remoteAccountsScript';
+import { ACCOUNTS_SKIP_AGY, accountsDigest } from './remoteAccountsScript';
 import type { AccountsMode } from './remoteAccountsScript';
 import type { HostStanding } from './remoteHosts';
 import { HOURLY_MS, eligibleOf } from './remoteAccountsTimer';
@@ -50,6 +50,7 @@ type Unreadable = Extract<AccountsRead, { kind: 'unreadable' }>;
 /** What a first call can come to: the parser answers `claude-only` for the usage mode alone. */
 export type FirstRead = Reading | Unreadable;
 type Found = Extract<Reading['claude'], { state: 'found' }>;
+type AgyFound = Extract<Reading['agy'], { state: 'found' }>;
 /** What the list learns from a door that did not say `yes`: the kinds of its rows. `full` is only the old list's, no door answers it. */
 export type NotRead = 'refused' | 'not-asked' | 'full' | 'damaged' | 'unwritten';
 
@@ -71,6 +72,8 @@ export interface HostMemory {
   readonly usageAtMs?: number | undefined;
   /** The Claude Code version at which the usage read went wrong; `''` stands for a version that was not known. */
   readonly usageBlockedAt?: string | undefined;
+  /** The agy version at which its quota command went wrong (it asked the model, or printed no known bucket); `''` stands for a version that was not known. */
+  readonly agyBlockedAt?: string | undefined;
   /** Why this place's last usage call did not give figures; cleared by the place's next first reply (E3.S2, § R2.8). */
   readonly usageMiss?: UsageMiss | undefined;
   /** How long this place's last call took, in ms: the hover of the age says it beside the exact time (R9a). */
@@ -179,10 +182,39 @@ export function blockedAfter(read: AccountsRead): string | undefined {
   return found !== undefined && blocks(found.usage) ? versionOf(found) : undefined;
 }
 
+const agyFoundOf = (read: AccountsRead | undefined): AgyFound | undefined => (read?.kind === 'read' && read.agy.state === 'found' ? read.agy : undefined);
+
+const agyVersionOf = (agy: AgyFound): string => agy.version ?? '';
+
+const agyBlocks = (usage: AgyFound['usage']): boolean => usage.state === 'failed' && (usage.why === 'model-call' || usage.why === 'format');
+
+/** The agy block after a reply: made by a reply that says the quota command went wrong, kept while the reply names the same agy version, else gone (a new version asks again). */
+function agyBlockOf(prev: HostMemory, read: FirstRead): string | undefined {
+  const agy = agyFoundOf(read);
+  if (agy === undefined) {
+    return undefined;
+  }
+
+  return agyBlocks(agy.usage) || prev.agyBlockedAt === agyVersionOf(agy) ? agyVersionOf(agy) : undefined;
+}
+
+/**
+ * The operand of a place's FIRST call: the word that tells the script not to run agy's quota command, while the place's last reading names the agy version at which
+ * that command asked the model (or printed nothing known); nothing otherwise. No version of agy is asked again at a host that it went wrong on.
+ */
+export function firstOperandOf(memory: HostMemory | undefined): string | undefined {
+  const agy = lastAgyOf(memory);
+
+  return agy !== undefined && memory?.agyBlockedAt === agyVersionOf(agy) ? ACCOUNTS_SKIP_AGY : undefined;
+}
+
+/** The agy part of a place's last reading, when it was found. */
+const lastAgyOf = (memory: HostMemory | undefined): AgyFound | undefined => agyFoundOf(memory?.reading?.read);
+
 // ───────────────── the round ─────────────────
 
-/** A call: the real one runs `ssh`; a test replaces it. The usage mode holds the digest of the first reply's account lines (§ R2.2); the first mode holds none. */
-export type AccountsCall = (host: string, mode: AccountsMode, digest?: string) => Promise<RemoteRun>;
+/** A call: the real one runs `ssh`; a test replaces it. The usage mode holds the digest of the first reply's account lines (§ R2.2); the first mode holds none, or the word that skips agy's quota. */
+export type AccountsCall = (host: string, mode: AccountsMode, operand?: string) => Promise<RemoteRun>;
 
 /** What the round needs of the world, and no ask: a round never asks anybody. */
 export interface RoundSeams {
@@ -296,6 +328,7 @@ function readMemory(prev: HostMemory, host: string, read: FirstRead, nowMs: numb
   return {
     ...prev, reading: { read, atMs: nowMs }, unreadable: undefined, failure: undefined, usageMiss: undefined,
     claudeAccount: found === undefined ? undefined : claudeAccountKey(found, host), usageAtMs: usageTimeOf(prev, read, host, nowMs), usageBlockedAt: blockOf(prev, read),
+    agyBlockedAt: agyBlockOf(prev, read),
   };
 }
 
@@ -510,7 +543,7 @@ async function beforeSpawn(context: Context, state: RoundState, host: string): P
 }
 
 /** What a call is made with: an ssh host's is the round's `call`; a WSL place's is the walk's, which reads the running list again first. */
-type Runner = (mode: AccountsMode, digest: string | undefined) => Promise<PlaceRun | RemoteRun>;
+type Runner = (mode: AccountsMode, operand: string | undefined) => Promise<PlaceRun | RemoteRun>;
 
 /** A WSL place whose distro was not running when it was read again: no call was made, and the place keeps nothing. */
 const withoutKey = (state: RoundState, key: string): RoundState => ({ ...state, memory: new Map([...state.memory].filter(([one]) => one !== key)) });
@@ -535,7 +568,7 @@ async function firstStep(context: Context, state: RoundState, host: string, run:
     return early;
   }
   const startedMs = context.seams.now();
-  const got = await run(modeFor('first'), undefined);
+  const got = await run(modeFor('first'), firstOperandOf(state.memory.get(host)));
 
   return aside(context, state, host, got) ?? settled(context, admitted(state, host), host, got as RemoteRun, startedMs);
 }
@@ -574,7 +607,7 @@ async function placeRound(context: Context, state: RoundState, host: string, run
 
 /** An ssh host: its calls are the round's `call`. */
 const hostRound = (context: Context, state: RoundState, host: string): Promise<Step> =>
-  placeRound(context, state, host, (mode, digest) => context.seams.call(host, mode, digest));
+  placeRound(context, state, host, (mode, operand) => context.seams.call(host, mode, operand));
 
 // ───────────────── the WSL turn (E3.S3) ─────────────────
 
@@ -632,7 +665,7 @@ class WslTurn {
   /** One place: the same steps as a host's (the Stop, the terminal, the door, the call, the checks, the publication, the usage call), with the walk's call. */
   private async visit(_state: RoundState, place: WslPlace, call: PlaceCall): Promise<Visited<RoundState>> {
     const key = memoryKeyOf(place);
-    const step = await placeRound(this.context, this.state, key, (mode, digest) => call(mode, digest));
+    const step = await placeRound(this.context, this.state, key, (mode, operand) => call(mode, operand));
     this.state = step.state;
 
     return { state: step.state, end: endAfter(step, key) };

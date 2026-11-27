@@ -125,7 +125,7 @@ class AccountsWindow implements TerminalAccounts {
     const wslPort = (log: (line: string) => void): WslPort | undefined => this.wslPort(log);
     const write = defaultRemoteSeams().log;
     const gate = logGate(write);
-    const real: AccountsCall = (host, mode, digest) => runAccounts(host, mode, digest, ACCOUNTS_LIMITS, { ...defaultRemoteSeams(), log: gate.seamFor(host) });
+    const real: AccountsCall = (host, mode, operand) => runAccounts(host, mode, operand, ACCOUNTS_LIMITS, { ...defaultRemoteSeams(), log: gate.seamFor(host) });
 
     return {
       test: this.test,
