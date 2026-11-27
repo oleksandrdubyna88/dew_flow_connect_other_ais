@@ -1,7 +1,9 @@
 using CoaiMcp.Core.Toolchain;
 using CoaiMcp.Runners.Consultation;
+using CoaiMcp.Runners.Files;
 using CoaiMcp.Runners.Processes;
 using CoaiMcp.Runners.Toolchain;
+using CoaiMcp.Runners.Worktrees;
 using CoaiMcp.Server.RoleJobs;
 using FluentAssertions;
 using Xunit;
@@ -197,5 +199,60 @@ public sealed class ACodexCoderBoundaryTests
         vendor.CheckTurn(new ProcessResult(0, "{\"type\":\"thread.started\",\"thread_id\":\"01a217ad-59bd-7543-907c-6b343bd876d3\"}\n{\"type\":\"item.completed\",\"item\":{\"type\":\"web_search\"}}\n", string.Empty, false), string.Empty)
             .Should().BeOfType<CoderTurnVerdict.Boundary>("the rule of CX-T4 and CX-T5 is built");
         RoleStops.SignInLost("codex", new ProcessResult(1, string.Empty, "Failed to refresh token: x", false)).Should().BeTrue("the three signs of the failover");
+    }
+
+    /// <summary>
+    /// S57: the must-changes of passes 6 and 7 are part of the list the flip rests on. Each line is the smallest proof that the fix is in place; the full tests are in their own classes (M15 <c>ABoundaryFoldersNeverWriteThroughALinkTests</c>, M16 <c>ACodexTurnCheckTests</c>, M17 <c>ACodexCoderPreflightTests</c>,
+    /// M11 a <c>ACodexCoderFixTurnsTests</c>, M11 b <c>AAgyCoderFixTurnsTests</c>, R-M15 <c>AVendorsHaveTheirOwnTempFoldersTests</c>). M18 is a gap of the agy road only and is closed on the agy branch.
+    /// </summary>
+    [Fact]
+    public void D4_EveryMustChangeOfPassesSixAndSeven_IsBuilt_ThisIsTheRestOfTheListTheFlipRestsOn()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "a symbolic link needs a privilege on Windows");
+        using var bed = TempDir.For("coai-d4-passes-six-seven-");
+        var worktree = Path.Combine(bed.Path, "wt");
+        var outside = Path.Combine(bed.Path, "outside");
+        var program = Path.Combine(bed.Path, "windows-program.exe");
+        Directory.CreateDirectory(worktree);
+        Directory.CreateDirectory(outside);
+        File.WriteAllBytes(program, "MZ made-up\n"u8.ToArray());
+        var job = new BoundaryJob("r20261127101010-ab12cd34", new CoderTree(worktree, Path.Combine(bed.Path, "main"), "gitdir: x\n"), Path.Combine(bed.Path, "job"), NetworkChoice.None("t"), NetworkChoice.None("t"));
+        var host = new BoundaryHost(BoundaryPlatform.Linux, Path.Combine(bed.Path, "no-home"), string.Empty, string.Empty, "systemd-run", "systemctl", program, string.Empty);
+
+        // M15: a link at the name of a marker is never followed.
+        var target = Path.Combine(outside, "a-host-file.txt");
+        File.WriteAllBytes(target, "precious\n"u8.ToArray());
+        var marker = Path.Combine(job.TempFolder, BoundaryPreflight.MarkerName(job));
+        Directory.CreateDirectory(job.TempFolder);
+        File.CreateSymbolicLink(marker, target);
+        BoundaryFolders.Prepare(host, job, job.Folders, job.TempFolder, job.VarTempFolder).Sentence.Should().BeEmpty();
+        File.ReadAllBytes(target).Should().Equal("precious\n"u8.ToArray(), "M15: the host file behind the link keeps its bytes");
+
+        // M16: a stream that ended with a bad exit and holds a web search is a boundary; one with no thread and no item is not.
+        var vendor = CodexCoderVendor.Instance;
+        const string thread = "{\"type\":\"thread.started\",\"thread_id\":\"01a217ad-59bd-7543-907c-6b343bd876d3\"}\n";
+        vendor.CheckTurn(new ProcessResult(1, thread + "{\"type\":\"item.completed\",\"item\":{\"type\":\"web_search\"}}\n", string.Empty, false), string.Empty)
+            .Should().BeOfType<CoderTurnVerdict.Boundary>("M16: a bad end answers a boundary for what is proved");
+        vendor.CheckTurn(new ProcessResult(1, string.Empty, string.Empty, false), string.Empty)
+            .Should().NotBeOfType<CoderTurnVerdict.Boundary>("M16: a missing thread on a bad end is the launch's own stop, not a boundary");
+
+        // M17: a program whose folder is the home is refused; a narrow folder of the home is not.
+        new CoderProgram("/h/codex", "/h", string.Empty).HomeProblem("/h").Should().NotBeEmpty("M17");
+        new CoderProgram("/h/.codex/packages/bin/codex", "/h/.codex/packages/bin", string.Empty).HomeProblem("/h").Should().BeEmpty("M17: the measured install is a narrow folder");
+
+        // M11 a: a turn the job's token cut is checked with a time of its own.
+        CoderTurnCheck.CutCheckBudget.Should().BeGreaterThan(TimeSpan.Zero, "M11 a");
+
+        // M11 b: on a cut stream, an event of a tool outside the three is a boundary in every state.
+        var init = "{\"event\":\"init\",\"conversation_id\":\"c\",\"init\":{\"permission_mode\":\"request-review\"}}";
+        var step = "{\"event\":\"step_update\",\"step_update\":{\"conversation_id\":\"c\",\"step_index\":2,\"state\":\"ERROR\",\"step_type\":\"tool\",\"tool_name\":\"run_command\"}}";
+        AgyTurnCheck.Check(new ProcessResult(1, init + "\n" + step + "\n", string.Empty, false), string.Empty, string.Empty).Should().BeOfType<CoderTurnVerdict.Boundary>("M11 b");
+
+        // R-M15: the temp sources lie beside the coder's folder, never inside it, and a link at one of the names is refused.
+        job.CoderTempOf("codex").Should().StartWith(job.CoderTempRoot);
+        RealPath.IsInside(job.CoderTempRoot, job.CoderFolder, StringComparison.Ordinal).Should().BeFalse("R-M15: no folder a unit binds writable holds the sources");
+        Directory.CreateDirectory(job.CoderTempVendorFolder("codex"));
+        File.CreateSymbolicLink(job.CoderTempOf("codex"), outside);
+        job.CoderTempOnDiskProblem("codex").Should().NotBeEmpty("R-M15: the names are asked before every admission");
     }
 }
