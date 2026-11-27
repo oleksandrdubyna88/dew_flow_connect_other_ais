@@ -212,12 +212,12 @@ public sealed class AThisRepositoryToolchainFileTests
         }
 
         red.State.Should().Be(CheckState.Failed, red.Note);
-        red.Steps.Select(step => (step.Step, step.Scope, step.ExitCode == 0)).Should().Equal((CheckStep.Build, "full", true), (CheckStep.Test, "selected", false));  // a red selected run ends the round: the full command is not run
-        red.Steps[1].ScopeFiles.Should().Be(1);
-        red.Steps[1].Argv.Should().Contain("ASelectedRunProbeTests", "the testFor wrapper is given the stem of the added file");
+        red.Steps.Select(step => (step.Step, step.Scope, step.ExitCode == 0)).Should().Equal((CheckStep.Restore, "full", true), (CheckStep.Build, "full", true), (CheckStep.Test, "selected", false));  // a red selected run ends the round: the full command is not run
+        red.Steps[2].ScopeFiles.Should().Be(1);
+        red.Steps[2].Argv.Should().Contain("ASelectedRunProbeTests", "the testFor wrapper is given the stem of the added file");
         FailureDigest.Of(CheckStep.Test, "dotnet", redText, tree.Path).Items.Should().Contain(item => item.Code.Contains("ASelectedRunProbeTests", StringComparison.Ordinal), "the failing test is in the digest");
         green.State.Should().Be(CheckState.Green, green.Note);
-        green.Steps.Select(step => (step.Step, step.Scope, step.ExitCode)).Should().Equal((CheckStep.Build, "full", 0), (CheckStep.Test, "selected", 0), (CheckStep.Test, "full", 0));
+        green.Steps.Select(step => (step.Step, step.Scope, step.ExitCode)).Should().Equal((CheckStep.Restore, "full", 0), (CheckStep.Build, "full", 0), (CheckStep.Test, "selected", 0), (CheckStep.Test, "full", 0));
     }
 
     /// <summary>
