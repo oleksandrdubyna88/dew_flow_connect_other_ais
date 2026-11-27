@@ -476,6 +476,7 @@ replace or change: the appendix, § K.21, word for word, with the gloss of the o
     its own screen "Models & Quota", and the account from its log — chosen knowing that a log's form is no
     contract. Codex: "the account, the subscription and what is left", from Codex itself. Then, told that
     this is the second change of epoch 6: "Yes, epoch 7 at once" (how 6.3 is counted: the ledger).
+28. **2026-11-27: the "yes" given to 2.1.0 stands for revision 3; not asked again.**
 
 **The owner's answers** to Q1 to Q4, of 2026-11-25 evening and of 2026-11-26: the appendix, § K.25, word
 for word; this plan's short list of them, with what entries 4.2 and 4.3 changed: § K.54.
@@ -644,7 +645,7 @@ the appendix, § I, *3. The consent*, the S1 spec, and the short list in § K.12
     their usage; that `claude` and `agy` as found there are started for it, and that **Claude Code rewrites its
     own cache files on a usage read** (decision 13); **from revision 3 the text also says that `codex` is
     started, and that `agy` and `codex` each call their vendor with their own sign-in** (entries 6.2 and 6.3)
-    — whether a "yes" given before is asked again is open (*Re-review for epoch 7*);
+    — a "yes" given before stands and is not asked again (decision 28);
   - the Claude session of a terminal, when a chat door of that terminal is pressed (Q1);
   - that CoAI itself installs and writes nothing there; and how to stop: *Not this host*, *Stop the round*, *Withdraw the
     permission*.

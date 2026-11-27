@@ -18,7 +18,7 @@ round all night.
 | MCP servers in `~/.claude.json` | 3 names | the same 3 names |
 | `agy` binary | 280593096 bytes, mtime 2026-11-26 08:42:19 +0100 | the same |
 
-### VM `ai1-dev3` — PASS
+### VM `ai1-dev3` — PASS on processes and files; the sign-in state was not re-read
 
 After values: 2026-11-27 11:00:17 UTC, read through the creds MCP with the owner's consent. Two earlier calls did not
 run: the night call timed out with no one to answer, and the call at 05:29 UTC was refused with "Another request
@@ -35,7 +35,7 @@ holds this window's dialog place". Neither was worked around. A restart of the o
 A first after-read of `agy` showed 4096 bytes: `command -v agy` found nothing in a non-login ssh shell, so the
 read measured the home folder. The read by the full path above is the one that counts.
 
-The logged-in state was not read again; the 14 sessions ran on through the whole night.
+The logged-in state was not read again. So this row shows that no process was restarted and no file changed; it does not show by itself that no session was asked to sign in again. The 14 sessions ran on through the whole night, and nobody reported a sign-in prompt.
 
 ## R10 — the places that lack `jq`
 
