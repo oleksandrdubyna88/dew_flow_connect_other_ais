@@ -419,7 +419,8 @@ Narrowed: yes — E6, the `jq` installer, is parked (entry 6.1): no install is b
   (The first change of epoch 7, on the lead's reading of entry 6.3: one more stops the plan. The paragraph
   marked for the owner, above, gives the number 7.1 to the Codex change if the owner reads that one as a
   change of epoch 7. Then this entry is the SECOND change of epoch 7, and it stops the plan.)
-  (When this entry was written no commit held its code. Entries 6.2 and 6.3: pull request #1066.)
+  (Its code: #1066. As root the worst path is 29 s with the connect, 1 s under the ceiling, not 2: each
+  vendor's `#!` line is read, up to 1 s. A test holds 29.)
   (Moved for room in this commit, word for word, § K.56 to § K.59: the merge conditions of what is merged
   and released, steps 1 to 10 of *Build order*, four bullets of § 2, and T9 and T8 of § 3.)
 
