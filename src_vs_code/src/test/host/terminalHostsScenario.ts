@@ -6,7 +6,7 @@ import type { RemoteRun } from '../../remoteSsh';
 import { until, activated } from './hostHelpers';
 
 /**
- * The per-host consent and the picked id of the BOUND road, in a real editor (S3-H1 of the E2 stories document, the chat reads the
+ * The permission, the per-host "no" and the picked id of the BOUND road, in a real editor (S3-H1 of the E2 stories document, the chat reads the
  * remote Claude session).
  *
  * <p>What a value cannot answer: that `bindRemoteSessions` really binds the road of this window to the profile's own `globalState`
@@ -51,6 +51,8 @@ export async function theConsentOfAHostIsKeptInTheRealGlobalState(): Promise<voi
 
     return answer(operands);
   });
+  let questions = 0;
+  door.replaceQuestion(async () => { questions += 1; return false; });
   const before = await door.stored();
   const terminal = vscode.window.createTerminal({ name: `Creds: ${HOST} / ${SESSION}` });
   try {
@@ -63,9 +65,13 @@ export async function theConsentOfAHostIsKeptInTheRealGlobalState(): Promise<voi
     assert.equal(off.kind, 'refused', 'a press on a host answered "no" did not refuse');
     assert.ok(off.kind === 'refused' && off.refusal.includes('is turned off'), `the refusal is not the "turned off" sentence: ${JSON.stringify(off)}`);
 
-    await door.commit({ kind: 'person', host: HOST, answer: 'yes' });
-    const fresh = await door.standings();
-    assert.ok(fresh.some((row) => row.host === HOST && row.answer === 'yes'), `the "yes" is not in the list read back from globalState: ${JSON.stringify(fresh)}`);
+    await door.commit({ kind: 'forget', host: HOST });
+    assert.ok(!(await door.standings()).some((row) => row.host === HOST && row.answer === 'no'), 'Read this host again did not lift the "no" in the list read back from globalState');
+    const none = await door.read(terminal, 'question');
+    assert.equal(calls.length, 0, 'ssh was spawned with no permission');
+    assert.ok(none.kind === 'refused' && none.refusal.includes('no permission'), `a press with no permission did not refuse with W15's sentence: ${JSON.stringify(none)}`);
+    assert.equal(questions, 1, 'the press with no permission did not ask the one question exactly once');
+    assert.equal((await door.allow()).kind, 'given', 'the permission was not given through the keeper');
 
     const on = await door.read(terminal, 'question');
     assert.equal(calls.length, 1, `a press on a host answered "yes" did not reach the run seam exactly once (${calls.length} calls)`);
@@ -83,12 +89,11 @@ export async function theConsentOfAHostIsKeptInTheRealGlobalState(): Promise<voi
     await until(() => door.pickedOf(terminal) === undefined, 'the picked id of a closed terminal is still kept');
   } finally {
     door.replaceRun(undefined);
+    door.replaceQuestion(undefined);
     await door.restore(before);
     terminal.dispose();
   }
 }
-
-const GLOBAL = vscode.ConfigurationTarget.Global;
 
 async function doorOf(): Promise<NonNullable<CoaiExports['remoteSessions']>> {
   const extension = vscode.extensions.getExtension<CoaiExports>('remsoftdev.connect-other-ais');
@@ -108,11 +113,11 @@ export async function theHostsStoreWritesTheListAndTheRefusalsFile(): Promise<vo
   const door = await doorOf();
   const before = await door.stored();
   try {
-    const first = await door.admit('h1');
-    assert.deepEqual(first, { kind: 'not-asked' }, `a host with no answer was not left unasked: ${JSON.stringify(first)}`);
+    const first = await door.may('round', 'h1');
+    assert.equal(first, 'no-permission', `a host with no permission was not left unread: ${JSON.stringify(first)}`);
     assert.equal((((await door.stored()).list ?? []) as { host: string; how?: string }[]).some((row) => row.host === 'h1'), false, 'the door wrote a row for a host nobody answered');
     await door.commit({ kind: 'person', host: 'h1', answer: 'no' });
-    assert.equal((await door.admit('h1')).kind, 'refused', 'a "no" did not refuse the host');
+    assert.equal(await door.may('round', 'h1'), 'no', 'a "no" did not refuse the host');
     const stored = await door.stored();
     assert.equal((stored.list as { host: string; how?: string }[]).find((row) => row.host === 'h1')?.how, undefined, 'the person\'s row carries `how`');
     assert.ok(stored.file !== undefined && (JSON.parse(stored.file) as { refused: { host: string }[] }).refused.some((one) => one.host === 'h1'), 'the refusals file on the real disk does not hold the host');
@@ -127,29 +132,47 @@ export async function theHostsStoreWritesTheListAndTheRefusalsFile(): Promise<vo
 }
 
 /**
- * A1-H2 (as the cut leaves it): the setting is read through the real configuration but has no effect on the door: with it off and with it
- * back at its default a host with no answer stays `not-asked` and no row is stored. If the editor refuses to write the user-level key,
- * this FAILS and says so: the claim must not rest on a skipped check.
+ * E2S1-H1: the permission through the real `globalState` and the real folder. No permission: the door answers `no-permission`, and a press with a run
+ * that fails the test when called reads nothing. An *Allow* through the keeper: `given`, the door says `yes`. A withdrawal: one
+ * `withdrawn-<n>.json` on the real disk, the row's copy is that `n`, and both doors say `no-permission`. An *Allow* again: `given`, and exactly one
+ * withdrawal file is left, one below the grant's stamp. Everything is put back in a `finally`. CI only: it cannot start here.
  */
-export async function theSettingReachesTheDoorThroughTheRealConfiguration(): Promise<void> {
+export async function thePermissionIsGivenAndWithdrawnThroughTheRealStores(): Promise<void> {
   const door = await doorOf();
   const before = await door.stored();
-  const config = (): vscode.WorkspaceConfiguration => vscode.workspace.getConfiguration('coai');
+  const terminal = vscode.window.createTerminal({ name: `Creds: ${HOST} / ${SESSION}` });
+  door.replaceRun(async () => { assert.fail('a host was read without the permission'); });
+  door.replaceQuestion(async () => false);
   try {
-    try {
-      await config().update('terminalAccountsAllowNewHosts', false, GLOBAL).then(undefined, (reason: unknown) => {
-        throw new Error(`the editor refused to write the user-level key, so A1-H2 cannot judge the setting: ${String(reason)}`);
-      });
-      console.info(`A1-H2: inspect() answers ${JSON.stringify(config().inspect('terminalAccountsAllowNewHosts'))}`);
-      assert.equal(config().get('terminalAccountsAllowNewHosts'), false, 'the real configuration does not answer the value that was written');
-      assert.equal((await door.admit('h2')).kind, 'not-asked', 'a host with no answer was asked about differently with the setting off');
-      assert.equal(((await door.stored()).list as { host: string }[] | undefined)?.some((row) => row.host === 'h2') ?? false, false, 'a row was stored with the setting off');
-    } finally {
-      await config().update('terminalAccountsAllowNewHosts', undefined, GLOBAL);
-    }
-    assert.equal((await door.admit('h2')).kind, 'not-asked', 'the setting back to its default allowed a host by itself: it has no effect in this build');
-    assert.equal((((await door.stored()).list ?? []) as { host: string }[]).some((row) => row.host === 'h2'), false, 'a row was stored for a host nobody answered, with the setting at its default');
+    terminal.show();
+    await door.restore({ list: undefined, row: undefined, file: undefined, withdrawn: [] });
+    assert.equal(await door.may('session', HOST), 'no-permission');
+    const refused = await door.read(terminal, 'question');
+    assert.ok(refused.kind === 'refused' && refused.refusal.includes('no permission'), `the press with no permission did not say W15's first sentence: ${JSON.stringify(refused)}`);
+    door.replaceRun(undefined);
+    assert.equal((await door.allow()).kind, 'given');
+    const now = await door.permission();
+    assert.ok(typeof now === 'object', `the permission is not given: ${JSON.stringify(now)}`);
+    assert.equal(await door.may('session', HOST), 'yes');
+    assert.ok(['yes', 'stopped'].includes(await door.may('round', HOST)));
+    assert.equal(await door.withdraw(), 'withdrawn');
+    const files = await door.withdrawnFiles();
+    // At least one file. A window's own listener may read the store while the press is in flight and land the unsaved withdrawal first (`landUnsaved`), so two
+    // files are by design (the lower one is the earlier try); the stamp that counts is the highest, and it is the one the row keeps and the next *Allow* leaves.
+    assert.ok(files.length >= 1, `a withdrawal made no file: ${JSON.stringify(files)}`);
+    const stamp = Math.max(...files.map((one) => Number(/^withdrawn-(\d+)\.json$/u.exec(one)?.[1])));
+    assert.ok(Number.isInteger(stamp) && stamp >= 1, `a withdrawal file is not named by a stamp: ${JSON.stringify(files)}`);
+    assert.equal(((await door.stored()).row as { withdrawnStamp?: number } | undefined)?.withdrawnStamp, stamp, 'the copy in the state row is not the stamp of the file');
+    assert.equal(await door.may('session', HOST), 'no-permission');
+    assert.equal(await door.may('round', HOST), 'no-permission');
+    assert.equal((await door.allow()).kind, 'given');
+    const left = await door.withdrawnFiles();
+    assert.deepEqual(left, [`withdrawn-${stamp}.json`], 'the Allow did not leave exactly its floor file');
+    assert.equal(await door.may('session', HOST), 'yes');
   } finally {
+    door.replaceRun(undefined);
+    door.replaceQuestion(undefined);
     await door.restore(before);
+    terminal.dispose();
   }
 }

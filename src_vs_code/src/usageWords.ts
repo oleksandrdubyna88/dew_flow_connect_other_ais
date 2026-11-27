@@ -8,9 +8,6 @@
  * is not there is a dash with no "% left", never `0%`.</p>
  */
 
-const MINUTE_MS = 60_000;
-const DAY_MINUTES = 1440;
-const HOUR_MINUTES = 60;
 const FIVE_HOURS = 300;
 const WEEK = 10_080;
 const MODEL_DEFAULT = 'Fable';
@@ -24,36 +21,35 @@ export function percentLeft(used: unknown): number | null {
   return Math.max(0, Math.min(100, Math.round(100 - used)));
 }
 
-/** The mod's rule: whole minutes from `nowMs` to the reset; `null` while either is unknown or once the reset has come. */
-const known = (ms: number | null): ms is number => ms !== null && Number.isFinite(ms);
-
+/**
+ * The mod's rule: whole minutes from `nowMs` to the reset; `null` while either is unknown or once the reset has come.
+ *
+ * <p>EMBEDDED in the accounts page by its own source text (`remoteAccountsPage.ts`), so it names nothing outside itself and holds no backtick.</p>
+ */
 export function minutesLeft(resetsAtMs: number | null, nowMs: number | null): number | null {
+  const known = (ms: number | null): ms is number => ms !== null && Number.isFinite(ms);
   if (!known(resetsAtMs) || !known(nowMs) || nowMs >= resetsAtMs) {
     return null;
   }
 
-  return Math.floor((resetsAtMs - nowMs) / MINUTE_MS);
+  return Math.floor((resetsAtMs - nowMs) / 60000);
 }
-
-const daysText = (minutes: number): string => `${Math.floor(minutes / DAY_MINUTES)}d ${Math.floor((minutes % DAY_MINUTES) / HOUR_MINUTES)}h`;
-
-const hoursText = (minutes: number): string => `${Math.floor(minutes / HOUR_MINUTES)}h ${minutes % HOUR_MINUTES}m`;
-
-const minutesText = (minutes: number): string => (minutes < 1 ? '<1m' : `${minutes}m`);
 
 /**
  * The mod's text under 24 hours — `1h 0m` from 60 minutes on, `59m`, `<1m` — and, from 24 hours on, `<d>d <h>h` (the form of the plan's sample:
  * a week's reset is `2d 15h`, never `63h 10m`). A dash when the time is not known.
+ *
+ * <p>EMBEDDED in the accounts page by its own source text, like `minutesLeft`: no module constant, no helper outside, no template literal.</p>
  */
 export function resetText(minutes: number | null): string {
+  const days = (all: number): string => Math.floor(all / 1440) + 'd ' + Math.floor((all % 1440) / 60) + 'h';
+  const hours = (all: number): string => Math.floor(all / 60) + 'h ' + (all % 60) + 'm';
+  const small = (all: number): string => (all < 1 ? '<1m' : all + 'm');
   if (minutes === null) {
     return '—';
   }
-  if (minutes >= DAY_MINUTES) {
-    return daysText(minutes);
-  }
 
-  return minutes >= HOUR_MINUTES ? hoursText(minutes) : minutesText(minutes);
+  return minutes >= 1440 ? days(minutes) : minutes >= 60 ? hours(minutes) : small(minutes);
 }
 
 /** A window as the two vendors name it: Claude by its name (a model by the model's), Codex by its length in minutes. */
@@ -130,3 +126,16 @@ const codexPart = (window: CodexWindowLike, nowMs: number): string =>
 
 /** Codex's windows, each by its length with its own reset: `5h 90% left · resets in 1h 5m · week 86% left · resets in 4d 23h`. */
 export const codexLine = (windows: readonly CodexWindowLike[], nowMs: number): string => windows.map((one) => codexPart(one, nowMs)).join(' · ');
+
+/**
+ * A reset that is a day or more away, as a date in the viewer's own zone: `Nov 30, 14:00` (the mod's week reset names the day; the tab adds the time).
+ *
+ * <p>EMBEDDED in the accounts page by its own source text, like `resetText`: no module constant, no helper outside, no template literal.</p>
+ */
+export function resetDate(resetsAtMs: number): string {
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const two = (n: number): string => (n < 10 ? '0' + n : String(n));
+  const at = new Date(resetsAtMs);
+
+  return months[at.getMonth()] + ' ' + at.getDate() + ', ' + two(at.getHours()) + ':' + two(at.getMinutes());
+}

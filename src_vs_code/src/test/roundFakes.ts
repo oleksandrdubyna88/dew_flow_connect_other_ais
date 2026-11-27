@@ -3,7 +3,7 @@ import type { ClaudeUsage } from '../remoteAccountsUsage';
 import type { AccountsMode } from '../remoteAccountsScript';
 import type { HostMemory, Memory, RoundResult, RoundSeams, Trigger, UsagePolicy } from '../remoteAccountsRound';
 import { claudeAccountKey, runRound } from '../remoteAccountsRound';
-import type { Admission } from '../remoteHosts';
+import type { DoorAnswer } from '../remotePermission';
 import type { LiveTerminal } from '../terminalSource';
 
 /**
@@ -18,7 +18,7 @@ export const EVERY_ROUND: UsagePolicy = { kind: 'every-round' };
 export const HOURLY: UsagePolicy = { kind: 'hourly' };
 export const ON_PRESS: UsagePolicy = { kind: 'on-press' };
 export const OFF: UsagePolicy = { kind: 'off' };
-export const READ_OK: Admission = { kind: 'read', how: 'auto', allowedNow: false };
+export const READ_OK: DoorAnswer = 'yes';
 
 /** A reading with a Claude account found; the other two vendors are absent. */
 type Reading = Extract<AccountsRead, { kind: 'read' }>;
@@ -53,6 +53,21 @@ export const terminal = (host: string, session = 's1', over: Partial<LiveTermina
 export interface Call {
   readonly host: string;
   readonly mode: AccountsMode;
+  /** The operand of a usage call: the digest the round took from the first reply of that place. */
+  readonly digest?: string | undefined;
+}
+
+/**
+ * The stdout a fake first call answers: the host and the call's number as a first line (the fake `parse` reads it; `framed` skips it) and then a real frame
+ * with the account lines of the reading, so the round can take a digest from it. `noLines`: a frame with no `COAI-VENDOR claude found` line.
+ */
+export function stdoutOf(host: string, nth: number, read: AccountsRead, noLines = false): string {
+  const claude = read.kind === 'unreadable' ? undefined : read.claude;
+  const found = !noLines && claude !== undefined && claude.state === 'found'
+    ? ['COAI-VENDOR claude found', ...(claude.email === '' ? [] : [`:email ${claude.email}`]), ...(claude.org === null ? [] : [`:org ${claude.org}`]), ...(claude.plan === null ? [] : [`:plan ${claude.plan}`])]
+    : [];
+
+  return [JSON.stringify({ host, nth }), 'COAI-ACCOUNTS 1', 'COAI-JQ found', ...found, 'COAI-ACCOUNTS-END', ''].join('\n');
 }
 
 export interface Options {
@@ -60,10 +75,14 @@ export interface Options {
   /** What the host answers: a reading, or `down` for an ssh that did not answer. `nth`: how many calls this host had before. */
   readonly reply?: (host: string, mode: AccountsMode, nth: number) => AccountsRead | 'down';
   /** The door's answer; `asked` is how many times it was asked about this host before. */
-  readonly door?: (host: string, asked: number, world: World) => Admission;
+  readonly door?: (host: string, asked: number, world: World) => DoorAnswer;
   /** Awaited inside the call, before it answers. */
   readonly hold?: (host: string, mode: AccountsMode, world: World) => Promise<void> | undefined;
   readonly stopped?: (world: World) => Promise<boolean>;
+  /** The first reply's frame holds no account lines (so no digest). */
+  readonly noLines?: boolean;
+  /** `read`: the fake parser answers a usage call with the first mode's arm, which the real parser never does (a test of the join's row for it). */
+  readonly usageArm?: 'claude-only' | 'read';
 }
 
 export interface World {
@@ -92,23 +111,24 @@ export function world(options: Options = {}): World {
   const landed: { count: number; memories: (Memory | undefined)[] } = { count: 0, memories: [] };
   const asked = new Map<string, number>();
   const nths = new Map<string, number>();
+  const usageAsClaudeOnly = options.usageArm !== 'read';
   const reply = options.reply ?? ((): AccountsRead => claudeFound('x@example.test'));
   const self: { current?: World } = {};
 
   const seams: RoundSeams = {
     live: () => control.terminals,
     stopped: () => (options.stopped === undefined ? Promise.resolve(control.stopped) : options.stopped(self.current as World)),
-    admit: (host) => {
+    may: (host) => {
       admits.push(host);
       const before = asked.get(host) ?? 0;
       asked.set(host, before + 1);
 
       return Promise.resolve(options.door === undefined ? READ_OK : options.door(host, before, self.current as World));
     },
-    call: async (host, mode) => {
+    call: async (host, mode, digest) => {
       const nth = nths.get(host) ?? 0;
       nths.set(host, nth + 1);
-      calls.push({ host, mode });
+      calls.push({ host, mode, digest });
       events.push(`start ${host}`);
       control.active += 1;
       control.maxActive = Math.max(control.maxActive, control.active);
@@ -116,16 +136,22 @@ export function world(options: Options = {}): World {
       control.active -= 1;
       events.push(`end ${host}`);
 
-      return reply(host, mode, nth) === 'down'
+      const answer = reply(host, mode, nth);
+
+      return answer === 'down'
         ? { kind: 'refused', refusal: `“${host}” did not answer over ssh within 30 s.` }
-        : { kind: 'answered', code: 0, stdout: JSON.stringify({ host, nth }) };
+        : { kind: 'answered', code: 0, stdout: stdoutOf(host, nth, answer, options.noLines === true) };
     },
     parse: (run, mode) => {
       parsed.push({ mode, stdout: run.stdout });
-      const named = JSON.parse(run.stdout) as { host: string; nth: number };
+      const named = JSON.parse(run.stdout.split('\n')[0] as string) as { host: string; nth: number };
       const read = reply(named.host, mode, named.nth);
+      if (read === 'down') {
+        return { kind: 'unreadable', why: 'exit' };
+      }
 
-      return read === 'down' ? { kind: 'unreadable', why: 'exit' } : read;
+      // The usage mode is answered with the Claude part alone (E3.S2, § R2.7); a test that wants another arm gives it.
+      return mode === 'claude-usage' && read.kind === 'read' && usageAsClaudeOnly ? { kind: 'claude-only', claude: read.claude, jqMissing: read.jqMissing } : read;
     },
     now: () => control.now,
     landed: (memory) => { landed.count += 1; landed.memories.push(memory); },
@@ -140,7 +166,7 @@ export function world(options: Options = {}): World {
 
 /** A round over a world, with the policy the test gives. */
 export const roundOf = (w: World, memory: Memory = new Map(), round = 0, trigger: Trigger = 'timer', policy: UsagePolicy = EVERY_ROUND): Promise<RoundResult> =>
-  runRound(w.seams, memory, round, trigger, policy, 'on');
+  runRound(w.seams, memory, round, trigger, policy);
 
 /** Each call as `a N` (no usage) or `a U` (usage), so a red shows the order. */
 export const callsOf = (w: World): readonly string[] => w.calls.map((call) => `${call.host} ${call.mode === 'claude-usage' ? 'U' : 'N'}`);

@@ -64,8 +64,8 @@ test('the guarded settings are every key that names a model or a program to run'
   ]);
 });
 
-test('the safety keys are the overrides that switch a protection of the person off — kimiAllowNetworkSignIn and terminalAccountsAllowNewHosts — and they raise no model notice', () => {
-  assert.deepEqual([...SAFETY_KEYS], ['kimiAllowNetworkSignIn', 'terminalAccountsAllowNewHosts']);
+test('E2S1-T17: the safety keys are the overrides that switch a protection of the person off — kimiAllowNetworkSignIn alone, the hosts setting is gone — and they raise no model notice', () => {
+  assert.deepEqual([...SAFETY_KEYS], ['kimiAllowNetworkSignIn']);
   const layers = { kimiAllowNetworkSignIn: { defaultValue: false, workspaceValue: true } };
 
   assert.equal(userLayerReader(() => true, inspector(layers))('kimiAllowNetworkSignIn'), false);

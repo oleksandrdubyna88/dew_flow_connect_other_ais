@@ -1,6 +1,7 @@
 /**
- * The accounts script and everything that is fixed about it (E1.S2, spec § A2.2 and § A2.3): the text that is sent to a VM, its two
- * operands, the limits that are written into it, and the caps of the reply it prints. Pure — no process, no file, no `vscode`.
+ * The accounts script and everything that is fixed about it (E1.S2, spec § A2.2 and § A2.3; revision 2 is E3.S2, spec § R2.2 to § R2.5): the text
+ * that is sent to a VM, its operands (the usage mode takes the account's digest), the limits that are written into it, and the caps of the reply it
+ * prints. Pure — no process, no file, no `vscode`.
  *
  * <p><b>What the text does.</b> It reads which AI command-line programs a VM has (Claude Code, Codex, agy), who is signed in to
  * them, and — only when asked — what Claude Code's own usage command prints. It writes nothing, starts no package manager and
@@ -11,7 +12,7 @@
  * <p><b>What we do about Claude Code's own programs, and what we do not claim.</b> We PASS `--no-session-persistence`,
  * `--strict-mcp-config` and `--setting-sources ""` to the usage command. A flag is a request until its effect has been seen, so
  * nothing here says that Claude Code starts nothing or that no hook runs: that is measured on a real host (parent § 5, W7).
- * Until it has been, the usage command runs only for the operand `claude-usage`, and the round ships with that operand switched off.</p>
+ * The usage command runs only for the operand `claude-usage` with the digest of the account the first reply named (§ R2.2).</p>
  *
  * <p><b>The text is one function read to its end and then called.</b> The last line is ONE brace group — the call with its
  * redirections first, then the end line — so a script that is cut on its way starts no program, opens no path for writing and
@@ -19,10 +20,13 @@
  * block and the spec's pin line to one another.</p>
  */
 
+import { createHash } from 'node:crypto';
+import { framed } from './remoteFraming';
+
 /** The protocol number of the begin line `COAI-ACCOUNTS <n>`. Not the session script's: one script's answer is never read by the other parser. */
 export const ACCOUNTS_PROTOCOL = 1;
 
-/** The two operands. The first is only ever a host's SECOND call in a round; every host's first call is `no-claude-usage`. */
+/** The two modes. `claude-usage` is only ever a place's SECOND call in a round and takes a digest (§ R2.2); every place's first call is `no-claude-usage`. */
 export type AccountsMode = 'claude-usage' | 'no-claude-usage';
 export const ACCOUNTS_MODES: readonly AccountsMode[] = ['claude-usage', 'no-claude-usage'];
 
@@ -31,11 +35,45 @@ export function isAccountsMode(word: string): word is AccountsMode {
   return ACCOUNTS_MODES.some((mode) => mode === word);
 }
 
+/** The digest operand of `claude-usage`: 64 characters of `0-9a-f` (§ R2.2), the sha256 of the account lines as the first reply printed them. */
+export const ACCOUNTS_DIGEST = /^[0-9a-f]{64}$/u;
+
+/** Membership in `ACCOUNTS_DIGEST` and nothing else: no email, no host and no name is ever an operand. */
+export const isAccountsDigest = (word: string): boolean => ACCOUNTS_DIGEST.test(word);
+
+/**
+ * The digest of a FIRST reply (§ R2.2, D5): over the framed lines as received (before `plainValue`), the line that is exactly
+ * `COAI-VENDOR claude found` and the lines directly after it that start with `:email `, `:org ` or `:plan `, each with one LF, as UTF-8; the
+ * sha256 in lower-case hex. `undefined` when the frame or that marker is not there. It is what the script holds in one variable before it prints,
+ * so both sides hash the same bytes. Never throws.
+ */
+export function accountsDigest(stdout: string): string | undefined {
+  const found = framed(stdout, { begin: `COAI-ACCOUNTS ${ACCOUNTS_PROTOCOL}`, family: 'COAI-ACCOUNTS ', end: 'COAI-ACCOUNTS-END' });
+  if (found.kind !== 'framed') {
+    return undefined;
+  }
+  const at = found.lines.indexOf('COAI-VENDOR claude found');
+  if (at < 0) {
+    return undefined;
+  }
+  const rest = found.lines.slice(at + 1);
+  const keys = rest.findIndex((line) => !/^:(?:email|org|plan) /u.test(line));
+  const kept = ['COAI-VENDOR claude found', ...(keys < 0 ? rest : rest.slice(0, keys))];
+
+  return createHash('sha256').update(`${kept.join('\n')}\n`, 'utf8').digest('hex');
+}
+
 /** The vendor commands' limits in seconds: a TERM after this long (`timeout -k 1 <n>`; a KILL one second later). */
 export const ACCOUNTS_SECONDS = { account: 3, version: 2, usage: 8, agy: 4 } as const;
 
 /** The limits of the readers at the end of each pipe, and of the Codex read's four tools; the sum of them and ssh's connect stays under the ceiling. */
-export const ACCOUNTS_READ_SECONDS = { account: 4, version: 2, usage: 9, agy: 4, codexList: 1, codexTime: 1, codexFile: 1, codexRecord: 3 } as const;
+export const ACCOUNTS_READ_SECONDS = { account: 4, version: 2, usage: 9, agy: 4, codexList: 1, codexTime: 1, codexFile: 1, codexRecord: 3, digest: 1 } as const;
+
+/** The KILL second after a TERM in a step that is NOT inside its reader's limit: the two version commands (§ R2.5). */
+export const ACCOUNTS_KILL_SECONDS = { version: 1, agy: 1 } as const;
+
+/** ssh's `ConnectTimeout`: a call to a host spends up to this before the script starts. A WSL call has none. */
+export const ACCOUNTS_CONNECT_SECONDS = 5;
 
 /** The runner kills the whole call here, and then every vendor of that host is lost. */
 export const ACCOUNTS_CEILING_SECONDS = 30;
@@ -51,8 +89,11 @@ export const CODEX_TAIL_MAX = 1048576;
 /** The Codex session files read: the three changed last, of the two newest day folders. */
 export const CODEX_FILES_MAX = 3;
 
-/** The tools every Linux has and the script checks first; a host without one says `COAI-BAD tool` and nothing is read. */
-export const ACCOUNTS_TOOLS: readonly string[] = ['timeout', 'tail', 'ls', 'sed', 'grep'];
+/** The tools every Linux has and the script checks first; a host without one says `COAI-BAD tool` and nothing is read. `sha256sum` is checked in the usage mode only. */
+export const ACCOUNTS_TOOLS: readonly string[] = ['id', 'timeout', 'tail', 'ls', 'sed', 'grep'];
+
+/** The `PATH` the script sets for itself (§ R2.3, D2): fixed text, never the caller's. */
+export const ACCOUNTS_PATH = '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin';
 
 /** The package managers the script can NAME for a host without `jq` (it runs none), in the order it tests them, and `none`. */
 export type ManagerWord = 'apt-get' | 'dnf' | 'yum' | 'apk' | 'none';
@@ -65,9 +106,23 @@ export const ACCOUNTS_LINE_BYTES_MAX = 512;
 export const ACCOUNTS_REPLY_BYTES_MAX = (ACCOUNTS_LINES_MAX + 2) * (ACCOUNTS_LINE_BYTES_MAX + 1);
 
 /**
- * The text that is sent to a VM, byte for byte the first `sh` block after the heading `## A2.3` of the spec: 222 lines, ASCII only,
- * each line ends with LF. It holds `${` six times and 58 backslashes, so every backslash is written twice here.
- * Hash and spec are held to this constant by `remoteAccountsScript.test.ts` (A2-T2); a change of the text is a change of the spec.
+ * The worst time of one mode, in seconds (T46, § R2.5): the reader limits of the steps that mode runs, the KILL seconds that are not inside a
+ * reader's limit, and ssh's connect time. The account's and the usage's KILL second are inside their readers' limits.
+ */
+export function worstSeconds(mode: AccountsMode): number {
+  const r = ACCOUNTS_READ_SECONDS;
+  const claude = r.account + r.version + ACCOUNTS_KILL_SECONDS.version;
+  const rest = mode === 'claude-usage'
+    ? r.digest + r.usage
+    : r.codexList + r.codexTime + Math.max(r.codexRecord, CODEX_FILES_MAX * r.codexFile) + r.agy + ACCOUNTS_KILL_SECONDS.agy;
+
+  return claude + rest + ACCOUNTS_CONNECT_SECONDS;
+}
+
+/**
+ * The text that is sent to a VM, byte for byte the first `sh` block after the heading `## R2.3` of the E3.S2 spec (revision 2): 342 lines, ASCII only,
+ * each line ends with LF. It holds `${` 12 times and 70 backslashes, so every backslash is written twice here.
+ * Hash and spec are held to this constant by `remoteAccountsScript.test.ts` (E3S2-T1); a change of the text is a change of the spec.
  */
 export const ACCOUNTS_SCRIPT = `coai_accounts() {
   unset IFS
@@ -147,8 +202,89 @@ export const ACCOUNTS_SCRIPT = `coai_accounts() {
     fi
   }
 
+  coai_closed() {
+    left=$1
+    hops=0
+    own=$("$st" -c '%u %a' -- /) || { unsafe=/; return 1; }
+    case $own in
+      '0 '*[2367]|'0 '*[2367]?) unsafe=/; return 1 ;;
+      '0 '*) ;;
+      *) unsafe=/; return 1 ;;
+    esac
+    while :; do
+      q=
+      rest=$left
+      again=no
+      while [ -n "$rest" ]; do
+        rest=\${rest#/}
+        part=\${rest%%/*}
+        case $rest in
+          */*) rest=/\${rest#*/} ;;
+          *) rest= ;;
+        esac
+        [ -n "$part" ] || continue
+        q=$q/$part
+        own=$("$st" -c '%u %a' -- "$q") || { unsafe=$q; return 1; }
+        case $own in
+          '0 '*) ;;
+          *) unsafe=$q; return 1 ;;
+        esac
+        if [ -L "$q" ]; then
+          hops=$((hops + 1))
+          [ "$hops" -le 16 ] || { unsafe=$q; return 1; }
+          to=$("$rl" -- "$q") || { unsafe=$q; return 1; }
+          case $to in
+            /*) left=$to$rest ;;
+            *) left=\${q%/*}/$to$rest ;;
+          esac
+          again=yes
+          break
+        fi
+        case $own in
+          *[2367]|*[2367]?) unsafe=$q; return 1 ;;
+        esac
+      done
+      [ "$again" = yes ] || return 0
+    done
+  }
+
+  coai_may() {
+    found=$(command -v "$1") || return 1
+    [ "$uid" = 0 ] || return 0
+    case $found in
+      /*) coai_closed "$found" || return 2 ;;
+      *) unsafe=$found; return 2 ;;
+    esac
+    return 0
+  }
+
+  coai_path() {
+    case $unsafe in
+      ''|*[!A-Za-z0-9._/@+-]*) unsafe=- ;;
+    esac
+    [ "\${#unsafe}" -le 200 ] || unsafe=-
+    printf ':path %s\\n' "$unsafe"
+  }
+
+  coai_vendor() {
+    coai_may "$1"
+    case $? in
+      0) return 0 ;;
+      1) ;;
+      *) printf 'COAI-VENDOR %s unsafe\\n' "$1"; coai_path; return 1 ;;
+    esac
+    if [ -n "$home_unsafe" ] && { [ -e "$HOME/.local/bin/$1" ] || [ -L "$HOME/.local/bin/$1" ]; }; then
+      unsafe=$home_unsafe
+      printf 'COAI-VENDOR %s unsafe\\n' "$1"
+      coai_path
+    else
+      printf 'COAI-VENDOR %s absent\\n' "$1"
+    fi
+    return 1
+  }
+
   coai_claude() {
-    command -v claude >/dev/null || { printf 'COAI-VENDOR claude absent\\n'; return 0; }
+    coai_vendor claude || return 0
     [ "$jq" = found ] || { printf 'COAI-VENDOR claude unreadable no-jq\\n'; return 0; }
     auth=$(
       {
@@ -165,6 +301,11 @@ export const ACCOUNTS_SCRIPT = `coai_accounts() {
     coai_version "$(timeout -k 1 2 claude --version | LC_ALL=C timeout -k 1 2 sed -n -e "$version" -e 1q)"
     if [ "$mode" != claude-usage ]; then
       printf 'COAI-USAGE claude skipped\\n'
+      return 0
+    fi
+    sum=$(printf '%s\\n' "$auth" | timeout -k 1 1 sha256sum)
+    if [ "\${sum%% *}" != "$want" ]; then
+      printf 'COAI-USAGE claude skipped account-changed\\n'
       return 0
     fi
     kept=$(
@@ -231,8 +372,8 @@ export const ACCOUNTS_SCRIPT = `coai_accounts() {
     fi
     three=$(LC_ALL=C timeout -k 1 1 ls -tr -- "$@" | tail -n 3)
     [ -n "$three" ] || { printf 'COAI-USAGE codex failed error\\n'; return 0; }
-    if command -v stat >/dev/null; then
-      ftime=$(timeout -k 1 1 stat -c %Y -- "\${three##*"$nl"}")
+    if command -v "$st" >/dev/null; then
+      ftime=$(timeout -k 1 1 "$st" -c %Y -- "\${three##*"$nl"}")
       case $ftime in
         ''|*[!0-9]*) ftime=- ;;
       esac
@@ -254,7 +395,7 @@ export const ACCOUNTS_SCRIPT = `coai_accounts() {
   }
 
   coai_agy() {
-    command -v agy >/dev/null || { printf 'COAI-VENDOR agy absent\\n'; return 0; }
+    coai_vendor agy || return 0
     printf 'COAI-VENDOR agy found\\n' || return 0
     coai_version "$(timeout -k 1 4 agy --version | LC_ALL=C timeout -k 1 4 sed -n -e "$version" -e 1q)"
     coai_sign_in "$HOME/.gemini/antigravity-cli/antigravity-oauth-token"
@@ -264,28 +405,62 @@ export const ACCOUNTS_SCRIPT = `coai_accounts() {
 
   printf 'COAI-ACCOUNTS 1\\n' || return 0
   case $#:\${1-} in
-    1:claude-usage|1:no-claude-usage) ;;
+    1:no-claude-usage) want= ;;
+    2:claude-usage)
+      want=$2
+      case $want in
+        *[!0-9a-f]*) want= ;;
+      esac
+      [ "\${#want}" -eq 64 ] || { printf 'COAI-BAD operands\\n'; return 0; }
+      ;;
     *) printf 'COAI-BAD operands\\n'; return 0 ;;
   esac
   mode=$1
   case \${HOME-} in
+    *:*) printf 'COAI-BAD home\\n'; return 0 ;;
     /*) ;;
     *) printf 'COAI-BAD home\\n'; return 0 ;;
   esac
   cd / || { printf 'COAI-BAD folder\\n'; return 0; }
-  PATH="$HOME/.local/bin\${PATH:+:$PATH}"
+  PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
   export PATH
-  for tool in timeout tail ls sed grep; do
-    command -v "$tool" >/dev/null || { printf 'COAI-BAD tool\\n'; return 0; }
-  done
-  if command -v jq >/dev/null; then
-    jq=found
-    printf 'COAI-JQ found\\n' || return 0
+  command -v id >/dev/null || { printf 'COAI-BAD tool\\n'; return 0; }
+  uid=$(id -u)
+  case $uid in
+    ''|*[!0-9]*) printf 'COAI-BAD tool\\n'; return 0 ;;
+  esac
+  unsafe=
+  home_unsafe=
+  st=stat
+  if [ "$uid" = 0 ]; then
+    st=$(command -v stat) || { printf 'COAI-BAD tool\\n'; return 0; }
+    rl=$(command -v readlink) || { printf 'COAI-BAD tool\\n'; return 0; }
+    if coai_closed "$HOME/.local/bin"; then
+      PATH=$HOME/.local/bin:$PATH
+    else
+      home_unsafe=$unsafe
+    fi
   else
-    jq=missing
-    printf 'COAI-JQ missing %s\\n' "$(coai_manager)" || return 0
+    PATH=$HOME/.local/bin:$PATH
   fi
+  tools='timeout tail ls sed grep'
+  [ "$mode" != claude-usage ] || tools="$tools sha256sum"
+  for tool in $tools; do
+    coai_may "$tool"
+    case $? in
+      0) ;;
+      1) printf 'COAI-BAD tool\\n'; return 0 ;;
+      *) printf 'COAI-BAD unsafe\\n'; coai_path; return 0 ;;
+    esac
+  done
+  coai_may jq
+  case $? in
+    0) jq=found; printf 'COAI-JQ found\\n' || return 0 ;;
+    1) jq=missing; printf 'COAI-JQ missing %s\\n' "$(coai_manager)" || return 0 ;;
+    *) printf 'COAI-BAD unsafe\\n'; coai_path; return 0 ;;
+  esac
   coai_claude
+  [ "$mode" != claude-usage ] || return 0
   coai_codex
   coai_agy
   return 0

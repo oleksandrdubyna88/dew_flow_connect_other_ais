@@ -7,7 +7,8 @@ import {
   nextAfterRound, openStarts, refreshAnswer, roundOrder, runRound, settleRound, standingsBump, timerFor, unreadHost, withRefusals,
 } from '../remoteAccountsRound';
 import type { ArmDecision, HostMemory, Memory, RoundResult, RoundSeams } from '../remoteAccountsRound';
-import type { Admission, HostStanding } from '../remoteHosts';
+import type { HostStanding } from '../remoteHosts';
+import type { DoorAnswer } from '../remotePermission';
 import type { RemoteRun } from '../remoteSsh';
 import {
   EVERY_ROUND, HOURLY, OFF, ON_PRESS, READ_OK, USAGE_READ, accounts, callsOf, claudeFound, foundOf, memoryOf, remembered, roundOf, terminal, usageCalls, world,
@@ -92,20 +93,20 @@ test('A3-T12: a failed host does not stop the round, and keeps its older reading
 });
 
 test('A3-T13: the door is asked before EVERY call, and its answer holds', async () => {
-  const kinds: ReadonlyArray<Exclude<Admission['kind'], 'read'>> = ['refused', 'not-asked', 'full', 'damaged', 'unwritten'];
-  for (const kind of kinds) {
-    const w = world({ hosts: ['a'], door: () => ({ kind } as Admission) });
+  const kinds: ReadonlyArray<readonly [Exclude<DoorAnswer, 'yes' | 'no-permission' | 'stopped'>, string]> = [['no', 'refused'], ['damaged', 'damaged'], ['waiting', 'unwritten']];
+  for (const [answer, kind] of kinds) {
+    const w = world({ hosts: ['a'], door: () => answer });
     const result = await roundOf(w, memoryOf(['a', remembered('a', 'x@example.test')]));
-    assert.equal(w.calls.length, 0, `a host answered ${kind} was called`);
-    assert.equal(result.memory.get('a')?.admission, kind, `${kind} was not kept in the host's memory`);
-    assert.equal(result.memory.get('a')?.reading === undefined, kind === 'refused', `${kind}: the reading of a host is dropped by a refusal and by nothing else`);
+    assert.equal(w.calls.length, 0, `a host answered ${answer} was called`);
+    assert.equal(result.memory.get('a')?.admission, kind, `${answer} was not kept in the host's memory`);
+    assert.equal(result.memory.get('a')?.reading === undefined, answer === 'no', `${answer}: the reading of a host is dropped by a refusal and by nothing else`);
   }
-  const all = world({ hosts: ['a', 'b', 'c'], door: () => ({ kind: 'unwritten' }) });
+  const all = world({ hosts: ['a', 'b', 'c'], door: () => 'waiting' });
   await roundOf(all);
   assert.equal(all.calls.length, 0, 'a window that could not save a refusal called a host');
 
   // `a` is read; after its call the door says `refused` for `b`: a "no" given during the round.
-  const during = world({ hosts: ['a', 'b'], door: (host, _asked, w) => (host === 'b' && w.calls.length >= 1 ? { kind: 'refused' } : READ_OK) });
+  const during = world({ hosts: ['a', 'b'], door: (host, _asked, w) => (host === 'b' && w.calls.length >= 1 ? 'no' : READ_OK) });
   const result = await roundOf(during, memoryOf(['b', remembered('b', 'x@example.test')]), 0, 'timer', OFF);
   assert.deepEqual(during.calls.map((call) => call.host), ['a'], 'a "no" given during a round did not stop the next call');
   assert.equal(result.memory.get('b')?.reading, undefined, 'a refusal kept the reading');
@@ -166,7 +167,8 @@ test('A3-T15: an account that changed is read in the same round, once', async ()
   const result = await roundOf(w, memoryOf(['a', remembered('a', 'x@example.test')], ['b', remembered('b', 'x@example.test')]));
 
   assert.ok(w.calls.filter((call) => call.host === 'b').length <= 2, 'a host was called three times in a round');
-  assert.deepEqual(callsOf(w), ['a N', 'a U', 'b N', 'b U', 'c N'], 'a new account\'s usage was a round late');
+  // E3.S2: the second call of `b` named another account (Z) than its first reply (Y), so nothing is counted for either, and `c`, which holds Z, asks for its own usage
+  assert.deepEqual(callsOf(w), ['a N', 'a U', 'b N', 'b U', 'c N', 'c U'], 'a new account\'s usage was a round late, or the usage of another account was counted');
   const kept = result.memory.get('b')?.reading;
   assert.ok(kept !== undefined, 'b has no reading');
   assert.equal(foundOf(kept.read).email, 'z@example.test', 'the second call\'s reading was not kept');
@@ -210,8 +212,8 @@ test('A3-T16: a usage read that went wrong is not repeated blindly', async () =>
   assert.equal(blockedAfter(claudeFound('x@example.test', { usage: { state: 'failed', why: 'timeout' } })), undefined);
 });
 
-test('A3-T17: the usage policy is one constant, and E1 ships it off', async () => {
-  assert.deepEqual(USAGE_POLICY, { kind: 'off' }, 'E1 would run the usage command before W6 and W7');
+test('A3-T17: the usage policy is one constant, and E3.S5 ships it every-round', async () => {
+  assert.deepEqual(USAGE_POLICY, { kind: 'every-round' }, 'the shipped policy is not every-round');
 
   const hosts = ['a', 'b'];
   const both = accounts({ a: 'x@example.test', b: 'x@example.test' });
@@ -254,14 +256,14 @@ test('A3-T17: the usage policy is one constant, and E1 ships it off', async () =
   const changed = claudeFound('y@example.test');
   assert.equal(needsSecondCall(changed, new Set(), memoryOf(['b', remembered('b', 'x@example.test')]), 'b', OFF, 0, 'refresh'), false, 'a usage read was made while the usage read is off');
   assert.equal(needsSecondCall(changed, new Set(), new Map(), 'b', EVERY_ROUND, 0, 'timer'), true, 'the companion: the same reading is a second call with the policy on');
-  // The shipped constant: six rounds over two hosts make 12 calls and none is `claude-usage`.
+  // The shipped constant: six rounds over two hosts of one account make 18 calls, and each round's one usage call is the second call of its first host.
   const shipped = world({ hosts, reply: both });
   memory = new Map();
   for (let round = 0; round < 6; round += 1) {
-    memory = new Map((await runRound(shipped.seams, memory, round, 'timer', USAGE_POLICY, 'on')).memory);
+    memory = new Map((await runRound(shipped.seams, memory, round, 'timer', USAGE_POLICY)).memory);
   }
-  assert.equal(shipped.calls.length, 12);
-  assert.equal(usageCalls(shipped), 0, 'E1 would run the usage command before W6 and W7');
+  assert.equal(shipped.calls.length, 18);
+  assert.equal(usageCalls(shipped), 6, 'the shipped policy does not read the usage once in each round');
 });
 
 test('A3-T17 companion: due — each policy, on its own', () => {
@@ -336,10 +338,10 @@ test('A3-T19: a closed host is dropped, and a result in flight too', async () =>
 // ───────────────── A3-T20 … A3-T22: the timer ─────────────────
 
 test('A3-T20: the first round and the gap', () => {
-  const decide = (over: Partial<Parameters<typeof armFor>[0]> = {}): ArmDecision => armFor({ eligible: true, armed: false, stopped: false, running: false, ...over });
+  const decide = (over: Partial<Parameters<typeof armFor>[0]> = {}): ArmDecision => armFor({ eligible: true, permitted: true, armed: false, stopped: false, running: false, ...over });
 
   assert.equal(decide(), 'arm-first', 'an eligible host at activation did not arm a first round');
-  assert.deepEqual(timerFor('arm-first', false, 0, 'on'), { kind: 'start', ms: FIRST_DELAY_MS });
+  assert.deepEqual(timerFor('arm-first', false, 0), { kind: 'start', ms: FIRST_DELAY_MS });
   assert.equal(FIRST_DELAY_MS, 30_000);
   assert.equal(decide({ eligible: false }), 'clear', 'a reload with no eligible host armed a round');
   assert.equal(decide({ armed: true }), 'keep', 'an open while armed re-armed the timer');
@@ -348,12 +350,12 @@ test('A3-T20: the first round and the gap', () => {
 
   const started = 1_000;
   const ended = started + 150_000;
-  const next = nextAfterRound({ stopped: false, eligible: true, endedMs: ended });
+  const next = nextAfterRound({ stopped: false, eligible: true, permitted: true, endedMs: ended });
   assert.ok(next.kind === 'at' && next.atMs >= ended + ROUND_GAP_MS, 'the next round began before 10 minutes after the last ended');
   assert.deepEqual(next, { kind: 'at', atMs: ended + ROUND_GAP_MS });
   assert.equal(ROUND_GAP_MS, 600_000);
-  assert.deepEqual(nextAfterRound({ stopped: true, eligible: true, endedMs: ended }), { kind: 'clear' });
-  assert.deepEqual(nextAfterRound({ stopped: false, eligible: false, endedMs: ended }), { kind: 'clear' });
+  assert.deepEqual(nextAfterRound({ stopped: true, eligible: true, permitted: true, endedMs: ended }), { kind: 'clear' });
+  assert.deepEqual(nextAfterRound({ stopped: false, eligible: false, permitted: true, endedMs: ended }), { kind: 'clear' });
 });
 
 test('A3-T21: the timer goes with the last terminal', () => {
@@ -361,12 +363,12 @@ test('A3-T21: the timer goes with the last terminal', () => {
   const eligible = (live: readonly string[], standings: readonly HostStanding[]): boolean => eligibleOf(live, standings).length > 0;
 
   assert.equal(eligible([], []), false);
-  assert.equal(armFor({ eligible: eligible([], []), armed: true, stopped: false, running: false }), 'clear', 'a timer ran with no Creds terminal');
+  assert.equal(armFor({ eligible: eligible([], []), permitted: true, armed: true, stopped: false, running: false }), 'clear', 'a timer ran with no Creds terminal');
   assert.equal(eligible(['a'], [standing('a', 'no')]), false, 'only refused hosts left, and the host was eligible');
-  assert.equal(armFor({ eligible: eligible(['a'], [standing('a', 'no')]), armed: true, stopped: false, running: false }), 'clear');
+  assert.equal(armFor({ eligible: eligible(['a'], [standing('a', 'no')]), permitted: true, armed: true, stopped: false, running: false }), 'clear');
   assert.deepEqual(eligibleOf(['a', 'b'], [standing('a', 'no'), standing('b', 'yes')]), ['b']);
   assert.deepEqual(eligibleOf(['a'], []), ['a'], 'a host with no row is eligible: the round allows it by itself');
-  assert.equal(armFor({ eligible: eligible(['a'], []), armed: false, stopped: false, running: false }), 'arm-first', 'a terminal that opens did not arm the timer again');
+  assert.equal(armFor({ eligible: eligible(['a'], []), permitted: true, armed: false, stopped: false, running: false }), 'arm-first', 'a terminal that opens did not arm the timer again');
 });
 
 test('A3-T22: Refresh now and opening the list', async () => {
@@ -377,7 +379,7 @@ test('A3-T22: Refresh now and opening the list', async () => {
   assert.equal(refreshAnswer({ running: true, lastEndMs: now - 61_000, now }), 'busy');
   assert.equal(refreshAnswer({ running: false, lastEndMs: undefined, now }), 'start');
   assert.equal(REFRESH_FLOOR_MS, 60_000);
-  assert.deepEqual(nextAfterRound({ stopped: false, eligible: true, endedMs: now }), { kind: 'at', atMs: now + ROUND_GAP_MS }, 'after a refresh round the next timer round is 600 s after ITS end');
+  assert.deepEqual(nextAfterRound({ stopped: false, eligible: true, permitted: true, endedMs: now }), { kind: 'at', atMs: now + ROUND_GAP_MS }, 'after a refresh round the next timer round is 600 s after ITS end');
 
   const reading = remembered('a', 'x@example.test');
   const failed: HostMemory = { failure: { sentence: 'did not answer', atMs: 0 } };
@@ -406,10 +408,10 @@ test('A3-T25: the round never asks a person', async () => {
   type AskKeys = Extract<keyof RoundSeams, `${string}ask${string}` | `${string}Ask${string}`>;
   const noAsk: [AskKeys] extends [never] ? true : false = true;
   assert.equal(noAsk, true);
-  assert.equal(typeof withAsk.admit, 'function');
+  assert.equal(typeof withAsk.may, 'function');
 
   const hundred = Array.from({ length: 100 }, (_unused, at) => `host${at}`);
-  const many = world({ hosts: hundred, door: () => ({ kind: 'not-asked' }) });
+  const many = world({ hosts: hundred, door: () => 'waiting' });
   const result = await roundOf(many);
   assert.equal(many.calls.length, 0);
   assert.equal(result.memory.size, 100);
@@ -427,20 +429,20 @@ test('A3-T26: the parser reads the mode that was sent, the extra call\'s too', a
 test('A3-T27: the two test-mode locks, pure', async () => {
   const decisions: readonly ArmDecision[] = ['arm-first', 'clear', 'keep'];
   for (const decision of decisions) {
-    assert.deepEqual(timerFor(decision, true, 0, 'on'), { kind: 'none' }, 'a round armed itself in a test run');
+    assert.deepEqual(timerFor(decision, true, 0), { kind: 'none' }, 'a round armed itself in a test run');
   }
-  assert.notDeepEqual(timerFor('arm-first', false, 0, 'on'), { kind: 'none' });
-  assert.deepEqual(timerFor('clear', false, 0, 'on'), { kind: 'clear' });
-  assert.deepEqual(timerFor('keep', false, 0, 'on'), { kind: 'none' });
+  assert.notDeepEqual(timerFor('arm-first', false, 0), { kind: 'none' });
+  assert.deepEqual(timerFor('clear', false, 0), { kind: 'clear' });
+  assert.deepEqual(timerFor('keep', false, 0), { kind: 'none' });
 
   // The timer after a round goes through the same lock: the next round is the gap from the END of the last, counted from now.
-  const next = nextAfterRound({ stopped: false, eligible: true, endedMs: 1_000_000 });
-  assert.deepEqual(timerFor(next, true, 1_000_000, 'on'), { kind: 'none' }, 'a round armed itself in a test run');
-  assert.deepEqual(timerFor(next, false, 1_000_000, 'on'), { kind: 'start', ms: ROUND_GAP_MS });
-  assert.deepEqual(timerFor(next, false, 1_100_000, 'on'), { kind: 'start', ms: ROUND_GAP_MS - 100_000 }, 'the gap was counted from the wrong moment');
-  assert.deepEqual(timerFor(next, false, 9_000_000, 'on'), { kind: 'start', ms: 0 }, 'a gap that is over waited a negative time');
-  assert.deepEqual(timerFor({ kind: 'clear' }, false, 0, 'on'), { kind: 'clear' });
-  assert.deepEqual(timerFor({ kind: 'clear' }, true, 0, 'on'), { kind: 'none' });
+  const next = nextAfterRound({ stopped: false, eligible: true, permitted: true, endedMs: 1_000_000 });
+  assert.deepEqual(timerFor(next, true, 1_000_000), { kind: 'none' }, 'a round armed itself in a test run');
+  assert.deepEqual(timerFor(next, false, 1_000_000), { kind: 'start', ms: ROUND_GAP_MS });
+  assert.deepEqual(timerFor(next, false, 1_100_000), { kind: 'start', ms: ROUND_GAP_MS - 100_000 }, 'the gap was counted from the wrong moment');
+  assert.deepEqual(timerFor(next, false, 9_000_000), { kind: 'start', ms: 0 }, 'a gap that is over waited a negative time');
+  assert.deepEqual(timerFor({ kind: 'clear' }, false, 0), { kind: 'clear' });
+  assert.deepEqual(timerFor({ kind: 'clear' }, true, 0), { kind: 'none' });
 
   const real: string[] = [];
   const realCall = (host: string): Promise<RemoteRun> => { real.push(host); return Promise.resolve({ kind: 'answered', code: 0, stdout: '' }); };
@@ -503,7 +505,7 @@ test('A3-T29: a Stop while a call is held open publishes nothing, and the memory
 
 test('A3-T30: a refusal while a call is held open publishes nothing', async () => {
   const older = remembered('a', 'old@example.test');
-  const heldRound = (door: (asked: number) => Admission, during: (control: { generation: number }) => void): { readonly w: ReturnType<typeof world>; readonly done: ReturnType<typeof roundOf> } => {
+  const heldRound = (door: (asked: number) => DoorAnswer, during: (control: { generation: number }) => void): { readonly w: ReturnType<typeof world>; readonly done: ReturnType<typeof roundOf> } => {
     const gate = held();
     const w = world({ hosts: ['a'], hold: () => gate.hold(), door: (_host, asked) => door(asked) });
     const done = (async () => {
@@ -521,21 +523,21 @@ test('A3-T30: a refusal while a call is held open publishes nothing', async () =
   // (1) the generation is bumped and the door now says `refused`: dropped; the round ends.
   // The host's change handler runs while the call is held, as stop() does in A3-T29: the newly refused host keeps an entry that says so.
   let current: Memory = memoryOf(['a', older]);
-  const one = heldRound((asked) => (asked === 0 ? READ_OK : { kind: 'refused' }), (control) => { control.generation += 1; current = withRefusals(current, new Set(['a'])); });
+  const one = heldRound((asked) => (asked === 0 ? READ_OK : 'no'), (control) => { control.generation += 1; current = withRefusals(current, new Set(['a'])); });
   const first = await one.done;
   assert.deepEqual(memoryAfter(current, first).get('a'), { ...older, reading: undefined, admission: 'refused' }, 'a refused host\'s older reading was brought back or published');
   assert.deepEqual(one.w.dropped, ['a']);
   assert.equal(one.w.calls.length, 1, 'an extra call was made');
 
   // (2) a Forget: the generation is bumped; the door is NOT asked again.
-  const two = heldRound((asked) => (asked === 0 ? READ_OK : { kind: 'not-asked' }), (control) => { control.generation += 1; });
+  const two = heldRound((asked) => (asked === 0 ? READ_OK : 'no-permission'), (control) => { control.generation += 1; });
   const second = await two.done;
   assert.equal(two.w.admits.length, 1, 'a forgotten host was admitted again by the check');
   assert.equal(second.memory.get('a')?.admission, undefined);
   assert.deepEqual(two.w.dropped, ['a']);
 
   // (3) the generation unchanged, the door says `refused` at the check: dropped, the older reading goes.
-  const three = heldRound((asked) => (asked === 0 ? READ_OK : { kind: 'refused' }), () => undefined);
+  const three = heldRound((asked) => (asked === 0 ? READ_OK : 'no'), () => undefined);
   const third = await three.done;
   assert.deepEqual(three.w.dropped, ['a'], 'a refused host\'s reading was published');
   assert.equal(third.memory.get('a')?.admission, 'refused', 'the kind the check answered was not kept');
@@ -648,7 +650,7 @@ test('A3-T29 (F1): a generation that moved by the end of the round abandons it, 
   const w = world({ hosts: ['a'] });
   const seams = { ...w.seams, landed: () => { w.control.generation += 1; } };
 
-  const result = await runRound(seams, new Map(), 0, 'timer', OFF, 'on');
+  const result = await runRound(seams, new Map(), 0, 'timer', OFF);
 
   assert.equal(result.abandoned, true, 'a Stop given as the round ended did not abandon it');
   assert.deepEqual([...memoryAfter(new Map(), result)], [], 'a stopped round\'s memory came back');
@@ -695,7 +697,7 @@ test('A3-T22 (F3): a round that fails is settled: logged once, and the timer is 
   assert.deepEqual(scheduled, [undefined], 'rounds stopped silently: no timer was asked for after a failed round');
   assert.equal(fallbacks.length, 0);
   // The timer that is then set is the planner\'s, from now, and outside test mode it starts.
-  assert.deepEqual(timerFor(nextAfterRound({ stopped: false, eligible: true, endedMs: 5_000 }), false, 5_000, 'on'), { kind: 'start', ms: ROUND_GAP_MS });
+  assert.deepEqual(timerFor(nextAfterRound({ stopped: false, eligible: true, permitted: true, endedMs: 5_000 }), false, 5_000), { kind: 'start', ms: ROUND_GAP_MS });
 
   // A scheduler that fails too: the fallback sets the timer.
   const both = await settleRound(() => Promise.reject(new Error('x')), () => Promise.reject(new Error('y')), () => { fallbacks.push('fallback'); }, () => { log.push('failed'); });
@@ -773,7 +775,7 @@ test('A3-T22 (T34): the list is drawn from the news of each host as it lands, no
   assert.notEqual(w.landed.memories.at(-1)?.get('b')?.reading, undefined);
 
   // a host the door did not allow lands too, with its kind
-  const door = world({ hosts: ['a'], door: () => ({ kind: 'refused' }) });
+  const door = world({ hosts: ['a'], door: () => 'no' });
   await roundOf(door, new Map(), 0, 'timer', OFF);
   assert.equal(door.landed.memories.at(-1)?.get('a')?.admission, 'refused');
 });

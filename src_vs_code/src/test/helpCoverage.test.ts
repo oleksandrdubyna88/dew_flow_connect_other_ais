@@ -468,8 +468,6 @@ const SETTING_ALIAS: Record<string, string> = {
   'coai.vibeHomesDirectory': 'vibe and kimi homes folder',
   // E6 of PLAN_kimi_and_vibe_on_linux.md (DL6): the Kimi card's tick-box, by its own label, said in the choose-reviewers article.
   'coai.kimiAllowNetworkSignIn': 'allow a kimi sign-in on network storage',
-  // E1.S1 of the accounts plan: the accounts round's own switch, said in the remote paragraph of the chat article.
-  'coai.terminalAccountsAllowNewHosts': 'allow new hosts by themselves',
   'coai.qconsultRowMinutes': 'minutes one row may run',
   'coai.qconsultQuestionsPerSession': 'questions per session',
   // The storage pair (issue #115). Their article is the one a person reaches for after reinstalling
@@ -879,7 +877,7 @@ test('A4-T17: the accounts list has an article in all five languages with five s
       assert.ok(text.trim().length > (section === 'title' ? 10 : 60), `ai-accounts-and-usage/${language}: "${section}" is too short to be an answer`);
     }
     const said = Object.values(body).join(' ');
-    for (const word of ['**AI accounts and usage**', '**Refresh now**', '**Stop the accounts round**', '`coai.terminalAccountsAllowNewHosts`']) {
+    for (const word of ['**AI accounts and usage**', '**Refresh now**', '**Stop the round**', '**Allow reading**']) {
       assert.ok(said.includes(word), `the ${language} article never names ${word}`);
     }
   }
@@ -928,7 +926,7 @@ const KEPT_ON_ITS_SIDE: Readonly<Record<string, string>> = {
 test('A5-T1: every language’s accounts article names its controls, the setting and jq', () => {
   for (const language of HELP_LANGUAGES) {
     const text = accountsArticleText(language, 'ai-accounts-and-usage');
-    for (const word of ['**AI accounts and usage**', '**Refresh now**', '**Stop the accounts round**', '**Not this host**', '`coai.terminalAccountsAllowNewHosts`', 'jq']) {
+    for (const word of ['**AI accounts and usage**', '**Refresh now**', '**Stop the round**', '**Not this host**', '**Allow reading**', '**Withdraw the permission**', 'jq']) {
       assert.ok(text.includes(word), `the ${language} accounts article never names ${word}`);
     }
     for (const word of ['**Claude Code**', '**Codex**', '**Antigravity**', '*account name not shown by Codex*', '`~/.claude`']) {
@@ -942,7 +940,7 @@ test('A5-T2: every language’s chat article says the answer covers the accounts
     const text = accountsArticleText(language, 'chat-with-other-ai');
     assert.ok(text.includes('**CoAI: hosts read over ssh**'), `the ${language} chat article never names the hosts command`);
     assert.ok(text.includes('**AI accounts and usage**'), `the ${language} chat article does not say that its answer covers the AI accounts`);
-    assert.ok(text.includes('`coai.terminalAccountsAllowNewHosts`'), `the ${language} chat article does not name the setting`);
+    assert.ok(text.includes('**Allow reading**') && text.includes('**Withdraw the permission**'), `the ${language} chat article does not name the one permission and its withdrawal`);
     assert.ok(text.includes('**Forget**'), `the ${language} chat article does not say what Forget does`);
     assert.ok(text.includes(KEPT_ON_ITS_SIDE[language] as string), `the ${language} chat article does not say that a refusal is kept on the side where it was given, and lifted from any window of that side`);
     assert.ok(!text.includes(ASKED_ONCE[language] as string), `the ${language} chat article still says a host is asked once, at its first read`);
@@ -956,18 +954,36 @@ test('A5-T3: no language’s chat article still says the reads change nothing on
   }
 });
 
-/** What the chat article says Forget does: allowing the host again by itself only while the setting is on (review of PR #1047, T32 and T33). */
-const FORGET_UNDER_THE_SETTING: Readonly<Record<string, string>> = {
-  en: 'so the host is allowed again by itself while **Allow new hosts by themselves** (`coai.terminalAccountsAllowNewHosts`) is on; with it off you are asked again',
-  de: 'sodass der Host wieder von selbst erlaubt wird, solange **Allow new hosts by themselves** (`coai.terminalAccountsAllowNewHosts`) an ist; ist es aus, werden Sie wieder gefragt',
-  es: 'así que el host se permite de nuevo por sí solo mientras **Allow new hosts by themselves** (`coai.terminalAccountsAllowNewHosts`) esté activado; si está desactivado, se le vuelve a preguntar',
-  ru: 'и хост снова разрешается сам, пока включена **Allow new hosts by themselves** (`coai.terminalAccountsAllowNewHosts`); при выключенной вас спросят снова',
-  uk: 'і хост знову дозволяється сам, поки ввімкнено **Allow new hosts by themselves** (`coai.terminalAccountsAllowNewHosts`); коли вимкнено, вас запитають знову',
+/** The clause that says the one permission covers the hosts opened later (E2S5-T3), as each language has it. */
+const OPENED_LATER: Readonly<Record<string, string>> = {
+  en: 'the ones open now and the ones you open later',
+  de: 'die jetzt offenen und die, die Sie später öffnen',
+  es: 'los abiertos ahora y los que abra más tarde',
+  ru: 'открытые сейчас и те, что вы откроете позже',
+  uk: 'відкриті зараз і ті, що ви відкриєте пізніше',
 };
 
-test('A5-T2 (T32, T33): every language’s chat article allows a forgotten host again by itself only while the setting is on', () => {
+test('E2S5-T3: every language’s chat article says the one permission, that it covers the hosts opened later, and how to withdraw it', () => {
   for (const language of HELP_LANGUAGES) {
     const text = accountsArticleText(language, 'chat-with-other-ai');
-    assert.ok(text.includes(FORGET_UNDER_THE_SETTING[language] as string), `the ${language} chat article says Forget allows the host again with no word of the setting`);
+    assert.ok(text.includes(OPENED_LATER[language] as string), `the ${language} chat article does not say that the permission covers the hosts opened later`);
+    for (const word of ['**Allow reading**', '**Withdraw the permission**', '**Not this host**', '**Read this host again**', '**Forget**']) {
+      assert.ok(text.includes(word), `the ${language} chat article never names ${word}`);
+    }
   }
+});
+
+/** What the retired setting and the cut said, which no help text may keep (E2S5-T2). */
+const RETIRED_HELP_WORDS: readonly RegExp[] = [/terminalAccountsAllowNewHosts/u, /Allow new hosts by themselves/u, /Not in this build/u, /accounts reading is off/u];
+
+test('E2S5-T2: no help text in any language names the retired setting, says a host is allowed by itself, or keeps the cut’s "not in this build" sentence', () => {
+  for (const language of HELP_LANGUAGES) {
+    for (const id of ['ai-accounts-and-usage', 'chat-with-other-ai']) {
+      const text = accountsArticleText(language, id);
+      for (const word of RETIRED_HELP_WORDS) {
+        assert.ok(!word.test(text), `the ${language} ${id} article still says ${String(word)}`);
+      }
+    }
+  }
+  assert.ok(RETIRED_HELP_WORDS[0]?.test('x terminalAccountsAllowNewHosts y') === true && RETIRED_HELP_WORDS[2]?.test('Not in this build: x') === true, 'companion: the scan finds a sentence put back');
 });

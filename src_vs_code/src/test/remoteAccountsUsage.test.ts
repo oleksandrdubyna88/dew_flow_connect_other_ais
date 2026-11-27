@@ -2,7 +2,7 @@ import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { ClaudeUsage, CodexUsage, readAccounts } from '../remoteAccountsReply';
-import { FILE_TIME, GOOD, LINES, NOW, RECORD_TIME, claudeLines, codexLines, ok, readOf } from './accountsFrames';
+import { FILE_TIME, GOOD, LINES, NOW, RECORD_TIME, claudeLines, claudeOnlyOf, codexLines, ok, readOf } from './accountsFrames';
 
 /**
  * The value rules of the accounts parser (E1.S2, spec § A2.11.3): the Claude usage lines with their reset text, and the Codex
@@ -14,7 +14,7 @@ const DOT = '·';
 const iso = (ms: number | null): string | null => (ms === null ? null : new Date(ms).toISOString().slice(0, 16) + 'Z');
 
 function claudeUsage(texts: readonly string[], at = NOW, turns = 0, unmatched = 0): ClaudeUsage {
-  const claude = readOf(readAccounts(ok(claudeLines(texts, turns, unmatched)), 'claude-usage', at)).claude;
+  const claude = claudeOnlyOf(readAccounts(ok(claudeLines(texts, turns, unmatched)), 'claude-usage', at)).claude;
   assert.equal(claude.state, 'found', `the Claude side is ${JSON.stringify(claude)}`);
 
   return claude.state === 'found' ? claude.usage : { state: 'skipped' };
@@ -218,7 +218,7 @@ test('A2-T19: the slots primary and secondary are not in the grammar', () => {
 });
 
 test('A2-T19 companion: the reply of § A2.5 is read, one window, the time from the record', () => {
-  const codex = readOf(readAccounts(ok(GOOD), 'claude-usage', NOW)).codex;
+  const codex = readOf(readAccounts(ok(GOOD), 'no-claude-usage', NOW)).codex;
   assert.ok(codex.state === 'found' && codex.usage.state === 'read');
   const usage = codex.state === 'found' && codex.usage.state === 'read' ? codex.usage : undefined;
   assert.equal(usage?.windows.length, 1);

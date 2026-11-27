@@ -26,7 +26,7 @@
 
 ### The chat module
 
-Every chat command and the `coaiChat` serializer load `chat` (`shell/modules/chat/`, 576 KiB budget), never `legacy`. On its first load it runs `registerChat` once: data root, side-specific models, remote sessions, presets, the chat store with its migration, housekeeping, the orphan sweep and the rename follower. A failure is kept, so a second call re-throws it instead of starting chat again. It hands each handler to the shell through the bridge. The old activation no longer starts any of this. `restorePanel` is the serializer's answer after a reload; once the restore has settled it asks, on a 250 ms timer and once per host, for the install start, because a window whose only activation is a restored tab would otherwise never see `menuReady` or a command. A bug's *Chat* button in the legacy sidebar reaches chat through `chooseFromBug` and the loader's `module(id)`, never by importing it.
+Every chat command and the `coaiChat` serializer load `chat` (`shell/modules/chat/`, budget 661,504 bytes in `scripts/bundle-entries.json`: the merged chat bundle was 653,282 bytes when the accounts tab, the accounts script's usage read and the WSL road (E2, E3) were added, and the budget is that size plus about 8 KiB), never `legacy`. On its first load it runs `registerChat` once: data root, side-specific models, remote sessions, presets, the chat store with its migration, housekeeping, the orphan sweep and the rename follower. A failure is kept, so a second call re-throws it instead of starting chat again. It hands each handler to the shell through the bridge. The old activation no longer starts any of this. `restorePanel` is the serializer's answer after a reload; once the restore has settled it asks, on a 250 ms timer and once per host, for the install start, because a window whose only activation is a restored tab would otherwise never see `menuReady` or a command. A bug's *Chat* button in the legacy sidebar reaches chat through `chooseFromBug` and the loader's `module(id)`, never by importing it.
 
 ### The runtime module
 
@@ -14120,3 +14120,36 @@ A real VM, a real Claude Code, Codex or agy, and a real `jq` on this machine (th
 ### Tests
 
 Unit and wiring tests run with `npm test` (`remoteHosts.test.ts` and `remoteRefusals.test.ts` for S1, `remoteAccountsScript.test.ts`, `remoteAccountsRuns.test.ts`, `remoteAccountsReply.test.ts`, `remoteAccountsUsage.test.ts` and `remoteFraming.test.ts` for S2, `remoteSsh.test.ts`, `remoteAccountsRound.test.ts`, `remoteAccountsState.test.ts` and `remoteAccountsHostScan.test.ts` for S3, `usageWords.test.ts`, `remoteAccountsRows.test.ts`, `remoteAccountsList.test.ts` and `helpCoverage.test.ts` for S4 and S5); the host scenarios A1-H1, A1-H2, A3-H1 and A4-H1 (`terminalHostsScenario.ts`, `terminalAccountsScenario.ts`) run only in CI's job `extension · a real editor`. Each is named in `module_tests.md`.
+
+## The terminal panel shows the AI accounts and their usage (E2)
+
+Stories: `todo/PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E2.md`, with the spec `…_E2_S1_spec.md` (the permission). Built 2026-11-26 on branch `feat/terminal-accounts-e2`. This section says what the code does at E2's head. E2 replaces the per-host consent of E1 with ONE permission and the QuickPick list with an editor tab. **The Claude usage read is still off** (`USAGE_POLICY`), and **WSL is not read** (E3).
+
+### What each story built
+
+| Story | Modules | Holds |
+|---|---|---|
+| E2.S1 the permission | `src/remotePermission.ts` (pure: `grantOf`, `inForce`, the stamp rule), `remoteRefusals.ts`, `remoteKeeper.ts`, `remoteKeeperDoor.ts`, `remoteSessionHost.ts` | the grant in `refused.json`, the withdrawal files `withdrawn-<stamp>.json` and the copy `withdrawnStamp` in the state row; the ONE door `HostKeeper.may(who, host)` (`no`, `damaged`, `waiting`, `no-permission`, `stopped`, `yes`); the question `askPermission`, the icon's `askPermissionFirst`, `withdraw`, `permission` |
+| E2.S4 the round under the permission | `src/remoteAccountsDriver.ts`, `remoteAccountsRound.ts` | the driver (pure over its seams): no timer and no call without the permission, the first round at once when it is given, E1's rhythm after it, `landed(host)` after each place; the one notice `accounts-can-be-shown` |
+| E2.S2 the model | `src/remoteAccountsTable.ts`, `remoteAccountsGroups.ts`, `remoteAccountsRows.ts` (reduced) | `tableModel` (every time an absolute instant, a missing number never a zero, every VM text through `forList`), `viewOf`/`viewState` (the three groupings and the sort, derived in the page), `INSTALL_JQ`, `forList` |
+| E2.S3 the tab | `src/remoteAccountsPage.ts` (pure html, CSP, nonce, the page script), `remoteAccountsMessages.ts` (a page message checked against the model → a closed command), `remoteAccountsRun.ts` (a command → the host's doors), `remoteAccountsPanel.ts` (the one webview panel), `remoteAccountsHost.ts` | ONE tab for the window (`coaiTerminalAccounts`, find bar, no serializer, no local roots); the icon opens it or reveals it and, only the first time and only with no permission, asks the one question; after each landed place the panel posts that block, after a Stop, a refusal or a permission change the whole model |
+| E2.S5 the documents | `src/help*.ts`, `SECURITY.md`, this file | the help in five languages for the one permission, `Withdraw`, *Not this host*, *Group by* and *Sort by*; the settings key is named nowhere |
+
+### The tab's commands
+
+`ready` is answered by the panel with the whole model. `refresh`, `stop`, `start`, `save-now` act through the driver and the keeper. `allow` only raises `askPermission` and `read-again` only raises the change question of that host, so neither writes a grant or lifts a refusal by itself; `refuse` (a person's "no" through `commitHost`) and `withdraw` act at once; `copy-install` hands the copier the fixed command of that place's manager word. The *Group by* switch, the *Sort by* choice and the column headers post nothing (the page keeps `{ v, groupBy, sort }` in the webview state).
+
+### Removed in E2
+
+The QuickPick (`AccountsList`, `openList`, `ShownItem`, the test door's `lastItems`; the door has `lastModel()` and `tabOpen()` now), the rows of the list (`Row`, `accountsRows`, `choose`, `ADMISSION_SAID`, `ignoredRows`), W10 and its constant of the retired setting's key, the bridge lines of E2.S1, the setting `coai.terminalAccountsAllowNewHosts` and its help text.
+
+### Known limits (E2)
+
+- **A modal that nobody answers is not driven by the host scenarios.** E2S3-H1 gives the permission through the keeper before it presses the icon; the first-press question is `askPermissionFirst`'s own test (E2S1).
+- **The chat bundle grew** by the page, the groupings and the model (593,271 → 626,030 bytes); its budget in `scripts/bundle-entries.json` was raised from 598,016 to 630,784 for it (the build plus the same ~4.7 KB of headroom the old budget had, in the 8 KiB steps the budget has always moved by).
+- **The tab shows a round in flight** (`AccountsDriver.progress()`: the place being called, its place in the round's order and the count; the host passes it to the model as `running`), and the model keeps a host's WHOLE name in `Block.host` (the name a message carries) and its cut drawn name in `Block.shown`.
+- The residuals of the permission are numbered 1–19 in `SECURITY.md`, section *The extension's outward ssh calls*.
+
+### Tests (E2)
+
+`remotePermission.test.ts` and the keeper's tests (E2S1-T1…T19), `remoteAccountsDriver.test.ts` (E2S4), `remoteAccountsTable.test.ts`, `remoteAccountsGroups.test.ts` (E2S2), `remoteAccountsPage.test.ts` (the page, run in a DOM shim: E2S3-T1…T8, T14…T19), `remoteAccountsMessages.test.ts` (T9), `remoteAccountsRun.test.ts` (T10), `remoteAccountsHostScan.test.ts` (T11…T13, the host's source), `helpCoverage.test.ts` (E2S5-T1…T3), `remoteHostsWiring.test.ts` (the scans of the retired code and of the key). The host scenarios E2S1-H1, E2S3-H1 and E2S4-H1 (`terminalAccountsScenario.ts`) run only in CI's job *extension · a real editor*.

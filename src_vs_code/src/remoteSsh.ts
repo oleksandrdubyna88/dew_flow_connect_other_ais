@@ -4,7 +4,7 @@ import { credsSession } from './credsSession';
 import { Platform, hostPlatform } from './hostSide';
 import { system32 } from './processLauncher';
 import { withoutControls } from './remoteAccountsReply';
-import { ACCOUNTS_SCRIPT, AccountsMode, isAccountsMode } from './remoteAccountsScript';
+import { ACCOUNTS_SCRIPT, AccountsMode, isAccountsDigest, isAccountsMode } from './remoteAccountsScript';
 import { callOf, shQuoted } from './remoteScript';
 import { Captured, capture } from './versionProbe';
 
@@ -51,14 +51,21 @@ export function sshArgv(host: string, operands: readonly string[]): readonly str
   return argvWith(host, operands);
 }
 
-/** The accounts call's words: the same options, the host and ONE of the two mode words. THROWS the same fixed text for a bad host or a mode outside the list. */
-export function accountsArgv(host: string, mode: AccountsMode): readonly string[] {
-  if (!isAccountsMode(mode)) {
+/**
+ * The accounts call's words: the same options, the host and the operands of E3.S2 (§ R2.2): `no-claude-usage` alone, or `claude-usage` and the 64-character digest of the
+ * account the first reply named. THROWS the same fixed text for a bad host, a mode outside the list, the usage mode without a digest that fits, or the first mode with one.
+ * No other text is an operand, ever: no email, no host, no name.
+ */
+export function accountsArgv(host: string, mode: AccountsMode, digest?: string): readonly string[] {
+  if (!isAccountsMode(mode) || !operandsOk(mode, digest)) {
     throw new Error(REFUSED_WORD);
   }
 
-  return argvWith(host, [mode]);
+  return argvWith(host, mode === 'claude-usage' ? [mode, digest as string] : [mode]);
 }
+
+/** The usage mode takes a digest of its class and the first mode takes none. */
+const operandsOk = (mode: AccountsMode, digest: string | undefined): boolean => (mode === 'claude-usage' ? digest !== undefined && isAccountsDigest(digest) : digest === undefined);
 
 /** C1's host class, the ONE test of it in this file. */
 const hostOk = (host: string): boolean => credsSession(`Creds: ${host} / s`).kind === 'session';
@@ -150,10 +157,10 @@ export async function runRemote(
 
 /**
  * The accounts call: the same road, with `ACCOUNTS_SCRIPT` ALWAYS on stdin — there is no script parameter, so no other text can be sent.
- * NEVER rejects. A bad host or a mode outside the list is a `refused` with no call.
+ * NEVER rejects. A bad host, a mode outside the list or operands that do not fit the mode (§ R2.2) is a `refused` with no call.
  */
-export function runAccounts(host: string, mode: AccountsMode, limits: RemoteLimits = ACCOUNTS_LIMITS, seams: RemoteSeams = defaultRemoteSeams()): Promise<RemoteRun> {
-  return ranWith(host, { argv: accountsArgvOf(host, mode), label: 'accounts', subject: ACCOUNTS_SUBJECT }, ACCOUNTS_SCRIPT, limits, seams);
+export function runAccounts(host: string, mode: AccountsMode, digest: string | undefined, limits: RemoteLimits = ACCOUNTS_LIMITS, seams: RemoteSeams = defaultRemoteSeams()): Promise<RemoteRun> {
+  return ranWith(host, { argv: accountsArgvOf(host, mode, digest), label: 'accounts', subject: ACCOUNTS_SUBJECT }, ACCOUNTS_SCRIPT, limits, seams);
 }
 
 /** What a call is ABOUT: its argv (nothing when a rule refused it), the label of its log line and the words of its sentences. */
@@ -198,9 +205,9 @@ async function ranAsked(host: string, ask: Ask, script: string, limits: RemoteLi
 }
 
 /** The accounts argv, or nothing when a rule refuses. */
-function accountsArgvOf(host: string, mode: AccountsMode): readonly string[] | undefined {
+function accountsArgvOf(host: string, mode: AccountsMode, digest: string | undefined): readonly string[] | undefined {
   try {
-    return accountsArgv(host, mode);
+    return accountsArgv(host, mode, digest);
   } catch {
     return undefined;
   }
@@ -229,7 +236,7 @@ const END_SENTENCES: ReadonlyMap<string, (host: string, limits: RemoteLimits, sa
 ]);
 
 /** A byte count in the unit it divides into evenly: 8 MiB stays `8 MiB`, 64 KiB says `64 KiB`. */
-function sizeWords(bytes: number): string {
+export function sizeWords(bytes: number): string {
   if (bytes % 1_048_576 === 0) {
     return `${bytes / 1_048_576} MiB`;
   }
@@ -237,7 +244,7 @@ function sizeWords(bytes: number): string {
   return bytes % 1024 === 0 ? `${bytes / 1024} KiB` : `${bytes} bytes`;
 }
 
-const tailOf = (got: Captured): string => got.stderrTail ?? '';
+export const tailOf = (got: Captured): string => got.stderrTail ?? '';
 
 /** ssh's own exit 255: it could not connect, authenticate or verify the host — never an answer. */
 const sshSentence = (host: string, said: string): string =>
@@ -286,7 +293,7 @@ function logged(seams: RemoteSeams, line: string): void {
  * It is ssh's own sentence (`Permission denied (publickey).`): the remote script's stderr goes to `/dev/null`, so no transcript
  * text can be in it.
  */
-function lastLine(tail: string): string {
+export function lastLine(tail: string): string {
   const lines = tail.split('\n').map(withoutControls);
   const last = [...lines].reverse().find((line) => line.trim().length > 0) ?? '';
 

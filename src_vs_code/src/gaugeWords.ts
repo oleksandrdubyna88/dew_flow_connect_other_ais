@@ -28,10 +28,6 @@ export interface GaugeRatio {
   readonly missingConsumer: string;
 }
 
-const MINUTE_MS = 60_000;
-const HOUR_MS = 60 * MINUTE_MS;
-const DAY_MS = 24 * HOUR_MS;
-
 /** The lengths a person has a word for; any other is said in hours or minutes. */
 const LENGTH_WORDS: Readonly<Record<number, string>> = { 10080: 'weekly', 43200: 'monthly' };
 
@@ -86,16 +82,20 @@ function seenWords(reading: GaugeReading, nowMs: number): string {
   return reading.stale ? `seen ${ago} · stale — a later read failed` : `seen ${ago}`;
 }
 
-/** The units an age is said in, largest first — rounded DOWN, so a reading is never said to be fresher than it is old. */
-const AGO_UNITS: readonly (readonly [number, string])[] = [[DAY_MS, 'd'], [HOUR_MS, 'h'], [MINUTE_MS, 'min']];
-
+/**
+ * `3 min ago`: an age in words, rounded DOWN, so a reading is never said to be fresher than it is old.
+ *
+ * <p>EMBEDDED in the accounts page by its own source text (`remoteAccountsPage.ts`): it names nothing outside itself, and holds no backtick and no
+ * template literal.</p>
+ */
 export function agoWords(ms: number): string {
+  const units: readonly (readonly [number, string])[] = [[86400000, 'd'], [3600000, 'h'], [60000, 'min']];
   if (!Number.isFinite(ms)) {
     return 'at an unknown time';
   }
-  const unit = AGO_UNITS.find(([length]) => ms >= length);
+  const unit = units.find((one) => ms >= one[0]);
 
-  return unit === undefined ? 'just now' : `${Math.floor(ms / unit[0])} ${unit[1]} ago`;
+  return unit === undefined ? 'just now' : Math.floor(ms / unit[0]) + ' ' + unit[1] + ' ago';
 }
 
 /** The vendor's own "not allowed" — kept, never inferred from a percentage; nothing when it allows or did not say. */

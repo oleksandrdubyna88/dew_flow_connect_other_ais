@@ -124,11 +124,11 @@ test('every host that opens a page pushes both the size and the tone to it', () 
   assert.deepEqual(missing, [], `these hosts open a page and push it only one setting, or none: ${missing.join(', ')}`);
 });
 
-test('the host scan still finds the eight hosts, so it is not passing on an empty list', () => {
+test('the host scan still finds the nine hosts, so it is not passing on an empty list', () => {
   const found = hosts().map((host) => host.file).sort();
 
   assert.deepEqual(found, [
     'bugsKeysPanel.ts', 'bugzReviewPanel.ts', 'chatPanel.ts', 'helpPanel.ts',
-    'notificationsPanel.ts', 'phrasesPanel.ts', 'roundsLogPanel.ts', 'settingsPanel.ts',
+    'notificationsPanel.ts', 'phrasesPanel.ts', 'remoteAccountsPanel.ts', 'roundsLogPanel.ts', 'settingsPanel.ts',
   ]);
 });

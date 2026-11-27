@@ -6,6 +6,8 @@ import { bodyOf, sourceFiles, sourceOf } from './sourceReading';
 /**
  * No stdout, no operand and no caught error in any log (E2.S2, S2-T10; parent § Limits).
  *
+ * <p>E3.S2 (T24) adds the digest and the account text to the banned words: the rule covers the changed modules, which are `remote*.ts`.
+ *
  * <p>The rule is written for every file named `src/remote*.ts`, so S3's `remoteRead.ts` and `remoteSessionHost.ts` are scanned
  * from the day they exist; the door functions in other files are S4's part (X10 of the spec, which adds the companion that the
  * scan FINDS the two terminal registrations and the Asked hook). A scan that matches nothing passes for ever, so the scanner
@@ -13,7 +15,7 @@ import { bodyOf, sourceFiles, sourceOf } from './sourceReading';
  */
 
 /** The words that must not be in the arguments of a console call or a `notify`: the child's stdout and what is cut from it, the operands, an error's message. */
-const BANNED = /\b(stdout|output|lines|tail|operands|folders|folder|paneCwd|cwd|candidates|names|rows|script|reason)\b|\.message|asText\(/u;
+const BANNED = /\b(stdout|output|lines|tail|operands|folders|folder|paneCwd|cwd|candidates|names|rows|script|reason|digest|email|account|org)\b|\.message|asText\(/u;
 
 /** The text of the argument list that opens at `open` (the index of the `(`), strings included; or the rest of the text when it never closes. */
 function argumentsFrom(text: string, open: number): string {
@@ -57,6 +59,8 @@ test('S2-T10: the scanner finds what it must, on samples', () => {
   });`).length, 1, 'a three-line notify with a caught error');
   assert.equal(logLeaks('console.error(`${operands}`);').length, 1, 'an operand in a template literal');
   assert.equal(logLeaks('console.warn(error.message);').length, 1, 'an error\'s message');
+  assert.equal(logLeaks('seams.log(`digest ${digest}`);').length, 1, 'a digest of the usage call (E3.S2, T24)');
+  assert.equal(logLeaks('write(`account ${found.email}`);').length, 1, 'an account text through the alias of the log seam (E3.S2, T24)');
   assert.equal(logLeaks('logged(seams, got.output);').length, 1, 'stdout through the remote reader\'s log road');
   assert.equal(logLeaks('seams.log(`${operands}`);').length, 1, 'an operand through the log seam');
   assert.equal(logLeaks('console.error("a (b) c", folder);').length, 1, 'a banned word after a string that holds parentheses');
@@ -222,10 +226,10 @@ test('A3-T28: the plain rule stands in ONE file, and the two older copies call i
 
 test('A4-T19: the log scan reaches the rows and the host of the accounts list, and both are clean', () => {
   const files = remoteFiles();
-  for (const wanted of ['remoteAccountsRows.ts', 'remoteAccountsHost.ts']) {
+  for (const wanted of ['remoteAccountsRows.ts', 'remoteAccountsHost.ts', 'remoteAccountsDriver.ts']) {
     assert.ok(files.includes(wanted), `the name pattern does not find ${wanted}`);
     assert.deepEqual(logLeaks(sourceOf(wanted)), [], `${wanted} writes stdout, an operand or an error's message to a log or a notice`);
   }
-  assert.ok(/\bnotify\(/u.test(sourceOf('remoteAccountsHost.ts')), 'the host has no notify( call, so the scan of its notices matches nothing');
+  assert.ok(/\bnotifyThen\(/u.test(sourceOf('remoteAccountsHost.ts')), 'the host has no notifyThen( call, so the scan of its notices matches nothing');
   assert.ok(/\bdefaultRemoteSeams\(\)\.log\(/u.test(sourceOf('remoteAccountsHost.ts')), 'the host writes no log line, so the scan of its log matches nothing');
 });

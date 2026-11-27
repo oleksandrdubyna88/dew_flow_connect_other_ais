@@ -1,6 +1,7 @@
 import { readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import * as vscode from 'vscode';
+import { byCodeUnit } from './codeUnitOrder';
 import { thisMachine } from './chatStoreLock';
 import type { ChatPanels } from './chatPanels';
 import { threads } from './chatThread';
@@ -8,14 +9,15 @@ import { notify, notifyAndAsk, notifyThen } from './notify';
 import { askPerson } from './personWait';
 import { thisSideLabel } from './consultantSides';
 import { credsSession } from './credsSession';
-import { Committed, HostChange, HostStanding, choicesOf, listedHosts, readableOf } from './remoteHosts';
+import { STATE_KEY, permissionRowOf, stateMerge } from './remoteAccountsRound';
+import { Committed, HostButton, commit as commitOne, HostChange, HostStanding, buttonsOf, changeOfButton, choicesOf, listedHosts, readableOf } from './remoteHosts';
 import { HOSTS_SAID, UnkeptWhy, notKeptSaid } from './remoteHostsSaid';
 import { HostKeeper, failedHostOf, hostKeeper } from './remoteKeeper';
+import { Allowed, Permission, PermissionAsked, SessionAnswer, permissionAsker } from './remotePermission';
+import { PermissionRow } from './remoteKeeperDoor';
 import { PickRow, Picked, Purpose, RemoteAnswer, RoadSeams, onePerTerminal, reachOf, readsKey, remoteRoad } from './remoteRead';
-import { refusalsStore } from './remoteRefusals';
 import { refusalsDiskOver } from './remoteRefusalsDisk';
-import { allowsNewHosts, ignoredLayerFor } from './sideConfig';
-import { ALLOW_NEW_HOSTS_KEY } from './modelKeys';
+import { refusalsStore } from './remoteRefusalsStore';
 import { runRemote } from './remoteSsh';
 import { liveTerminals } from './terminalHost';
 import { registerCommand } from './shellBridge';
@@ -26,7 +28,7 @@ import { registerCommand } from './shellBridge';
  * progress line, the pick list, the answers in `globalState` — and holds the two per-terminal maps.
  *
  * <p>Nothing else in the extension spawns ssh or reads the consent. No `console` call here. The three messages this file raises
- * (the consent question, the same question from the hosts list, and "no host has been asked yet") go through the one door, `notifyAndAsk`
+ * (the one permission question, the change question for a host, and the short messages of the hosts list) go through the one door, `notifyAndAsk`
  * and `notify`, with fixed text and a host name; every sentence of the road itself reaches the door that asked as a value, and that door says it.</p>
  *
  * <p>Unit tests cannot load this module (it imports `vscode`); `terminalHostsScenario.ts` runs it in a real editor, in CI.</p>
@@ -35,33 +37,33 @@ import { registerCommand } from './shellBridge';
 /** The `globalState` key of the answers: at most 100 rows, one per host. */
 export const TERMINAL_HOSTS_KEY = 'coai.terminalHosts';
 
-const READ = 'Read';
-const NOT_THIS_HOST = 'Not this host';
-const FORGET = 'Forget';
+const ALLOW_READING = 'Allow reading';
+const NOT_NOW = 'Not now';
 const SAVE_NOW = 'Save now';
 
-/** The file of refusals and the prefix of a marker, inside the folder the extension hands in: the ONE place that names them. */
+/** The buttons of the change question, by what each does (§ P10). */
+const BUTTON_LABEL: Readonly<Record<HostButton, string>> = { 'not-this-host': 'Not this host', 'read-again': 'Read this host again', 'forget': 'Forget' };
+
+/** The file of refusals, the prefix of a marker and the prefix of a withdrawal file, inside the folder the extension hands in: the ONE place that names them. */
 const REFUSED_FILE = 'refused.json';
 const MARKER_PREFIX = 'unsure-';
-
-const answerOf = (button: string | undefined): 'yes' | 'no' | undefined => (button === READ ? 'yes' : button === NOT_THIS_HOST ? 'no' : undefined);
+const WITHDRAWN_PREFIX = 'withdrawn-';
 
 /**
- * The modal question for a host, through the one door every message goes through (it is recorded, and the wait is the person's, not
- * the panel's). Escape gives `undefined`, and the road writes nothing for it.
+ * The ONE question (W14), through the one door every message goes through: raised ONLY by the permission's asker, never by a timer, the keeper or
+ * the round. Escape and *Not now* are `false`, and write nothing.
  */
-const askQuestion = async (host: string): Promise<'yes' | 'no' | undefined> =>
-  answerOf(await notifyAndAsk({
+const raisePermission = async (): Promise<boolean> =>
+  (await notifyAndAsk({
     as: 'warning',
     class: 'confirmation',
     source: 'remoteSessions',
-    code: 'read-remote-session',
-    subject: host,
+    code: 'read-accounts-permission',
     modal: true,
-    title: HOSTS_SAID.title(host),
-    detail: HOSTS_SAID.askedDetail,
-    actions: [READ, NOT_THIS_HOST],
-  }));
+    title: HOSTS_SAID.permissionTitle,
+    detail: HOSTS_SAID.permissionDetail(sideLabel()),
+    actions: [ALLOW_READING, NOT_NOW],
+  })) === ALLOW_READING;
 
 interface Choice extends vscode.QuickPickItem {
   readonly sessionId: string;
@@ -104,40 +106,49 @@ export interface RemoteSessions {
   /** The keeper's commit of ONE host's change — the only write of the list. */
   readonly commitHost: HostKeeper['commit'];
   readonly commitKey: HostKeeper['commitKey'];
-  /** The round's door: asked just before EVERY accounts call. It never asks a person. */
-  readonly admitHost: HostKeeper['admit'];
+  /** The ONE door (E2.S1): asked by the round before every call and by the session road before EVERY spawn. It never asks a person. */
+  readonly may: HostKeeper['may'];
   readonly hostStandings: HostKeeper['standings'];
   readonly stopRound: HostKeeper['stopRound'];
   readonly startRound: HostKeeper['startRound'];
   readonly roundStop: HostKeeper['roundStop'];
   /** A PERSON'S PRESS ONLY: saves what the file did not take. Called from the action of the notice and from a press on a row of the list. */
   readonly saveWaiting: HostKeeper['saveWaiting'];
-  /** The three choices for one host; over a damaged list or file the answer is a `mend`. */
+  /** The choices for one host (each only where it does something); over a damaged list or file the answer is a `mend`. */
   readonly changeHost: (host: string) => Promise<void>;
-  /** The question for a host that has no answer, committed; over damage it is `changeHost`. */
-  readonly askHost: (host: string) => Promise<void>;
-  readonly allowsNewHosts: () => boolean;
-  readonly ignoredLayer: () => 'workspace' | 'folder' | undefined;
+  /** The ONE question (W14). No modal when the permission is in force; *Not now* writes nothing. Called by a person's press only. */
+  readonly askPermission: () => Promise<PermissionAsked>;
+  /** The icon's press: asks only when the state row holds no `askedUtc` and the permission is not in force, and notes it BEFORE the modal. */
+  readonly askPermissionFirst: () => Promise<PermissionAsked | 'asked-before'>;
+  /** A person's *Withdraw*: narrows at once. */
+  readonly withdraw: HostKeeper['withdraw'];
+  /** The permission as the tab and the hosts list show it, from a fresh read of the disk. */
+  readonly permission: HostKeeper['permission'];
   /** Fires after every commit that wrote (the keeper's change signal): the accounts round learns of a refusal or a Forget from it. */
   readonly onChanged: vscode.Event<void>;
-  /** *CoAI: hosts read over ssh*: list the hosts, change one answer or forget it. */
+  /** *CoAI: hosts read over ssh*: the permission's row first, then the hosts. */
   readonly changeHosts: () => Promise<void>;
   /** The keeper, for the test door only. */
   readonly keeper: HostKeeper;
 }
 
-const configNow = (): vscode.WorkspaceConfiguration => vscode.workspace.getConfiguration('coai');
-
 interface HostChoice extends vscode.QuickPickItem {
-  readonly host: string;
+  /** The host this row changes; the first row has none. */
+  readonly host?: string;
+  /** The first row: the permission. */
+  readonly permission?: 'none' | 'waiting' | 'damaged' | 'given';
 }
 
-const hostChoice = (host: string, standing: HostStanding | undefined, allowNew: boolean): HostChoice =>
-  (standing === undefined
-    ? { label: host, description: HOSTS_SAID.noAnswerReadable, host }
-    : { label: host, description: HOSTS_SAID.rowDescription(standing, allowNew), detail: HOSTS_SAID.rowDetail(standing), host });
+/** How the host stands, as a row of the hosts list (W4, W4b, W4c). */
+function hostChoice(host: string, standing: HostStanding | undefined, state: { readonly permitted: boolean; readonly damaged: boolean }): HostChoice {
+  if (standing === undefined) {
+    return { label: host, description: state.damaged ? HOSTS_SAID.noAnswerReadable : HOSTS_SAID.rowDescription(false, state.permitted), host };
+  }
 
-/** One short message about the list of hosts: the empty list, or an answer that could not be kept. */
+  return { label: host, description: HOSTS_SAID.rowDescription(standing.answer === 'no', state.permitted), detail: HOSTS_SAID.rowDetail(standing), host };
+}
+
+/** One short message about the list of hosts: an answer that could not be kept, or the permission withdrawn. */
 const tell = (title: string): Promise<void> => notify({
   as: 'information',
   class: 'outcome',
@@ -146,29 +157,32 @@ const tell = (title: string): Promise<void> => notify({
   title,
 });
 
-/** The empty list: which of the three wordings of W5 says why. */
-const emptySaid = (damaged: boolean, allowNew: boolean): string => (damaged ? HOSTS_SAID.emptyDamaged : allowNew ? HOSTS_SAID.emptyOn : HOSTS_SAID.emptyOff);
+/** What the person chose, whatever the kind of change that carried it. */
+const chosenOf = (change: HostChange): 'no' | 'forget' => (change.kind === 'forget' ? 'forget' : change.kind === 'mend' ? change.answer : 'no');
 
-/** What the person chose, whatever the kind of change that carried it. `auto` is never a person's choice. */
-const chosenOf = (change: HostChange): 'yes' | 'no' | 'forget' => (change.kind === 'forget' ? 'forget' : change.kind === 'auto' ? 'yes' : change.answer);
-
-/** The change question's detail: how the host stands, over damage what is wrong, then the words that tell what each button does. */
-async function changeDetail(keeper: HostKeeper, host: string, allowNew: boolean): Promise<{ readonly detail: string; readonly damaged: boolean }> {
-  const value = keeper.stored();
-  const list = readableOf(value);
-  const fileDamaged = (await keeper.roundStop()) === 'damaged';
-  const standings = await keeper.standings();
-  const refusals = standings.filter((one) => one.answer === 'no').length;
-  const parts = [
+/** What is wrong with the list or the file, in W7's and W7b's words; nothing when both can be read. */
+function damageSaid(list: ReturnType<typeof readableOf>, fileDamaged: boolean, standings: readonly HostStanding[]): readonly string[] {
+  return [
     list.damaged ? HOSTS_SAID.damagedList(list.rows.length, list.rows.filter((row) => row.answer === 'no').length, list.unreadable) : '',
-    fileDamaged ? HOSTS_SAID.damagedFile(sideLabel(), refusals) : '',
-    HOSTS_SAID.changeDetail(standings.find((one) => one.host === host), allowNew, sideLabel()),
+    fileDamaged ? HOSTS_SAID.damagedFile(sideLabel(), standings.filter((one) => one.answer === 'no').length) : '',
   ];
-
-  return { detail: parts.filter((part) => part.length > 0).join(' '), damaged: list.damaged || fileDamaged };
 }
 
-const askChange = (host: string, detail: string): Promise<string | undefined> => notifyAndAsk({
+/** The change question's detail: how the host stands, over damage what is wrong, then the words that tell what each offered button does. */
+async function changeDetail(keeper: HostKeeper, host: string): Promise<{ readonly detail: string; readonly damaged: boolean; readonly buttons: readonly HostButton[] }> {
+  const list = readableOf(keeper.stored());
+  const fileDamaged = (await keeper.roundStop()) === 'damaged';
+  const standings = await keeper.standings();
+  const standing = standings.find((one) => one.host === host);
+  const damaged = list.damaged || fileDamaged;
+  const buttons = buttonsOf(standing, standing?.answer === 'no', damaged);
+  const stands = { standing, permitted: typeof (await keeper.permission()) === 'object' };
+  const parts = [...damageSaid(list, fileDamaged, standings), HOSTS_SAID.changeDetail(stands, buttons, sideLabel())];
+
+  return { detail: parts.filter((part) => part.length > 0).join(' '), damaged, buttons };
+}
+
+const askChange = (host: string, detail: string, buttons: readonly HostButton[]): Promise<string | undefined> => notifyAndAsk({
   as: 'warning',
   class: 'confirmation',
   source: 'remoteSessions',
@@ -177,22 +191,15 @@ const askChange = (host: string, detail: string): Promise<string | undefined> =>
   modal: true,
   title: HOSTS_SAID.title(host),
   detail,
-  actions: [READ, NOT_THIS_HOST, FORGET],
+  actions: buttons.map((one) => BUTTON_LABEL[one]),
 });
 
 /** The change a button means: over damage a `mend`, else a plain change. `undefined` for Escape. */
-const BUTTON_ANSWER: ReadonlyMap<string | undefined, 'yes' | 'no' | 'forget'> = new Map([[READ, 'yes'], [NOT_THIS_HOST, 'no'], [FORGET, 'forget']]);
+function changeFor(label: string | undefined, host: string, damaged: boolean): HostChange | undefined {
+  const button = (Object.keys(BUTTON_LABEL) as HostButton[]).find((one) => BUTTON_LABEL[one] === label);
 
-function changeFor(button: string | undefined, host: string, damaged: boolean): HostChange | undefined {
-  const answer = BUTTON_ANSWER.get(button);
-  if (answer === undefined) {
-    return undefined;
-  }
-
-  return damaged ? { kind: 'mend', host, answer } : plainChange(host, answer);
+  return button === undefined ? undefined : changeOfButton(button, host, damaged);
 }
-
-const plainChange = (host: string, answer: 'yes' | 'no' | 'forget'): HostChange => (answer === 'forget' ? { kind: 'forget', host } : { kind: 'person', host, answer });
 
 /** Commits a person's answer for a host and tells the person when the store did not keep it. */
 async function committedAndTold(keeper: HostKeeper, host: string, change: HostChange): Promise<void> {
@@ -204,49 +211,92 @@ async function committedAndTold(keeper: HostKeeper, host: string, change: HostCh
 
 /** The change question for one host, and the chosen change committed. A change the store did not keep is told. */
 async function changeHostOf(keeper: HostKeeper, host: string): Promise<void> {
-  const allowNew = allowsNewHosts(configNow());
-  const { detail, damaged } = await changeDetail(keeper, host, allowNew);
-  const change = changeFor(await askChange(host, detail), host, damaged);
+  const { detail, damaged, buttons } = await changeDetail(keeper, host);
+  const change = changeFor(await askChange(host, detail, buttons), host, damaged);
   if (change !== undefined) {
     await committedAndTold(keeper, host, change);
   }
 }
 
-/** The host the person chose from the list, or nothing (Escape). */
-async function chosenHost(rows: readonly HostChoice[]): Promise<string | undefined> {
-  const chosen = await askPerson(() => vscode.window.showQuickPick(rows, { title: 'Hosts read over ssh', placeHolder: 'Choose a host to change its answer' }));
-
-  return chosen?.host;
+/** The row or host the person chose from the list, or nothing (Escape). */
+async function chosenRow(rows: readonly HostChoice[]): Promise<HostChoice | undefined> {
+  return askPerson(() => vscode.window.showQuickPick(rows, { title: 'Hosts read over ssh', placeHolder: 'Choose the permission or a host' }));
 }
 
 const liveHostsOf = (): readonly string[] =>
   liveTerminals(vscode.window.terminals).flatMap((one) => { const name = credsSession(one.name); return name.kind === 'session' ? [name.host] : []; });
 
-/** The panel's list: choosing a host asks again and commits the answer; Escape changes nothing. */
-async function changeHostsOf(keeper: HostKeeper): Promise<void> {
-  const allowNew = allowsNewHosts(configNow());
-  const standings = await keeper.standings();
-  const listed = choicesOf(listedHosts(keeper.stored(), liveHostsOf()), standings);
-  const rows = listed.map((one) => hostChoice(one.host, one.standing, allowNew));
-  if (rows.length === 0) {
-    await tell(emptySaid(readableOf(keeper.stored()).damaged, allowNew));
-
-    return;
+/** The permission as the first row shows it: damage first (a list or a file that cannot be read), then what waits, then what is given. */
+async function permissionState(keeper: HostKeeper): Promise<'none' | 'waiting' | 'damaged' | { readonly given: string }> {
+  if (readableOf(keeper.stored()).damaged || (await keeper.roundStop()) === 'damaged') {
+    return 'damaged';
   }
-  const host = await chosenHost(rows);
-  if (host !== undefined) {
-    await changeHostOf(keeper, host);
+  const now: Permission = await keeper.permission();
+
+  return now;
+}
+
+/** The first row of the list: the permission, in its four states (W18). */
+function permissionChoice(state: Awaited<ReturnType<typeof permissionState>>): HostChoice {
+  const said = HOSTS_SAID.permissionRow(state);
+
+  return { label: said.label, description: said.description, permission: typeof state === 'string' ? state : 'given' };
+}
+
+/** What a press on the permission's row needs: the keeper, the question's asker and whether a notice was raised by it. */
+interface Press {
+  readonly keeper: HostKeeper;
+  readonly asker: ReturnType<typeof permissionAsker>;
+  readonly raised: { notice: boolean };
+}
+
+/** *Allow reading…*: the one question; an answer that was not kept is told here when no notice told it. */
+async function pressedAsk(press: Press): Promise<void> {
+  press.raised.notice = false;
+  const asked = await press.asker.ask();
+  if (typeof asked === 'object' && !press.raised.notice) {
+    await tell(asked.said);
   }
 }
 
-/** The question for a host with no answer: committed as a person's answer; over damage it is the change question. */
-async function askHostOf(keeper: HostKeeper, host: string): Promise<void> {
-  if (readableOf(keeper.stored()).damaged || (await keeper.roundStop()) === 'damaged') {
-    return changeHostOf(keeper, host);
+/** *Withdraw the permission*: at once; W17 when it landed (a withdrawal that did not has its own notice). */
+async function pressedWithdraw(press: Press): Promise<void> {
+  if ((await press.keeper.withdraw()) === 'withdrawn') {
+    await tell(HOSTS_SAID.withdrew);
   }
-  const answer = await askQuestion(host);
-  if (answer !== undefined) {
-    await committedAndTold(keeper, host, { kind: 'person', host, answer });
+}
+
+/** What a press on the permission's row does, by its state; over damage it is information only. */
+const PRESSED: Readonly<Record<NonNullable<HostChoice['permission']>, (press: Press) => Promise<void>>> = {
+  none: pressedAsk,
+  given: pressedWithdraw,
+  waiting: async (press) => { afterPress(press.keeper, await press.keeper.saveWaiting()); },
+  damaged: async () => undefined,
+};
+
+/** The hosts' rows of the list: refused ∪ live ∪ stored, in code-unit order, each saying how it stands. */
+async function hostRows(keeper: HostKeeper, state: Awaited<ReturnType<typeof permissionState>>): Promise<readonly HostChoice[]> {
+  const standings = await keeper.standings();
+  const listed = choicesOf(listedHosts(keeper.stored(), liveHostsOf()), standings);
+
+  return listed.map((one) => hostChoice(one.host, one.standing, { permitted: typeof state === 'object', damaged: state === 'damaged' }));
+}
+
+/** The panel's list: the permission's row first, then the hosts; choosing a host asks again and commits the answer; Escape changes nothing. */
+async function changeHostsOf(keeper: HostKeeper, asker: ReturnType<typeof permissionAsker>, raised: { notice: boolean }): Promise<void> {
+  const state = await permissionState(keeper);
+  const chosen = await chosenRow([permissionChoice(state), ...(await hostRows(keeper, state))]);
+  if (chosen !== undefined) {
+    await pressedRow(chosen, { keeper, asker, raised });
+  }
+}
+
+/** The permission's row does what its state says; a host's row asks the change question for that host. */
+async function pressedRow(chosen: HostChoice, press: Press): Promise<void> {
+  if (chosen.permission !== undefined) {
+    await PRESSED[chosen.permission](press);
+  } else if (chosen.host !== undefined) {
+    await changeHostOf(press.keeper, chosen.host);
   }
 }
 
@@ -257,7 +307,7 @@ async function askHostOf(keeper: HostKeeper, host: string): Promise<void> {
 const pressSaid = (host: string | undefined, result: Committed): string | undefined =>
   (result.kind === 'full' && host === undefined ? undefined : notKeptSaid(host ?? '', 'no', result));
 
-/** W9: a refusal or a Stop the file did not take. One call site, ONE action: *Save now*; `after` is given what the press came to. */
+/** W9: a refusal, a Stop or a withdrawal the file did not take. One call site, ONE action: *Save now*; `after` is given what the press came to. */
 function raiseUnkept(keeper: HostKeeper, subject: string, title: string, cure: string, after: (result: Committed) => void): void {
   void notifyThen({
     as: 'warning',
@@ -275,19 +325,58 @@ function raiseUnkept(keeper: HostKeeper, subject: string, title: string, cure: s
   });
 }
 
+/** W16 for an *Allow* the store did not keep; for `unwritten` also the notice with *Save now*, which tells the person what waits and takes a lock over that hangs. */
+function allowNotKept(keeper: HostKeeper, raised: { notice: boolean }, result: Allowed): string {
+  const said = HOSTS_SAID.allowNotKept(result);
+  if (result.kind === 'unwritten') {
+    raised.notice = true;
+    void notifyThen({
+      as: 'warning',
+      class: 'outcome',
+      source: 'remoteSessions',
+      code: 'accounts-permission-not-kept',
+      title: said,
+      action: SAVE_NOW,
+    }, (button) => {
+      if (button === SAVE_NOW) {
+        void keeper.saveWaiting().then((done) => afterPress(keeper, done));
+      }
+    });
+  }
+
+  return said;
+}
+
 /** The change event of a road that has no keeper to listen to: nobody is ever told. */
 const noChange: vscode.Event<void> = () => ({ dispose: () => undefined });
+
+/** The modal of the permission's question, until the test door replaces it (a modal has nobody to answer it in a real editor under test). */
+let boundQuestion: (() => Promise<boolean>) | undefined;
+
+/** The permission's one decision (`permissionAsker`) over this window's keeper and state row. Nothing but a person's press reaches it. */
+function askerOf(keeper: HostKeeper, state: vscode.Memento, raised: { notice: boolean }): ReturnType<typeof permissionAsker> {
+  return permissionAsker({
+    raise: () => (boundQuestion ?? raisePermission)(),
+    permission: () => keeper.permission(),
+    allow: () => keeper.allow(),
+    askedBefore: () => permissionRowOf(state.get(STATE_KEY)).askedUtc !== undefined,
+    noteAsked: () => keeper.commitKey(STATE_KEY, { asked: new Date().toISOString() }, stateMerge).then(() => undefined),
+    notKept: (result) => allowNotKept(keeper, raised, result),
+  });
+}
 
 /**
  * The road over a keeper and a run seam. `run` is `runRemote` unless a test says otherwise. The per-terminal state — the picked id
  * and the latch — lives here, in `WeakMap`s keyed by the terminal object, so it goes with it.
  */
-export function remoteSessionsOf(keeper: HostKeeper, run: RoadSeams['run'] = runRemote, onChanged: vscode.Event<void> = noChange): RemoteSessions {
+export function remoteSessionsOf(keeper: HostKeeper, state: vscode.Memento, run: RoadSeams['run'] = runRemote, onChanged: vscode.Event<void> = noChange): RemoteSessions {
   const picked = new WeakMap<vscode.Terminal, Picked>();
   const latch = onePerTerminal<vscode.Terminal>();
+  const raised = { notice: false };
+  const asker = askerOf(keeper, state, raised);
   const seamsOf = (terminal: vscode.Terminal): RoadSeams => ({
-    store: { consent: (host) => keeper.consent(host), answer: (host, answer) => keeper.commit({ kind: 'person', host, answer }) },
-    ask: askQuestion,
+    store: { may: (host) => keeper.may('session', host) as Promise<SessionAnswer> },
+    askPermission: () => asker.ask(),
     liveName: () => liveNameOf(terminal),
     run,
     pick: pickOne,
@@ -309,18 +398,19 @@ export function remoteSessionsOf(keeper: HostKeeper, run: RoadSeams['run'] = run
     },
     commitHost: (change) => keeper.commit(change),
     commitKey: keeper.commitKey,
-    admitHost: (host) => keeper.admit(host),
+    may: (who, host) => keeper.may(who, host),
     hostStandings: () => keeper.standings(),
     stopRound: () => keeper.stopRound(),
     startRound: () => keeper.startRound(),
     roundStop: () => keeper.roundStop(),
     saveWaiting: () => keeper.saveWaiting(),
     changeHost: (host) => changeHostOf(keeper, host),
-    askHost: (host) => askHostOf(keeper, host),
-    allowsNewHosts: () => allowsNewHosts(configNow()),
-    ignoredLayer: () => ignoredLayerFor(configNow(), ALLOW_NEW_HOSTS_KEY),
+    askPermission: () => asker.ask(),
+    askPermissionFirst: () => asker.askFirst(),
+    withdraw: () => keeper.withdraw(),
+    permission: () => keeper.permission(),
     onChanged,
-    changeHosts: () => changeHostsOf(keeper),
+    changeHosts: () => changeHostsOf(keeper, asker, raised),
     keeper,
   };
 }
@@ -355,21 +445,35 @@ function afterPress(live: HostKeeper, result: Committed): void {
   }
 }
 
+/** The state row's two reads of the permission and its one write, over the profile's `globalState`: the keeper imports nothing of the round. */
+const rowOf = (state: vscode.Memento): PermissionRow => ({
+  read: () => {
+    const row = permissionRowOf(state.get(STATE_KEY));
+
+    return { withdrawn: row.withdrawn, stopped: row.stopped };
+  },
+  change: (change) => commitOne(state, STATE_KEY, change, stateMerge).then(() => undefined, () => undefined),
+});
+
 /** The keeper of this window over the profile's state and the folder of this side's refusals file. */
 function keeperOf(context: vscode.ExtensionContext, folder: string, changed: () => void): HostKeeper {
-  const store = refusalsStore(refusalsDiskOver(folder, { file: REFUSED_FILE, markerPrefix: MARKER_PREFIX }, thisMachine), Date.now);
+  const store = refusalsStore(refusalsDiskOver(folder, { file: REFUSED_FILE, markerPrefix: MARKER_PREFIX, withdrawnPrefix: WITHDRAWN_PREFIX }, thisMachine), Date.now);
   const keeperRef: { current?: HostKeeper } = {};
   const keeper = hostKeeper({
     state: context.globalState,
     key: TERMINAL_HOSTS_KEY,
     refusals: store,
     now: () => new Date().toISOString(),
-    allowNew: () => allowsNewHosts(vscode.workspace.getConfiguration('coai')),
+    row: rowOf(context.globalState),
     changed,
     unkept: (host, why, marked) => {
       const live = keeperRef.current as HostKeeper;
       const title = host === undefined ? HOSTS_SAID.unkeptStop(why, sideLabel(), marked) : HOSTS_SAID.unkeptHost(host, why as UnkeptWhy, sideLabel(), marked);
       raiseUnkept(live, host ?? 'accounts-round', title, marked ? HOSTS_SAID.cureMarked : HOSTS_SAID.cureUnmarked, (result) => afterPress(live, result));
+    },
+    unkeptWithdrawal: (why) => {
+      const live = keeperRef.current as HostKeeper;
+      raiseUnkept(live, 'permission', HOSTS_SAID.unkeptWithdrawal(why), why === 'busy' ? HOSTS_SAID.cureWithdrawalBusy : HOSTS_SAID.cureWithdrawal, (result) => afterPress(live, result));
     },
   });
   keeperRef.current = keeper;
@@ -384,7 +488,7 @@ function keeperOf(context: vscode.ExtensionContext, folder: string, changed: () 
 export function bindRemoteSessions(context: vscode.ExtensionContext, folder: string): RemoteSessions {
   // The key is set again whenever a change was written — by the first read of a host, or from the panel's list.
   const changes = new vscode.EventEmitter<void>();
-  const sessions = remoteSessionsOf(keeperOf(context, folder, () => { void setReadsKey(sessions); changes.fire(); }), (host, session, operands, script) => boundRun(host, session, operands, script), changes.event);
+  const sessions = remoteSessionsOf(keeperOf(context, folder, () => { void setReadsKey(sessions); changes.fire(); }), context.globalState, (host, session, operands, script) => boundRun(host, session, operands, script), changes.event);
   bound = sessions;
   signalChange = () => { changes.fire(); };
   void setReadsKey(sessions);
@@ -405,25 +509,41 @@ export function bindRemoteSessions(context: vscode.ExtensionContext, folder: str
 export interface RemoteSessionsTestDoor {
   /** Replace the bound road's ssh call; `undefined` puts `runRemote` back. */
   readonly replaceRun: (run: RoadSeams['run'] | undefined) => void;
+  /** TEST ONLY. Replace the modal of the permission's question by an answer (`true`: *Allow reading*; `false`: *Not now*), no dialog is shown; `undefined` puts the modal back. */
+  readonly replaceQuestion: (raise: (() => Promise<boolean>) | undefined) => void;
   readonly read: RemoteSessions['read'];
   readonly pickedOf: RemoteSessions['pickedOf'];
   /** What the context key `coai.terminalReadsSession` was last set to, or nothing before the first set. */
   readonly readsKey: () => boolean | undefined;
   /** The product's own commit: a scenario gives a host its answer the way a press does. */
   readonly commit: RemoteSessions['commitHost'];
-  readonly admit: RemoteSessions['admitHost'];
+  /** The one door. */
+  readonly may: RemoteSessions['may'];
+  /** The keeper's own *Allow* and *Withdraw*: a scenario gives and withdraws the way a press does, with no modal. */
+  readonly allow: HostKeeper['allow'];
+  readonly withdraw: RemoteSessions['withdraw'];
+  readonly permission: RemoteSessions['permission'];
+  /** The names of this side's withdrawal files, read now. */
+  readonly withdrawnFiles: () => Promise<readonly string[]>;
   readonly standings: RemoteSessions['hostStandings'];
-  /** What is stored, as it is, for the `finally`: the list, and the TEXT of this side's refusals file (`undefined` when there is none). */
-  readonly stored: () => Promise<{ readonly list: unknown; readonly file: string | undefined }>;
+  /** What is stored, as it is, for the `finally`: the list, the state row, the TEXT of the file, and every withdrawal file with its text. */
+  readonly stored: () => Promise<StoredBefore>;
   /**
-   * TEST ONLY. Puts both back whole — the list by one raw write, the file by one raw write or a removal — removes every marker and
-   * the lock, empties what this window holds as not saved and what it remembers of the file, and sends the change signal a commit sends.
+   * TEST ONLY. Puts all four back by raw writes, removes every other withdrawal file, every marker and the lock, empties what this window holds as
+   * not saved and what it remembers of the file, and sends the change signal a commit sends.
    */
-  readonly restore: (before: { readonly list: unknown; readonly file: string | undefined }) => Promise<void>;
+  readonly restore: (before: StoredBefore) => Promise<void>;
   /** The Stop, through the product's own road. */
   readonly stopRound: RemoteSessions['stopRound'];
   readonly startRound: RemoteSessions['startRound'];
   readonly roundStop: RemoteSessions['roundStop'];
+}
+
+export interface StoredBefore {
+  readonly list: unknown;
+  readonly row: unknown;
+  readonly file: string | undefined;
+  readonly withdrawn: readonly { readonly name: string; readonly text: string }[];
 }
 
 /** The file's text; `undefined` only when there is no file. Any other error is thrown, so a scenario does not take a file it could not read for a missing one. */
@@ -435,25 +555,48 @@ const textOrNothing = (path: string): Promise<string | undefined> =>
     throw error;
   });
 
+const namesOf = async (folder: string, prefix: string): Promise<readonly string[]> =>
+  (await readdir(folder).catch(() => [] as string[])).filter((one) => one.startsWith(prefix)).sort(byCodeUnit);
+
+/** The withdrawal files of the folder with their text: raw reads, for the `finally` of a scenario only. */
+async function withdrawnOf(folder: string): Promise<StoredBefore['withdrawn']> {
+  const names = await namesOf(folder, WITHDRAWN_PREFIX);
+
+  return Promise.all(names.map(async (name) => ({ name, text: (await textOrNothing(join(folder, name))) ?? '' })));
+}
+
+async function restoreFiles(folder: string, before: StoredBefore): Promise<void> {
+  if (before.file === undefined) {
+    await rm(join(folder, REFUSED_FILE), { force: true });
+  } else {
+    await writeFile(join(folder, REFUSED_FILE), before.file, 'utf8');
+  }
+  for (const name of (await readdir(folder).catch(() => [] as string[])).filter((one) => one.startsWith(MARKER_PREFIX) || one.startsWith(WITHDRAWN_PREFIX) || one.endsWith('.lock'))) {
+    await rm(join(folder, name), { force: true });
+  }
+  for (const one of before.withdrawn) {
+    await writeFile(join(folder, one.name), one.text, 'utf8');
+  }
+}
+
 export const testDoorOf = (sessions: RemoteSessions, state: vscode.Memento, folder: string): RemoteSessionsTestDoor => ({
   replaceRun: (run) => { boundRun = run ?? runRemote; },
+  replaceQuestion: (raise) => { boundQuestion = raise; },
   read: sessions.read,
   pickedOf: sessions.pickedOf,
   readsKey: () => lastKey,
   commit: sessions.commitHost,
-  admit: sessions.admitHost,
+  may: sessions.may,
+  allow: () => sessions.keeper.allow(),
+  withdraw: sessions.withdraw,
+  permission: sessions.permission,
+  withdrawnFiles: () => namesOf(folder, WITHDRAWN_PREFIX),
   standings: sessions.hostStandings,
-  stored: async () => ({ list: state.get(TERMINAL_HOSTS_KEY), file: await textOrNothing(join(folder, REFUSED_FILE)) }),
+  stored: async () => ({ list: state.get(TERMINAL_HOSTS_KEY), row: state.get(STATE_KEY), file: await textOrNothing(join(folder, REFUSED_FILE)), withdrawn: await withdrawnOf(folder) }),
   restore: async (before) => {
     await state.update(TERMINAL_HOSTS_KEY, before.list);
-    if (before.file === undefined) {
-      await rm(join(folder, REFUSED_FILE), { force: true });
-    } else {
-      await writeFile(join(folder, REFUSED_FILE), before.file, 'utf8');
-    }
-    for (const name of (await readdir(folder).catch(() => [] as string[])).filter((one) => one.startsWith(MARKER_PREFIX) || one.endsWith('.lock'))) {
-      await rm(join(folder, name), { force: true });
-    }
+    await state.update(STATE_KEY, before.row);
+    await restoreFiles(folder, before);
     sessions.keeper.forgetHeld();
     void setReadsKey(sessions);
     // The raw writes above sent no change signal: tell the listeners (the accounts window's known hosts and generation) what the store now holds, as a commit does.

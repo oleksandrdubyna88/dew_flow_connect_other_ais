@@ -23,12 +23,8 @@ export const MODEL_KEYS: readonly string[] = [
   'chatPresetsMoved', 'chatModelName',
 ];
 
-/** The setting that lets the accounts round allow a host that has no answer by itself. */
-export const ALLOW_NEW_HOSTS_KEY = 'terminalAccountsAllowNewHosts';
-
 /**
- * The settings that SWITCH OFF a protection of the person — a refusal the server makes, or the question before a host is read over ssh —
- * read from the person's own layer too.
+ * The settings that SWITCH OFF a protection of the person — a refusal the server makes — read from the person's own layer too.
  *
  * <p>`kimiAllowNetworkSignIn` admits a Kimi sign-in folder on network storage, where a Kimi on another machine can refresh the
  * same rotating token and sign this one out. A cloned repository's `.vscode/settings.json` must not be able to say "yes" for
@@ -38,7 +34,7 @@ export const ALLOW_NEW_HOSTS_KEY = 'terminalAccountsAllowNewHosts';
  * a key here names no model and no program: it must not raise the "a repository cannot choose a program for you" notice
  * ({@link ignoredWorkspaceValues} walks {@link MODEL_KEYS} only).</p>
  */
-export const SAFETY_KEYS: readonly string[] = ['kimiAllowNetworkSignIn', ALLOW_NEW_HOSTS_KEY];
+export const SAFETY_KEYS: readonly string[] = ['kimiAllowNetworkSignIn'];
 
 /**
  * The settings read from the layers that HOLD a value — folder, workspace, user — never from the registry's default.
@@ -147,16 +143,4 @@ function ignoredIn(key: string, inspected: Inspected = {}): readonly IgnoredValu
  */
 export function copyWouldReplace(ignored: IgnoredValue, overlay: Readonly<Record<string, unknown>> | undefined): boolean {
   return overlay === undefined ? ignored.userHasOne : overlay[ignored.key] !== undefined;
-}
-
-/**
- * Whether the accounts round may allow a host that has no answer by itself: `true` for `true` and for `undefined`, `false` for
- * everything else (`false`, `'true'`, `0`, an object). `undefined` is a window that still runs an older settings registry and handed
- * over no default; the default of this build is on.
- */
-export const allowNewHostsFrom = (value: unknown): boolean => value === true || value === undefined;
-
-/** The repository layer that holds a value for `key` — folder first, the one VS Code would have applied — or nothing. */
-export function ignoredLayerOf(inspect: Inspect, key: string): 'workspace' | 'folder' | undefined {
-  return ignoredIn(key, inspect(key))[0]?.layer;
 }
