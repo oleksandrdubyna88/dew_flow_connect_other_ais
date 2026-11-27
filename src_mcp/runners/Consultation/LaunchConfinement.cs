@@ -43,6 +43,9 @@ public abstract record LaunchConfinement
 
         /// <summary>The vendor whose CLI this coder turn runs on (epoch 3 E3 s7 t1): the id of a <see cref="ICoderVendor"/>. claude by default; a resume handle made for another vendor is refused (<see cref="CoderLaunches.WhyNot"/>).</summary>
         public string Vendor { get; init; } = CoderBoundaryTable.Claude;
+
+        /// <summary>The folder the vendor's unit starts in (epoch 3 E3 s6 t3, <see cref="ICoderVendor.WorkingDirectory"/>): the worktree for claude, the guard folder for agy. Empty when the launcher did not say; a vendor whose folder is not the worktree refuses to build a launch without it.</summary>
+        public string WorkFolder { get; init; } = string.Empty;
     }
 
     public static LaunchConfinement AsShipped { get; } = new Shipped();

@@ -85,7 +85,7 @@ public sealed class TheCoderEpicAcceptanceTests
             return new World(repo, baseSha);
         }
 
-        /// <summary>A real server on this world's data folder: the coder's list names a claude model AND a codex one (the coder keeps the claude one), the reviewers are codex and gemini, every CLI is the fake.</summary>
+        /// <summary>A real server on this world's data folder: the coder's list names a claude model AND an agy one (the route holds both: agy is launchable since its flip, and the agy CLI is the fake too, so no real CLI is named here), the reviewers are codex and gemini, every CLI is the fake.</summary>
         internal System.Diagnostics.Process Server() => StdioServer.Start(
             Data.Path,
             logLevel: "information",
@@ -93,8 +93,9 @@ public sealed class TheCoderEpicAcceptanceTests
             [
                 ("COAI_ROLE_LAUNCHER", "setsid"),
                 ("COAI_ROLE_CLAUDE_PERSON_SIGN_IN", "1"),
-                ("COAI_ROLES_MODELS", new JsonObject { ["coder"] = new JsonArray(new JsonObject { ["model"] = "gpt-5.5", ["vendor"] = "codex" }, new JsonObject { ["model"] = "sonnet", ["vendor"] = "claude" }) }.ToJsonString()),
+                ("COAI_ROLES_MODELS", new JsonObject { ["coder"] = new JsonArray(new JsonObject { ["model"] = "gemini-4-argon-medium", ["vendor"] = "agy" }, new JsonObject { ["model"] = "sonnet", ["vendor"] = "claude" }) }.ToJsonString()),
                 ("COAI_ROLE_CLAUDE_CLI", RoleJobWorld.FakeCli),
+                ("COAI_ROLE_AGY_CLI", RoleJobWorld.FakeCli),
                 ("COAI_PROVIDERS", "codex,gemini"),
                 ("COAI_ROUND_WORKTREES", _temp.At("round-trees")),
                 ("COAI_EXE_CODEX", RoleJobWorld.FakeCli),
@@ -225,7 +226,7 @@ public sealed class TheCoderEpicAcceptanceTests
     }
 
     [Fact]
-    public async Task D2_TheRouteHoldsClaudeModelsOnly_TheFakeSawResumeOnce_NothingOutsideTheWorktreeChanged_FilesChangedIsTheDiffOfBaseToHead()
+    public async Task D2_TheRouteHoldsTheClaudeAndTheAgyModel_OnlyClaudeIsLaunched_TheFakeSawResumeOnce_NothingOutsideTheWorktreeChanged_FilesChangedIsTheDiffOfBaseToHead()
     {
         await using var world = await World.CreateAsync(
         [
@@ -240,8 +241,8 @@ public sealed class TheCoderEpicAcceptanceTests
             await StdioServer.InitializeAsync(server);
             var started = await world.StartAsync(server, 2);
             var jobId = started.GetProperty("jobId").GetString()!;
-            // The codex model of the list is not a coder's model in this epoch: the route keeps the claude one.
-            started.GetProperty("route").EnumerateArray().Select(model => model.GetString()).Should().Equal(["claude/sonnet"]);
+            // The agy model of the list is a coder's model since the flip of agy (s8 t6): the route holds it after the claude one, which answers first here and is the only one launched.
+            started.GetProperty("route").EnumerateArray().Select(model => model.GetString()).Should().Equal(["claude/sonnet", "agy/gemini-4-argon-medium"]);
 
             var status = await world.WaitEndAsync(server, jobId);
 

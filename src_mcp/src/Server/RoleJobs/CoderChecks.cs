@@ -127,6 +127,12 @@ internal sealed class CoderChecks(IRoleRun run, GitHistory git, CoderOsLayer lay
             return Unverified(turn, head, before.Sentence.Length > 0 ? before.Sentence : $"the worktree is at {before.Head}, not at the commit {head} the checks were to run on; nothing was run");
         }
 
+        // A FIFO (or another entry that is not a regular file) at the worktree's toolchain file: the host never waits on it, and the round is not trusted (pass 9, M20). `checks-changed-tree` and not `coder-boundary`: a FIFO there proves no command of the model — a check can make it — so no boundary is said to have broken; it says the tree is not what coai committed and expected.
+        if (ToolchainEntryProblem(afterRound: false) is { Length: > 0 } odd)
+        {
+            return Unverified(turn, head, odd);
+        }
+
         var logs = Path.Combine(run.Folder, "checks", $"round-{turn}");
         var result = await new ChecksAtBase(git, new CheckRunner(layer.Launcher, layer.ChecksBoundary()))
             .RunCoderJobAsync(new DiskWorkFolder(tree.Root), baseSha, layer.Job, logs, Jobs, ct, step => RecordStep(logs, step), Facts());
@@ -134,6 +140,11 @@ internal sealed class CoderChecks(IRoleRun run, GitHistory git, CoderOsLayer lay
         RecordRefusal(result, logs);
         RecordDefinitions(result, logs);
         ct.ThrowIfCancellationRequested();
+        if (ToolchainEntryProblem(afterRound: true) is { Length: > 0 } made)
+        {
+            return Unverified(turn, head, made, Steps(result));
+        }
+
         var after = await StateAsync(git, tree, ct);
         if (Moved(before, after) is { Length: > 0 } moved)
         {
@@ -267,6 +278,35 @@ internal sealed class CoderChecks(IRoleRun run, GitHistory git, CoderOsLayer lay
         {
             run.Log.Warning("role job {JobId}: the record of the check unit {Part} could not be written", run.Request.JobId, part);
         }
+    }
+
+    /// <summary>The sentence that says the worktree's toolchain file is an entry that is not a regular file, or empty. The read is by the one road for entries a unit can write (<see cref="DiskWorkFolder"/>), so it never waits.</summary>
+    /// <remarks>
+    /// Two looks, and each says what is known of its place (pass 10, S72): BEFORE the round it is what the coder's turn left — no check ran between the end of the turn and the look, so no check is named; AFTER the round it was not there before the round, so a check of this round left it. A read that the disk refuses
+    /// (a check ran <c>chmod 000</c> on the file) is an entry that cannot be read too, and ends the job the same way — never an exception that ends it <c>runner-error</c> with no envelope (S73).
+    /// </remarks>
+    private string ToolchainEntryProblem(bool afterRound)
+    {
+        string reason;
+        try
+        {
+            if (new DiskWorkFolder(tree.Root).Read(CoaiMcp.Core.Toolchain.ToolchainTables.FilePath, CoaiMcp.Core.Toolchain.ToolchainTables.MaxBytes) is not CoaiMcp.Core.Work.WorkFile.NotRegular odd)
+            {
+                return string.Empty;
+            }
+
+            reason = odd.Reason;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            reason = $"the disk refused the read, {e.GetType().Name}";
+        }
+
+        var name = CoaiMcp.Core.Toolchain.ToolchainTables.FilePath;
+
+        return afterRound
+            ? $"the worktree's {name} is not a regular file that can be read ({reason}); it was not so before the round, so a check of this round left it, and what the round said is not trusted"
+            : $"the worktree's {name} is not a regular file that can be read ({reason}); the coder's turn left it — no check ran after the turn — so nothing was run";
     }
 
     private CoderChecksRound Unverified(int turn, string head, string sentence, IReadOnlyList<CoderCheckStep>? steps = null) =>

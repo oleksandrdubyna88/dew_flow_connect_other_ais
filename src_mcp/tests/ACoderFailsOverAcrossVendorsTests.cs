@@ -109,6 +109,10 @@ public sealed class ACoderFailsOverAcrossVendorsTests
         rig.Vendors = set;
         rig.Rig.Setting("COAI_ROLE_CODEX_CLI", RoleJobWorld.FakeCli).Setting("COAI_ROLE_AGY_CLI", RoleJobWorld.FakeCli);
 
+        // A vendor that signs in with a file is given a copy of the person's own file (s7 t6): the stand-in for the real home holds one for each, with nothing in it the recipe of these stand-ins keeps.
+        rig.RealHomeFile(".codex/auth.json", "{}");
+        rig.RealHomeFile(".agy/auth.json", "{}");
+
         return rig;
     }
 
@@ -128,20 +132,18 @@ public sealed class ACoderFailsOverAcrossVendorsTests
         _ => null,
     };
 
-    private static string Home(CoderRig rig, RoleJobRecord job) => Path.Combine(rig.JobFolder(job), "coder", "home");
+    private static string Home(CoderRig rig, RoleJobRecord job, string vendor = "claude") => Path.Combine(rig.JobFolder(job), "coder", vendor, "home");
 
     private static string CredentialsInUnit(CoderRig rig, RoleJobRecord job) => Path.Combine(Home(rig, job), ".claude", ".credentials.json");
 
-    private static string CopyPath(CoderRig rig, RoleJobRecord job, string vendor) => Path.Combine(Home(rig, job), $".{vendor}", "auth.json");
+    private static string CopyPath(CoderRig rig, RoleJobRecord job, string vendor) => Path.Combine(Home(rig, job, vendor), $".{vendor}", "auth.json");
 
     /// <summary>What FakeCli tried to read inside each unit, launch by launch: path, what it saw (<c>read</c>, <c>absent</c>, <c>denied</c>) and the first characters.</summary>
     private static IReadOnlyList<IReadOnlyDictionary<string, (string Saw, string Text)>> ReadsOf(CoderRig rig, RoleJobRecord job)
     {
-        var folder = Path.Combine(rig.JobTemp(job), "launches", "sidecars");
-
         return
         [
-            .. new DirectoryInfo(folder).EnumerateFiles("*.reads").OrderBy(file => file.CreationTimeUtc).ThenBy(file => file.LastWriteTimeUtc)
+            .. rig.LaunchFolders(job).Select(folder => Path.Combine(folder, "sidecars")).Where(Directory.Exists).SelectMany(folder => new DirectoryInfo(folder).EnumerateFiles("*.reads")).OrderBy(file => file.CreationTimeUtc).ThenBy(file => file.LastWriteTimeUtc)
                 .Select(file => (IReadOnlyDictionary<string, (string, string)>)File.ReadAllLines(file.FullName).Select(line => line.Split('\t')).ToDictionary(parts => parts[0], parts => (parts[1], parts.Length > 2 ? parts[2] : string.Empty))),
         ];
     }
@@ -265,7 +267,7 @@ public sealed class ACoderFailsOverAcrossVendorsTests
         if (vendorOfLast != "claude")
         {
             (vendorOfLast == "codex" ? codexVendor : agyVendor).Expected.Should().Equal(string.Empty, finalSession);
-            (vendorOfLast == "codex" ? agyVendor : codexVendor).Expected.Should().BeEmpty("a vendor that is not the last one is not asked about the session of the last");
+            (vendorOfLast == "codex" ? agyVendor : codexVendor).Expected.Should().NotContain(session => session.Length > 0, "a vendor that is not the last one is asked only about its own turn 0 — a launch that ended badly is checked too (pass 5, M11) — and never about the session of the last");
         }
 
         // The unit of each vendor, from its record: claude's sign-in bind is in the unit of claude and of no other vendor, and another vendor's unit hides the claude key pool.
@@ -275,7 +277,7 @@ public sealed class ACoderFailsOverAcrossVendorsTests
             var vendor = attemptVendor[attempt];
             var binds = properties.Where(property => property.StartsWith("BindReadOnlyPaths=", StringComparison.Ordinal) && property.EndsWith(".claude/.credentials.json", StringComparison.Ordinal)).ToList();
             binds.Should().HaveCount(vendor == "claude" ? 1 : 0, $"the unit of attempt {attempt} ({vendor}) holds {(vendor == "claude" ? "claude's" : "no claude")} sign-in");
-            properties.Where(property => property.Contains("/.codex", StringComparison.Ordinal) || property.Contains("/.agy", StringComparison.Ordinal)).Should().BeEmpty("no property of a unit names another vendor's sign-in");
+            properties.Where(property => property.StartsWith("Bind", StringComparison.Ordinal) && (property.Contains("/.codex", StringComparison.Ordinal) || property.Contains("/.agy", StringComparison.Ordinal))).Should().BeEmpty("no unit BINDS another vendor's sign-in (the real files are hidden: InaccessiblePaths)");
             if (vendor != "claude")
             {
                 properties.Should().Contain(property => property.StartsWith("InaccessiblePaths=", StringComparison.Ordinal) && property.Contains("/keys", StringComparison.Ordinal), "the key pool of claude is hidden from the unit of another vendor");
@@ -283,7 +285,7 @@ public sealed class ACoderFailsOverAcrossVendorsTests
         }
 
         // The variable names of each unit, from inside: its vendor's own, none of another's.
-        var names = KeyRig.EnvNamesOf(Path.Combine(rig.JobTemp(job), "launches"));
+        var names = KeyRig.EnvNamesOf(rig.LaunchFolders(job));
         names.Should().HaveCount(launches.Count);
         for (var i = 0; i < launches.Count; i++)
         {
@@ -372,21 +374,13 @@ public sealed class ACoderFailsOverAcrossVendorsTests
     }
 
     [Fact]
-    public async Task D2_TheProductsOwnTable_HoldsTheVerdictShipAndTheMarkLaunchableOffForCodexAndAgy_SoNothingLaunchesThem()
+    public void D2_TheProductsOwnTable_HoldsTheVerdictShipAndTheMarkLaunchableOnForCodexAndForAgy()
     {
-        await using var rig = await CoderRig.CreateAsync(needsLayer: false);
-        var service = ServiceFor(rig, CoderVendors.Shipped);
-
-        foreach (var (vendor, model) in new[] { ("codex", "terra"), ("agy", Argon) })
-        {
-            var named = Parse(await service.StartAsync(RoleDescriptors.Coder, rig.Repo, CoderRig.TaskFile, null, model, null, null, null, TestContext.Current.CancellationToken));
-
-            named.GetProperty("error").GetString().Should().StartWith($"the coder cannot run {model} on {vendor}: ").And.Contain("not launchable yet").And.NotContain("release", "the refusal is the mark launchable, which is off, never a missing release");
-        }
-
-        rig.World.Store.JobIds().Should().BeEmpty();
-        CoderVendors.Shipped.Launchable.Should().Equal("claude");
-        CoderVendors.Shipped.Table.Vendors.Should().OnlyContain(row => row.Verdict == "ship" && !row.Launchable && row.Measured.Count == 1, "both marks are off, and the history of each measure is there and decides nothing");
+        CoderVendors.Shipped.Launchable.Should().Equal("claude", "codex", "agy");
+        CoderVendors.Shipped.Table.Vendors.Should().OnlyContain(row => row.Verdict == "ship" && row.Measured.Count == 1, "the history of each measure is there and decides nothing");
+        CoderVendors.Shipped.Table.Row("codex")!.Launchable.Should().BeTrue("the flip commit of s5 t5");
+        CoderVendors.Shipped.Table.Row("agy")!.Launchable.Should().BeTrue("the flip commit of s8 t6");
+        CoderVendors.Shipped.Resolve("agy").Should().BeOfType<CoderVendorResolution.Launchable>();
     }
 
     private static string CoderList => """{"coder":[{"model":"sonnet","vendor":"claude"},{"model":"opus","vendor":"claude"},{"model":"terra","vendor":"codex"},{"model":"gemini-4-argon-medium","vendor":"agy"}]}""";
@@ -424,10 +418,10 @@ public sealed class ACoderFailsOverAcrossVendorsTests
         ended.State.Should().Be(RoleJobStates.Succeeded, ended.Reason);
         var reads = ReadsOf(rig, job);
         reads.Should().HaveCount(2);
-        reads[0][CopyPath(rig, job, "codex")].Saw.Should().Be("absent", "the first launch of codex finds no copy of its own yet: the test vendor makes it while it runs (CONTROL: the next read would see it)");
+        reads[0][CopyPath(rig, job, "codex")].Saw.Should().Be("read", "the first launch of codex finds the copy coai made for it from the real file (s7 t6)");
         reads[1][CopyPath(rig, job, "codex")].Saw.Should().Be("absent", "the copy codex's unit left in the job's home is deleted before agy's unit starts");
         File.Exists(CopyPath(rig, job, "codex")).Should().BeFalse();
-        File.ReadAllText(CopyPath(rig, job, "agy")).Should().Contain(AgyCopy, "the copy of the vendor that is running is not touched");
+        File.Exists(CopyPath(rig, job, "agy")).Should().BeFalse("the copy of the vendor that ran last is deleted when the job ends (s7 t6): no sign-in copy is kept after a job");
     }
 
     [Fact]
@@ -437,7 +431,7 @@ public sealed class ACoderFailsOverAcrossVendorsTests
         await using var rig = await RigAsync(set);
         var job = rig.NewJob(route: ["codex/terra", $"agy/{Argon}"]);
         // The vendor leaves a FOLDER where its copy belongs: coai cannot delete it as a file, and the next vendor must not start with it there.
-        rig.Says("terra", Falls("terra", [], new Dictionary<string, string> { [".codex/auth.json/inner"] = CodexCopy })).Says(Argon, Writes(CoderRig.Green, AgyLast, []));
+        rig.Says("terra", Falls("terra", [], new Dictionary<string, string> { [".codex/auth.json#folder"] = CodexCopy })).Says(Argon, Writes(CoderRig.Green, AgyLast, []));
 
         var (_, ended) = await rig.RunAsync(job);
 
@@ -653,11 +647,33 @@ public sealed class ACoderFailsOverAcrossVendorsTests
         rig.Launches(job).Select(ModelOf).Should().Equal("sonnet", "terra", Argon);
     }
 
+    [Fact]
+    public async Task M9_ATokenOfTheCopy_PrintedInTheAnswer_EndsTheJobCoderBoundary_NamesAnId_AndIsInNoFileOfTheJobsRecord()
+    {
+        const string Token = "made-up-printed-access-token-xyz";
+        var recipe = new CoderSignInRecipe.CopyForJob(".codex/auth.json", ["tokens/access_token"], new Dictionary<string, string>(), string.Empty, "gate") { TokenFields = ["tokens/access_token"] };
+        var codexVendor = new CrossVendor("codex", recipe);
+        var set = Set(Verdict.Ship, Verdict.Refuse, codexVendor, new CrossVendor("agy"));
+        await using var rig = await RigAsync(set);
+        rig.RealHomeFile(".codex/auth.json", $"{{\"tokens\":{{\"access_token\":\"{Token}\"}}}}");
+        var job = rig.NewJob(route: ["codex/terra"]);
+        // The coder reads its own copy and puts the token into the notes of an otherwise valid report.
+        rig.Says("terra", new CoderRig.Launch(new Dictionary<string, string> { [CoderRig.StateFile] = CoderRig.Green + "\n" }, CoderRig.Report(notes: "debug: " + Token), Session: CodexLast));
+
+        var (_, ended) = await rig.RunAsync(job);
+
+        (ended.State, ended.Stop).Should().Be((RoleJobStates.Failed, RoleStopWords.CoderBoundary), ended.Reason);
+        ended.Reason.Should().Contain("sign-in-codex-1").And.NotContain(Token);
+        var stored = string.Concat(Directory.EnumerateFiles(rig.World.Store.FolderOf(job.JobId)!.Location, "*", SearchOption.AllDirectories).Select(File.ReadAllText));
+        stored.Should().NotContain(Token, "the token is in no file of the job's record: not a turn file, not the envelope, not the result");
+        stored.Should().Contain("[sign-in copy sign-in-codex-1]", "the mark names the copy, so the record says whose token was printed").And.NotContain("[claude key", "the mark of a vendor that is not claude does not say claude");
+    }
+
     /// <summary>
     /// A vendor that stands in for a real one, with an id the route knows: claude's argv, probe and unit (FakeCli answers as claude), a prompt of its own, a variable NAME of its own in the unit's environment (<c>&lt;ID&gt;_AUTH_FILE</c>, the path of the sign-in copy it would
     /// keep in the job's home), a recipe that says it is a COPY for the job, and a check of its stream that records the session every turn was expected to continue.
     /// </summary>
-    private sealed class CrossVendor(string id) : ICoderVendor
+    private sealed class CrossVendor(string id, CoderSignInRecipe? recipe = null) : ICoderVendor
     {
         public List<string> Expected { get; } = [];
 
@@ -667,7 +683,7 @@ public sealed class ACoderFailsOverAcrossVendorsTests
 
         public string PromptResource => CoderVendors.Claude.PromptResource;
 
-        public CoderSignInRecipe SignIn => new CoderSignInRecipe.CopyForJob($".{id}/auth.json", [], new Dictionary<string, string>(), string.Empty, "gate");
+        public CoderSignInRecipe SignIn => recipe ?? new CoderSignInRecipe.CopyForJob($".{id}/auth.json", [], new Dictionary<string, string>(), string.Empty, "gate");
 
         public IConsultantRuntime Runtime => new ClaudeConsultant(new ClaudeRuntime(), id);
 
@@ -689,15 +705,15 @@ public sealed class ACoderFailsOverAcrossVendorsTests
 
         public IReadOnlyList<string> ResumedArgv(string model, string worktree, string sessionId) => CoderVendors.Claude.ResumedArgv(model, worktree, sessionId);
 
-        public IReadOnlyList<string> UnitProperties(CoaiMcp.Runners.Toolchain.BoundaryHost host, CoaiMcp.Runners.Toolchain.BoundaryJob job, CoaiMcp.Runners.Toolchain.CoderProgram program, TimeSpan runtimeMax) => CoderVendors.Claude.UnitProperties(host, job, program, runtimeMax);
+        public IReadOnlyList<string> UnitProperties(CoaiMcp.Runners.Toolchain.BoundaryHost host, CoaiMcp.Runners.Toolchain.BoundaryJob job, CoaiMcp.Runners.Toolchain.CoderProgram program, TimeSpan runtimeMax) => CoaiMcp.Runners.Toolchain.CoderUnit.Properties(host, job, program, runtimeMax, id); //erties(host, job, program, runtimeMax);
 
         public string WorkingDirectory(CoaiMcp.Runners.Toolchain.BoundaryJob job) => CoderVendors.Claude.WorkingDirectory(job);
 
         public IReadOnlyList<KeyValuePair<string, string>> Environment(CoaiMcp.Runners.Toolchain.BoundaryHost host, CoaiMcp.Runners.Toolchain.BoundaryJob job) =>
-            [.. CoderVendors.Claude.Environment(host, job), new($"{id.ToUpperInvariant()}_AUTH_FILE", Path.Combine(job.CoderHomeFolder, $".{id}", "auth.json"))];
+            [.. CoaiMcp.Runners.Toolchain.CoderUnit.Environment(host, job, id), new($"{id.ToUpperInvariant()}_AUTH_FILE", Path.Combine(job.CoderHomeOf(id), $".{id}", "auth.json"))];
 
         public CoderHomeLayout Home(CoaiMcp.Runners.Toolchain.BoundaryJob job) =>
-            new(job.CoderHomeFolder, Path.Combine(job.CoderHomeFolder, $".{id}", "auth.json"), [.. job.CoderFolders, Path.Combine(job.CoderHomeFolder, $".{id}")]);
+            new(job.CoderHomeOf(id), Path.Combine(job.CoderHomeOf(id), $".{id}", "auth.json"), [.. job.CoderFoldersOf(id), Path.Combine(job.CoderHomeOf(id), $".{id}")]);
 
         public CoaiMcp.Runners.Toolchain.CoderProgram Program(string executable, string path, CoaiMcp.Runners.Toolchain.BoundaryJob job) => CoderVendors.Claude.Program(executable, path, job);
     }

@@ -41,6 +41,7 @@
     <EmbeddedResource Include="..\..\shared\kimi-model-blocks.json" LogicalName="CoaiMcp.Runners.kimi-model-blocks.json" />
     <!-- The ONE table of the codex and agy coder verdicts and measured releases (epoch 3 E3 s7 t1, judgement S5): read by CoderBoundaryTable; CoderVendors decides from it and from nothing else. Embedded for the same reason. -->
     <EmbeddedResource Include="..\..\shared\coder-boundary-releases.json" LogicalName="CoaiMcp.Runners.coder-boundary-releases.json" />
+    <EmbeddedResource Include="..\..\shared\coder-report.codex.schema.json" LogicalName="CoaiMcp.Runners.coder-report.codex.schema.json" />
   </ItemGroup>
 
   <ItemGroup>

@@ -20,6 +20,9 @@ public abstract record WorkFile
 
     /// <summary>The bytes are not UTF-8.</summary>
     public sealed record NotUtf8 : WorkFile;
+
+    /// <summary>The entry is there and is not a regular file that can be read — a FIFO, a socket, a device — or a read of it did not finish (pass 9, M20). It is never waited on; the reason is a sentence with no content of the entry.</summary>
+    public sealed record NotRegular(string Reason) : WorkFile;
 }
 
 /// <summary>

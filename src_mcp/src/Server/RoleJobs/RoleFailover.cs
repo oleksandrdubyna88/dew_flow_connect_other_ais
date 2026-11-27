@@ -74,7 +74,11 @@ internal static class RoleAnswers
 }
 
 /// <summary>The session an attempt's answer came from: the model, the handle its first turn reported (empty when the vendor named none) and the key the session runs on (<see cref="RoleKey.KeyId"/>; empty for a launch with no key) — every later turn of the session uses the SAME key — and the CLI release the session ran with (a record, never a condition).</summary>
-internal sealed record RoleSession(ModelRef Model, string Handle, string KeyId = "", Server.Keys.ClaudeKeySecret? Secret = null, string CliVersion = "");
+internal sealed record RoleSession(ModelRef Model, string Handle, string KeyId = "", Server.Keys.ClaudeKeySecret? Secret = null, string CliVersion = "")
+{
+    /// <summary>What a cumulative vendor had reported when the session's turn 0 (and its repair turns) ended: the counter the first fix turn is measured against, so each fix turn's usage line holds that turn only.</summary>
+    public ConsultationBilled Counter { get; init; } = new();
+}
 
 /// <summary>What a role made of an attempt AFTER the model's first valid answer (<see cref="RoleFailover.Follow"/>): the job's end, or a stop of the same model that goes on to the next one.</summary>
 internal abstract record RoleFollowed
@@ -396,6 +400,14 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
 
             if (ct.IsCancellationRequested)
             {
+                // A turn the job's own budget cut is checked too, with a time of its own: a boundary outranks the word of the budget (M11 leg a).
+                if (Coder is not null && await CoderTurnCheck.StopOfACutTurnAsync(Vendors, model, launched, turn == 0 ? string.Empty : attempt.Handle, OsLayer?.Job) is { } broken)
+                {
+                    KeepTurn(attempt, turn, launched);
+
+                    return Finished(model, attempt, launched, broken, string.Empty);
+                }
+
                 return Interrupted(model, attempt, launched);
             }
 
@@ -455,7 +467,7 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
     /// </summary>
     private async Task<Ended> FollowedAsync(ModelRef model, AttemptRun attempt, CancellationToken ct)
     {
-        var session = new RoleSession(model, attempt.FirstHandle, attempt.KeyId, attempt.Secret, attempt.CliVersion);
+        var session = new RoleSession(model, attempt.FirstHandle, attempt.KeyId, attempt.Secret, attempt.CliVersion) { Counter = attempt.CounterBefore };
         Session = session;
         RoleFollowed followed;
         try
@@ -534,15 +546,15 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
             return new Read(new RoleStop(RoleStopWords.TreeChanged, Redaction.SafeText(sentence, Redaction.TitleLimit), ConsultFailureKinds.TreeChanged, false, false), string.Empty);
         }
 
+        // The check of the turn's own stream, before the role reads the answer and so before anything of the turn is committed (a coder only; the vendor's seam says what is wrong). First: a denied action leaves an empty answer.
+        if (Coder is not null && CoderTurnCheck.StopFirst(Vendors, model, launched, expectedSession, OsLayer?.Job) is { } wrong)
+        {
+            return new Read(wrong, string.Empty);
+        }
+
         if (StopOfLaunch(model, launched) is { } stopped)
         {
             return new Read(stopped, string.Empty);
-        }
-
-        // The check of the turn's own stream, before the role reads the answer and so before anything of the turn is committed (a coder only; the vendor's seam says what is wrong).
-        if (Coder is not null && CoderTurnCheck.Stop(Vendors, model, launched, expectedSession) is { } wrong)
-        {
-            return new Read(wrong, string.Empty);
         }
 
         var launch = launched.Launch!;
@@ -645,7 +657,7 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
 
     private string Evidence(string folder, int n, RoleLaunched launched, RoleStop stop)
     {
-        var text = launched.OsStop is not null ? stop.Reason
+        var text = launched.OsStop is not null || stop.NoEvidence ? stop.Reason
             : launched.Launch is { } launch
                 ? string.IsNullOrWhiteSpace(launch.Answer) ? ConsultFailures.EvidenceOf(launch) : launch.Answer!
                 : stop.Reason;
@@ -680,8 +692,7 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
             return;
         }
 
-        var share = launched.Runtime.UsageIsCumulative ? ConsultationUsage.Less(launch.Usage, attempt.CounterBefore) : launch.Usage;
-        RecordLedger(run, model, launched, stop, attempt.TurnEnded - attempt.TurnBegun, share);
+        RecordLedger(run, model, launched, stop, attempt.TurnEnded - attempt.TurnBegun, attempt.LastShare);
     }
 
     /// <summary>
@@ -736,6 +747,9 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
         /// <summary>What the attempt's launches consumed together — a cumulative vendor's counter is not summed (<see cref="ConsultationUsage.OfTwoLaunches"/>).</summary>
         public Usage Total { get; private set; } = Usage.None;
 
+        /// <summary>What the last launch consumed by itself: the report of a cumulative vendor cut by the counter before it, else the report.</summary>
+        public Usage LastShare { get; private set; } = Usage.None;
+
         /// <summary>The cumulative vendor's counter as the last launch reported it: what the next report is measured against.</summary>
         public ConsultationBilled CounterBefore { get; private set; } = new();
 
@@ -750,6 +764,8 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
             }
 
             var reported = launched.Launch?.Usage ?? Usage.None;
+            // This launch's own share: a cumulative vendor's report is cut by the counter of the launches BEFORE it, and only then does the counter move.
+            LastShare = launched.Runtime.UsageIsCumulative ? ConsultationUsage.Less(reported, CounterBefore) : reported;
             Total = ConsultationUsage.OfTwoLaunches(launched.Runtime.UsageIsCumulative, Total, reported);
             if (ConsultationUsage.CarriesACounter(reported) && launched.Runtime.UsageIsCumulative)
             {

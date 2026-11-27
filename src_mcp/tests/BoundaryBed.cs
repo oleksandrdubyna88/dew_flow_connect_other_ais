@@ -66,6 +66,9 @@ internal sealed class BoundaryBed : IAsyncDisposable
         return mount;
     }
 
+    /// <summary>Names the claude key pool's folder (and its keys file) for the job, as a job started with a data folder does: a unit that does not hide it is refused by its row.</summary>
+    public void UseKeys(string folder, string file = "") => Job = Job with { KeysFolder = folder, KeysFile = file };
+
     /// <summary>Moves the job's folder to <paramref name="root"/> (a folder of the test's own); the folders under the old one are not carried over.</summary>
     public void UseJobRoot(string root) => Job = Job with { JobRoot = root };
 
@@ -76,7 +79,7 @@ internal sealed class BoundaryBed : IAsyncDisposable
     {
         var jobs = Path.Combine(Parent(), "jobs");
         UseJobRoot(Path.Combine(jobs, "job-a"));
-        var other = Path.Combine(jobs, "job-b", "coder", "home");
+        var other = Path.Combine(jobs, "job-b", "coder", "claude", "home");
         Directory.CreateDirectory(other);
         var secret = Path.Combine(other, "transcript.txt");
         File.WriteAllText(secret, "another job's coder home\n");

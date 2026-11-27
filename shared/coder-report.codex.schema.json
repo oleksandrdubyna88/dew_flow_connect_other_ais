@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coai.dev/schemas/coder-report.codex.schema.json",
+  "$comment": "The FLAT variant of shared/coder-report.schema.json that codex's --output-schema accepts (epoch 3 E3 s5 t2; RESULTS_codex_coder.md section 2): the API takes no combinator keywords, so every member of the report is required and a member the status does not use is written as null (V19). coai's own reader (core/Coder/CoderReport.cs) stays the check of a report: only a null of a member the status does not use is read as absent. The tests of ACodexCoderLaunchTests hold this file's members equal to the reader's keys.",
+  "title": "coai coder report (flat)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["status", "reason", "dod", "notes"],
+  "properties": {
+    "status": { "type": "string", "enum": ["ok", "refused"] },
+    "reason": { "type": ["string", "null"] },
+    "dod": {
+      "type": ["array", "null"],
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "met", "evidence"],
+        "properties": {
+          "id": { "type": "string" },
+          "met": { "type": "boolean" },
+          "evidence": { "type": "string" }
+        }
+      }
+    },
+    "notes": { "type": ["string", "null"] }
+  }
+}

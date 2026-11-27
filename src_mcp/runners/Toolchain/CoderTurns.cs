@@ -37,7 +37,7 @@ public sealed class CoderTurns(CoderBoundary boundary, FilesystemInvariant invar
     public Task<CoderTurnOutcome> RunAsync(BoundaryJob job, ProcessRequest request, string part, CancellationToken ct = default) => RunAsync(job, request, part, null, ct);
 
     /// <summary>Launches the coder of <paramref name="vendor"/> (the boundary's own vendor when null — claude unless a test says otherwise): its unit properties, working directory and environment are the seam's.</summary>
-    internal async Task<CoderTurnOutcome> RunAsync(BoundaryJob job, ProcessRequest request, string part, ICoderVendor? vendor, CancellationToken ct = default)
+    internal async Task<CoderTurnOutcome> RunAsync(BoundaryJob job, ProcessRequest request, string part, ICoderVendor? vendor, CancellationToken ct = default, SignInJobs? signIns = null)
     {
         var bound = vendor is null ? boundary : boundary.For(vendor);
         if (WrongWorktree(bound.Vendor.WorkingDirectory(job), job, request) is { Length: > 0 } wrong)
@@ -45,15 +45,43 @@ public sealed class CoderTurns(CoderBoundary boundary, FilesystemInvariant invar
             return new CoderTurnOutcome.Refused(wrong, new BoundaryRecord(BoundaryRecord.UnitBoundary, [], "host", CoderBoundary.NetworkReason, []));
         }
 
-        var admission = await bound.AdmitAsync(job, request.Executable, ct, CoderBoundary.CarriesKey(request));
+        // The sign-in copy of a vendor that signs in with a file, made for this launch and gated (s7 t6): a launch that cannot have its margin is refused here, before anything of it starts.
+        if (signIns is not null && await bound.PrepareSignInAsync(job, request.Executable, request.Timeout + UnitControl.Backstop, signIns, DateTime.UtcNow, ct) is { Length: > 0 } unsigned)
+        {
+            return new CoderTurnOutcome.Refused(unsigned, new BoundaryRecord(BoundaryRecord.UnitBoundary, [], "host", CoderBoundary.NetworkReason, []));
+        }
+
+        // The vendor's own files and tripwires, before EVERY launch (s5 t2): a launch that cannot have them is refused here, before the unit's preflight and before anything of it starts.
+        var original = request;
+        var prepared = bound.PrepareLaunch(job, request);
+        if (prepared.Problem.Length > 0)
+        {
+            return new CoderTurnOutcome.Refused(prepared.Problem, new BoundaryRecord(BoundaryRecord.UnitBoundary, [], "host", CoderBoundary.NetworkReason, []));
+        }
+
+        request = prepared.Request;
+        var admission = await bound.AdmitAsync(job, request.Executable, ct, CoderBoundary.CarriesKey(request), request.Timeout + UnitControl.Backstop);
         if (admission is BoundaryAdmission.Refused refused)
         {
             return new CoderTurnOutcome.Refused(refused.Sentence, refused.Record);
         }
 
+        if (bound.Vendor.BeforeStart(job) is { Length: > 0 } notStarted)
+        {
+            return new CoderTurnOutcome.Refused(notStarted, new BoundaryRecord(BoundaryRecord.UnitBoundary, [], "host", CoderBoundary.NetworkReason, []));
+        }
+
         var before = await SnapshotAsync(job.Tree.MainCheckout, ct);
         var run = await bound.RunAsync((BoundaryAdmission.Admitted)admission, job, request, part, ct);
-        var after = await SnapshotAsync(job.Tree.MainCheckout, ct);
+        if (run.Gone)
+        {
+            // Only from a unit that is gone: with a live one a link could be put at the report between the look and the copy (pass 6, S47).
+            bound.CollectLaunch(job, original, request);
+        }
+
+        // A launch that the caller's cancel cut keeps its result: the snapshot after it is taken with a time of its own, never with the cancelled token (a cancelled one throws, and a throw here would replace the stream of the turn by an empty one; pass 5 re-check, M11 leg a).
+        using var own = new CancellationTokenSource(AfterCancelBudget);
+        var after = await SnapshotAsync(job.Tree.MainCheckout, ct.IsCancellationRequested ? own.Token : ct, ct.IsCancellationRequested);
         var evidence = CoderMainEvidence.Of(before.Snapshot, after.Snapshot, before.Why.Length > 0 ? before.Why : after.Why);
 
         return Classify(run, evidence);
@@ -71,14 +99,21 @@ public sealed class CoderTurns(CoderBoundary boundary, FilesystemInvariant invar
                 : $"The coder launch stands in '{request.WorkingDirectory}', which is not where the coder of job {job.JobId} starts ({expected}); it was not started.";
     }
 
+    private static readonly TimeSpan AfterCancelBudget = TimeSpan.FromSeconds(30);
+
     private sealed record Snapped(FilesystemSnapshot? Snapshot, string Why);
 
     /// <summary>A snapshot of the main checkout, or why there is none. Evidence is best effort and never the reason a job fails; only a cancel passes through.</summary>
-    private async Task<Snapped> SnapshotAsync(string main, CancellationToken ct)
+    private async Task<Snapped> SnapshotAsync(string main, CancellationToken ct, bool afterACancel = false)
     {
         try
         {
             return new Snapped(await invariant.SnapshotAsync(main, ct), string.Empty);
+        }
+        catch (OperationCanceledException) when (afterACancel)
+        {
+            // The snapshot of a cancelled launch has only its own time: when that runs out there is no evidence, and the stream of the turn is still kept.
+            return new Snapped(null, "the snapshot after a cancelled launch ran out of its own time");
         }
         catch (ContextException e)
         {

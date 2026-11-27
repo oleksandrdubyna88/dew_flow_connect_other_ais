@@ -16,9 +16,9 @@
     "howToAdd": "To add a newly verified full id: (1) get the id from the CLI itself - run `claude --model <alias> -p ... --output-format json` once and read the key of `modelUsage` (or read `message.model` in a real transcript); do not copy it from a web page or type it; (2) add { \"id\": ..., \"source\": ... } to verifiedIds with the file or measurement that shows it; (3) add the id to the accepted rows of ARoleModelNameIsCheckedBeforeAnyLaunchTests; (4) build and run the whole MCP suite. Never add a pattern."
   },
   "codex": {
-    "names": [ "astra", "terra", "gpt-6-astra", "gpt-5.6-terra", "sol", "luna", "gpt-5.5", "gpt-5.4" ],
-    "measured": [ "astra", "terra", "gpt-6-astra", "gpt-5.6-terra" ],
-    "source": "measured: research/RESULTS_question_consultant_capabilities.md section 4 (codex-astra = gpt-6-astra, codex-terra = gpt-5.6-terra) and shared/role-defaults.json (astra); named by .agents/rules/common/vendor-routing.md and not measured: sol, luna, gpt-5.5, gpt-5.4."
+    "names": [ "astra", "terra", "gpt-6-astra", "gpt-5.6-terra", "gpt-6.1-terra", "sol", "luna", "gpt-5.5", "gpt-5.4" ],
+    "measured": [ "astra", "terra", "gpt-6-astra", "gpt-5.6-terra", "gpt-6.1-terra" ],
+    "source": "measured: research/RESULTS_question_consultant_capabilities.md section 4 (codex-astra = gpt-6-astra, codex-terra = gpt-5.6-terra), v2/epoch-3/e3-roles-complete/RESULTS_model_lists.md (gpt-6.1-terra, in the list of the CLI itself) and v2/epoch-3/e2-coder-one-task/RESULTS_coder_comparison.md (gpt-6.1-terra, the model of the measured codex coder run), and shared/role-defaults.json (astra); named by .agents/rules/common/vendor-routing.md and not measured: sol, luna, gpt-5.5, gpt-5.4."
   },
   "agy": {
     "names": [

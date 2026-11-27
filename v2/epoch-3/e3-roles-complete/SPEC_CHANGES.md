@@ -402,3 +402,15 @@ is not edited: its 14.1 still says that the agy coder waits for the owner's word
 ids and C9 is worth one model-free probe when the story is built; the probe is not a task and not a condition. (5) To keep
 SPEC.md under 64 KiB, five more records of what is done moved here word for word: C7-E, 0-T, C8-T, and one paragraph each
 under C3-H and C4-U.
+
+## P. What the security verify of the built coder changed (passes 5 to 10, 2026-11-27)
+
+These changes came after the plan gates, from the passes of the security verify (`RESULTS_e3_s7_t3_security_verify.md`); the code holds them and each has a test. None adds a task.
+
+- **The turn check runs for every launch that has a process** (pass 5, M11), not only for a clean exit: on a cut stream (a non-zero exit, a deadline, a cancel) the vendor answers `coder-boundary` for what one side alone proves — a mode sign, an event of a tool outside the three, a DONE event with no record or with a record that is not `allow` — and a boundary wins over the crash that follows. A turn that the JOB's own token cut is checked too, with a time of its own (pass 6, M11 leg a). G15's literal rule is unchanged.
+- **agy's preflight has three more rows** (pass 5, M12): `keys-folder-hidden`, `sign-in-not-in-unit` (the shared fragments) and `other-vendor-folder-hidden`.
+- **Each vendor has its own temp folders** (pass 5, M13), and since pass 6 (R-M15) they lie OUTSIDE every folder a unit binds writable: `<job>/coder-temp/<vendor>/tmp` and `vartmp`. Each name is asked with `Lstat` on the host before every admission.
+- **The refresh of the agy sign-in is forced by a stale scratch copy** (pass 5, M14): coai sets the expiry of ITS OWN copy two hours into the past, so `agy models` refreshes it; the real file is never written. The envelope counts the refreshes. The refresh unit hides the key pool and every real sign-in file and asks the home rule (pass 10, S26, S54).
+- **What a unit can write, the host reads by one road** (passes 7 to 9, M18, M19, M20, S55): `UnitWrittenFile` — no wait, no link, a regular file, a size limit, a time bound. It covers the guard's records, the sign-in copy, the codex rollouts and `report.txt`, `CodexSessions.Clear`, and the worktree's `.coai/toolchain.yaml`. `ICoderVendor.HostReadEntries` names the entries a vendor's unit can write; after every turn each must still be a plain file, else the job ends `coder-boundary`. Every vendor's turn check has one fixed limit of 30 seconds and answers `coder-boundary` when it does not finish.
+- **`checks-changed-tree` has a second meaning** (pass 9, M20): the worktree's toolchain file is a FIFO, or cannot be read. A FIFO there proves no command of the model (a check can make it), so the word is `checks-changed-tree` and not `coder-boundary`: the tree is not what coai committed and expected. It is never sent to the coder and never fails over.
+- **Both vendors are launchable** (codex: s5 t5; agy: s8 t6): the `launchable` marks of `shared/coder-boundary-releases.json` are on.

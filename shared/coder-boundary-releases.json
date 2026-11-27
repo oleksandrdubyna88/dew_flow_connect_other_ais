@@ -1,6 +1,6 @@
 {
  "version": 1,
- "note": "The ONE table of the codex and agy coder verdicts (epoch 3 E3 s7 t1, judgement S5). Filled only from the judgement file. A vendor's coder is launchable only when its verdict is ship AND its row carries launchable: true — the owner's condition of 2026-11-26; the mark is off for both and ONE commit turns it on (s5 t5 for codex, s8 t6 for agy) after the must-changes of the judgement addenda are built and green. The key measured is HISTORY ('measured on X', the heading of its results, the heading of its judgement, the sha256 of the measured programs): nothing compares an installed release or hash with it and no version gates a launch. claude is not here: it is always launchable.",
+ "note": "The ONE table of the codex and agy coder verdicts (epoch 3 E3 s7 t1, judgement S5). Filled only from the judgement file. A vendor's coder is launchable only when its verdict is ship AND its row carries launchable: true — the owner's condition of 2026-11-26; the mark is on for codex (s5 t5) and for agy (s8 t6): ONE commit turned each on, after the must-changes of the judgement addenda are built and green. The key measured is HISTORY ('measured on X', the heading of its results, the heading of its judgement, the sha256 of the measured programs): nothing compares an installed release or hash with it and no version gates a launch. claude is not here: it is always launchable.",
  "judgement": "v2/spikes/RESULTS_codex_agy_write_boundary_judgement.md",
  "shared": [
   { "id": "U1", "class": "pre" },
@@ -20,7 +20,7 @@
   {
    "id": "codex",
    "verdict": "ship",
-   "launchable": false,
+   "launchable": true,
    "results": "v2/spikes/RESULTS_codex_coder.md",
    "measured": [
     {
@@ -81,7 +81,7 @@
   {
    "id": "agy",
    "verdict": "ship",
-   "launchable": false,
+   "launchable": true,
    "results": "v2/spikes/RESULTS_agy_coder.md",
    "measured": [
     {

@@ -68,7 +68,10 @@ public sealed class ACoderVendorSeamTests
         string[] e2 =
         [
             "ProtectSystem=strict", "ProtectHome=tmpfs", "TemporaryFileSystem=/run/user", "TemporaryFileSystem=/mnt", "TemporaryFileSystem=/dev/shm", "InaccessiblePaths=-/run/WSL",
-            $"BindReadOnlyPaths={M}", "BindReadOnlyPaths=/w", $"BindPaths={W}", $"BindReadOnlyPaths={W}/.git", $"TemporaryFileSystem={J}:ro", $"BindPaths={J}/coder", $"BindPaths={J}/coder/tmp:{BoundaryUnit.UnitTemp}", $"BindPaths={J}/coder/vartmp:{BoundaryUnit.UnitVarTemp}",
+            $"BindReadOnlyPaths={M}", "BindReadOnlyPaths=/w", $"BindPaths={W}", $"BindReadOnlyPaths={W}/.git", $"TemporaryFileSystem={J}:ro", $"BindPaths={J}/coder/claude", $"BindPaths={J}/coder-temp/claude/tmp:{BoundaryUnit.UnitTemp}", $"BindPaths={J}/coder-temp/claude/vartmp:{BoundaryUnit.UnitVarTemp}",
+            // C3 item 2: the real sign-in file of codex (whose coder gets a copy) is in no unit, claude's coder unit included.
+            "InaccessiblePaths=-/nonexistent/home/.codex/auth.json",
+            "InaccessiblePaths=-/nonexistent/home/.gemini/antigravity-cli/antigravity-oauth-token",
             "NoNewPrivileges=yes", "PrivateUsers=yes", "RestrictSUIDSGID=yes", "LockPersonality=yes", "ProtectKernelTunables=yes", "ProtectControlGroups=yes", "Nice=10", "LimitCORE=0",
             "PrivateNetwork=no",
             "RuntimeMaxSec=300", "TimeoutStopSec=10", "MemoryMax=2000M", "MemorySwapMax=0",
@@ -80,7 +83,7 @@ public sealed class ACoderVendorSeamTests
         claude.Environment(NoHome(), TheJob()).Select(pair => pair.Key).Should().Equal("PATH", "HOME", "TMPDIR", "LANG", "TERM", "NO_COLOR", "GIT_TERMINAL_PROMPT");
         claude.Environment(NoHome(), TheJob()).Should().Equal(CoderUnit.Environment(NoHome(), TheJob()));
         var home = claude.Home(TheJob());
-        (home.Home, home.SignInFile).Should().Be(($"{J}/coder/home", $"{J}/coder/home/.claude/.credentials.json"));
+        (home.Home, home.SignInFile).Should().Be(($"{J}/coder/claude/home", $"{J}/coder/claude/home/.claude/.credentials.json"));
         home.Folders.Should().Equal(TheJob().CoderFolders);
         claude.SignIn.Should().Be(new CoderSignInRecipe.BindRealFile(".claude/.credentials.json"));
         claude.PromptId.Should().Be("coder");
@@ -206,27 +209,29 @@ public sealed class ACoderVendorSeamTests
     // ---------- d3: the table ----------
 
     [Fact]
-    public void D3_TheShippedTable_HoldsTheVerdictShipTheMarkLaunchableOffAndTheHistoryOfOneMeasureForCodexAndAgy_AndSoLaunchesNeither()
+    public void D3_TheShippedTable_HoldsTheVerdictShipAndTheHistoryOfOneMeasureForCodexAndAgy_TheMarkOnForCodexAfterS5T5AndForAgyAfterS8T6()
     {
         var table = CoderBoundaryTable.Shipped;
 
         table.Vendors.Select(row => row.Id).Should().Equal("codex", "agy");
-        table.Vendors.Should().OnlyContain(row => row.Verdict == "ship" && !row.Launchable && !row.Ships && row.Measured.Count == 1, "the owner's condition of 2026-11-26: the verdict is ship, the history of the measure is there, and the mark is OFF until the commit of s5 t5 (codex) or s8 t6 (agy)");
-        table.LaunchableVendors.Should().Equal("claude");
-        CoderVendors.Shipped.Launchable.Should().Equal(["claude"]);
+        table.Vendors.Should().OnlyContain(row => row.Verdict == "ship" && row.Measured.Count == 1, "the owner's condition of 2026-11-26: the verdict is ship and the history of the measure is there");
+        table.Row("codex")!.Launchable.Should().BeTrue("the commit of s5 t5 turned the mark of codex on");
+        table.Row("agy")!.Launchable.Should().BeTrue("the commit of s8 t6 turned the mark of agy on");
+        table.LaunchableVendors.Should().Equal("claude", "codex", "agy");
+        CoderVendors.Shipped.Launchable.Should().Equal(["claude", "codex", "agy"]);
     }
 
     [Theory]
     [InlineData("codex")]
     [InlineData("agy")]
-    public void D3_AVendorWhoseMarkIsOff_IsRefusedWithASentenceThatNamesTheLaunchableVendors_AndNeverForItsHistoryOrItsRelease(string vendor)
+    public void D3_EveryVendorOfTheProductsTable_IsLaunchableAfterTheFlips_AndAVendorWithNoRowIsRefusedWithASentenceThatNamesTheLaunchableVendors(string vendor)
     {
-        var said = CoderBoundaryTable.Shipped.WhyNot(vendor);
-
-        said.Should().Contain($"'{vendor}'").And.Contain("not launchable yet").And.Contain("launchable are claude").And.NotContain("release");
-        CoderVendors.Shipped.Resolve(vendor).Should().BeOfType<CoderVendorResolution.Refused>().Which.Sentence.Should().Be(said);
+        // The marks of both vendors are on (s5 t5 and s8 t6); the sentence of a mark that is off is held by the tests of a table of a test's own (D3_AVendorIsLaunchableOnlyWhenTheVerdictIsShipAndTheMarkIsOn...).
+        CoderBoundaryTable.Shipped.WhyNot(vendor).Should().BeEmpty();
+        CoderVendors.Shipped.Resolve(vendor).Should().BeOfType<CoderVendorResolution.Launchable>();
         CoderBoundaryTable.Shipped.WhyNot("claude").Should().BeEmpty();
-        CoderBoundaryTable.Shipped.WhyNot("gemini-cli").Should().Contain("has no row");
+        var said = CoderBoundaryTable.Shipped.WhyNot("gemini-cli");
+        said.Should().Contain("has no row").And.Contain("launchable are claude, codex, agy").And.NotContain("release");
     }
 
     [Fact]
@@ -245,11 +250,11 @@ public sealed class ACoderVendorSeamTests
     }
 
     [Fact]
-    public void D3_TheMarkLaunchable_IsOffInTheProductsTable_AndOnlyTheCommitsOfS5T5AndS8T6MayTurnItOn()
+    public void D3_TheMarkLaunchable_IsOnForCodexAfterS5T5_AndForAgyAfterS8T6()
     {
         var text = File.ReadAllText(Path.Combine(Repo(), "shared", "coder-boundary-releases.json"));
 
-        System.Text.RegularExpressions.Regex.Matches(text, "\"launchable\":\\s*(true|false)").Select(match => match.Groups[1].Value).Should().Equal("false", "false");
+        System.Text.RegularExpressions.Regex.Matches(text, "\"launchable\":\\s*(true|false)").Select(match => match.Groups[1].Value).Should().Equal("true", "true");
     }
 
     [Fact]

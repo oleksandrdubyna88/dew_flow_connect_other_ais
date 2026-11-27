@@ -26,6 +26,9 @@ internal sealed record CoderPromptRecord(string Id, string Sha256)
 /// </summary>
 internal sealed record CoderCliRecord(string Vendor, string Installed, string LastMeasured)
 {
+    /// <summary>What the preflight rows of this vendor do not prove (ids of class <c>release</c>: measured on the release named beside the installed one, never probed before the job); empty for a vendor that says nothing.</summary>
+    public string NotProved { get; init; } = string.Empty;
+
     /// <summary>No CLI was launched (a job that ended before any model).</summary>
     public static CoderCliRecord None { get; } = new(string.Empty, string.Empty, string.Empty);
 
@@ -40,6 +43,40 @@ internal sealed record CoderCliRecord(string Vendor, string Installed, string La
         json.WriteString("vendor", Vendor);
         json.WriteString("installed", Installed);
         json.WriteString("lastMeasured", LastMeasured);
+        if (NotProved.Length > 0)
+        {
+            json.WriteString("notProvedByPreflight", NotProved);
+        }
+
+        json.WriteEndObject();
+    }
+}
+
+/// <summary>The real sign-in file of a vendor that signs in with a file, before and after the job (s7 t6 d4): a sha256 and a modification time each — a hash, never text — and whether they differ. coai opens that file for reading only, so a difference is something else's doing.</summary>
+internal sealed record CoderSignInRecord(string Vendor, string BeforeSha256, string BeforeModifiedUtc, string AfterSha256, string AfterModifiedUtc, bool Changed)
+{
+    /// <summary>How many refresh units the job ran for this vendor: each puts the owner's refresh token for the seconds of one run into a unit of coai's own (risk A12) and is one more refresh on coai's copy (A5).</summary>
+    public int Refreshes { get; init; }
+
+    public static CoderSignInRecord Of(string vendor, RealSignInState before, RealSignInState after) =>
+        new(vendor, before.Sha256, Stamp(before.ModifiedUtc), after.Sha256, Stamp(after.ModifiedUtc), before.Sha256 != after.Sha256 || before.ModifiedUtc != after.ModifiedUtc);
+
+    private static string Stamp(DateTime? time) => time is { } at ? at.ToString("yyyy-MM-ddTHH:mm:ss.fffZ", System.Globalization.CultureInfo.InvariantCulture) : string.Empty;
+
+    public void Write(Utf8JsonWriter json)
+    {
+        json.WriteStartObject();
+        json.WriteString("vendor", Vendor);
+        json.WriteStartObject("before");
+        json.WriteString("sha256", BeforeSha256);
+        json.WriteString("modifiedUtc", BeforeModifiedUtc);
+        json.WriteEndObject();
+        json.WriteStartObject("after");
+        json.WriteString("sha256", AfterSha256);
+        json.WriteString("modifiedUtc", AfterModifiedUtc);
+        json.WriteEndObject();
+        json.WriteBoolean("changed", Changed);
+        json.WriteNumber("refreshes", Refreshes);
         json.WriteEndObject();
     }
 }
@@ -73,6 +110,9 @@ internal sealed record CoderEnvelope(string JobId, string BaseSha, string HeadSh
     /// <summary>The CLI release of the model that produced the result, beside the last measured one. Written as <c>cli</c> when there is one.</summary>
     public CoderCliRecord Cli { get; init; } = CoderCliRecord.None;
 
+    /// <summary>The real sign-in files of the vendors that were given a copy, before and after the job. Written as <c>signIn</c> when there is one.</summary>
+    public IReadOnlyList<CoderSignInRecord> SignIn { get; init; } = [];
+
     public string ToJson()
     {
         using var buffer = new MemoryStream();
@@ -101,6 +141,16 @@ internal sealed record CoderEnvelope(string JobId, string BaseSha, string HeadSh
             Instructions.Write(json);
             Prompt.Write(json);
             Cli.Write(json);
+            if (SignIn.Count > 0)
+            {
+                json.WriteStartArray("signIn");
+                foreach (var record in SignIn)
+                {
+                    record.Write(json);
+                }
+
+                json.WriteEndArray();
+            }
             json.WriteEndObject();
         }
 

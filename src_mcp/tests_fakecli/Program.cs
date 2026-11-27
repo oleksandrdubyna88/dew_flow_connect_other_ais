@@ -7,6 +7,9 @@
 //   stderr-exit <text> <code>            — text to stderr, exit <code>
 //   sleep <ms>                           — exit 0 after the delay
 //   emit-bytes <n>                       — n bytes of 'x' on stdout in lines of 99, no pause, exit 0 (a check step that is too chatty; epoch 3 E2 s1 t2)
+//   exec --help / exec resume --help — the text of the file FAKECLI_EXEC_HELP_FILE / FAKECLI_EXEC_RESUME_HELP_FILE names (exit FAKECLI_EXEC_HELP_EXIT / FAKECLI_EXEC_RESUME_HELP_EXIT when not 0): a codex's write capability (epoch 3 E3 s5 t1)
+//   set-json-field <file> <field> <value> — set one string field (a '/'-separated path) of the JSON file; exit 0, or 1 with a line on stderr when the file is not JSON (the fake as a vendor's own refresh step, epoch 3 E3 s7 t6)
+//   sandbox -P coai -- <command...> / debug prompt-input <flags> x / doctor --json — the codex coder's model-free verbs (epoch 3 E3 s5 t3): a real bwrap sandbox, the measured tool list and the measured doctor report, steered by FAKECLI_CODEX_SANDBOX / _TOOLS / _DOCTOR / _EXPECT_MODEL (CodexVerbs.cs)
 //   write-files <path>...                — try to write each path; "wrote <path>" on stdout, "fake-cli: could not write <path>: <why>" on stderr; exit 0 (the fake as a coder, epoch 3 E2 s2 t5)
 //   hold-in <folder> <ms>                — write <folder>/ready, then wait <ms>, exit 0 (a coder that is working; a test waits for the file)
 //   emit-repeat <text> <times>           — <text> <times> times on stdout, exit 0 (output whose bytes outnumber its characters)
@@ -147,6 +150,24 @@ if (args.Length >= 2 && args[0] == "vendor-mcp")
     return CoaiMcp.FakeCli.McpVendor.Run(args[1], args[2..]);
 }
 
+// The hook handler of the agy coder's guard (epoch 3 E3 s6 t2): the real code of the product, started the way agy starts the hook — from the folder of hooks.json, the payload on stdin.
+if (args is ["--agy-hook"])
+{
+    return CoaiMcp.Runners.Reviewers.AntigravityCoderGuard.RunHook(Console.In, Console.Out, Directory.GetCurrentDirectory());
+}
+
+// The codex coder's model-free verbs (`sandbox`, `debug prompt-input`, `doctor`; epoch 3 E3 s5 t3): answered before the vendor mode, steered by the environment or the minimal-environment file, because a unit's `env -i` carries no FAKECLI_* name.
+if (CoaiMcp.FakeCli.CodexVerbs.Handles(args))
+{
+    return CoaiMcp.FakeCli.CodexVerbs.Run(args);
+}
+
+// agy's `models` (the refresh step of the agy coder's sign-in, epoch 3 E3 s6): as measured on 1.5.18, it refreshes the access token of the sign-in file in its home ONLY when that token is expired.
+if (args is ["models"])
+{
+    return CoaiMcp.FakeCli.AgyCoder.Models();
+}
+
 var minimal = MinimalSteering.Load(args);
 Func<string, string?> read = minimal is { } fromFile ? name => fromFile.GetValueOrDefault(name) : Environment.GetEnvironmentVariable;
 if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor" || minimal is not null)
@@ -162,6 +183,23 @@ if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor" || minimal is
 
         Console.Out.Write(read("FAKECLI_HELP_STDOUT") ?? "Usage: fake [options]\n");
         return int.TryParse(read("FAKECLI_HELP_EXIT"), out var helpExit) ? helpExit : 0;
+    }
+
+    // The codex coder's write capability (epoch 3 E3 s5 t1) asks `exec --help` and `exec resume --help`: each answers the text of its own variable (the file a test points it at), exit 0, no stdin.
+    if (args is ["exec", "--help"] or ["exec", "resume", "--help"])
+    {
+        var resumed = args.Length == 3;
+        if (int.TryParse(read(resumed ? "FAKECLI_EXEC_RESUME_HELP_EXIT" : "FAKECLI_EXEC_HELP_EXIT"), out var execHelpExit) && execHelpExit != 0)
+        {
+            return execHelpExit;
+        }
+
+        if (read(resumed ? "FAKECLI_EXEC_RESUME_HELP_FILE" : "FAKECLI_EXEC_HELP_FILE") is { Length: > 0 } helpFile && File.Exists(helpFile))
+        {
+            Console.Out.Write(File.ReadAllText(helpFile));
+        }
+
+        return 0;
     }
 
     // A codex asks its CLI's --version before every launch (the tier probe), and `providers` asks it too.
@@ -198,6 +236,7 @@ if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor" || minimal is
         }
 
         LaunchRecord.Write(record, string.Join('\0', args.Append(prompt.StdIn)), read("FAKECLI_RECORD_GATE"));
+        CoaiMcp.FakeCli.CodexVerbs.RecordWhere(record);
     }
 
     var steering = Steering.For(prompt.Text, read, CoaiMcp.FakeCli.ModelMap.For(args, read));
@@ -224,6 +263,39 @@ if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor" || minimal is
         return 65;
     }
 
+    // A command of the model in the unit, in its working folder (model map `cwdDelete` and `cwdFifos`, JSON arrays of paths below the working folder): each file is deleted, then a FIFO is made at each name — what the host's plain read of the worktree's toolchain file would wait on for ever.
+    if (steering.Get("CWD_DELETE") is { Length: > 0 } cwdDelete)
+    {
+        foreach (var relative in System.Text.Json.JsonSerializer.Deserialize<string[]>(cwdDelete) ?? [])
+        {
+            File.Delete(Path.Combine(Directory.GetCurrentDirectory(), relative));
+        }
+    }
+
+    if (steering.Get("CWD_FIFOS") is { Length: > 0 } cwdFifos)
+    {
+        foreach (var relative in System.Text.Json.JsonSerializer.Deserialize<string[]>(cwdFifos) ?? [])
+        {
+            var at = Path.Combine(Directory.GetCurrentDirectory(), relative);
+            Directory.CreateDirectory(Path.GetDirectoryName(at)!);
+            using var cwdFifo = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("/usr/bin/mkfifo", [at]) { UseShellExecute = false })!;
+            cwdFifo.WaitForExit();
+        }
+    }
+
+    // A command of the model in the unit (model map `homeFifos`, a JSON array of paths below $HOME): a FIFO is made at each name — what a host read that opens with a plain open would wait on for ever.
+    if (steering.Get("HOME_FIFOS") is { Length: > 0 } homeFifos && Environment.GetEnvironmentVariable("HOME") is { Length: > 0 } fifoHome)
+    {
+        foreach (var relative in System.Text.Json.JsonSerializer.Deserialize<string[]>(homeFifos) ?? [])
+        {
+            var at = Path.Combine(fifoHome, relative);
+            Directory.CreateDirectory(Path.GetDirectoryName(at)!);
+            File.Delete(at);
+            using var fifo = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("/usr/bin/mkfifo", [at]) { UseShellExecute = false })!;
+            fifo.WaitForExit();
+        }
+    }
+
     // A coder that tries to write where it must not (model map `tryWriteFiles`): absolute paths, each attempted; a refusal is a line on stderr and the answer still follows.
     if (steering.Get("TRY_WRITE_FILES") is { Length: > 0 } tryWriteFiles)
     {
@@ -245,6 +317,12 @@ if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor" || minimal is
 
     GC.KeepAlive(ignoredTerm);
 
+    // The fake as an agy coder (epoch 3 E3 s6 t3, t5; model map `agyTools`): agy's stream, and for each scripted tool the hook of .agents/hooks.json asked the way agy asks it.
+    if (steering.Get("AGY_TOOLS") is { Length: > 0 } agyTools)
+    {
+        return CoaiMcp.FakeCli.AgyCoder.Run(args, agyTools, steering.Get, read("FAKECLI_RECORD_DIR") ?? string.Empty);
+    }
+
     var stderrText = steering.Get("STDERR");
     if (stderrText is { Length: > 0 })
     {
@@ -262,12 +340,29 @@ if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor" || minimal is
     if (outIndex >= 0 && outIndex + 1 < args.Length && Path.IsPathRooted(args[outIndex + 1]) &&
         steering.Get("OUTFILE_TEXT") is { Length: > 0 } fileText)
     {
-        File.WriteAllText(args[outIndex + 1], Placeholders.Fill(fileText, prompt.Text));
+        if (steering.Get("OUTFILE_FIFO") == "1")
+        {
+            // The report file of the launch is a FIFO, not a file (a command of the model in the unit).
+            File.Delete(args[outIndex + 1]);
+            using var report = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("/usr/bin/mkfifo", [args[outIndex + 1]]) { UseShellExecute = false })!;
+            report.WaitForExit();
+        }
+        else
+        {
+            File.WriteAllText(args[outIndex + 1], Placeholders.Fill(fileText, prompt.Text));
+        }
     }
 
     if (steering.Get("STDOUT") is { Length: > 0 } stdoutText)
     {
         Console.Out.Write(Placeholders.Fill(stdoutText, prompt.Text));
+    }
+
+    // A turn that says its piece and then does not end (model map `holdAfterMs`): what the stream holds is flushed first, so a deadline that cuts the turn finds it (epoch 3 E3, the turn check of a turn the job's budget cut).
+    if (int.TryParse(steering.Get("HOLD_AFTER_MS"), out var holdAfterMs) && holdAfterMs > 0)
+    {
+        Console.Out.Flush();
+        Thread.Sleep(holdAfterMs);
     }
 
     VibeShape.Write(args, steering.Get("EXPORT_TEXT"), read("FAKECLI_RECORD_ENV"), read("FAKECLI_HOME_WRITE"));
@@ -382,6 +477,8 @@ switch (args0)
         return 0;
 
     // Epoch 3 E2 s2 t5: the fake as a CODER. `write-files` tries each path and says which it could not write (the OS layer's answer, on stderr), exiting 0; `hold-in` says it is working by writing `ready` into a folder, then waits.
+    case ["set-json-field", var jsonFile, var jsonField, var jsonValue]:
+        return CoaiMcp.FakeCli.CoderVerbs.SetJsonField(jsonFile, jsonField, jsonValue);
     case ["write-files", .. var writePaths]:
         return CoaiMcp.FakeCli.CoderVerbs.WriteFiles(writePaths);
 

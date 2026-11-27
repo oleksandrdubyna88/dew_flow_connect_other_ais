@@ -110,7 +110,7 @@ public sealed class ACoderJobFoldersTests : IDisposable
         Assert.SkipWhen(OperatingSystem.IsWindows(), "a symbolic link needs a privilege on Windows");
         using var elsewhere = TempDir.For("coai-elsewhere-");
         File.WriteAllText(Path.Combine(elsewhere.Path, "precious.txt"), "keep\n");
-        var home = Path.Combine(Make(Job), "coder", "home");
+        var home = Path.Combine(Make(Job), "coder", "claude", "home");
         Directory.CreateDirectory(home);
         Directory.CreateSymbolicLink(Path.Combine(home, "to-a-folder"), elsewhere.Path);
         Directory.CreateSymbolicLink(Path.Combine(home, "to-proc"), "/proc");
@@ -135,7 +135,7 @@ public sealed class ACoderJobFoldersTests : IDisposable
     public void AFolderOfModeZeroMadeByACheck_IsRemoved_NotKeptWithItsRecordForEver()
     {
         Assert.SkipUnless(FolderHolds.CanMakeOneUndeletable, "a privileged Unix process ignores the mode");
-        var locked = Path.Combine(Make(Job), "coder", "home", "locked");
+        var locked = Path.Combine(Make(Job), "coder", "claude", "home", "locked");
         Directory.CreateDirectory(Path.Combine(locked, "inner"));
         File.WriteAllText(Path.Combine(locked, "inner", "f.txt"), "x\n");
         File.SetUnixFileMode(Path.Combine(locked, "inner"), UnixFileMode.None);

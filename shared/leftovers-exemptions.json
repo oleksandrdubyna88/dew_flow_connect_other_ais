@@ -50,6 +50,8 @@
     {"file":"src_mcp/tests/WorktreeManagerTests.cs","line":456,"sha256":"e2f977c759f13d5786347201a88c2404375bf948322f99d4befe80cfede27621","class":"raw-worktree","guards":["csharp"]},
     {"file":"src_mcp/tests/WorktreeManagerTests.cs","line":500,"sha256":"b9771fcbf06ba1d72c07e38cdba79dbfdd016363856c40bf1edab26bcc15ff28","class":"raw-worktree","guards":["csharp"]},
     {"file":"src_mcp/tests/WorktreeManagerTests.cs","line":532,"sha256":"b9771fcbf06ba1d72c07e38cdba79dbfdd016363856c40bf1edab26bcc15ff28","class":"raw-worktree","guards":["csharp"]},
+    {"file":"src_mcp/tests_fakecli/CodexVerbs.cs","line":138,"sha256":"0ef623849e946ce7dbeea607bd6994836bf2e448a23a6c7a50dcdfb214c2707f","class":"raw-temp","guards":["csharp"],"proof":"unreached"},
+    {"file":"src_mcp/tests_fakecli/CodexVerbs.cs","line":156,"sha256":"cc66651e04a14c20bc8d547c9aaf11b361161158f295650c404b99e372fd9821","class":"raw-temp","guards":["csharp"],"proof":"unreached"},
     {"file":"src_mcp/tests_fakecli/Serving.cs","line":141,"sha256":"0f17f6a364e2b379bd664b2cd525959fbf9f8975347cb362a431517939fba859","class":"raw-temp","guards":["csharp"],"proof":"read"},
     {"file":"src_mcp/tests_leftovers/Owned.cs","line":120,"sha256":"03014b01f9660e43a4b9c2c8b08888f738c3f065288af0cb6e2e8fa193d41a4d","class":"raw-temp","guards":["csharp"],"proof":"read"},
     {"file":"src_mcp/tests_leftovers/TempDir.cs","line":36,"sha256":"3ea674a2daaa22bfce5a1d8fba11236892f7774c3e1b7ae74fcd170c22a97289","class":"raw-temp","guards":["csharp"],"proof":"entry"},

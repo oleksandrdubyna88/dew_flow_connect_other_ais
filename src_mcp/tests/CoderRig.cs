@@ -60,6 +60,13 @@ internal sealed class CoderRig : IAsyncDisposable
     internal string Base { get; private set; } = string.Empty;
 
     /// <summary>The machine as the OS layer sees it: this host, the stand-in as the person's home, no PATH to look programs up in.</summary>
+    /// <summary>Writes a file into the stand-in for the person's real home (a sign-in file of a vendor that signs in with one).</summary>
+    internal void RealHomeFile(string relative, string text)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.Combine(_home.Path, relative))!);
+        File.WriteAllText(Path.Combine(_home.Path, relative), text);
+    }
+
     internal BoundaryHost Host => OnHost(BoundaryHost.Current() with { RealHome = _home.Path, NuGetPackages = string.Empty, Path = string.Empty });
 
     /// <summary>The vendors a coder of the job may be launched on: the product's set, or a test's own table with its own test vendor (epoch 3 E3 s7 t2). Read when the job's work is made.</summary>
@@ -147,7 +154,7 @@ internal sealed class CoderRig : IAsyncDisposable
     /// One launch of the fake coder: the files it writes below its working folder, what it says, how long it waits before it answers, and — a coder that goes where it must not — the ABSOLUTE paths it tries to write (what the OS refuses
     /// goes to its stderr).
     /// </summary>
-    internal sealed record Launch(IReadOnlyDictionary<string, string>? Edits, string Answer, int SleepMs = 0, IReadOnlyList<string>? TryWrites = null, string Session = "", int Exit = 0, string Stderr = "", string Stdout = "", IReadOnlyDictionary<string, string>? HomeFiles = null, IReadOnlyList<string>? Reads = null, bool IgnoreTerm = false);
+    internal sealed record Launch(IReadOnlyDictionary<string, string>? Edits, string Answer, int SleepMs = 0, IReadOnlyList<string>? TryWrites = null, string Session = "", int Exit = 0, string Stderr = "", string Stdout = "", IReadOnlyDictionary<string, string>? HomeFiles = null, IReadOnlyList<string>? Reads = null, bool IgnoreTerm = false, string OutfileText = "");
 
     /// <summary>
     /// What FakeCli does for <paramref name="model"/>, launch by launch (the last repeats). The steering file — the coder's child reads only that — is written again with every call.
@@ -155,6 +162,15 @@ internal sealed class CoderRig : IAsyncDisposable
     internal CoderRig Says(string model, params Launch[] launches)
     {
         _inner.Says(model, [.. launches.Select(launch => (object)Entry(launch))]);
+        Steer(_inner.MapFile, _inner.RecordFolder);
+
+        return this;
+    }
+
+    /// <summary>What FakeCli does for <paramref name="model"/> when each launch is a ready model-map entry (an agy coder: <c>agyTools</c> and the rest, <see cref="AgyCoderBed"/>) — the steering file is written again, as for <see cref="Says(string, Launch[])"/>.</summary>
+    internal CoderRig SaysEntries(string model, params IReadOnlyDictionary<string, object?>[] entries)
+    {
+        _inner.Says(model, [.. entries.Select(entry => (object)entry)]);
         Steer(_inner.MapFile, _inner.RecordFolder);
 
         return this;
@@ -205,6 +221,11 @@ internal sealed class CoderRig : IAsyncDisposable
             entry["stderr"] = launch.Stderr;
         }
 
+        if (launch.OutfileText.Length > 0)
+        {
+            entry["outfileText"] = launch.OutfileText;
+        }
+
         return entry;
     }
 
@@ -226,11 +247,11 @@ internal sealed class CoderRig : IAsyncDisposable
     internal static IReadOnlyDictionary<string, string> Edits(params string[] names) => names.ToDictionary(name => name, name => $"the coder wrote {name}\n");
 
     internal RoleDescriptor Descriptor(Action<string>? boundary = null) =>
-        new(RoleDescriptors.Coder, "the coder", () => new CoderWork { Boundary = boundary, Vendors = Vendors, Turns = TurnsOf(Host, Degrade), AttemptTimeout = AttemptTimeout, Ladder = [TimeSpan.FromMinutes(5)] }, RouteAs: "coder", Check: CoderTask.Refusal);
+        new(RoleDescriptors.Coder, "the coder", () => new CoderWork { Boundary = boundary, Vendors = Vendors, Turns = TurnsOf(Host, Degrade, OnLauncher), AttemptTimeout = AttemptTimeout, Ladder = [TimeSpan.FromMinutes(5)] }, RouteAs: "coder", Check: CoderTask.Refusal);
 
     /// <summary>The job's turns over the stand-in machine: the real boundary code, the host and the degrade this rig holds at the moment the descriptor is made.</summary>
-    private static Func<IProcessLauncher, CoderTurns> TurnsOf(BoundaryHost host, Func<IReadOnlyList<string>, IReadOnlyList<string>>? degrade) =>
-        launcher => new CoderTurns(new CoderBoundary(launcher, host) { Degrade = degrade }, new FilesystemInvariant(launcher));
+    private static Func<IProcessLauncher, CoderTurns> TurnsOf(BoundaryHost host, Func<IReadOnlyList<string>, IReadOnlyList<string>>? degrade, Func<IProcessLauncher, IProcessLauncher> wrap) =>
+        launcher => new CoderTurns(new CoderBoundary(wrap(launcher), host) { Degrade = degrade }, new FilesystemInvariant(launcher));
 
     internal RoleJobRecord NewJob(string baseSha = "", IReadOnlyList<string>? route = null, int timeoutMinutes = 5) =>
         World.Store.Create(
@@ -238,10 +259,52 @@ internal sealed class CoderRig : IAsyncDisposable
             new RoleJobPlan(route ?? ["claude/sonnet"], 4, false));
 
     /// <summary>The folder of one job's own files — the coder's home, temp folders and caches — where the layer makes them.</summary>
-    internal string JobFolder(RoleJobRecord job) => Path.Combine(_jobs.Path, job.JobId);
+    internal string JobFolder(RoleJobRecord job) => Path.Combine(_jobsFolder ?? _jobs.Path, job.JobId);
 
-    /// <summary>What the coder's unit sees as <c>/tmp</c>: the job's own temp folder.</summary>
-    internal string JobTemp(RoleJobRecord job) => Path.Combine(JobFolder(job), "coder", "tmp");
+    private string? _jobsFolder;
+
+    /// <summary>A folder of the test's own for the job folders (the real-run tests need one outside <c>/tmp</c>, where a job's folder can be covered); the layer is told, and <see cref="JobFolder"/> follows.</summary>
+    internal void UseJobsFolder(string folder)
+    {
+        _jobsFolder = folder;
+        Directory.CreateDirectory(folder);
+        _inner.Setting(CoderOsLayer.JobsVariable, folder);
+    }
+
+    /// <summary>A test-only wrap of the launcher every unit of the job is started through (a real-run test counts and records the turns there); null leaves it as it is.</summary>
+    internal Func<IProcessLauncher, IProcessLauncher> OnLauncher { get; set; } = launcher => launcher;
+
+    /// <summary>The vendors a rig stages its fake for: each has its own <c>/tmp</c> (pass 5, M13).</summary>
+    internal static readonly string[] StagedVendors = ["claude", "codex", "agy"];
+
+    /// <summary>What <paramref name="vendor"/>'s coder unit sees as <c>/tmp</c>: that vendor's own temp folder of the job (claude's unless said).</summary>
+    internal string JobTemp(RoleJobRecord job, string vendor = "claude") => Path.Combine(JobFolder(job), "coder-temp", vendor, "tmp");
+
+    /// <summary>The record folders of the launches of the job, one for each vendor that ran (the fake records inside its own unit's <c>/tmp</c>).</summary>
+    internal IReadOnlyList<string> LaunchFolders(RoleJobRecord job) =>
+        [.. StagedVendors.Select(vendor => Path.Combine(JobTemp(job, vendor), "launches")).Where(Directory.Exists)];
+
+    /// <summary>
+    /// True for a scenario whose coder is codex (epoch 3 E3 s5 t4): its unit covers <c>/tmp</c> with a tmpfs of its own and binds the codex <c>vartmp</c> folder of the job at <c>/var/tmp</c>, so the fake's map and record folder are staged THERE, not in the temp folder a vendor's unit sees as <c>/tmp</c>.
+    /// </summary>
+    internal bool CodexUnit { get; set; }
+
+    /// <summary>The folder of the job the fake's map and launch records are staged in, as the host sees it.</summary>
+    internal string Scratch(RoleJobRecord job) => CodexUnit ? Path.Combine(JobFolder(job), "coder-temp", "codex", "vartmp") : JobTemp(job);
+
+    private string UnitScratch => CodexUnit ? BoundaryUnit.UnitVarTemp : BoundaryUnit.UnitTemp;
+
+    /// <summary>The record folder of the job's launches, as the host sees it: one <c>.argv</c> file for each launch, and the sidecars the fake writes beside them.</summary>
+    internal string LaunchFolder(RoleJobRecord job) => Path.Combine(Scratch(job), "launches");
+
+    /// <summary>What FakeCli does for <paramref name="model"/>, launch by launch, as raw model-map entries (a codex-shaped answer the claude envelope of <see cref="Says(string, Launch[])"/> would spoil). The steering file is written again.</summary>
+    internal CoderRig SaysRaw(string model, params object[] entries)
+    {
+        _inner.Says(model, entries);
+        Steer(_inner.MapFile, _inner.RecordFolder);
+
+        return this;
+    }
 
     /// <summary>
     /// Makes the job's model map and record folder where the coder's unit will find them: the map is copied into the job's temp folder, and the steering file names the paths AS THE UNIT SEES THEM (<c>/tmp/…</c>). Called by <see cref="RunAsync"/>
@@ -249,20 +312,26 @@ internal sealed class CoderRig : IAsyncDisposable
     /// </summary>
     internal void Stage(RoleJobRecord job)
     {
-        var temp = JobTemp(job);
-        Directory.CreateDirectory(Path.Combine(temp, "launches"));
-        if (File.Exists(_inner.MapFile))
+        foreach (var vendor in CodexUnit ? new[] { "codex" } : StagedVendors)
         {
-            File.Copy(_inner.MapFile, Path.Combine(temp, "model-map.json"), overwrite: true);
+            var temp = CodexUnit ? Scratch(job) : JobTemp(job, vendor);
+            Directory.CreateDirectory(Path.Combine(temp, "launches"));
+            if (File.Exists(_inner.MapFile))
+            {
+                File.Copy(_inner.MapFile, Path.Combine(temp, "model-map.json"), overwrite: true);
+            }
         }
 
-        Steer($"{BoundaryUnit.UnitTemp}/model-map.json", $"{BoundaryUnit.UnitTemp}/launches");
+        Steer($"{UnitScratch}/model-map.json", $"{UnitScratch}/launches");
         _staged.Add(job.JobId);
     }
 
     /// <summary>The argv of every launch of the coder of <paramref name="job"/> — recorded inside its unit, read from the job's temp folder; empty when the job never launched a coder.</summary>
     internal IReadOnlyList<string[]> Launches(RoleJobRecord job) =>
-        Directory.Exists(Path.Combine(JobTemp(job), "launches")) ? RoleFailoverRig.LaunchesIn(Path.Combine(JobTemp(job), "launches")) : [];
+    [
+        .. (CodexUnit ? new[] { LaunchFolder(job) } : (IEnumerable<string>)LaunchFolders(job)).Where(Directory.Exists).SelectMany(folder => new DirectoryInfo(folder).EnumerateFiles("*.argv")).OrderBy(file => file.CreationTimeUtc).ThenBy(file => file.LastWriteTimeUtc)
+            .Select(file => LaunchRecords.Read(file.FullName).Split('\0')),
+    ];
 
     internal async Task<(int Exit, RoleJobRecord Job)> RunAsync(RoleJobRecord job, Action<string>? boundary = null, TimeProvider? clock = null)
     {

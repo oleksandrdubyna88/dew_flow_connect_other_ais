@@ -43,6 +43,27 @@ internal sealed record CoderProgram(string Real, string BindFolder, string Probl
             : new CoderProgram(real.Path, SystemFolders.Any(system => RealPath.IsInside(system, folder, StringComparison.Ordinal)) ? string.Empty : folder, string.Empty);
     }
 
+    /// <summary>
+    /// The sentence that says the folder of the program is the person's home or a folder above it, or empty (pass 6, M17). The folder is bound into the unit read-only and, for codex, opened for reads to the model's commands: a program that lies directly in the home brings the whole home back over the empty tmpfs
+    /// of <c>ProtectHome</c>, with its keys and tokens. A program in a narrow folder of the home (<c>~/.codex/packages/…/bin</c>) is what the measured install is, and is not refused. Empty <paramref name="realHome"/> names nothing to compare.
+    /// </summary>
+    /// <param name="realHome">The person's real home as the disk spells it (<see cref="BoundaryHost.ResolvedHome"/>).</param>
+    public string HomeProblem(string realHome)
+    {
+        var folder = BindFolder.Length > 0 ? BindFolder : Path.GetDirectoryName(Real) ?? string.Empty;
+        if (realHome.Length == 0 || folder.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        var home = Path.TrimEndingDirectorySeparator(realHome);
+        var wide = Path.TrimEndingDirectorySeparator(folder) == home || RealPath.IsInside(folder, home, StringComparison.Ordinal);
+
+        return wide
+            ? $"the folder of the program ('{folder}') is the person's home or a folder above it, and would bring the home back into the unit with its keys and tokens; keep the program in a narrow folder of its own, for example under ~/.codex/packages"
+            : string.Empty;
+    }
+
     private static CoderProgram Refused(string problem) => new(string.Empty, string.Empty, problem);
 
     private static bool IsPlain(string path) =>

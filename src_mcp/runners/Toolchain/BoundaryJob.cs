@@ -131,17 +131,67 @@ public sealed record BoundaryJob(
     /// </summary>
     public string CoderFolder => Path.Combine(JobRoot, "coder");
 
-    /// <summary>The coder's <c>HOME</c>: the job's own, with the sign-in file bound into it read-only — never the real one.</summary>
-    public string CoderHomeFolder => Path.Combine(CoderFolder, "home");
+    /// <summary>The vendor claude's id, the one whose home the unqualified members below name.</summary>
+    internal const string ClaudeVendor = "claude";
+
+    /// <summary>
+    /// The folder of ONE vendor's coder inside the job (<c>&lt;job&gt;/coder/&lt;vendor&gt;</c>): its home, and whatever else only its CLI reads. Only the vendor that is running has it bound into its unit, so nothing the model of one vendor leaves there is read by the CLI of the next
+    /// (the condition C3 of the fourth security verify of s7 t6): every other vendor's folder lies under the job's cover and is not there.
+    /// </summary>
+    public string CoderVendorFolder(string vendor) => Path.Combine(CoderFolder, vendor);
+
+    /// <summary>The <c>HOME</c> of <paramref name="vendor"/>'s coder: <c>&lt;job&gt;/coder/&lt;vendor&gt;/home</c>, with the sign-in file bound into it read-only (claude) or a copy made into it (codex, agy) — never the real one.</summary>
+    public string CoderHomeOf(string vendor) => Path.Combine(CoderVendorFolder(vendor), "home");
+
+    /// <summary>The coder's <c>HOME</c> for claude: the job's own, with the sign-in file bound into it read-only — never the real one.</summary>
+    public string CoderHomeFolder => CoderHomeOf(ClaudeVendor);
 
     /// <summary>What the coder's unit sees as <c>/tmp</c>.</summary>
-    public string CoderTempFolder => Path.Combine(CoderFolder, "tmp");
+    public string CoderTempFolder => CoderTempOf(ClaudeVendor);
+
+    /// <summary>
+    /// The folder that holds the SOURCES of every vendor's <c>/tmp</c> and <c>/var/tmp</c> (<c>&lt;job&gt;/coder-temp</c>, pass 6, R-M15): a sibling of <see cref="CoderFolder"/>, never inside a folder a unit binds writable — a name inside such a folder can be moved from inside and put back
+    /// as a link, and the next unit would get the link's target as its writable temp folder. It lies under the job's cover and no unit binds it or a parent of it; a unit sees only the content of its own two folders, at <c>/tmp</c> and <c>/var/tmp</c>.
+    /// </summary>
+    public string CoderTempRoot => Path.Combine(JobRoot, "coder-temp");
+
+    /// <summary>The folder of ONE vendor's two temp sources: <c>&lt;job&gt;/coder-temp/&lt;vendor&gt;</c>.</summary>
+    public string CoderTempVendorFolder(string vendor) => Path.Combine(CoderTempRoot, vendor);
+
+    /// <summary>What <paramref name="vendor"/>'s unit sees as <c>/tmp</c> (pass 5, M13; moved by R-M15): <c>&lt;job&gt;/coder-temp/&lt;vendor&gt;/tmp</c>, bound only into that vendor's unit, so what a CLI leaves there is not in the unit of a later vendor of the job.</summary>
+    public string CoderTempOf(string vendor) => Path.Combine(CoderTempVendorFolder(vendor), "tmp");
+
+    /// <summary>What <paramref name="vendor"/>'s unit sees as <c>/var/tmp</c>: <c>&lt;job&gt;/coder-temp/&lt;vendor&gt;/vartmp</c>.</summary>
+    public string CoderVarTempOf(string vendor) => Path.Combine(CoderTempVendorFolder(vendor), "vartmp");
+
+    /// <summary>
+    /// The sentence that says one of the names of <paramref name="vendor"/>'s temp sources is not a real folder, or empty — asked on the host before EVERY admission, before anything is made through the name (R-M15): the folder of the temp sources, the vendor's folder in it and the two sources are each
+    /// missing (made next) or a real folder, never a link or a file. No unit of the job is alive between this question and the bind, so nothing changes them in between. (A unit runs as the same user as coai, so who owns the folder says nothing more than this does.)
+    /// </summary>
+    public string CoderTempOnDiskProblem(string vendor)
+    {
+        foreach (var name in new[] { CoderTempRoot, CoderTempVendorFolder(vendor), CoderTempOf(vendor), CoderVarTempOf(vendor) })
+        {
+            if (Files.RealPath.Lstat(name).Kind is not (Files.EntryKind.Missing or Files.EntryKind.Directory))
+            {
+                return $"The temp folder '{name}' of the coder is a link or a file, not a real folder, so a unit would have been given something else as its /tmp or /var/tmp; the launch was refused.";
+            }
+        }
+
+        return string.Empty;
+    }
 
     /// <summary>What the coder's unit sees as <c>/var/tmp</c>.</summary>
-    public string CoderVarTempFolder => Path.Combine(CoderFolder, "vartmp");
+    public string CoderVarTempFolder => CoderVarTempOf(ClaudeVendor);
 
     /// <summary>Where the sign-in file is bound inside the coder's home.</summary>
     public string CoderSignInFile => Path.Combine(CoderHomeFolder, ".claude", ".credentials.json");
+
+    /// <summary>Where the full copy of a real sign-in file lives while a refresh unit runs (<c>&lt;job&gt;/refresh</c>): INSIDE the job folder, so it is under the cover of every unit of the job in either layout and goes with the job's folder when the retention removes it.</summary>
+    public string RefreshFolder => Path.Combine(JobRoot, "refresh");
+
+    /// <summary>True when the job folder is its own cover (<see cref="JobCover"/>): the folder that holds the jobs cannot be covered, so another job's folder is not hidden from this job's units by the cover.</summary>
+    public bool IsItsOwnCover => string.Equals(System.IO.Path.TrimEndingDirectorySeparator(JobCover), System.IO.Path.TrimEndingDirectorySeparator(JobRoot), StringComparison.Ordinal);
 
     /// <summary>
     /// The folder of the claude key pool of this device (<c>&lt;data&gt;/keys</c>), when the job runs on it (epoch 3 E2 s7): a coder launch with a pool key gets <c>InaccessiblePaths=</c> of it, and its preflight proves a read of it fails from inside the unit. Empty
@@ -178,7 +228,13 @@ public sealed record BoundaryJob(
             : string.Empty;
 
     /// <summary>Every per-job folder the coder's unit needs, in the order they are made.</summary>
-    public IReadOnlyList<string> CoderFolders => [CoderHomeFolder, Path.Combine(CoderHomeFolder, ".claude"), CoderTempFolder, CoderVarTempFolder];
+    public IReadOnlyList<string> CoderFolders => CoderFoldersOf(ClaudeVendor);
+
+    /// <summary>The folders coai makes for <paramref name="vendor"/>'s unit: its home, the claude CLI's folder in it, and the two temp folders (<see cref="CoderTempRoot"/>: a unit sees them as <c>/tmp</c> and <c>/var/tmp</c> only).</summary>
+    public IReadOnlyList<string> CoderFoldersOf(string vendor) => [CoderHomeOf(vendor), Path.Combine(CoderHomeOf(vendor), ".claude"), CoderTempOf(vendor), CoderVarTempOf(vendor)];
+
+    /// <summary>Where the claude sign-in file is bound inside <paramref name="vendor"/>'s home.</summary>
+    public string CoderSignInFileOf(string vendor) => Path.Combine(CoderHomeOf(vendor), ".claude", ".credentials.json");
 
     /// <summary>
     /// The folder that holds the worktree, and every other coder worktree beside it: read-only to the coder, with the one worktree of the job bound writable on top. A coder that writes BESIDE its worktree writes into another job's.

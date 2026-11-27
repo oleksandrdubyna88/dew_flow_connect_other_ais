@@ -506,7 +506,8 @@ internal static class Program
                 return await AskRemote.RunAsync(Flags(args), Note, Console.Out);
 
             case Startup.AgyHook:
-                return Runners.Reviewers.AntigravityReadOnly.RunHook(Console.In, Console.Out);
+                // Started by agy from the folder of hooks.json: the guard's own file there says whether this is a coder's guard (epoch 3 E3 s6 t2); without one it is the read-only handler of the consultants, as it was.
+                return Runners.Reviewers.AntigravityCoderGuard.RunHook(Console.In, Console.Out, Directory.GetCurrentDirectory());
 
             case Startup.AskApi:
                 // The key is read from THIS process's environment inside the mode, never from argv.

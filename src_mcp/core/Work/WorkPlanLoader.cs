@@ -105,6 +105,10 @@ internal sealed class WorkPlanLoader(IWorkFolder folder, IYamlReader reader, Lis
                 errors.Add(new WorkError(WorkErrorCodes.YamlSyntax, path, node, "the file is not UTF-8 text"));
 
                 return new FileRead(true, null);
+            case WorkFile.NotRegular odd:
+                errors.Add(new WorkError(WorkErrorCodes.YamlSyntax, path, node, $"the entry is not a regular file that can be read ({odd.Reason})"));
+
+                return new FileRead(true, null);
             default:
                 return Parse(((WorkFile.Text)raw).Content, path, node, level);
         }

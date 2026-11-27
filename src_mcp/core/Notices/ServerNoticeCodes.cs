@@ -112,6 +112,12 @@ public static class ServerNoticeCodes
     /// </summary>
     public const string InstructionsSecret = "instructions-secret";
 
+    /// <summary>
+    /// The real sign-in file of a vendor (codex, agy) was not what it was when a coder job began: its sha256 or its modification time differ at the job's end (epoch 3 E3 s7 t6 d4). coai opens that file for reading only and gives the unit a copy, so something else changed it — usually the person's own CLI.
+    /// Subject is the job id; the notice names the vendor and says the two times, never a hash of a secret as a secret and never any text of the file.
+    /// </summary>
+    public const string SignInFileChanged = "sign-in-file-changed";
+
     /// <summary>Every code, for the test that asserts the redactor rewrites none of them.</summary>
     public static IReadOnlyList<string> All =>
     [
@@ -142,5 +148,6 @@ public static class ServerNoticeCodes
         ClaudeKeysEmpty,
         ClaudePersonSignInUsed,
         InstructionsSecret,
+        SignInFileChanged,
     ];
 }

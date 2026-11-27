@@ -103,7 +103,8 @@ public sealed class ACoderJobWithNoBoundaryIsRefusedTests
         var outcome = await bed.Turns(bed.Boundary(Degrade(item, bed))).RunAsync(bed.Job, Coder(bed), "c1");
 
         var refused = outcome.Should().BeOfType<CoderTurnOutcome.Refused>($"the preflight must see it: {outcome}").Subject;
-        refused.Sentence.Should().Contain(item).And.Contain("refused before the coder was launched");
+        // The stand-in home of this bed lives under /tmp, so a unit with no job /tmp also shows the stand-in home to the home row's read arm (M17); the sentence then names that row first. The row under test must still say no.
+        refused.Sentence.Should().Contain(item == BoundaryPreflight.TempIsTheJobs ? BoundaryPreflight.HomeIsTheJobs : item).And.Contain("refused before the coder was launched");
         refused.Record.Preflight.Single(row => row.Item == item).Held.Should().BeFalse($"{item} is the row that said no");
         NeverLaunched(bed, launches, "systemd-run");
     }

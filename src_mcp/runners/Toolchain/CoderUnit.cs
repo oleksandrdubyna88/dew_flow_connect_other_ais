@@ -45,7 +45,7 @@ internal static partial class CoderUnit
         host.BindSignIn ? [] : BoundaryUnit.KeysHidden(job);
 
     /// <summary>The <c>-p</c> properties of the coder's unit, in the order they are given.</summary>
-    internal static IReadOnlyList<string> Properties(BoundaryHost host, BoundaryJob job, CoderProgram program, TimeSpan runtimeMax)
+    internal static IReadOnlyList<string> Properties(BoundaryHost host, BoundaryJob job, CoderProgram program, TimeSpan runtimeMax, string vendor = BoundaryJob.ClaudeVendor)
     {
         var tree = job.Tree;
 
@@ -58,11 +58,14 @@ internal static partial class CoderUnit
             $"BindReadOnlyPaths={tree.GitEntry}",
             .. BoundaryUnit.Mounts(job),
             $"TemporaryFileSystem={job.JobCover}:ro",
-            $"BindPaths={job.CoderFolder}",
-            $"BindPaths={job.CoderTempFolder}:{BoundaryUnit.UnitTemp}",
-            $"BindPaths={job.CoderVarTempFolder}:{BoundaryUnit.UnitVarTemp}",
-            .. host.SignInFile.Length > 0 ? [$"BindReadOnlyPaths={host.SignInFile}:{job.CoderSignInFile}"] : Array.Empty<string>(),
+            // ONLY this vendor's folder of the job's coder (C3): another vendor's home is under the cover above and is not there.
+            $"BindPaths={job.CoderVendorFolder(vendor)}",
+            $"BindPaths={job.CoderTempOf(vendor)}:{BoundaryUnit.UnitTemp}",
+            $"BindPaths={job.CoderVarTempOf(vendor)}:{BoundaryUnit.UnitVarTemp}",
+            .. host.SignInFile.Length > 0 ? [$"BindReadOnlyPaths={host.SignInFile}:{job.CoderSignInFileOf(vendor)}"] : Array.Empty<string>(),
             .. KeysHidden(host, job),
+            // The real sign-in files of the vendors whose coder gets a COPY are not in a claude coder's unit either (C3 item 2).
+            .. BoundaryUnit.CopyVendorSignInHidden(host),
             .. program.BindFolder.Length > 0 ? [$"BindReadOnlyPaths={program.BindFolder}"] : Array.Empty<string>(),
             .. host.ResolverFile.Length > 0 ? [$"BindReadOnlyPaths={host.ResolverFile}"] : Array.Empty<string>(),
             .. BoundaryUnit.Hardening,
@@ -75,10 +78,10 @@ internal static partial class CoderUnit
     /// The fixed part of the unit's environment, as <c>env -i</c> sets it inside: <c>PATH</c> of system folders, the coder's own <c>HOME</c>, <c>TMPDIR</c>, a locale and the switches that keep it quiet — and nothing else. No vendor key, no
     /// <c>COAI_</c> name, no agent or bus socket; the values that must cross are <see cref="ByName"/>.
     /// </summary>
-    internal static IReadOnlyList<KeyValuePair<string, string>> Environment(BoundaryHost host, BoundaryJob job) =>
+    internal static IReadOnlyList<KeyValuePair<string, string>> Environment(BoundaryHost host, BoundaryJob job, string vendor = BoundaryJob.ClaudeVendor) =>
     [
         new("PATH", BoundaryHost.SystemPath),
-        new("HOME", job.CoderHomeFolder),
+        new("HOME", job.CoderHomeOf(vendor)),
         new("TMPDIR", BoundaryUnit.UnitTemp),
         new("LANG", "C.UTF-8"),
         new("TERM", "dumb"),

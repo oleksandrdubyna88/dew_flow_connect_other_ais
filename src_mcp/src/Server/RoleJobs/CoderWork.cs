@@ -121,7 +121,7 @@ internal sealed class CoderWork : IRoleWork
             Ladder = Ladder,
             Coder = confinement,
             OsLayer = layer,
-            Follow = (answered, token) => FollowAsync(run, git, prepared, site, loop, judge.Accepted, new CoderFixSession(answered.Model, answered.Handle, confinement, answered.KeyId, answered.Secret), ++answers, layer, cap, note, instructions, sent.GetValueOrDefault(RoleRoute.Format(answered.Model)) ?? CoderPromptRecord.None, new CoderCliRecord(answered.Model.Vendor, answered.CliVersion, Vendors.LastMeasured(answered.Model.Vendor)), token),
+            Follow = (answered, token) => FollowAsync(run, git, prepared, site, loop, judge.Accepted, new CoderFixSession(answered.Model, answered.Handle, confinement, answered.KeyId, answered.Secret) { Counter = answered.Counter }, ++answers, layer, cap, note, instructions, sent.GetValueOrDefault(RoleRoute.Format(answered.Model)) ?? CoderPromptRecord.None, new CoderCliRecord(answered.Model.Vendor, answered.CliVersion, Vendors.LastMeasured(answered.Model.Vendor)) { NotProved = Vendors.Resolve(answered.Model.Vendor) is CoderVendorResolution.Launchable found ? found.Vendor.NotProvedByPreflight : string.Empty }, token),
             Restore = token => CoderRestore.RestoreAsync(git, prepared.Tree, loop.LastCommit, token),
             // A job that leaves a vendor for another deletes what that vendor kept in the job's home before the next unit starts (epoch 3 E3 s8 t1).
             VendorLeft = left => Vendors.Resolve(left) is CoderVendorResolution.Launchable found ? layer.LeaveVendor(found.Vendor) : string.Empty,
@@ -133,6 +133,9 @@ internal sealed class CoderWork : IRoleWork
         }
         finally
         {
+            // The sign-in copies were made for this job and are not kept after it.
+            layer.RemoveSignInCopies();
+
             // The work is over, checks included: nothing reads a mount's source any more. A runner that lost the job leaves them — the job may be running again in another one.
             if (run.StillWriter())
             {
@@ -209,7 +212,7 @@ internal sealed class CoderWork : IRoleWork
 
         return ended switch
         {
-            CoderLoopEnd.Done done => new RoleFollowed.Ended(await EnvelopeAsync(run, git, prepared, layer, done, new CoderChecksReport(done.Rounds, cap, note), instructions, prompt, cli, ct)),
+            CoderLoopEnd.Done done => new RoleFollowed.Ended(await EnvelopeAsync(run, git, prepared, layer, done, new CoderChecksReport(done.Rounds, cap, note), instructions, prompt, loop.LastCliVersion.Length > 0 ? cli with { Installed = loop.LastCliVersion } : cli, ct)),
             CoderLoopEnd.FailOver failOver => new RoleFollowed.FailsOver(failOver.Why),
             _ => new RoleFollowed.Ended(((CoderLoopEnd.Halted)ended).Outcome),
         };
@@ -218,19 +221,29 @@ internal sealed class CoderWork : IRoleWork
     /// <summary>The loop ended with something to show: list the files from git, compare the generation again, and make the envelope — a success when it is green, a failure carrying the same envelope when it is not.</summary>
     private async Task<RoleWorkOutcome> EnvelopeAsync(IRoleRun run, GitHistory git, Prepared prepared, CoderOsLayer layer, CoderLoopEnd.Done end, CoderChecksReport checks, CoderInstructionsRecord instructions, CoderPromptRecord prompt, CoderCliRecord cli, CancellationToken ct)
     {
-        var changes = end.Head == prepared.BaseSha ? [] : await CoderCommits.ChangesAsync(git, prepared.Tree, prepared.BaseSha, end.Head, ct);
+        // A boundary that a cut turn proved is the job's end even when the job's own token was cancelled by then (M11 leg a): the end is written with a short time of its own, and the budget's word does not replace it.
+        var cutBoundary = ct.IsCancellationRequested && end.Stop == RoleStopWords.CoderBoundary;
+        using var own = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var changes = end.Head == prepared.BaseSha ? [] : await CoderCommits.ChangesAsync(git, prepared.Tree, prepared.BaseSha, end.Head, cutBoundary ? own.Token : ct);
         if (changes is null)
         {
-            return ct.IsCancellationRequested ? new RoleWorkOutcome.Stopped() : new RoleWorkOutcome.Failed("coder-commit", "git could not list the files the commit changed");
+            return ct.IsCancellationRequested && !cutBoundary ? new RoleWorkOutcome.Stopped() : new RoleWorkOutcome.Failed("coder-commit", "git could not list the files the commit changed");
         }
 
         Boundary?.Invoke("before-result");
-        if (ct.IsCancellationRequested || !run.StillWriter())
+        if ((ct.IsCancellationRequested && !cutBoundary) || !run.StillWriter())
         {
             return new RoleWorkOutcome.Stopped();
         }
 
-        var json = new CoderEnvelope(run.Request.JobId, prepared.BaseSha, end.Head, prepared.Branch, end.Report is not null, end.FixTurns, changes, end.Report, layer.Evidence, checks) { Instructions = instructions, Prompt = prompt, Cli = cli }.ToJson();
+        // The real sign-in files, before and after (s7 t6 d4): a hash and a time each; a difference is a notice to the person.
+        var signIn = layer.SignInRecords();
+        foreach (var changed in signIn.Where(record => record.Changed))
+        {
+            run.Notice(RoleJobNotices.SignInFileChanged(run.Job, changed, run.Clock.GetUtcNow().UtcDateTime));
+        }
+
+        var json = new CoderEnvelope(run.Request.JobId, prepared.BaseSha, end.Head, prepared.Branch, end.Report is not null, end.FixTurns, changes, end.Report, layer.Evidence, checks) { Instructions = instructions, Prompt = prompt, Cli = cli, SignIn = signIn }.ToJson();
 
         return end.Stop.Length == 0 ? new RoleWorkOutcome.Succeeded(json) : new RoleWorkOutcome.Failed(end.Stop, end.Reason, json);
     }
