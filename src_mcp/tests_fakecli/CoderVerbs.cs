@@ -111,6 +111,38 @@ internal static class CoderVerbs
     }
 
     /// <summary>
+    /// A steering path that is relative (the model map and the record folder of a fixture repository: <c>.fake/model-map.json</c>) is looked for in the working folder first and then below each folder the launch was given with <c>--add-dir</c>. An agy coder runs from the read-only guard folder and reaches
+    /// the worktree through <c>--add-dir</c> only, so without this a path that names the worktree could not be written before the job (whose id names the worktree) exists. A path that is rooted, or that is found nowhere, is answered as it was.
+    /// </summary>
+    internal static string? ResolveSteeringPath(string[] args, string? value)
+    {
+        if (string.IsNullOrEmpty(value) || Path.IsPathRooted(value))
+        {
+            return value;
+        }
+
+        var folders = new List<string> { Directory.GetCurrentDirectory() };
+        for (var at = 0; at + 1 < args.Length; at++)
+        {
+            if (args[at] == "--add-dir")
+            {
+                folders.Add(args[at + 1]);
+            }
+        }
+
+        foreach (var folder in folders)
+        {
+            var candidate = Path.Combine(folder, value);
+            if (File.Exists(candidate) || Directory.Exists(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        return value;
+    }
+
+    /// <summary>
     /// <c>hold-in &lt;folder&gt; &lt;ms&gt;</c>: writes <c>ready</c> into the folder (the EVENT a test waits for, never a sleep), then waits <paramref name="milliseconds"/> and exits 0 — a coder that is working while something else happens to the main checkout.
     /// </summary>
     internal static int HoldIn(string folder, int milliseconds)

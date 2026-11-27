@@ -169,6 +169,9 @@ if (args is ["models"])
 
 var minimal = MinimalSteering.Load(args);
 Func<string, string?> read = minimal is { } fromFile ? name => fromFile.GetValueOrDefault(name) : Environment.GetEnvironmentVariable;
+// A relative path of the model map or of the record folder may name the worktree of a job that the launch reaches through --add-dir (an agy coder starts in its guard folder).
+var steeredRead = read;
+read = name => name is "FAKECLI_MODEL_MAP" or "FAKECLI_RECORD_DIR" ? CoaiMcp.FakeCli.CoderVerbs.ResolveSteeringPath(args, steeredRead(name)) : steeredRead(name);
 if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor" || minimal is not null)
 {
     // A claude consultant asks its CLI's --help before every turn; this answers it without touching stdin.
