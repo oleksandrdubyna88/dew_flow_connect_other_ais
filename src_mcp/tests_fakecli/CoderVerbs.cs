@@ -111,7 +111,7 @@ internal static class CoderVerbs
     }
 
     /// <summary>
-    /// A steering path that is relative (the model map and the record folder of a fixture repository: <c>.fake/model-map.json</c>) is looked for in the working folder first and then below each folder the launch was given with <c>--add-dir</c>. An agy coder runs from the read-only guard folder and reaches
+    /// A steering path that is relative (the model map and the record folder of a fixture repository: <c>.fake/model-map.json</c>) is looked for in the working folder first and then below each folder the launch was given with <c>--add-dir</c>. A coder whose unit starts in a read-only folder of its own runs from it and reaches
     /// the worktree through <c>--add-dir</c> only, so without this a path that names the worktree could not be written before the job (whose id names the worktree) exists. A path that is rooted, or that is found nowhere, is answered as it was.
     /// </summary>
     internal static string? ResolveSteeringPath(string[] args, string? value)
