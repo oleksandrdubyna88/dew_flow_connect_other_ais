@@ -58,8 +58,8 @@ internal sealed class AgyCoderBed
     internal static CoderVendorSet Set(AgyCoderVendor? vendor = null) => CoderVendorSet.Of(Table(), vendor ?? Vendor());
 
     /// <summary>One tool call of the scripted agy: the name the hook sees, a path (relative to the worktree, or absolute) and what the tool writes.</summary>
-    internal static IReadOnlyDictionary<string, object?> Tool(string tool, string path, string content = "", string target = "", string replacement = "", bool skipHook = false, bool noEvent = false, bool hookTwice = false) =>
-        new Dictionary<string, object?> { ["tool"] = tool, ["path"] = path, ["content"] = content, ["target"] = target, ["replacement"] = replacement, ["skipHook"] = skipHook, ["noEvent"] = noEvent, ["hookTwice"] = hookTwice };
+    internal static IReadOnlyDictionary<string, object?> Tool(string tool, string path, string content = "", string target = "", string replacement = "", bool skipHook = false, bool noEvent = false, bool hookTwice = false, bool stayActive = false) =>
+        new Dictionary<string, object?> { ["tool"] = tool, ["path"] = path, ["content"] = content, ["target"] = target, ["replacement"] = replacement, ["skipHook"] = skipHook, ["noEvent"] = noEvent, ["hookTwice"] = hookTwice, ["stayActive"] = stayActive };
 
     /// <summary>One launch of the fake as agy: its tools, the report it answers with and what it says on stderr.</summary>
     internal static IReadOnlyDictionary<string, object?> Launch(IReadOnlyList<IReadOnlyDictionary<string, object?>>? tools = null, string? answer = null, string conversation = "", string stderr = "", int exit = 0, int tokensIn = 100, int tokensOut = 10, int sleepMs = 0, int holdMs = 0, string denied = "", IReadOnlyList<string>? reads = null, IReadOnlyList<string>? tries = null)

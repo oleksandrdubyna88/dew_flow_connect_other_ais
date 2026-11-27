@@ -265,7 +265,7 @@ internal sealed class CoderRig : IAsyncDisposable
     internal static readonly string[] StagedVendors = ["claude", "codex", "agy"];
 
     /// <summary>What <paramref name="vendor"/>'s coder unit sees as <c>/tmp</c>: that vendor's own temp folder of the job (claude's unless said).</summary>
-    internal string JobTemp(RoleJobRecord job, string vendor = "claude") => Path.Combine(JobFolder(job), "coder", vendor, "tmp");
+    internal string JobTemp(RoleJobRecord job, string vendor = "claude") => Path.Combine(JobFolder(job), "coder-temp", vendor, "tmp");
 
     /// <summary>The record folders of the launches of the job, one for each vendor that ran (the fake records inside its own unit's <c>/tmp</c>).</summary>
     internal IReadOnlyList<string> LaunchFolders(RoleJobRecord job) =>

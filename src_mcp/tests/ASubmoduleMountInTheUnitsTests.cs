@@ -188,7 +188,7 @@ public sealed class ASubmoduleMountInTheUnitsTests
         string[] e2 =
         [
             .. E2Isolation,
-            $"BindReadOnlyPaths={M}", "BindReadOnlyPaths=/w", $"BindPaths={W}", $"BindReadOnlyPaths={W}/.git", $"TemporaryFileSystem={J}:ro", $"BindPaths={J}/coder/claude", $"BindPaths={J}/coder/claude/{TempName}:{BoundaryUnit.UnitTemp}", $"BindPaths={J}/coder/claude/vartmp:{BoundaryUnit.UnitVarTemp}",
+            $"BindReadOnlyPaths={M}", "BindReadOnlyPaths=/w", $"BindPaths={W}", $"BindReadOnlyPaths={W}/.git", $"TemporaryFileSystem={J}:ro", $"BindPaths={J}/coder/claude", $"BindPaths={J}/coder-temp/claude/{TempName}:{BoundaryUnit.UnitTemp}", $"BindPaths={J}/coder-temp/claude/vartmp:{BoundaryUnit.UnitVarTemp}",
             .. CodexHidden,
             .. AgyHidden,
             .. E2Hardening,

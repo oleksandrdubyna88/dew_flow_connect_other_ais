@@ -300,7 +300,7 @@ public sealed class AAgyCoderFixTurnsTests
 
     // ---------- M11: a turn that ended badly is checked too, and a boundary wins over a crash ----------
 
-    public static TheoryData<string> CutTurns => new() { "exit-after-a-done-with-no-record", "timeout-after-a-done-with-no-record", "exit-with-a-mode-warning", "exit-after-a-denied-action-result" };
+    public static TheoryData<string> CutTurns => new() { "exit-after-a-done-with-no-record", "timeout-after-a-done-with-no-record", "exit-with-a-mode-warning", "exit-after-a-denied-action-result", "timeout-while-another-tool-is-active", "exit-while-another-tool-is-active" };
 
     [Theory]
     [MemberData(nameof(CutTurns))]
@@ -313,6 +313,8 @@ public sealed class AAgyCoderFixTurnsTests
         {
             "exit-after-a-done-with-no-record" => AgyCoderBed.Launch([broken], exit: 1),
             "timeout-after-a-done-with-no-record" => AgyCoderBed.Launch([broken], holdMs: 60_000),
+            "timeout-while-another-tool-is-active" => AgyCoderBed.Launch([AgyCoderBed.Tool("run_command", string.Empty, skipHook: true, stayActive: true)], holdMs: 60_000),
+            "exit-while-another-tool-is-active" => AgyCoderBed.Launch([AgyCoderBed.Tool("run_command", string.Empty, skipHook: true, stayActive: true)], exit: 1),
             "exit-with-a-mode-warning" => AgyCoderBed.Launch([AgyCoderBed.Writes(CoderRig.Green)], exit: 1, stderr: "warning: --mode auto is not available for this account; continuing in the default mode."),
             _ => AgyCoderBed.Launch([AgyCoderBed.Writes(CoderRig.Green)], exit: 1, answer: string.Empty, denied: "[{\"action\":\"command\",\"display_name\":\"Bash\"}]"),
         }).SaysEntries("gemini-4-argon-medium", Turn(CoderRig.Green, AgyCoderBed.Other));
@@ -352,8 +354,23 @@ public sealed class AAgyCoderFixTurnsTests
         cut(Stream(Init("c"), Step("c", 2, "DONE", "run_command")), Record("c", 2, "run_command", "allow") + "\n", string.Empty).Should().BeOfType<CoderTurnVerdict.Boundary>("a DONE event of another tool");
         cut(done, Record("c", 2, "write_file", "allow") + "\n", string.Empty).Should().BeOfType<CoderTurnVerdict.Fine>("a matched event: the cut explains the rest");
         cut(Stream(Init("c"), Step("c", 2, "ACTIVE", "write_file")), string.Empty, string.Empty).Should().BeOfType<CoderTurnVerdict.Fine>("an event that did not end is what a cut explains");
+        cut(Stream(Init("c"), Step("c", 2, "ACTIVE", "run_command")), string.Empty, string.Empty).Should().BeOfType<CoderTurnVerdict.Boundary>("an event of another tool is a break in every state: a cut does not explain that it was started");
         cut(Stream(Init("c")), Record("c", 2, "write_file", "allow") + "\n", string.Empty).Should().BeOfType<CoderTurnVerdict.Fine>("a record with no event: the stream was cut before it");
         cut(Stream(Init("c")), string.Empty, "warning: --mode auto is not available").Should().BeOfType<CoderTurnVerdict.Boundary>("a mode sign");
+    }
+
+    [Fact]
+    public void M11b_AnActiveEventOfAnotherTool_IsBoundary_OnACleanStreamAndOnACutOne_Alike()
+    {
+        var active = Stream(Init("c"), Step("c", 2, "ACTIVE", "run_command"));
+
+        Check(active, string.Empty, exit: 0).Should().BeOfType<CoderTurnVerdict.Boundary>("a clean stream (G15 item 4)");
+        Check(active, string.Empty, exit: 1).Should().BeOfType<CoderTurnVerdict.Boundary>("a stream that ended with an exit that is not 0");
+        AgyTurnCheck.Check(new ProcessResult(-1, active, string.Empty, true), string.Empty, string.Empty).Should().BeOfType<CoderTurnVerdict.Boundary>("a stream the deadline cut");
+        foreach (var state in new[] { "ERROR", "DONE" })
+        {
+            Check(Stream(Init("c"), Step("c", 2, state, "run_command")), string.Empty, exit: 1).Should().BeOfType<CoderTurnVerdict.Boundary>(state);
+        }
     }
 
     // ---------- the check itself, over crafted streams ----------
