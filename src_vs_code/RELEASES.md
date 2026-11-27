@@ -3,6 +3,13 @@
 > The next release of the extension is 2.0.0, requested by hand with a `Release-As: 2.0.0` footer: the v1 data migration runs only from major version 2 (v2 epoch 1, E5).
 > What changes for a person is in `RELEASE_NOTES_2.0.md` at the repository root.
 
+## [2.1.1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v2.1.0...extension-v2.1.1) (2026-11-27)
+
+
+### Bug Fixes
+
+* **extension:** while the round is at a place, its Claude usage cell says the usage is being read now, not that it was not asked ([#1061](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/1061)) ([cdcfa0b](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/cdcfa0b97d5e6da6d498734303dd82a32ddd319f))
+
 ## [2.1.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v2.0.0...extension-v2.1.0) (2026-11-27)
 
 
