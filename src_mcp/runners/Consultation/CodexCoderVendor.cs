@@ -185,6 +185,32 @@ internal sealed class CodexCoderVendor : ICoderVendor
         .. Flags(model, CoderLaunchFiles.None).Skip(3),
     ];
 
+    /// <summary>
+    /// The folder the unit that reads the list of models starts in (epoch 3 E3 s2 t5, S4 item 13): an empty folder inside the vendor's folder of the job, made new for every read. It holds no text of the repository — no <c>AGENTS.md</c>, no <c>.codex</c> — and is never the worktree.
+    /// </summary>
+    public static string ModelListFolder(BoundaryJob job) => Path.Combine(job.CoderVendorFolder(VendorId), "models-cwd");
+
+    /// <summary>
+    /// The looks that are made before EVERY start of the CLI in the job's home — a turn, and the list of models (A4-M3): the home is a real folder at its own real path, and it holds no <c>environments.toml</c> (the launch half of CX-C1: a file that makes the CLI run commands somewhere that is not the vendor sandbox, judgement 13.11).
+    /// </summary>
+    public string BeforeModelFree(BoundaryJob job)
+    {
+        var codexHome = CodexHome(job);
+        if (SignInCopy.HomeProblem(job.CoderHomeOf(VendorId)) is { Length: > 0 } homeProblem)
+        {
+            return $"{homeProblem}; the codex coder was not launched";
+        }
+
+        if (RealPath.Lstat(codexHome).Kind != EntryKind.Directory)
+        {
+            return "the CODEX_HOME of the job is not a real folder, so the codex coder was not launched";
+        }
+
+        return RealPath.Lstat(Path.Combine(codexHome, EnvironmentsFile)).Kind != EntryKind.Missing
+            ? $"the job's CODEX_HOME holds a file named {EnvironmentsFile}, which would let the CLI run commands outside its sandbox; the codex coder was not launched"
+            : string.Empty;
+    }
+
     /// <summary>The job's <c>CODEX_HOME</c>: <c>&lt;job&gt;/coder/codex/home/.codex</c>.</summary>
     public static string CodexHome(BoundaryJob job) => Path.Combine(job.CoderHomeOf(VendorId), ".codex");
 
@@ -207,20 +233,9 @@ internal sealed class CodexCoderVendor : ICoderVendor
     public CoderLaunchPrepared PrepareLaunch(BoundaryHost host, BoundaryJob job, ProcessRequest request)
     {
         var codexHome = CodexHome(job);
-        if (SignInCopy.HomeProblem(job.CoderHomeOf(VendorId)) is { Length: > 0 } homeProblem)
+        if (BeforeModelFree(job) is { Length: > 0 } looked)
         {
-            return Refused(request, $"{homeProblem}; the codex coder was not launched");
-        }
-
-        if (RealPath.Lstat(codexHome).Kind != EntryKind.Directory)
-        {
-            return Refused(request, "the CODEX_HOME of the job is not a real folder, so the codex coder was not launched");
-        }
-
-        // The launch half of CX-C1: a file that makes the CLI run commands somewhere that is not the vendor sandbox. One look, every launch.
-        if (RealPath.Lstat(Path.Combine(codexHome, EnvironmentsFile)).Kind != EntryKind.Missing)
-        {
-            return Refused(request, $"the job's CODEX_HOME holds a file named {EnvironmentsFile}, which would let the CLI run commands outside its sandbox; the codex coder was not launched");
+            return Refused(request, looked);
         }
 
         // The launch half of CX-T5: a fresh attempt starts with no rollout of an earlier thread of the job (a failed-over model's), so the check after the turn can hold "no file of another thread" as written.

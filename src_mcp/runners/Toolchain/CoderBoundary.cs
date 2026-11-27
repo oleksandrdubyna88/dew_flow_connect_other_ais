@@ -334,7 +334,19 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
                 return new ModelFreeRun(null, linked);
             }
 
-            var (run, notStarted) = await RunUnitAsync(job, request, part, new BoundaryRecord(BoundaryRecord.UnitBoundary, [], "host", NetworkReason, []), ct);
+            // The checks that are made before every start of the CLI in the job's home (A4-M3 item 2): a file that sends the CLI's commands elsewhere is a boundary refusal, here too.
+            if (Vendor.BeforeModelFree(job) is { Length: > 0 } looked)
+            {
+                return new ModelFreeRun(null, looked);
+            }
+
+            // The unit starts in a folder that holds NO text of the repository (S4 item 13): an empty folder of the job's own vendor folder, made new for this run — never the worktree, whose AGENTS.md and .codex the run must not sit beside, because it talks to the vendor.
+            if (EmptyWorkFolder(job, request.WorkingDirectory) is { Length: > 0 } notEmpty)
+            {
+                return new ModelFreeRun(null, notEmpty);
+            }
+
+            var (run, notStarted) = await RunUnitAsync(job, request, part, new BoundaryRecord(BoundaryRecord.UnitBoundary, [], "host", NetworkReason, []), ct, request.WorkingDirectory);
 
             // A unit that could not be started is the boundary's fault (no user manager, a refused property), never the model's: the sentence is the unit control's own.
             return notStarted.Length > 0 ? new ModelFreeRun(null, $"The unit that reads the list of models could not be started: {notStarted}") : new ModelFreeRun(run, string.Empty);
@@ -345,7 +357,49 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
         }
     }
 
-    private async Task<(BoundaryRun Run, string NotStarted)> RunUnitAsync(BoundaryJob job, ProcessRequest request, string part, BoundaryRecord seen, CancellationToken ct)
+    /// <summary>
+    /// Makes <paramref name="folder"/> an EMPTY real folder inside the vendor's own folder of the job (the one folder of the unit that is bound writable and is not the worktree): what is there is removed first, a link or a file at its place is a refusal, and a folder outside the vendor's folder is never used.
+    /// Empty when it is ready, else the sentence.
+    /// </summary>
+    private string EmptyWorkFolder(BoundaryJob job, string folder)
+    {
+        var vendorFolder = Path.TrimEndingDirectorySeparator(job.CoderVendorFolder(Vendor.Id));
+        if (folder.Length == 0 || !Path.GetFullPath(folder).StartsWith(vendorFolder + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+        {
+            return $"the folder the list of models is read in ({folder}) is not inside the vendor's folder of the job, so the list was not read";
+        }
+
+        // No folder above it is a folder of the repository (A4-M3 item 1): a '.git' on the way up would be text the run sits under.
+        for (var above = Path.GetDirectoryName(Path.GetFullPath(folder)); !string.IsNullOrEmpty(above); above = Path.GetDirectoryName(above))
+        {
+            if (new[] { ".git" }.FirstOrDefault(name => RealPath.Lstat(Path.Combine(above, name)).Kind != EntryKind.Missing) is { } found)
+            {
+                return $"a folder above the folder the list of models is read in ({above}) holds {found}, so it is a folder of a repository, and the list was not read";
+            }
+        }
+
+        try
+        {
+            if (RealPath.Lstat(folder).Kind is EntryKind.Link or EntryKind.File)
+            {
+                File.Delete(folder);
+            }
+            else if (RealPath.Lstat(folder).Kind == EntryKind.Directory)
+            {
+                Directory.Delete(folder, recursive: true);
+            }
+
+            Directory.CreateDirectory(folder);
+
+            return RealPath.Lstat(folder).Kind == EntryKind.Directory && !Directory.EnumerateFileSystemEntries(folder).Any() ? string.Empty : $"the folder the list of models is read in ({folder}) could not be made empty, so the list was not read";
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return $"the folder the list of models is read in could not be made ({e.GetType().Name}), so the list was not read";
+        }
+    }
+
+    private async Task<(BoundaryRun Run, string NotStarted)> RunUnitAsync(BoundaryJob job, ProcessRequest request, string part, BoundaryRecord seen, CancellationToken ct, string? workFolder = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(part);
         if (!CoderUnit.IsPart(part))
@@ -371,7 +425,7 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
         var record = seen with { Properties = properties };
         try
         {
-            var arguments = CoderUnit.Wrapped(unit, Vendor.WorkingDirectory(job), properties, Vendor.Environment(launchHost, job), program, request.Arguments, crossing, Degrade);
+            var arguments = CoderUnit.Wrapped(unit, workFolder ?? Vendor.WorkingDirectory(job), properties, Vendor.Environment(launchHost, job), program, request.Arguments, crossing, Degrade);
             var started = await _units.StartAsync(sent with
             {
                 Executable = host.SystemdRun,

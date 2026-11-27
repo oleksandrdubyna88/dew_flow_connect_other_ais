@@ -192,6 +192,12 @@ internal interface ICoderVendor
     /// </summary>
     CoderLaunchPrepared PrepareLaunch(BoundaryHost host, BoundaryJob job, ProcessRequest request) => new(request, string.Empty);
 
+    /// <summary>
+    /// The checks that are made before EVERY start of the CLI in the job's home, for a program of the vendor that makes no model call and so has no launch of its own (codex: the list of models, epoch 3 E3 s2 t5, A4-M3): the same looks as <see cref="PrepareLaunch"/> makes before a turn, without what needs the model.
+    /// Empty when the program may start, else the sentence that says why not.
+    /// </summary>
+    string BeforeModelFree(BoundaryJob job) => string.Empty;
+
     /// <summary>After the vendor's unit ended: what it wrote inside the unit that the host must read is brought to where the launch named it (codex: the report file). The default does nothing.</summary>
     void CollectLaunch(BoundaryJob job, ProcessRequest original, ProcessRequest launched)
     {

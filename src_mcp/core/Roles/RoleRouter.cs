@@ -122,8 +122,16 @@ internal static class RoleRouter
 
         return Named(list, request.Model) is { } named
             ? Chosen([named], list, why + $", {named.Model} first because the caller named it")
-            : new RouteResult.Refused($"model '{request.Model}' is not in the {ImportantRole} list ({Names(list)}), and this task is important ({reason}): it runs only on that list; name one of them or set {ModelsSetting}");
+            : new RouteResult.Refused($"model '{request.Model}' is not in the {ImportantRole} list ({Names(list)}), and this task is important ({reason}): it runs only on that list; name one of them or set {ModelsSetting}{FamilyHint(request.Model, list)}");
     }
+
+    /// <summary>
+    /// A codex name of the exact shape whose FAMILY is on the list (epoch 3 E3 s2 t5, S4 item 6): lists are compared by the name as written, and never by what a family resolves to, so a caller who names <c>gpt-6.2-astra</c> against a list that holds <c>astra</c> is refused — and told to name the family or to change the list.
+    /// </summary>
+    private static string FamilyHint(string model, IReadOnlyList<ModelRef> list) =>
+        CodexModelShape.TryParse(model, RoleModelNames.Current.CodexFamilies, out var family, out _) && list.Any(entry => entry.Vendor == "codex" && entry.Model == family)
+            ? $"; the list holds the family '{family}' and lists are compared by the name as written, so name '{family}' or change the list in {ModelsSetting}"
+            : string.Empty;
 
     /// <summary>An explicit model, else the coder's band, then the role's list.</summary>
     private static RouteResult Ordinary(RouteRequest request, RouteTable table)

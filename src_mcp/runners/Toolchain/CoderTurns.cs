@@ -94,11 +94,6 @@ public sealed class CoderTurns(CoderBoundary boundary, FilesystemInvariant invar
     internal async Task<CoderTurnOutcome> RunModelFreeAsync(BoundaryJob job, ProcessRequest request, string part, ICoderVendor vendor, SignInJobs signIns, CancellationToken ct)
     {
         var bound = boundary.For(vendor);
-        if (WrongWorktree(bound.Vendor.WorkingDirectory(job), job, request) is { Length: > 0 } wrong)
-        {
-            return new CoderTurnOutcome.Refused(wrong, new BoundaryRecord(BoundaryRecord.UnitBoundary, [], "host", CoderBoundary.NetworkReason, []));
-        }
-
         if (await bound.PrepareSignInAsync(job, request.Executable, request.Timeout + UnitControl.Backstop, signIns, DateTime.UtcNow, ct) is { Length: > 0 } unsigned)
         {
             return new CoderTurnOutcome.Refused(unsigned, new BoundaryRecord(BoundaryRecord.UnitBoundary, [], "host", CoderBoundary.NetworkReason, []));

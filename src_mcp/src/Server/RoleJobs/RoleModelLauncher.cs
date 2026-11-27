@@ -179,7 +179,8 @@ internal sealed partial class RoleModelLauncher(Func<string, string?> settings, 
         var ready = (ConsultantPreparation.Ready)prepared;
 
         var built = runtime.Build(ready.Launch);
-        var listing = built with { Request = built.Request with { Arguments = CodexModelList.Arguments, StdIn = string.Empty, Timeout = CodexModelList.Deadline, MaxOutputChars = CodexModelList.MostChars + 1 }, OutputFile = string.Empty };
+        // A coder's list is read in a folder with no text of the repository (S4 item 13); a read-only role reads it where its launch runs.
+        var listing = built with { Request = built.Request with { Arguments = CodexModelList.Arguments, StdIn = string.Empty, Timeout = CodexModelList.Deadline, MaxOutputChars = CodexModelList.MostChars + 1, WorkingDirectory = Coder is null ? built.Request.WorkingDirectory : CodexCoderVendor.ModelListFolder(Layer!.Job) }, OutputFile = string.Empty };
         if (Coder is null)
         {
             return new RoleLaunched(await new ReviewerExecutor(launcher).LaunchOnceAsync(listing, ct), null, runtime, listing, string.Empty) { CliVersion = ready.CliVersion };

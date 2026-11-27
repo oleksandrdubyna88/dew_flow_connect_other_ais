@@ -1,7 +1,7 @@
 namespace CoaiMcp.Core.Roles;
 
 /// <summary>
-/// The exact shape of a codex model name, <c>gpt-&lt;version&gt;-&lt;family&gt;</c> (epoch 3 E3 s2 t5; <c>SPEC_CHANGES.md</c> section Q1; ledger entry 2.1): <c>&lt;version&gt;</c> is whole numbers with single dots between them (<c>6</c>, <c>6.1</c>, <c>5.6</c>, <c>6.10</c>) and
+/// The exact shape of a codex model name, <c>gpt-&lt;version&gt;-&lt;family&gt;</c> (epoch 3 E3 s2 t5; <c>SPEC_CHANGES.md</c> section Q1; ledger entry 2.1): <c>&lt;version&gt;</c> is whole numbers with single dots between them and no leading zero in a number (<c>6</c>, <c>6.1</c>, <c>5.6</c>, <c>6.10</c>; not <c>06</c> or <c>6.01</c>) and
 /// <c>&lt;family&gt;</c> is one of the families of <c>shared/role-model-names.json</c> (<c>codex.families</c>). Nothing else has the shape: not <c>GPT-6.1-terra</c>, not <c>gpt-x-terra</c>, not <c>gpt-6.1-terra-preview</c>, not a name with a space.
 /// </summary>
 /// <remarks>
@@ -54,7 +54,7 @@ public static class CodexModelShape
         var numbers = new List<int>();
         foreach (var piece in version.Split('.'))
         {
-            if (piece.Length is 0 or > MostDigits || !piece.All(character => character is >= '0' and <= '9'))
+            if (piece.Length is 0 or > MostDigits || (piece.Length > 1 && piece[0] == '0') || !piece.All(character => character is >= '0' and <= '9'))
             {
                 return null;
             }
