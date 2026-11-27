@@ -1,6 +1,6 @@
 # PLAN — E6 stories and spec: the `jq` installer
 
-> Status: **plan only, nothing implemented yet, 2026-11-27.** The stories AND the spec of epic E6 of
+> Status: **PARKED by the owner, 2026-11-27 (the parent's entry 6.1): as measured, it would install on no place of the owner. Plan only, nothing implemented.** The stories AND the spec of epic E6 of
 > [PLAN_the_terminal_panel_shows_the_accounts_and_their_usage.md](PLAN_the_terminal_panel_shows_the_accounts_and_their_usage.md)
 > (its *Epics* § *E6*, decision 17, the answer Q3) and of its
 > [appendix](PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_appendix.md) (§ E the design, § B

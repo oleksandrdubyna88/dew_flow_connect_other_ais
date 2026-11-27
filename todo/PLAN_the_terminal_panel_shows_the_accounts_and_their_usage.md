@@ -1,6 +1,6 @@
 # PLAN — the terminal panel shows the AI accounts of the open ssh hosts, and their usage
 
-> Status: **In progress, 2026-11-27 — epoch 6 is approved by the owner; E1 to E4 are released as extension 2.1.0; of E5, the gate R12 is not run; E6, the `jq` installer, is plan only.**
+> Status: **In progress, 2026-11-27 — epoch 6 is approved by the owner; E1 to E4 are released as extension 2.1.0; of E5, the gate R12 is not run; E6, the `jq` installer, is parked (6.1).**
 > How the plan came here is in the ledger below; the status as it said so before: the appendix, § K.24,
 > § K.34 and § K.42. **Epoch 5 took the changes 5.1 to 5.9 on 2026-11-27** — the owner's four answers to
 > E6's questions (5.1: E6 is the sixth epic of this plan again; 5.2: 2.1.0 was released before R12, whose
@@ -329,6 +329,10 @@ Narrowed: yes — the release gate "R7 and R12 passed, once, on the head that is
   was tagged. The Definition of Done keeps that box open.)
 
 > Epoch 6 · approved 2026-11-27 · by owner · state: open
+
+- 6.1 · 2026-11-27 · owner · epics, scope — E6 is parked: as measured, it would install `jq` on no place of the owner
+  (R10 and R10 (f) of the E5 results. The owner, asked, chose to park it. Its document stays as written; no code.
+  It comes back when a place lacks `jq` and its login user is root or has `sudo` with no password.)
 
 ## The goal
 
@@ -1116,7 +1120,7 @@ What is kept, reworked and retired of it: *Re-review for epoch 3*, above.
 | R10 | Which places lack `jq` | A table: `jq` there or not, the manager word, root or `sudo` without a password. A place without `jq` shows the fixed command; after the owner runs it, the next round reads the accounts. The count is the input of E6 |
 | W8 | A start of `agy` (§ 5) | A record |
 
-### E6 — The `jq` installer · the next release (entries 4.2 and 5.1)
+### E6 — The `jq` installer · PARKED (entry 6.1)
 
 **Not in 2.1.0, which shows the install command with a copy button (§ 1). It is the sixth epic of THIS
 plan, for the release after 2.1.0** (the owner, 2026-11-27: entry 5.1; entry 4.2 had said "under a later
