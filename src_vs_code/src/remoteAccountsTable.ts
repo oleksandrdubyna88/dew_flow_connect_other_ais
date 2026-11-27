@@ -237,17 +237,32 @@ const MISS_SAID: Readonly<Record<UsageMiss['why'], (miss: never) => string>> = {
 
 const BLOCKED_SAID = 'Usage not read: the usage command went wrong on this host, so CoAI stopped asking it';
 const NOT_ASKED_SAID = 'Usage not read: it was not asked for in this round';
+/** While the round is at this place: its first reading has landed and its usage call may be running, so "not asked" would not be true yet. */
+export const USAGE_READING_NOW_SAID = 'Usage is being read now…';
 
-/** What a place's memory says of its usage call: the miss, and whether the host is blocked at a version. */
+/** What a place's memory says of its usage call: the miss, whether the host is blocked at a version, and whether the round is at this place now. */
 interface UsageContext {
   readonly miss: UsageMiss | undefined;
   readonly blocked: boolean;
+  readonly readingNow: boolean;
+}
+
+/** Why a reading with no usage figures has none, when the script did not say it failed. */
+function usageNotReadSaid(context: UsageContext): string {
+  if (context.miss !== undefined) {
+    return usageMissSaid(context.miss);
+  }
+  if (context.blocked) {
+    return BLOCKED_SAID;
+  }
+
+  return context.readingNow ? USAGE_READING_NOW_SAID : NOT_ASKED_SAID;
 }
 
 const usageFailedSaid = (found: Found, context: UsageContext): string => {
   const { usage } = found;
   if (usage.state !== 'failed') {
-    return context.miss !== undefined ? usageMissSaid(context.miss) : context.blocked ? BLOCKED_SAID : NOT_ASKED_SAID;
+    return usageNotReadSaid(context);
   }
   const version = `Claude Code ${versionText(found.version)}`;
   const said: Readonly<Record<typeof usage.why, string>> = {
@@ -260,7 +275,10 @@ const usageFailedSaid = (found: Found, context: UsageContext): string => {
   return `Usage unavailable: ${said[usage.why]}`;
 };
 
-const usageContextOf = (memory: HostMemory): UsageContext => ({ miss: memory.usageMiss, blocked: memory.usageBlockedAt !== undefined });
+const usageContextOf = (memory: HostMemory, readingNow: boolean): UsageContext => ({ miss: memory.usageMiss, blocked: memory.usageBlockedAt !== undefined, readingNow });
+
+/** The round is at this place now: at its ssh host, or, for a WSL place, at the scope host `wsl` whose turn reads it. */
+const readingNowAt = (round: RoundNow, key: string): boolean => round.kind === 'running' && (round.host === key || (round.host === 'wsl' && isWslKey(key)));
 
 type Shell = Omit<ToolRow, 'version' | 'account' | 'span'>;
 
@@ -354,7 +372,7 @@ function sharedAccount(members: readonly Member[]): Shared {
 }
 
 function sharedOf(seen: readonly Seen[]): ReadonlyMap<string, Shared> {
-  const members = seen.flatMap((one): readonly Member[] => (one.read.claude.state === 'found' ? [{ host: one.host, found: one.read.claude, at: one.at, miss: one.miss, blocked: one.blocked }] : []));
+  const members = seen.flatMap((one): readonly Member[] => (one.read.claude.state === 'found' ? [{ host: one.host, found: one.read.claude, at: one.at, miss: one.miss, blocked: one.blocked, readingNow: one.readingNow }] : []));
   const keys = new Set(members.flatMap((one) => accountKeyOf(one.found) ?? []));
 
   return new Map([...keys].map((key) => [key, sharedAccount(members.filter((one) => accountKeyOf(one.found) === key))]));
@@ -563,9 +581,9 @@ const placeNameOf = (id: Ident): string => (isWslKey(id.host) ? id.shown : id.ho
 /** A read place with no tool has one line — but a root place has none: root is a place of nearly every distro, and a line for each would be noise (E3.S3). */
 const lineOf = (head: Head, rows: readonly ToolRow[], root: boolean): string | null => (head.kind === 'read' && rows.length === 0 && !root ? NO_TOOL_SAID : null);
 
-function readBlock(id: Ident, memory: HostMemory, head: Head, shared: ReadonlyMap<string, Shared>, root: boolean): Block {
+function readBlock(id: Ident, memory: HostMemory, head: Head, shared: ReadonlyMap<string, Shared>, root: boolean, readingNow: boolean): Block {
   const { reading } = memory;
-  const rows = reading === undefined ? [] : rowsOf(placeNameOf(id), { host: id.host, read: reading.read, at: reading.atMs, ...usageContextOf(memory) }, shared);
+  const rows = reading === undefined ? [] : rowsOf(placeNameOf(id), { host: id.host, read: reading.read, at: reading.atMs, ...usageContextOf(memory, readingNow) }, shared);
   const olderAt = olderAtOf(head, reading);
 
   return {
@@ -578,7 +596,7 @@ function readBlockFor(input: TableInput, id: Ident, shared: ReadonlyMap<string, 
   const memory = input.memory.get(id.host) ?? {};
   const root = splitWslKey(id.host)?.user === 'root';
 
-  return readBlock(id, memory, memoryHead(placeNameOf(id), memory), shared, root);
+  return readBlock(id, memory, memoryHead(placeNameOf(id), memory), shared, root, readingNowAt(input.round, id.host));
 }
 
 /** Why the scope host `host` is not read at all, or nothing when it is. */
@@ -626,7 +644,7 @@ const seenOf = (input: TableInput, keys: readonly string[]): readonly Seen[] =>
   keys.flatMap((key) => {
     const reading = input.memory.get(key)?.reading;
 
-    return reading === undefined ? [] : [{ host: key, read: reading.read, at: reading.atMs, ...usageContextOf(input.memory.get(key) ?? {}) }];
+    return reading === undefined ? [] : [{ host: key, read: reading.read, at: reading.atMs, ...usageContextOf(input.memory.get(key) ?? {}, readingNowAt(input.round, key)) }];
   });
 
 /** The model, from what the window holds. Deterministic: the same input gives the same model. */
