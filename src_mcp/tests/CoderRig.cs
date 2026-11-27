@@ -277,7 +277,7 @@ internal sealed class CoderRig : IAsyncDisposable
     internal bool CodexUnit { get; set; }
 
     /// <summary>The folder of the job the fake's map and launch records are staged in, as the host sees it.</summary>
-    internal string Scratch(RoleJobRecord job) => CodexUnit ? Path.Combine(JobFolder(job), "coder", "codex", "vartmp") : JobTemp(job);
+    internal string Scratch(RoleJobRecord job) => CodexUnit ? Path.Combine(JobFolder(job), "coder-temp", "codex", "vartmp") : JobTemp(job);
 
     private string UnitScratch => CodexUnit ? BoundaryUnit.UnitVarTemp : BoundaryUnit.UnitTemp;
 
