@@ -57,9 +57,9 @@ public sealed class EveryClassThatSetsTheProcessEnvironmentTests
     [Fact]
     public void NoStaticHelperSetsTheProcessEnvironment_ButFakeCliSteeringAndTheRunTempInitializer()
     {
-        TestSourceIndex.StaticOffenders(TestSourceIndex.Classes, SetsTheEnvironment, allowed: [nameof(FakeCliSteering), nameof(RunTemp)]).Should().BeEmpty(
+        TestSourceIndex.StaticOffenders(TestSourceIndex.Classes, SetsTheEnvironment, allowed: [nameof(FakeCliSteering), nameof(RunTemp), nameof(PerUserFolderForTheRun)]).Should().BeEmpty(
             "a static class is placed in no collection, so an environment write from a helper runs in whichever class called it; "
-            + "RunTemp's module initializer is the one other writer — it runs once, before any test, and never again");
+            + "the module initializers of RunTemp and of PerUserFolderForTheRun are the other writers — each runs once, before any test, and never again");
     }
 
     [Fact]
