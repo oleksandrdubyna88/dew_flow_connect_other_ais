@@ -44,7 +44,18 @@ public sealed class ChecksAtBase(GitHistory git, CheckRunner runner)
             return new CheckResult(CheckState.ToolchainRefused, [], atBase.Trouble);
         }
 
-        var change = Compare(atBase.File, tree.Read(ToolchainTables.FilePath, ToolchainTables.MaxBytes));
+        WorkFile inTree;
+        try
+        {
+            inTree = tree.Read(ToolchainTables.FilePath, ToolchainTables.MaxBytes);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // A read the disk refuses (a check ran chmod 000 on the file) is an entry that cannot be read — a change, as a FIFO is — not an exception that ends the job with no envelope (pass 10, S73).
+            inTree = new WorkFile.NotRegular($"the disk refused the read, {e.GetType().Name}");
+        }
+
+        var change = Compare(atBase.File, inTree);
         var result = await runner.RunAsync(ToolchainFile.Read(atBase.File), request, ct);
 
         return result with { ToolchainChange = change, Note = result.Note + Reported(change, baseSha) };

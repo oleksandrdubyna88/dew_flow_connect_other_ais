@@ -40,6 +40,9 @@ internal sealed class SignInRefresh(IProcessLauncher launcher, BoundaryHost host
         // The folder that holds the jobs' folders is an empty tmpfs: no other job, no worktree, no coder home of this job is there. Only the scratch home is bound back, writable.
         $"TemporaryFileSystem={job.JobCover}:ro",
         $"BindPaths={scratch}",
+        // The key pool is in NO unit of the family, and no real sign-in file of the person is read by any unit but as the copy it is given: this unit holds the one full copy it needs, in its scratch home (pass 10, S26, R-S7).
+        .. BoundaryUnit.KeysHidden(job),
+        .. BoundaryUnit.SignInHidden(host),
         .. program.BindFolder.Length > 0 ? [$"BindReadOnlyPaths={program.BindFolder}"] : Array.Empty<string>(),
         .. host.ResolverFile.Length > 0 ? [$"BindReadOnlyPaths={host.ResolverFile}"] : Array.Empty<string>(),
         .. BoundaryUnit.Hardening,

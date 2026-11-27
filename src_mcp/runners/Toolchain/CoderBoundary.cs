@@ -148,7 +148,8 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
             if (recipe.RefreshArgv.Count > 0 && recipe.ExpiryField.Length > 0 && (realExpiry is null || realExpiry.Value - nowUtc < runtimeMax + recipe.Margin))
             {
                 // The access token of the real file has no margin: ONE refresh in a unit of its own, on a scratch home that holds the full copy. It runs only now, and only when the margin is missing; a real file that has it is cut into the copy as it is.
-                var program = Vendor.Program(executable, host.Path, job);
+                // The home rule is asked here too, as for the launch: a program that lies in the person's home would be run with the home bound back, and with the owner's refresh token in the scratch home (pass 10, S54).
+                var program = ProgramOf(executable, job);
                 if (program.Problem.Length > 0)
                 {
                     return $"the sign-in of {Vendor.Id} needs a refresh and its program cannot be run in a unit: {program.Problem}";

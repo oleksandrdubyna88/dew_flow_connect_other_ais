@@ -263,6 +263,9 @@ public sealed class ACodexCoderBoundaryTests
         CoaiMcp.Runners.Files.UnitWrittenFile.Read(fifo, 1024).Should().BeOfType<CoaiMcp.Runners.Files.FileReadResult.Unreadable>("M19, S55");
         CoderTurnCheck.CheckBudget.Should().Be(TimeSpan.FromSeconds(30), "S61");
 
+        // M20 (and S73): the worktree's toolchain file is read by the same road; a FIFO is a NotRegular entry, an entry the disk refuses is an exception the round turns into a stop word (the rig tests of AToolchainFileOfTheWorktreeTests and APassTenShouldsTests).
+        new CoaiMcp.Work.DiskWorkFolder(outside).Read("a-fifo", 1024).Should().BeOfType<CoaiMcp.Core.Work.WorkFile.NotRegular>("M20: a FIFO is never waited on");
+
         // R-M15: the temp sources lie beside the coder's folder, never inside it, and a link at one of the names is refused.
         job.CoderTempOf("codex").Should().StartWith(job.CoderTempRoot);
         RealPath.IsInside(job.CoderTempRoot, job.CoderFolder, StringComparison.Ordinal).Should().BeFalse("R-M15: no folder a unit binds writable holds the sources");

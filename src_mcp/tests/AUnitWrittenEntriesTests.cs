@@ -183,6 +183,7 @@ public sealed class AUnitWrittenEntriesTests
         var (_, ended) = await rig.RunAsync(job).WaitAsync(TimeSpan.FromMinutes(2), TestContext.Current.CancellationToken);
 
         (ended.State, ended.Stop).Should().Be((RoleJobStates.Failed, RoleStopWords.CoderBoundary), $"{which}: {ended.Reason}");
+        ended.Reason.Should().Contain("regular file", $"{which}: the sentence says what was wrong with the entry — not that a check ran out of time (S69, part 1)");
         (await rig.GitAsync(rig.Repo, "rev-list", "--count", $"{rig.Base}..coder/{job.JobId}")).Should().Be("0", "nothing of the turn was committed");
     }
 

@@ -468,6 +468,17 @@ public sealed class AAgyCoderLaunchTests
         var read = false;
         AgyTurnCheck.Check(new ProcessResult(0, init + other, string.Empty, false), string.Empty, () => { read = true; return string.Empty; }).Should().BeOfType<CoderTurnVerdict.Boundary>("M18");
         read.Should().BeFalse("M18, part 1");
+        // M20: the worktree's toolchain file is asked in every round by the one road; a FIFO there ends the job `checks-changed-tree` (AToolchainFileOfTheWorktreeTests, APassTenShouldsTests).
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "a FIFO needs a Unix");
+        using var temp = TempDir.For("coai-d4-m20-");
+        var fifo = Path.Combine(temp.Path, "toolchain.yaml");
+        using (var made = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("mkfifo", [fifo]) { UseShellExecute = false })!)
+        {
+            made.WaitForExit();
+        }
+
+        new CoaiMcp.Work.DiskWorkFolder(temp.Path).Read("toolchain.yaml", 1024).Should().BeOfType<CoaiMcp.Core.Work.WorkFile.NotRegular>("M20: a FIFO is never waited on");
+        // S26, R-S7: the refresh unit hides the key pool and every real sign-in file (APassTenShouldsTests).
         // M19: the limit of a check is one fixed 30 seconds, and the sign-in copy is read by the road that never waits.
         CoderTurnCheck.CheckBudget.Should().Be(TimeSpan.FromSeconds(30));
         AgyCoderBed.Vendor().HostReadEntries(job).Select(entry => entry.Path).Should().Contain(AgyCoderUnit.SignInFile(job), "M19");

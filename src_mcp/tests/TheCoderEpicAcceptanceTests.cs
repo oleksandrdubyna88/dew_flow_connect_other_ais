@@ -85,7 +85,7 @@ public sealed class TheCoderEpicAcceptanceTests
             return new World(repo, baseSha);
         }
 
-        /// <summary>A real server on this world's data folder: the coder's list names a claude model AND an agy one (the coder keeps the claude one: the mark of agy is off), the reviewers are codex and gemini, every CLI is the fake.</summary>
+        /// <summary>A real server on this world's data folder: the coder's list names a claude model AND an agy one (the route holds both: agy is launchable since its flip, and the agy CLI is the fake too, so no real CLI is named here), the reviewers are codex and gemini, every CLI is the fake.</summary>
         internal System.Diagnostics.Process Server() => StdioServer.Start(
             Data.Path,
             logLevel: "information",
@@ -95,6 +95,7 @@ public sealed class TheCoderEpicAcceptanceTests
                 ("COAI_ROLE_CLAUDE_PERSON_SIGN_IN", "1"),
                 ("COAI_ROLES_MODELS", new JsonObject { ["coder"] = new JsonArray(new JsonObject { ["model"] = "gemini-4-argon-medium", ["vendor"] = "agy" }, new JsonObject { ["model"] = "sonnet", ["vendor"] = "claude" }) }.ToJsonString()),
                 ("COAI_ROLE_CLAUDE_CLI", RoleJobWorld.FakeCli),
+                ("COAI_ROLE_AGY_CLI", RoleJobWorld.FakeCli),
                 ("COAI_PROVIDERS", "codex,gemini"),
                 ("COAI_ROUND_WORKTREES", _temp.At("round-trees")),
                 ("COAI_EXE_CODEX", RoleJobWorld.FakeCli),
