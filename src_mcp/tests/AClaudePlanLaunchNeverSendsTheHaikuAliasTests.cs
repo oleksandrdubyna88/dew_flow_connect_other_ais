@@ -25,7 +25,7 @@ public sealed class AClaudePlanLaunchNeverSendsTheHaikuAliasTests
 {
     private const string Worktree = "D:/storage/coai-wt-s1-r1";
     private const string Repo = "D:/rsd/some-checkout";
-    private const string FullHaiku = "claude-haiku-4-5-20251001";
+    private const string FullHaiku = "claude-haiku-5-5";
 
     private static readonly string Scratch = Path.Combine(TempDir.Root, "coai-scratch-" + Guid.NewGuid().ToString("N"));
     private static readonly string AnswerFolder = Path.Combine(TempDir.Root, "coai-answers-" + Guid.NewGuid().ToString("N"));
@@ -107,11 +107,12 @@ public sealed class AClaudePlanLaunchNeverSendsTheHaikuAliasTests
         ModelOf(Argv(road, model)).Should().Be(FullHaiku, road);
 
     /// <summary>
-    /// The id is the one the display vectors list for the haiku family — the repository's own list, not a memory of it. If a newer Haiku is
-    /// ever listed there, this fails until the alias is pointed at it.
+    /// The id is the NEWEST one the display vectors list for the haiku family — the repository's own list, not a memory of it. The bare alias
+    /// runs claude-haiku-5-5 outside plan mode (measured 2026-11-27, CLI 2.1.332, a v2 coder job in acceptEdits mode), so the id sent in plan
+    /// mode must be the same model. If a newer Haiku is ever listed there, this fails until the alias is pointed at it.
     /// </summary>
     [Fact]
-    public void TheFullIdIsTheOneHaikuTheRepositorysOwnModelListNames()
+    public void TheFullIdIsTheNewestHaikuTheRepositorysOwnModelListNames()
     {
         using var file = File.OpenRead(Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "shared", "model-display-vectors.json")));
         using var parsed = JsonDocument.Parse(file);
@@ -120,7 +121,16 @@ public sealed class AClaudePlanLaunchNeverSendsTheHaikuAliasTests
             .Select(row => row.GetProperty("model").GetString()!)
             .ToList();
 
-        haikus.Should().Equal(FullHaiku);
+        haikus.Should().Contain(FullHaiku, "the id sent must be one the repository lists");
+        haikus.OrderByDescending(Release).First().Should().Be(FullHaiku, "an older Haiku is a dearer model than the one the alias runs");
+    }
+
+    /// <summary>The (major, minor) of <c>claude-haiku-M-N[-date]</c>, so the newest sorts first.</summary>
+    private static (int Major, int Minor) Release(string id)
+    {
+        var parts = id.Split('-');
+
+        return (int.Parse(parts[2], System.Globalization.CultureInfo.InvariantCulture), int.Parse(parts[3], System.Globalization.CultureInfo.InvariantCulture));
     }
 
     /// <summary>Only the one alias is rewritten: another alias, a full id and no model at all go out as the row wrote them.</summary>

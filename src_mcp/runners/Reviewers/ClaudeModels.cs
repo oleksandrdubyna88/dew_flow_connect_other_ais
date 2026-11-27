@@ -14,8 +14,12 @@ namespace CoaiMcp.Runners.Reviewers;
 /// <c>sonnet</c> for <c>haiku</c>, and <c>XMt</c> applies it only when the permission mode is <c>plan</c>; the CLI's own help says:
 /// "A session whose model setting is 'opusplan', 'opusplan[1m]' or 'haiku' runs a different model in plan mode". A full id is not
 /// mapped. So a person who chose <c>haiku</c> ran, and paid for, Sonnet. The alias is therefore sent as <see cref="HaikuId"/>.</para>
-/// <para><b>Why that id.</b> It is the only Haiku the repository lists (<c>shared/model-display-vectors.json</c>, family
-/// <c>haiku</c>; a test holds this constant to that file and fails when a newer Haiku is listed there). <c>opusplan</c> is left as
+/// <para><b>Why that id.</b> It is the model the bare alias runs OUTSIDE plan mode: the session file of v2 job r20261126012559-2183e184 (a
+/// coder job in acceptEdits mode, CLI 2.1.332) has <c>"model":"claude-haiku-5-5"</c> in its api-request params. Sending the older
+/// claude-haiku-4-5-20251001 would be a different, dearer model than the one the person chose (USD per MTok in/out: 4.5 is 1.00/5.00, 5.5 is
+/// 0.10/0.50; platform.claude.com pricing page, 2026-11-27). It is the newest Haiku the repository lists
+/// (<c>shared/model-display-vectors.json</c>, family <c>haiku</c>); a test holds this constant to that file and fails when a newer Haiku is
+/// listed there. <c>opusplan</c> is left as
 /// written: in plan mode it runs Opus, which is what its name says, so no row pays for a model it did not choose, and no
 /// repository model list carries it.</para>
 /// <para><b>The other half is the check.</b> The CLI's JSON result names the models that ANSWERED in <c>modelUsage</c>. The alias list
@@ -24,7 +28,7 @@ namespace CoaiMcp.Runners.Reviewers;
 public static class ClaudeModels
 {
     /// <summary>The full id sent for the alias <c>haiku</c> — the CLI maps only the bare alias, and only in plan mode.</summary>
-    public const string HaikuId = "claude-haiku-4-5-20251001";
+    public const string HaikuId = "claude-haiku-5-5";
 
     private const string HaikuAlias = "haiku";
 
