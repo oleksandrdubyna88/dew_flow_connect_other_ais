@@ -358,13 +358,13 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
     }
 
     /// <summary>
-    /// Makes <paramref name="folder"/> an EMPTY real folder inside the vendor's own folder of the job (the one folder of the unit that is bound writable and is not the worktree): what is there is removed first, a link or a file at its place is a refusal, and a folder outside the vendor's folder is never used.
+    /// Asks that <paramref name="folder"/> is an EMPTY real folder (and makes it when it is not there yet) inside the vendor's own folder of the job (the one folder of the unit that is bound writable and is not the worktree): a link or a file at its place, or an entry in it, is a refusal (nothing is deleted), and a folder outside the vendor's folder is never used.
     /// Empty when it is ready, else the sentence.
     /// </summary>
     private string EmptyWorkFolder(BoundaryJob job, string folder)
     {
         var vendorFolder = Path.TrimEndingDirectorySeparator(job.CoderVendorFolder(Vendor.Id));
-        if (folder.Length == 0 || !Path.GetFullPath(folder).StartsWith(vendorFolder + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+        if (folder.Length == 0 || Path.GetRelativePath(vendorFolder, Path.GetFullPath(folder)) is var way && (Path.IsPathRooted(way) || way == "." || way.Split(Path.DirectorySeparatorChar)[0] == ".."))
         {
             return $"the folder the list of models is read in ({folder}) is not inside the vendor's folder of the job, so the list was not read";
         }
@@ -378,20 +378,20 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
             }
         }
 
+        // coai asks, and deletes nothing (A4-M3 item 1): the folder is a real folder and no link, and it holds no entry. A folder that does not exist yet is made now; one that an earlier unit of the job wrote into is not used again.
         try
         {
-            if (RealPath.Lstat(folder).Kind is EntryKind.Link or EntryKind.File)
+            var kind = RealPath.Lstat(folder).Kind;
+            if (kind == EntryKind.Missing)
             {
-                File.Delete(folder);
+                Directory.CreateDirectory(folder);
             }
-            else if (RealPath.Lstat(folder).Kind == EntryKind.Directory)
+            else if (kind != EntryKind.Directory)
             {
-                Directory.Delete(folder, recursive: true);
+                return $"what stands at the folder the list of models is read in ({folder}) is a link or a file, not a real folder, so the list was not read";
             }
 
-            Directory.CreateDirectory(folder);
-
-            return RealPath.Lstat(folder).Kind == EntryKind.Directory && !Directory.EnumerateFileSystemEntries(folder).Any() ? string.Empty : $"the folder the list of models is read in ({folder}) could not be made empty, so the list was not read";
+            return RealPath.Lstat(folder).Kind == EntryKind.Directory && !Directory.EnumerateFileSystemEntries(folder).Any() ? string.Empty : $"the folder the list of models is read in ({folder}) holds an entry, or is not a real folder, so the list was not read";
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {

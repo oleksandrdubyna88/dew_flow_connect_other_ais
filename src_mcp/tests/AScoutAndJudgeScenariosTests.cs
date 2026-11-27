@@ -28,6 +28,9 @@ public sealed partial class AScoutAndJudgeScenariosTests
         internal IReadOnlyList<string> Route => [First, Second];
     }
 
+    /// <summary>The name a model is launched with: a codex family is resolved to the newest model the installed CLI lists when the job reaches the entry (the recording of the live list holds gpt-6.2-astra).</summary>
+    private static string LaunchedAs(string model) => model == "astra" ? "gpt-6.2-astra" : model;
+
     private static readonly Kind[] AllKinds =
     [
         new("scout", "claude/sonnet", "claude/haiku", "sonnet", "haiku"),
@@ -59,7 +62,7 @@ public sealed partial class AScoutAndJudgeScenariosTests
     public async Task S6_ADeclaredRefusal_GoesToTheNextModel_WithOneSwitchLine_AndOneNotice(Kind kind)
     {
         await using var rig = await RigAsync();
-        rig.Says(kind.FirstModel, Says(kind, kind.FirstModel, FakeRoleAnswers.Refusal)).Says(kind.SecondModel, Says(kind, kind.SecondModel, kind.Valid));
+        rig.Says(kind.FirstModel, Says(kind, kind.FirstModel, FakeRoleAnswers.Refusal)).Says(LaunchedAs(kind.SecondModel), Says(kind, kind.SecondModel, kind.Valid));
 
         var (exit, job) = await RunAsync(rig, kind);
 
@@ -68,7 +71,7 @@ public sealed partial class AScoutAndJudgeScenariosTests
         job.Model.Should().Be(kind.Second);
         job.Attempts.Select(attempt => (attempt.Model, attempt.Stop)).Should().Equal((kind.FirstModel, "refusal"), (kind.SecondModel, string.Empty));
         job.Attempts[0].Reason.Should().Contain("I will not write this plan");
-        rig.Models().Should().Equal(kind.FirstModel, kind.SecondModel);
+        rig.Models().Should().Equal(kind.FirstModel, LaunchedAs(kind.SecondModel));
         rig.Launches().Should().OnlyContain(argv => !argv.Contains("--resume"), "the next model starts from turn 0 in a new session");
         rig.SwitchLines().Should().ContainSingle().Which.Should().StartWith($"role job {job.JobId} ({kind.Role}) switched {kind.First} -> {kind.Second} after refusal: ");
         rig.NoticesOf(ServerNoticeCodes.RoleModelSwitched).Should().ContainSingle().Which.Provider.Should().Be(kind.Second.Split('/')[0]);
@@ -80,7 +83,7 @@ public sealed partial class AScoutAndJudgeScenariosTests
     public async Task S6_EveryModelRefusing_EndsFailed_NamingEveryAttempt_WithNoResult(Kind kind)
     {
         await using var rig = await RigAsync();
-        rig.Says(kind.FirstModel, Says(kind, kind.FirstModel, FakeRoleAnswers.Refusal)).Says(kind.SecondModel, Says(kind, kind.SecondModel, FakeRoleAnswers.Refusal));
+        rig.Says(kind.FirstModel, Says(kind, kind.FirstModel, FakeRoleAnswers.Refusal)).Says(LaunchedAs(kind.SecondModel), Says(kind, kind.SecondModel, FakeRoleAnswers.Refusal));
 
         var (_, job) = await RunAsync(rig, kind);
 
@@ -115,7 +118,7 @@ public sealed partial class AScoutAndJudgeScenariosTests
     {
         await using var rig = await RigAsync();
         Environment.SetEnvironmentVariable("FAKECLI_SIDE_EFFECT", Path.Combine(rig.Repo, "written-by-the-model.txt"));
-        rig.Says(kind.FirstModel, Says(kind, kind.FirstModel, kind.Valid)).Says(kind.SecondModel, Says(kind, kind.SecondModel, kind.Valid));
+        rig.Says(kind.FirstModel, Says(kind, kind.FirstModel, kind.Valid)).Says(LaunchedAs(kind.SecondModel), Says(kind, kind.SecondModel, kind.Valid));
 
         var (_, job) = await RunAsync(rig, kind);
 
@@ -144,7 +147,7 @@ public sealed partial class AScoutAndJudgeScenariosTests
     {
         await using var rig = await RigAsync();
         var kind = Of(role);
-        rig.Says(model, FakeRoleAnswers.CodexSays(kind.Valid));
+        rig.Says(model == "terra" ? "gpt-6.1-terra" : "gpt-6.2-astra", FakeRoleAnswers.CodexSays(kind.Valid));
 
         var (_, job) = await RunAsync(rig, kind, [$"codex/{model}"]);
 

@@ -42,7 +42,7 @@ public sealed class ARoleFailsOverTests
     public async Task A8_TheRecordedClaude429Envelope_GoesToTheNextVendorAtOnce_AndTheSameVendorIsSkipped()
     {
         await using var rig = await RoleFailoverRig.CreateAsync();
-        rig.Says("fable", FakeRoleAnswers.ClaudeSpendLimit()).Says("opus", FakeRoleAnswers.ClaudeSays(FakeRoleAnswers.Ok)).Says("astra", FakeRoleAnswers.CodexSays(FakeRoleAnswers.Ok));
+        rig.Says("fable", FakeRoleAnswers.ClaudeSpendLimit()).Says("opus", FakeRoleAnswers.ClaudeSays(FakeRoleAnswers.Ok)).Says("gpt-6.2-astra", FakeRoleAnswers.CodexSays(FakeRoleAnswers.Ok));
         var job = rig.NewJob(ClaudeTwoThenCodex);
         var clock = System.Diagnostics.Stopwatch.StartNew();
 
@@ -53,14 +53,14 @@ public sealed class ARoleFailsOverTests
         after.State.Should().Be(RoleJobStates.Succeeded);
         after.Attempts.Select(attempt => (attempt.Model, attempt.Vendor, attempt.Stop)).Should().Equal(("fable", "claude", "limit"), ("astra", "codex", string.Empty));
         after.Attempts[0].Reason.Should().Contain("monthly spend limit");
-        rig.Models().Should().Equal("fable", "astra");
+        rig.Models().Should().Equal("fable", "gpt-6.2-astra");
     }
 
     [Fact]
     public async Task A8_ALostSignIn_AlsoSkipsTheVendorsOtherModels()
     {
         await using var rig = await RoleFailoverRig.CreateAsync();
-        rig.Says("fable", FakeRoleAnswers.ClaudeNoSignIn()).Says("opus", FakeRoleAnswers.ClaudeSays(FakeRoleAnswers.Ok)).Says("astra", FakeRoleAnswers.CodexSays(FakeRoleAnswers.Ok));
+        rig.Says("fable", FakeRoleAnswers.ClaudeNoSignIn()).Says("opus", FakeRoleAnswers.ClaudeSays(FakeRoleAnswers.Ok)).Says("gpt-6.2-astra", FakeRoleAnswers.CodexSays(FakeRoleAnswers.Ok));
         var job = rig.NewJob(ClaudeTwoThenCodex);
 
         var (_, after) = await rig.RunAsync(job);
@@ -68,7 +68,7 @@ public sealed class ARoleFailsOverTests
         after.State.Should().Be(RoleJobStates.Succeeded);
         after.Attempts.Select(attempt => (attempt.Model, attempt.Stop)).Should().Equal(("fable", "crash"), ("astra", string.Empty));
         after.Attempts[0].Reason.Should().Contain("the sign-in is lost");
-        rig.Models().Should().Equal("fable", "astra");
+        rig.Models().Should().Equal("fable", "gpt-6.2-astra");
     }
 
     [Fact]
@@ -76,15 +76,15 @@ public sealed class ARoleFailsOverTests
     {
         await using var rig = await RoleFailoverRig.CreateAsync();
         rig.Setting("COAI_ROLE_CLAUDE_CLI", Path.Combine(rig.Repo, "no-such-claude-cli"));
-        rig.Says("astra", FakeRoleAnswers.CodexSays(FakeRoleAnswers.Ok));
+        rig.Says("gpt-6.2-astra", FakeRoleAnswers.CodexSays(FakeRoleAnswers.Ok));
         var job = rig.NewJob(ClaudeTwoThenCodex);
 
         var (_, after) = await rig.RunAsync(job);
 
         after.State.Should().Be(RoleJobStates.Succeeded);
         after.Attempts.Select(attempt => (attempt.Model, attempt.Vendor, attempt.Stop)).Should().Equal(("fable", "claude", "crash"), ("astra", "codex", string.Empty));
-        rig.Models().Should().Equal("astra");
-        rig.LedgerLines().Should().ContainSingle("a CLI that was never started is no launch").Which.GetProperty("model").GetString().Should().Be("astra");
+        rig.Models().Should().Equal("gpt-6.2-astra");
+        rig.LedgerLines().Should().ContainSingle("a CLI that was never started is no launch").Which.GetProperty("model").GetString().Should().Be("gpt-6.2-astra");
     }
 
     // ---- A9: a crash, a timeout, an empty answer ----
@@ -120,7 +120,7 @@ public sealed class ARoleFailsOverTests
     public async Task A10_WhenTheListIsExhausted_TheJobFails_NamingEveryAttempt_WithOneNotice()
     {
         await using var rig = await RoleFailoverRig.CreateAsync();
-        rig.Says("fable", FakeRoleAnswers.Crash("fable fell over")).Says("opus", FakeRoleAnswers.Crash("opus fell over")).Says("astra", FakeRoleAnswers.Crash("astra fell over"));
+        rig.Says("fable", FakeRoleAnswers.Crash("fable fell over")).Says("opus", FakeRoleAnswers.Crash("opus fell over")).Says("gpt-6.2-astra", FakeRoleAnswers.Crash("astra fell over"));
         var job = rig.NewJob(ClaudeTwoThenCodex);
 
         var (exit, after) = await rig.RunAsync(job);
@@ -182,7 +182,7 @@ public sealed class ARoleFailsOverTests
     public async Task A11_TwoSwitches_AreTwoLinesAndTwoNotices_EachNamingTheVendorTheWorkWentTo()
     {
         await using var rig = await RoleFailoverRig.CreateAsync();
-        rig.Says("fable", FakeRoleAnswers.Crash("fable fell over")).Says("opus", FakeRoleAnswers.Crash("opus fell over")).Says("astra", FakeRoleAnswers.CodexSays(FakeRoleAnswers.Ok));
+        rig.Says("fable", FakeRoleAnswers.Crash("fable fell over")).Says("opus", FakeRoleAnswers.Crash("opus fell over")).Says("gpt-6.2-astra", FakeRoleAnswers.CodexSays(FakeRoleAnswers.Ok));
         var job = rig.NewJob(ClaudeTwoThenCodex);
 
         var (_, after) = await rig.RunAsync(job);
@@ -265,7 +265,7 @@ public sealed class ARoleFailsOverTests
     public async Task EveryLaunch_IsOneLedgerLine_OfKindRole_NamingItsVendorModelAndOutcome()
     {
         await using var rig = await RoleFailoverRig.CreateAsync();
-        rig.Says("fable", FakeRoleAnswers.ClaudeSpendLimit()).Says("astra", FakeRoleAnswers.CodexSays(FakeRoleAnswers.Ok));
+        rig.Says("fable", FakeRoleAnswers.ClaudeSpendLimit()).Says("gpt-6.2-astra", FakeRoleAnswers.CodexSays(FakeRoleAnswers.Ok));
         var job = rig.NewJob(["claude/fable", "claude/opus", "codex/astra"]);
 
         await rig.RunAsync(job);
@@ -273,7 +273,7 @@ public sealed class ARoleFailsOverTests
         var lines = rig.LedgerLines();
         lines.Should().HaveCount(rig.Launches().Count).And.HaveCount(2, "fable and astra were launched; opus was skipped and has no line");
         lines.Select(line => (line.GetProperty("provider").GetString(), line.GetProperty("model").GetString(), line.GetProperty("role").GetString(), line.GetProperty("kind").GetString(), line.GetProperty("stage").GetString()))
-            .Should().Equal(("claude", "fable", "failover-probe", "role", "RoleJob"), ("codex", "astra", "failover-probe", "role", "RoleJob"));
+            .Should().Equal(("claude", "fable", "failover-probe", "role", "RoleJob"), ("codex", "gpt-6.2-astra", "failover-probe", "role", "RoleJob"));
         lines.Select(line => line.GetProperty("outcome").GetString()).Should().Equal("exit", "ok");
     }
 
@@ -281,7 +281,7 @@ public sealed class ARoleFailsOverTests
     public async Task EveryLedgerLine_OfARoleJob_CarriesTheJobsId()
     {
         await using var rig = await RoleFailoverRig.CreateAsync();
-        rig.Says("fable", FakeRoleAnswers.ClaudeSpendLimit()).Says("astra", FakeRoleAnswers.CodexSays(FakeRoleAnswers.Ok));
+        rig.Says("fable", FakeRoleAnswers.ClaudeSpendLimit()).Says("gpt-6.2-astra", FakeRoleAnswers.CodexSays(FakeRoleAnswers.Ok));
         var job = rig.NewJob(["claude/fable", "claude/opus", "codex/astra"]);
 
         await rig.RunAsync(job);

@@ -243,7 +243,8 @@ public sealed class ACodexCoderPreflightTests
         var refused = Refused(admission);
         refused.Record.Preflight.Single(row => row.Item == "tool-list").Held.Should().BeFalse("a tool nobody measured is on the list");
         var said = JsonSerializer.Serialize(refused.Record.Preflight) + refused.Sentence;
-        said.Should().NotContain("HOSTILE", "a row never carries the output of a program it ran (the one exception is the name of a tool, shown only by the shape rule: V34)").And.NotContain(CodexBed.AccessToken).And.NotContain(CodexBed.IdToken);
+        said.Should().NotContain("HOSTILE", "a row never carries the output of a program it ran (the one exception is the name of a tool, shown only by the shape rule: V34)").And.NotContain(CodexBed.AccessToken).And.NotContain(CodexBed.IdToken)
+            .And.NotContain("abcdefghijklmnopqrstuvwxyz0123456789", "a name of allowed characters only, with the shape of a secret, never reaches a sentence: the shared redactor is asked");
     }
 
     [Fact]
@@ -304,17 +305,89 @@ public sealed class ACodexCoderPreflightTests
     [InlineData("agents")]
     [InlineData("mcp")]
     [InlineData("new-tool")]
-    public async Task V33_ANameOutsideTheKnownSet_RefusesTheLaunch_AsABoundaryRow_NamingTheRowToolList(string mode)
+    public async Task V33_ANameOutsideTheKnownSet_RefusesTheLaunchOfThisModel_ItIsTheOnlyRedRow_AndSaysThisModelCannotBeUsed(string mode)
     {
         NeedAUserManager();
         await using var bed = await CodexBed.CreateAsync(("FAKECLI_CODEX_TOOLS", mode));
+        var request = new ProcessRequest(FakeCliInvocations.Exe, bed.Arguments, bed.Worktree) { Timeout = TimeSpan.FromSeconds(60), InheritsEnvironment = false, Passthrough = ProcessEnvironment.Minimal };
+
+        var outcome = await bed.Turns().RunAsync(bed.Job, request, "c1", bed.Vendor, TestContext.Current.CancellationToken);
+
+        var refused = outcome.Should().BeOfType<CoderTurnOutcome.Refused>(outcome.ToString()).Subject;
+        var red = refused.Record.Preflight.Where(row => !row.Held).ToList();
+        red.Select(row => row.Item).Should().Equal(["tool-list"], "the names are the same in both reads and every other row holds");
+        red[0].Unavailable.Should().BeTrue("entry 2.2: at the first launch of an entry this is a model that cannot be used");
+        refused.ModelUnavailable.Should().BeTrue();
+        refused.ToolReason.Should().Be("unknown-tool");
+        refused.Sentence.Should().Contain("tool-list").And.Contain("cannot be used on this machine now");
+    }
+
+    [Fact]
+    public async Task V33_AnOutsideNameWithAnotherRowRed_IsTheBoundaryRowWinning_NeverModelUnavailable()
+    {
+        NeedAUserManager();
+        await using var bed = await CodexBed.CreateAsync(("FAKECLI_CODEX_TOOLS", "new-tool"), ("FAKECLI_CODEX_SANDBOX", "net"));
 
         var refused = Refused(await bed.AdmitAsync());
 
-        var red = refused.Record.Preflight.Where(row => !row.Held).ToList();
-        red.Select(row => row.Item).Should().Contain("tool-list");
-        red.Should().OnlyContain(row => !row.Unavailable, "a tool nobody looked at is a boundary fault, never a model that is unavailable");
-        refused.Sentence.Should().Contain("The coder boundary did not hold").And.Contain("tool-list");
+        refused.Record.Preflight.Where(row => !row.Held).Select(row => row.Item).Should().Contain(["tool-list", "vendor-sandbox-network"]);
+        refused.Sentence.Should().Contain("The coder boundary did not hold");
+        new CoderTurnOutcome.Refused(refused.Sentence, refused.Record).ModelUnavailable.Should().BeFalse("a boundary row is red too: the boundary row wins");
+    }
+
+    [Fact]
+    public async Task V33_AnOutsideNameInOneReadOnly_IsTwoReadsThatDiffer_TheBoundary_NeverModelUnavailable()
+    {
+        NeedAUserManager();
+        await using var bed = await CodexBed.CreateAsync(("FAKECLI_CODEX_TOOLS", "project-mcp"));
+
+        var refused = Refused(await bed.AdmitAsync());
+
+        var rows = refused.Record.Preflight.Where(row => !row.Held).ToList();
+        rows.Select(row => row.Item).Should().Contain("no-project-tools");
+        rows.Should().Contain(row => !row.Unavailable);
+        new CoderTurnOutcome.Refused(refused.Sentence, refused.Record).ModelUnavailable.Should().BeFalse();
+    }
+
+    // ---------- V36: the inventory is read whole ----------
+
+    [Fact]
+    public async Task V36_TheNestedInventoryInAnotherForm_InBothCopies_DoesNotHold_WhereTheCodeBeforeAdmittedAListOfFourKnownNames()
+    {
+        NeedAUserManager();
+        await using var bed = await CodexBed.CreateAsync(("FAKECLI_CODEX_TOOLS", "other-form"));
+        var request = new ProcessRequest(FakeCliInvocations.Exe, bed.Arguments, bed.Worktree) { Timeout = TimeSpan.FromSeconds(60), InheritsEnvironment = false, Passthrough = ProcessEnvironment.Minimal };
+
+        var outcome = await bed.Turns().RunAsync(bed.Job, request, "c1", bed.Vendor, TestContext.Current.CancellationToken);
+
+        var refused = outcome.Should().BeOfType<CoderTurnOutcome.Refused>(outcome.ToString()).Subject;
+        refused.Record.Preflight.Where(row => !row.Held).Select(row => row.Item).Should().Equal("tool-list");
+        refused.ModelUnavailable.Should().BeTrue("both reads are not whole: the model cannot be used, nothing was launched");
+        refused.ToolReason.Should().Be("inventory-not-whole");
+        refused.UnknownTools.Should().BeEmpty("no name is shown for an inventory that was not read whole");
+    }
+
+    [Fact]
+    public async Task V36_Guard_TheNestedInventoryInAnotherForm_IsNeverAdmitted_WhateverTheWordOfTheStop()
+    {
+        NeedAUserManager();
+        await using var bed = await CodexBed.CreateAsync(("FAKECLI_CODEX_TOOLS", "other-form"));
+
+        var refused = Refused(await bed.AdmitAsync());
+
+        refused.Record.Preflight.Single(row => row.Item == "tool-list").Held.Should().BeFalse("a list of 4 known names read from text that changed its form must not pass as fewer tools");
+    }
+
+    [Fact]
+    public async Task V36_AnInventoryThatIsNotWholeInOneReadOnly_IsTheBoundary()
+    {
+        NeedAUserManager();
+        await using var bed = await CodexBed.CreateAsync(("FAKECLI_CODEX_TOOLS", "project-other-form"));
+
+        var refused = Refused(await bed.AdmitAsync());
+
+        refused.Record.Preflight.Where(row => !row.Held).Select(row => row.Item).Should().Contain("no-project-tools");
+        new CoderTurnOutcome.Refused(refused.Sentence, refused.Record).ModelUnavailable.Should().BeFalse("one read only: the two reads are not the same");
     }
 
     [Theory]
@@ -381,13 +454,13 @@ public sealed class ACodexCoderPreflightTests
 
         var row = refused.Record.Preflight.Single(item => item.Item == "tool-list");
         var said = JsonSerializer.Serialize(refused.Record.Preflight) + refused.Sentence + row.Tools;
-        foreach (var hostile in new[] { "bad\nname", "bad\\nname", "control\u0001char", "control\\u0001char", "sk-ant-oat01", "abcdefghij/klmnop", new string('a', 300) })
+        foreach (var hostile in new[] { "bad\nname", "bad\\nname", "control\u0001char", "control\\u0001char", "sk-ant-oat01", "abcdefghij/klmnop", "abcdefghijklmnopqrstuvwxyz0123456789", new string('a', 300) })
         {
             said.Should().NotContain(hostile, "a name that is not 1 to 64 safe characters is never shown");
         }
 
-        row.Tools.Should().Contain("a name that cannot be shown (300 characters)").And.Contain("a name that cannot be shown (8 characters)");
-        refused.Sentence.Should().Contain("4 name(s) outside the known set");
+        row.Tools.Should().Contain("a name that cannot be shown (300 characters)").And.Contain("a name that cannot be shown (8 characters)").And.Contain("a name that cannot be shown (55 characters)", "a name of allowed characters only that the shared redactor would change");
+        refused.Sentence.Should().Contain("5 name(s) outside the known set");
     }
 
     [Fact]

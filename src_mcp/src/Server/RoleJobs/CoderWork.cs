@@ -212,7 +212,7 @@ internal sealed class CoderWork : IRoleWork
 
         return ended switch
         {
-            CoderLoopEnd.Done done => new RoleFollowed.Ended(await EnvelopeAsync(run, git, prepared, layer, done, new CoderChecksReport(done.Rounds, cap, note), instructions, prompt, loop.LastCliVersion.Length > 0 ? cli with { Installed = loop.LastCliVersion } : cli, new CoderModelRecord(session.Model.Vendor, session.Asked.Model, session.Model.Model, layer.ToolsAbsent), ct)),
+            CoderLoopEnd.Done done => new RoleFollowed.Ended(await EnvelopeAsync(run, git, prepared, layer, done, new CoderChecksReport(done.Rounds, cap, note), instructions, prompt, loop.LastCliVersion.Length > 0 ? cli with { Installed = loop.LastCliVersion } : cli, new CoderModelRecord(session.Model.Vendor, session.Asked.Model, session.Model.Model, layer.ToolsAbsent) { Present = Vendors.Resolve(session.Model.Vendor) is CoderVendorResolution.Launchable { Vendor.NamesResolvedModel: true } }, ct)),
             CoderLoopEnd.FailOver failOver => new RoleFollowed.FailsOver(failOver.Why),
             _ => new RoleFollowed.Ended(((CoderLoopEnd.Halted)ended).Outcome),
         };

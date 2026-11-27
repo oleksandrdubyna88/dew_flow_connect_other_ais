@@ -64,7 +64,7 @@ public sealed class ACodexCoderBoundaryTests
         var mainBefore = await HashesAsync(rig.Repo);
         var homeBefore = Directory.GetFileSystemEntries(rig.Host.RealHome, "*", SearchOption.AllDirectories).Order().ToList();
         var signInBefore = File.ReadAllText(Path.Combine(rig.Host.RealHome, ".codex", "auth.json"));
-        rig.SaysRaw("terra", Turn(Writes(CoderRig.Green), Report(), tryWrites: outside));
+        rig.SaysRaw("gpt-6.1-terra", Turn(Writes(CoderRig.Green), Report(), tryWrites: outside));
 
         var (_, ended) = await rig.RunAsync(job);
 

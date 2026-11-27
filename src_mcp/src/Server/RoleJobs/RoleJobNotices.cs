@@ -1,5 +1,6 @@
 using CoaiMcp.Core.Notices;
 using CoaiMcp.Core.Roles;
+using CoaiMcp.Runners.Consultation;
 
 namespace CoaiMcp.Server.RoleJobs;
 
@@ -78,16 +79,22 @@ internal static class RoleJobNotices
     /// The preflight of a codex coder found a tool outside the known set (epoch 3 E3 s2 t5, SPEC_CHANGES Q3 item 5): the job, the vendor, the model as asked and as resolved, the installed CLI release and the names. <paramref name="names"/> is already what
     /// <see cref="Runners.Consultation.CodexToolList.Shown"/> lets through: a name only when it is 1 to 64 safe characters, at most 5, then the count; any other name is said as a name that cannot be shown, with its length.
     /// </summary>
-    public static ServerNotice CoderToolUnknown(RoleJobRecord job, string vendor, string asked, string resolved, string cliVersion, string names, DateTime nowUtc) => new()
+    public static ServerNotice CoderToolUnknown(RoleJobRecord job, string vendor, string asked, string resolved, string cliVersion, string reason, string names, DateTime nowUtc) => new()
     {
         Utc = ServerNotice.Iso(nowUtc),
         Class = "failure",
         Source = Source,
         Code = ServerNoticeCodes.CoderToolUnknown,
-        Subject = job.JobId,
-        Title = $"Role job {job.JobId} ({job.Role}): the {vendor} coder was refused, its model has a tool coai does not know",
-        Detail = $"Vendor {vendor}; model as asked {asked}, as resolved {resolved}; installed CLI release {(cliVersion.Length > 0 ? cliVersion : "(not read)")}; tool names outside the known set of 11: {names}. The coder was not started: a tool nobody looked at could do more than the boundary was proven for.",
-        Cure = "Look at the tool; if it is harmless, add its name to the known set in one commit (CodexToolList.Known). Until then use another model for the coder.",
+        Subject = $"{job.JobId}/{vendor}-{asked}",
+        Title = reason == CodexToolList.ReasonNotWhole
+            ? $"Role job {job.JobId} ({job.Role}): the {vendor} coder {asked} was refused, its tool inventory could not be read whole"
+            : $"Role job {job.JobId} ({job.Role}): the {vendor} coder {asked} was refused, its model has a tool coai does not know",
+        Detail = reason == CodexToolList.ReasonNotWhole
+            ? $"Vendor {vendor}; model as asked {asked}, as resolved {resolved}; installed CLI release {(cliVersion.Length > 0 ? cliVersion : "(not read)")}; the list of tools the CLI printed for the model was not in the one form coai reads, so a shorter list could not be told from a smaller tool set. No name is shown. The coder was not started."
+            : $"Vendor {vendor}; model as asked {asked}, as resolved {resolved}; installed CLI release {(cliVersion.Length > 0 ? cliVersion : "(not read)")}; tool names outside the known set of 11: {(names.Length > 0 ? names : "none is shown, because the two reads of the list are not the same and a name that only one read holds can be text of the repository")}. The coder was not started: a tool nobody looked at could do more than the boundary was proven for.",
+        Cure = reason == CodexToolList.ReasonNotWhole
+            ? "Look at the text of the tool list of this CLI release (codex debug prompt-input); if its form changed, the rule of the whole read needs a measure and an addendum of the judgement, not a wider pattern. Until then the job goes on with the next model of its route."
+            : "Look at the tool. A name joins the known set only after a measure of that tool (what it reaches and where it runs) and an addendum of the judgement of the codex write boundary, never by one commit alone. Until then the job goes on with the next model of its route.",
         Role = job.Role,
         Repo = job.Repo,
     };

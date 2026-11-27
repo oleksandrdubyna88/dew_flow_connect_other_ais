@@ -35,7 +35,7 @@ public sealed class ACodexCoderFixTurnsTests
     {
         await using var world = await CodexRigWorld.CreateAsync();
         var rig = world.Rig;
-        rig.SaysRaw("terra", Turn(Writes(CoderRig.Red + " a"), Report()), Turn(Writes(CoderRig.Red + " b"), Report()), Turn(Writes(CoderRig.Green), Report()));
+        rig.SaysRaw("gpt-6.1-terra", Turn(Writes(CoderRig.Red + " a"), Report()), Turn(Writes(CoderRig.Red + " b"), Report()), Turn(Writes(CoderRig.Green), Report()));
         var job = rig.NewJob(route: ["codex/terra"]);
 
         var (_, ended) = await rig.RunAsync(job);
@@ -64,7 +64,7 @@ public sealed class ACodexCoderFixTurnsTests
     {
         await using var world = await CodexRigWorld.CreateAsync();
         var rig = world.Rig;
-        rig.SaysRaw("terra", Turn(Writes(CoderRig.Green), "this is not a report at all"), Turn(null, Report()));
+        rig.SaysRaw("gpt-6.1-terra", Turn(Writes(CoderRig.Green), "this is not a report at all"), Turn(null, Report()));
         var job = rig.NewJob(route: ["codex/terra"]);
 
         var (_, ended) = await rig.RunAsync(job);
@@ -87,8 +87,8 @@ public sealed class ACodexCoderFixTurnsTests
         var rig = world.Rig;
         var lost = RoleStopFixtures.Load("codex-resume-no-session");
         lost.ExitCode.Should().NotBe(0);
-        rig.SaysRaw("terra", Turn(Writes(CoderRig.Red + " a"), Report()), new Dictionary<string, object?> { ["stdout"] = lost.StdOut, ["stderr"] = lost.StdErr, ["exit"] = lost.ExitCode, ["writeFiles"] = new Dictionary<string, string> { ["stray.txt"] = "half\n" } })
-            .SaysRaw("astra", Turn(Writes(CoderRig.Green), Report(), OtherThread, rollout: Rollout(OtherThread)));
+        rig.SaysRaw("gpt-6.1-terra", Turn(Writes(CoderRig.Red + " a"), Report()), new Dictionary<string, object?> { ["stdout"] = lost.StdOut, ["stderr"] = lost.StdErr, ["exit"] = lost.ExitCode, ["writeFiles"] = new Dictionary<string, string> { ["stray.txt"] = "half\n" } })
+            .SaysRaw("gpt-6.2-astra", Turn(Writes(CoderRig.Green), Report(), OtherThread, rollout: Rollout(OtherThread)));
         var job = rig.NewJob(route: Two);
 
         var (_, ended) = await rig.RunAsync(job);
@@ -144,8 +144,8 @@ public sealed class ACodexCoderFixTurnsTests
         await using var world = await CodexRigWorld.CreateAsync();
         var rig = world.Rig;
         var lost = RoleStopFixtures.Load("codex-refresh-failed-host-network");
-        rig.SaysRaw("terra", new Dictionary<string, object?> { ["stdout"] = lost.StdOut, ["stderr"] = lost.StdErr, ["exit"] = lost.ExitCode })
-            .SaysRaw("astra", Turn(Writes(CoderRig.Green), Report(), OtherThread, rollout: Rollout(OtherThread)));
+        rig.SaysRaw("gpt-6.1-terra", new Dictionary<string, object?> { ["stdout"] = lost.StdOut, ["stderr"] = lost.StdErr, ["exit"] = lost.ExitCode })
+            .SaysRaw("gpt-6.2-astra", Turn(Writes(CoderRig.Green), Report(), OtherThread, rollout: Rollout(OtherThread)));
         var job = rig.NewJob(route: Two);
 
         var (_, ended) = await rig.RunAsync(job);
@@ -173,7 +173,7 @@ public sealed class ACodexCoderFixTurnsTests
     {
         await using var world = await CodexRigWorld.CreateAsync();
         var rig = world.Rig;
-        rig.SaysRaw("terra", Turn(Writes(CoderRig.Green), Report(), items: [Message(), .. items])).SaysRaw("astra", Turn(Writes(CoderRig.Green), Report(), OtherThread, rollout: Rollout(OtherThread)));
+        rig.SaysRaw("gpt-6.1-terra", Turn(Writes(CoderRig.Green), Report(), items: [Message(), .. items])).SaysRaw("gpt-6.2-astra", Turn(Writes(CoderRig.Green), Report(), OtherThread, rollout: Rollout(OtherThread)));
         var job = rig.NewJob(route: Two);
 
         var (_, ended) = await rig.RunAsync(job);
@@ -196,7 +196,7 @@ public sealed class ACodexCoderFixTurnsTests
             OfType("error", ",\"message\":\"Falling back from WebSockets to HTTPS transport.\""),
             OfType("mcp_tool_call", ",\"server\":\"codex\",\"tool\":\"list_mcp_resources\",\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"resources\\\":[]}\"}]},\"error\":null"),
         ];
-        rig.SaysRaw("terra", Turn(Writes(CoderRig.Green), Report(), items: fine));
+        rig.SaysRaw("gpt-6.1-terra", Turn(Writes(CoderRig.Green), Report(), items: fine));
         var job = rig.NewJob(route: ["codex/terra"]);
 
         var (_, ended) = await rig.RunAsync(job);
@@ -209,7 +209,7 @@ public sealed class ACodexCoderFixTurnsTests
     {
         await using var world = await CodexRigWorld.CreateAsync();
         var rig = world.Rig;
-        rig.SaysRaw("terra", Turn(Writes(CoderRig.Red + " a"), Report()), Turn(Writes(CoderRig.Green), Report(), items: [Message(), OfType("web_search", ",\"query\":\"\"")]));
+        rig.SaysRaw("gpt-6.1-terra", Turn(Writes(CoderRig.Red + " a"), Report()), Turn(Writes(CoderRig.Green), Report(), items: [Message(), OfType("web_search", ",\"query\":\"\"")]));
         var job = rig.NewJob(route: ["codex/terra"]);
 
         var (_, ended) = await rig.RunAsync(job);
@@ -223,8 +223,8 @@ public sealed class ACodexCoderFixTurnsTests
     {
         await using var world = await CodexRigWorld.CreateAsync();
         var rig = world.Rig;
-        rig.SaysRaw("terra", Turn(Writes(CoderRig.Red + " a"), Report()), Turn(Writes(CoderRig.Green), Report(), OtherThread, rollout: Rollout(OtherThread)))
-            .SaysRaw("astra", Turn(Writes(CoderRig.Green), Report(), OtherThread, rollout: Rollout(OtherThread)));
+        rig.SaysRaw("gpt-6.1-terra", Turn(Writes(CoderRig.Red + " a"), Report()), Turn(Writes(CoderRig.Green), Report(), OtherThread, rollout: Rollout(OtherThread)))
+            .SaysRaw("gpt-6.2-astra", Turn(Writes(CoderRig.Green), Report(), OtherThread, rollout: Rollout(OtherThread)));
         var job = rig.NewJob(route: Two);
 
         var (_, ended) = await rig.RunAsync(job);
@@ -248,7 +248,7 @@ public sealed class ACodexCoderFixTurnsTests
             "an agent call" => Rollout(ThreadId, "{\"type\":\"response_item\",\"payload\":{\"type\":\"function_call\",\"name\":\"collaboration.spawn_agent\",\"arguments\":\"{}\"}}"),
             _ => new Dictionary<string, string> { [Path.Combine(".codex", "sessions", "2026", "11", "26", $"rollout-2026-11-26T10-00-00-{ThreadId}.jsonl")] = "this is not json\n" },
         };
-        rig.SaysRaw("terra", Turn(Writes(CoderRig.Green), Report(), rollout: home));
+        rig.SaysRaw("gpt-6.1-terra", Turn(Writes(CoderRig.Green), Report(), rollout: home));
         var job = rig.NewJob(route: ["codex/terra"]);
 
         var (_, ended) = await rig.RunAsync(job);
@@ -291,8 +291,8 @@ public sealed class ACodexCoderFixTurnsTests
     {
         await using var world = await CodexRigWorld.CreateAsync();
         var rig = world.Rig;
-        rig.SaysRaw("terra", Turn(Writes(CoderRig.Green), Report(), items: [Message(), OfType("web_search", ",\"query\":\"\"")], exit: 1, stderr: "the CLI fell over"))
-            .SaysRaw("astra", Turn(Writes(CoderRig.Green), Report(), OtherThread, rollout: Rollout(OtherThread)));
+        rig.SaysRaw("gpt-6.1-terra", Turn(Writes(CoderRig.Green), Report(), items: [Message(), OfType("web_search", ",\"query\":\"\"")], exit: 1, stderr: "the CLI fell over"))
+            .SaysRaw("gpt-6.2-astra", Turn(Writes(CoderRig.Green), Report(), OtherThread, rollout: Rollout(OtherThread)));
         var job = rig.NewJob(route: Two);
 
         var (_, ended) = await rig.RunAsync(job);
@@ -306,8 +306,8 @@ public sealed class ACodexCoderFixTurnsTests
     {
         await using var world = await CodexRigWorld.CreateAsync();
         var rig = world.Rig;
-        rig.SaysRaw("terra", new Dictionary<string, object?> { ["stdout"] = "{\"type\":\"turn.started\"}\n" + OfType("web_search", ",\"query\":\"\"") + "\n", ["exit"] = 1, ["stderr"] = "the CLI fell over" })
-            .SaysRaw("astra", Turn(Writes(CoderRig.Green), Report(), OtherThread, rollout: Rollout(OtherThread)));
+        rig.SaysRaw("gpt-6.1-terra", new Dictionary<string, object?> { ["stdout"] = "{\"type\":\"turn.started\"}\n" + OfType("web_search", ",\"query\":\"\"") + "\n", ["exit"] = 1, ["stderr"] = "the CLI fell over" })
+            .SaysRaw("gpt-6.2-astra", Turn(Writes(CoderRig.Green), Report(), OtherThread, rollout: Rollout(OtherThread)));
         var job = rig.NewJob(route: Two);
 
         var (_, ended) = await rig.RunAsync(job);
@@ -321,8 +321,8 @@ public sealed class ACodexCoderFixTurnsTests
     {
         await using var world = await CodexRigWorld.CreateAsync();
         var rig = world.Rig;
-        rig.SaysRaw("terra", Turn(Writes(CoderRig.Green), Report(), exit: 1, rollout: new Dictionary<string, string>([.. Rollout(ThreadId), .. Rollout(OtherThread)])))
-            .SaysRaw("astra", Turn(Writes(CoderRig.Green), Report(), OtherThread, rollout: Rollout(OtherThread)));
+        rig.SaysRaw("gpt-6.1-terra", Turn(Writes(CoderRig.Green), Report(), exit: 1, rollout: new Dictionary<string, string>([.. Rollout(ThreadId), .. Rollout(OtherThread)])))
+            .SaysRaw("gpt-6.2-astra", Turn(Writes(CoderRig.Green), Report(), OtherThread, rollout: Rollout(OtherThread)));
         var job = rig.NewJob(route: Two);
 
         var (_, ended) = await rig.RunAsync(job);
@@ -336,8 +336,8 @@ public sealed class ACodexCoderFixTurnsTests
     {
         await using var world = await CodexRigWorld.CreateAsync();
         var rig = world.Rig;
-        rig.SaysRaw("terra", Turn(Writes(CoderRig.Green), Report(), exit: 1, rollout: Rollout(ThreadId, "{\"type\":\"response_item\",\"payload\":{\"type\":\"function_call\",\"name\":\"collaboration.spawn_agent\"}}")))
-            .SaysRaw("astra", Turn(Writes(CoderRig.Green), Report(), OtherThread, rollout: Rollout(OtherThread)));
+        rig.SaysRaw("gpt-6.1-terra", Turn(Writes(CoderRig.Green), Report(), exit: 1, rollout: Rollout(ThreadId, "{\"type\":\"response_item\",\"payload\":{\"type\":\"function_call\",\"name\":\"collaboration.spawn_agent\"}}")))
+            .SaysRaw("gpt-6.2-astra", Turn(Writes(CoderRig.Green), Report(), OtherThread, rollout: Rollout(OtherThread)));
         var job = rig.NewJob(route: Two);
 
         var (_, ended) = await rig.RunAsync(job);
@@ -375,7 +375,7 @@ public sealed class ACodexCoderFixTurnsTests
         await using var world = await CodexRigWorld.CreateAsync();
         var rig = world.Rig;
         rig.AttemptTimeout = TimeSpan.FromMinutes(5);
-        rig.SaysRaw("terra", Turn(Writes(CoderRig.Green), Report(), items: [Message(), OfType("web_search", ",\"query\":\"\"")], holdAfterMs: 150_000));
+        rig.SaysRaw("gpt-6.1-terra", Turn(Writes(CoderRig.Green), Report(), items: [Message(), OfType("web_search", ",\"query\":\"\"")], holdAfterMs: 150_000));
         var job = rig.NewJob(route: ["codex/terra"], timeoutMinutes: 1);
 
         var (_, ended) = await rig.RunAsync(job);
@@ -390,7 +390,7 @@ public sealed class ACodexCoderFixTurnsTests
         await using var world = await CodexRigWorld.CreateAsync();
         var rig = world.Rig;
         rig.AttemptTimeout = TimeSpan.FromMinutes(5);
-        rig.SaysRaw("terra", Turn(Writes(CoderRig.Red + " a"), Report()), Turn(Writes(CoderRig.Green), Report(), items: [Message(), OfType("web_search", ",\"query\":\"\"")], holdAfterMs: 150_000));
+        rig.SaysRaw("gpt-6.1-terra", Turn(Writes(CoderRig.Red + " a"), Report()), Turn(Writes(CoderRig.Green), Report(), items: [Message(), OfType("web_search", ",\"query\":\"\"")], holdAfterMs: 150_000));
         var job = rig.NewJob(route: ["codex/terra"], timeoutMinutes: 1);
 
         var (_, ended) = await rig.RunAsync(job);
@@ -405,7 +405,7 @@ public sealed class ACodexCoderFixTurnsTests
         await using var world = await CodexRigWorld.CreateAsync();
         var rig = world.Rig;
         rig.AttemptTimeout = TimeSpan.FromMinutes(5);
-        rig.SaysRaw("terra", Turn(Writes(CoderRig.Green), Report(), holdAfterMs: 150_000));
+        rig.SaysRaw("gpt-6.1-terra", Turn(Writes(CoderRig.Green), Report(), holdAfterMs: 150_000));
         var job = rig.NewJob(route: ["codex/terra"], timeoutMinutes: 1);
 
         var (_, ended) = await rig.RunAsync(job);
@@ -474,7 +474,7 @@ public sealed class ACodexCoderFixTurnsTests
     {
         await using var world = await CodexRigWorld.CreateAsync();
         var rig = world.Rig;
-        rig.SaysRaw("terra", Turn(Writes(CoderRig.Red + " a"), Report()), Turn(Writes(CoderRig.Green), Report()));
+        rig.SaysRaw("gpt-6.1-terra", Turn(Writes(CoderRig.Red + " a"), Report()), Turn(Writes(CoderRig.Green), Report()));
         var job = rig.NewJob(route: ["codex/terra"]);
 
         var (_, ended) = await rig.RunAsync(job);

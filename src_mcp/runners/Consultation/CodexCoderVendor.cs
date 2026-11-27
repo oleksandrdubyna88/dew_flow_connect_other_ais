@@ -78,6 +78,8 @@ internal sealed class CodexCoderVendor : ICoderVendor
 
     public bool PointsAtInstructionBlock => true;
 
+    public bool NamesResolvedModel => true;
+
     /// <summary>The turn check of codex without a job (s5 t4): the rollout of CX-T5 cannot be found, which ends the job — a check closed by construction.</summary>
     public CoderTurnVerdict CheckTurn(ProcessResult process, string expectedSession) => CodexTurnCheck.Check(process, expectedSession, null);
 

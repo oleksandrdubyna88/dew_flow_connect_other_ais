@@ -21,6 +21,9 @@ internal sealed record CoderOsStop(string Kind, string Sentence, bool Started)
 
     /// <summary>The names outside the known set of tools, as a person may read them (<see cref="Runners.Toolchain.CoderTurnOutcome.Refused.UnknownTools"/>); empty when the stop is not about a tool. Raises the notice <c>coder-tool-unknown</c>.</summary>
     public string UnknownTools { get; init; } = string.Empty;
+
+    /// <summary>Why the notice <c>coder-tool-unknown</c> is raised (<see cref="Runners.Toolchain.CoderTurnOutcome.Refused.ToolReason"/>); empty when the stop is not about the tool inventory.</summary>
+    public string ToolReason { get; init; } = string.Empty;
 }
 
 /// <summary>
@@ -172,8 +175,8 @@ internal sealed class CoderOsLayer(BoundaryJob job, CoderTurns turns, IProcessLa
     {
         CoderTurnOutcome.WriteStopped stopped => new CoderOsStop("write-stopped", stopped.Sentence, Started: true),
         // A refusal that is ONLY "this model cannot be used here now" is not a fault of the boundary (epoch 3 E3 s2 t5, SPEC_CHANGES Q2): its own kind, which the failover reads as the stop word model-unavailable.
-        CoderTurnOutcome.Refused { ModelUnavailable: true } refused => new CoderOsStop(CoderOsStop.ModelUnavailableKind, refused.Sentence, Started: false) { UnknownTools = refused.UnknownTools },
-        CoderTurnOutcome.Refused refused => new CoderOsStop("boundary-refused", refused.Sentence, Started: false) { UnknownTools = refused.UnknownTools },
+        CoderTurnOutcome.Refused { ModelUnavailable: true } refused => new CoderOsStop(CoderOsStop.ModelUnavailableKind, refused.Sentence, Started: false) { UnknownTools = refused.UnknownTools, ToolReason = refused.ToolReason },
+        CoderTurnOutcome.Refused refused => new CoderOsStop("boundary-refused", refused.Sentence, Started: false) { UnknownTools = refused.UnknownTools, ToolReason = refused.ToolReason },
         CoderTurnOutcome.UnitNotStopped notStopped => new CoderOsStop("unit-not-stopped", notStopped.Sentence, Started: true),
         _ => null,
     };

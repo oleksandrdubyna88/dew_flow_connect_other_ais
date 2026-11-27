@@ -15,8 +15,11 @@ public sealed record PreflightRow(string Item, bool Held, string Detail)
     /// <summary>For a held row that reads a tool list: the known tools this model does not have (coai's own strings, so they can be shown). Empty for every other row.</summary>
     public IReadOnlyList<string> Absent { get; init; } = [];
 
-    /// <summary>For the red row of a tool list with names outside the known set: those names as a person may read them (at most 5, each only when it is 1 to 64 safe characters; the rest as a name that cannot be shown, with its length). Empty for every other row.</summary>
+    /// <summary>For the red row of a tool list with names outside the known set: those names as a person may read them (at most 5, each only when it is 1 to 64 safe characters and the shared redactor leaves it as it is; the rest as a name that cannot be shown, with its length). Empty for every other row.</summary>
     public string Tools { get; init; } = string.Empty;
+
+    /// <summary>Why the person is told by the notice <c>coder-tool-unknown</c> for a red row of the tool inventory: <c>unknown-tool</c> or <c>inventory-not-whole</c> (then no name is shown). Empty for every other row.</summary>
+    public string ToolReason { get; init; } = string.Empty;
 }
 
 /// <summary>

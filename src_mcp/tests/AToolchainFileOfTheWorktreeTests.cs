@@ -150,7 +150,7 @@ public sealed class AToolchainFileOfTheWorktreeTests
                 break;
         }
 
-        rig.SaysRaw("terra", first, second);
+        rig.SaysRaw("gpt-6.1-terra", first, second);
         var job = rig.NewJob(route: ["codex/terra"]);
 
         var (_, ended) = await rig.RunAsync(job).WaitAsync(TimeSpan.FromSeconds(90), TestContext.Current.CancellationToken);
@@ -165,7 +165,7 @@ public sealed class AToolchainFileOfTheWorktreeTests
         var rig = world.Rig;
         var turn = (Dictionary<string, object?>)Turn(Writes(CoderRig.Green), Report());
         turn["homeFifos"] = new[] { Path.Combine(".codex", "auth.json") };
-        rig.SaysRaw("terra", turn);
+        rig.SaysRaw("gpt-6.1-terra", turn);
         var job = rig.NewJob(route: ["codex/terra"]);
 
         var (_, ended) = await rig.RunAsync(job).WaitAsync(TimeSpan.FromMinutes(2), TestContext.Current.CancellationToken);

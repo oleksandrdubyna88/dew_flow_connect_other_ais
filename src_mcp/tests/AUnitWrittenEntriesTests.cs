@@ -177,7 +177,7 @@ public sealed class AUnitWrittenEntriesTests
             turn["homeFifos"] = new[] { rollout };
         }
 
-        rig.SaysRaw("terra", turn).SaysRaw("astra", Turn(Writes(CoderRig.Green), Report(), OtherThread, rollout: Rollout(OtherThread)));
+        rig.SaysRaw("gpt-6.1-terra", turn).SaysRaw("gpt-6.2-astra", Turn(Writes(CoderRig.Green), Report(), OtherThread, rollout: Rollout(OtherThread)));
         var job = rig.NewJob(route: ["codex/terra", "codex/astra"]);
 
         var (_, ended) = await rig.RunAsync(job).WaitAsync(TimeSpan.FromMinutes(2), TestContext.Current.CancellationToken);

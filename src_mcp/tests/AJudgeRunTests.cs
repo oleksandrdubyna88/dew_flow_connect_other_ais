@@ -153,7 +153,7 @@ public sealed class AJudgeRunTests
         wrong["verdict"] = "reject";
         wrong["findings"] = new JsonArray();
         rig.Says("fable", Says(wrong));
-        rig.Says("astra", FakeRoleAnswers.CodexSays(JudgeScenario.Judge().ToJsonString()));
+        rig.Says("gpt-6.2-astra", FakeRoleAnswers.CodexSays(JudgeScenario.Judge().ToJsonString()));
 
         var (exit, job) = await RunAsync(rig);
 
@@ -223,7 +223,7 @@ public sealed class AJudgeRunTests
     {
         await using var rig = await RigAsync();
         rig.Says("fable", Says(JsonNode.Parse(FakeRoleAnswers.Refusal)!.AsObject()));
-        rig.Says("astra", FakeRoleAnswers.CodexSays(JudgeScenario.Judge().ToJsonString()));
+        rig.Says("gpt-6.2-astra", FakeRoleAnswers.CodexSays(JudgeScenario.Judge().ToJsonString()));
 
         var (_, job) = await RunAsync(rig);
 

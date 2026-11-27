@@ -64,6 +64,9 @@ public abstract record CoderTurnOutcome
 
         /// <summary>The names outside the known set of tools that a red row carries, as a person may read them (<see cref="PreflightRow.Tools"/>); empty when no row carries any.</summary>
         public string UnknownTools => Record.Preflight.FirstOrDefault(row => !row.Held && row.Tools.Length > 0)?.Tools ?? string.Empty;
+
+        /// <summary>Why the notice <c>coder-tool-unknown</c> is raised for this refusal (<see cref="PreflightRow.ToolReason"/>), or empty when no red row is about the tool inventory.</summary>
+        public string ToolReason => Record.Preflight.FirstOrDefault(row => !row.Held && row.ToolReason.Length > 0)?.ToolReason ?? string.Empty;
     }
 
     /// <summary>What the launch was bounded by and what the preflight said: the record of the unit it ran in, or the one of the refusal. Null for none.</summary>

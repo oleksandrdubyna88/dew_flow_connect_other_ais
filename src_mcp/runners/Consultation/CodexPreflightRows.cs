@@ -26,7 +26,7 @@ internal static class CodexPreflightRows
 
         var data = DataOf(started.Result.StdOut);
         var byItem = basic.Skip(1).ToDictionary(row => row.Item, StringComparer.Ordinal);
-        var tools = CodexToolList.Judge(Names(data, "tools-worktree"), Names(data, "tools-standin"));
+        var tools = CodexToolList.Judge(CodexToolList.Read(Text(data, "tools-worktree")), CodexToolList.Read(Text(data, "tools-standin")));
         var doctor = CodexDoctorReport.Read(Text(data, "doctor"));
         var profile = CodexDoctorReport.ProfileProblem(doctor);
         var mcp = CodexDoctorReport.McpProblem(doctor);
@@ -43,10 +43,10 @@ internal static class CodexPreflightRows
         {
             ["tool-list"] = tools.ToolList.Length == 0
                 ? new PreflightRow("tool-list", true, HeldSentence(tools)) { Absent = tools.Absent }
-                : new PreflightRow("tool-list", false, tools.ToolList) { Unavailable = tools.ToolListUnavailable, Tools = tools.Outside.Count > 0 ? tools.ShownNames : string.Empty },
+                : new PreflightRow("tool-list", false, tools.ToolList) { Unavailable = tools.ToolListUnavailable, Tools = tools.ShownNames, ToolReason = tools.Reason },
             ["no-project-tools"] = tools.NoProjectTools.Length + mcp.Length == 0
                 ? new PreflightRow("no-project-tools", true, "a project's own .codex/config.toml with an MCP server does not change the tool list, and the doctor report says no MCP server is configured")
-                : new PreflightRow("no-project-tools", false, string.Join("; ", new[] { tools.NoProjectTools, mcp }.Where(text => text.Length > 0))),
+                : new PreflightRow("no-project-tools", false, string.Join("; ", new[] { tools.NoProjectTools, mcp }.Where(text => text.Length > 0))) { ToolReason = tools.NoProjectTools.Length > 0 ? tools.Reason : string.Empty },
             ["permission-profile"] = profile.Length == 0
                 ? new PreflightRow("permission-profile", true, "the doctor report of the CLI shows the profile coai, a restricted filesystem and network sandbox and the approval policy Never")
                 : new PreflightRow("permission-profile", false, profile),
@@ -79,8 +79,6 @@ internal static class CodexPreflightRows
 
         return true;
     }
-
-    private static IReadOnlyList<string>? Names(Dictionary<string, string> data, string name) => CodexToolList.NamesOf(Text(data, name));
 
     private static string Text(Dictionary<string, string> data, string name) => data.GetValueOrDefault(name) ?? string.Empty;
 

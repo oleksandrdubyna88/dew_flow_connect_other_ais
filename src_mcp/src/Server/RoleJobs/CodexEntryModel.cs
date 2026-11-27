@@ -4,6 +4,13 @@ using CoaiMcp.Runners.Reviewers;
 
 namespace CoaiMcp.Server.RoleJobs;
 
+/// <summary>The one road by which the loop asks what the model of an entry is: the vendor's own rule when the vendor has one, else the name as given. The loop names no vendor.</summary>
+internal static class EntryModels
+{
+    public static Task<EntryModel> ResolveAsync(RoleModelLauncher launcher, ModelRef asked, string repoPath, string folder, CancellationToken ct) =>
+        CodexEntryModel.ResolveAsync(launcher, asked, repoPath, folder, ct);
+}
+
 /// <summary>What the model of a route entry came to when the job reached the entry (epoch 3 E3 s2 t5): the model every turn of the entry launches with, or the stop that says the entry cannot be used.</summary>
 /// <param name="Launch">The model the entry launches with: the name as given, or — for a codex family — the newest model the installed CLI lists.</param>
 /// <param name="Stop">Set when the entry cannot be used: nothing is launched, and the failover goes on (<see cref="RoleStopWords.ModelUnavailable"/>) or the job ends (a boundary stop, a limit that keeps its word).</param>
@@ -28,7 +35,7 @@ internal static class CodexEntryModel
 
     /// <summary>The entry's model: asks the installed CLI for its live list when the name needs it, else the name as given.</summary>
     public static async Task<EntryModel> ResolveAsync(RoleModelLauncher launcher, ModelRef asked, string repoPath, string folder, CancellationToken ct) =>
-        AsksTheList(asked) ? Read(asked, await launcher.ListCodexModelsAsync(asked, repoPath, folder, ct)) : new EntryModel(asked);
+        AsksTheList(asked) ? Read(asked, await launcher.ListModelsAsync(asked, repoPath, folder, ct)) : new EntryModel(asked);
 
     /// <summary>What a finished read of the list makes of <paramref name="asked"/>. Pure, so every row of the table of Q2 is a unit test.</summary>
     internal static EntryModel Read(ModelRef asked, RoleLaunched listed)

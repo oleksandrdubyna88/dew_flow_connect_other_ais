@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 
@@ -198,7 +199,7 @@ internal static class CodexVerbs
 
     /// <summary>
     /// <c>codex debug models</c> (epoch 3 E3 s2 t5): a network call and no model call, which prints the live list of the account as ONE JSON object <c>{"models":[…]}</c>. It answers from the RECORDING of the real command (<c>fixtures/role-stops/codex-debug-models.json</c>, scrubbed to the fields coai reads: stdout, stderr and the exit code as the real CLI
-    /// gave them), or from the file <c>FAKECLI_CODEX_MODELS</c> names (a recording of the same shape), or — for a word — the one failure a test needs, or <c>slugs:a=list,b=hide</c> for a list of exactly these models: <c>exit1</c> (a CLI that fails), <c>garbage</c> (an exit 0 that is no list), <c>huge</c> (a list over the limit), <c>sign-in-lost</c> (the refresh failure of a copy that is no use) and <c>slow</c> (a list that comes after the deadline).
+    /// gave them), or from the file <c>FAKECLI_CODEX_MODELS</c> names (a recording of the same shape), or — for a word — the one failure a test needs, or <c>slugs:a=list,b=hide</c> for a list of exactly these models: <c>exit1</c> (a CLI that fails), <c>garbage</c> (an exit 0 that is no list), <c>huge</c> (a list over the limit), <c>sign-in-lost</c> (the refresh failure of a copy that is no use) and <c>slow</c> (a list that comes after the deadline), <c>write-stopped</c> (a refused write, as the OS layer says it) and <c>ignores-term</c> (a process that ignores the stop signal). Each sidecar also names what the working folder held when the call was made.
     /// Each call is a sidecar <c>sidecars/&lt;pid&gt;.models</c> of the record folder (working folder, <c>HOME</c>, <c>CODEX_HOME</c>, one to a line), which a test reads to see where and with which home the list was asked; it is NO launch of a model, so the record folder holds no launch record for it.
     /// </summary>
     private static int Models(string[] args)
@@ -207,7 +208,7 @@ internal static class CodexVerbs
         {
             var folder = Path.Combine(record, "sidecars");
             Directory.CreateDirectory(folder);
-            File.WriteAllLines(Path.Combine(folder, Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture) + ".models"), [Directory.GetCurrentDirectory(), Environment.GetEnvironmentVariable("HOME") ?? string.Empty, CodexHome(), string.Join(" ", args)]);
+            File.WriteAllLines(Path.Combine(folder, Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture) + ".models"), [Directory.GetCurrentDirectory(), Environment.GetEnvironmentVariable("HOME") ?? string.Empty, CodexHome(), string.Join(" ", args), string.Join(",", Directory.EnumerateFileSystemEntries(Directory.GetCurrentDirectory()).Select(Path.GetFileName))]);
         }
 
         var mode = Steering("FAKECLI_CODEX_MODELS");
@@ -229,6 +230,18 @@ internal static class CodexVerbs
                 Console.Error.WriteLine("Failed to refresh token: 401 Unauthorized");
 
                 return 1;
+            case "write-stopped":
+                Console.Error.WriteLine("fake codex: cannot write /etc/hosts: Read-only file system");
+
+                return 1;
+            case "ignores-term":
+                // A list that is never finished and a process that ignores the stop signal (an unit that cannot be stopped, once the stop timeout is taken away).
+                using (PosixSignalRegistration.Create(PosixSignal.SIGTERM, context => context.Cancel = true))
+                {
+                    Thread.Sleep(TimeSpan.FromMinutes(5));
+                }
+
+                return 0;
             case "slow":
                 Thread.Sleep(TimeSpan.FromMinutes(2));
 
@@ -293,8 +306,11 @@ internal static class CodexVerbs
             _ => [],
         };
         var nested = Nested.Where(name => !without.Contains(name));
-        var description = "Run JavaScript. " + string.Concat(nested.Select(name => $"### `{name}`\n"));
-        var bare = mode == "one" || mode == "empty" || (mode == "project-empty" && project);
+        // The nested inventory in ANOTHER form (a list in a sentence): the text a shorter list could be read from, if the grammar did not refuse it (epoch 3 E3 s2 t5, V36).
+        var otherForm = mode == "other-form" || (mode == "project-other-form" && project);
+        var description = otherForm
+            ? "Run JavaScript. The tools you may call from it are: " + string.Join(", ", nested) + "."
+            : "Run JavaScript.\n" + string.Concat(nested.Select(name => $"### `{name}`\n"));
         using var buffer = new MemoryStream();
         using (var json = new Utf8JsonWriter(buffer))
         {
@@ -318,13 +334,24 @@ internal static class CodexVerbs
                 return 0;
             }
 
-            Namespace(json, "functions", bare ? [("exec", string.Empty)] : [("exec", description), ("wait", string.Empty), ("request_user_input", string.Empty), ("request_user_input_async", string.Empty)]);
+            if (mode == "one")
+            {
+                // ONE name: a single top-level tool and no JavaScript tool, so there is no nested inventory to read.
+                json.WriteStartObject();
+                json.WriteString("name", "apply_patch");
+                json.WriteEndObject();
+            }
+            else
+            {
+                Namespace(json, "functions", [("exec", description), ("wait", string.Empty), ("request_user_input", string.Empty), ("request_user_input_async", string.Empty)]);
+            }
+
             if (agents)
             {
                 Namespace(json, "collaboration", [.. new[] { "followup_task", "interrupt_agent", "list_agents", "send_message", "spawn_agent", "wait_agent" }.Select(name => (name, string.Empty))]);
             }
 
-            foreach (var name in ExtraTools(mode, Directory.GetCurrentDirectory()))
+            foreach (var name in ExtraTools(mode, Directory.GetCurrentDirectory(), args))
             {
                 json.WriteStartObject();
                 json.WriteString("name", name);
@@ -333,6 +360,16 @@ internal static class CodexVerbs
 
             json.WriteEndArray();
             json.WriteEndObject();
+            if (mode == "second-item")
+            {
+                // A second item of the same type (A4-M1 item 1): the read must not take the first and go on.
+                json.WriteStartObject();
+                json.WriteString("type", "additional_tools");
+                json.WriteStartArray("tools");
+                json.WriteEndArray();
+                json.WriteEndObject();
+            }
+
             json.WriteEndArray();
         }
 
@@ -342,16 +379,25 @@ internal static class CodexVerbs
     }
 
     /// <summary>The tools a mode adds at the top level: an account connector, one a project's own config brings (the project is NOT trusted by the real CLI; a mode makes the fake trust it), or a name that is hostile text.</summary>
-    private static IEnumerable<string> ExtraTools(string mode, string cwd) => mode switch
+    private static IEnumerable<string> ExtraTools(string mode, string cwd, string[] args) => mode switch
     {
+        // A new tool for ONE model only (the model of the probe is asked as -c model="…"): the entry of that model is refused, the next one is not (epoch 3 E3 s2 t5, V33).
+        _ when mode.StartsWith("new-tool-in:", StringComparison.Ordinal) && args.Contains($"model=\"{mode["new-tool-in:".Length..]}\"") => ["brand_new_tool"],
+        // A new tool that shows from the THIRD probe of the job on (the preflight of the first launch makes two: the worktree and the stand-in project), so it shows on a repair turn or a fix turn that was not there at turn 0.
+        "late-tool" when ProbeCalls() >= 3 => ["brand_new_tool"],
+        // A tool that only the read in the worktree shows: what a file of the repository could add (A4-M2); the stand-in project is coai's own folder and never shows it.
+        "worktree-only" when !File.Exists(Path.Combine(cwd, ".codex", "config.toml")) => ["worktree_only_tool"],
         "mcp" => ["mcp__ologs__get_profile"],
         "project-mcp" when File.Exists(Path.Combine(cwd, ".codex", "config.toml")) => ["mcp__standin__probe"],
         "hostile" => ["HOSTILE-TEXT-A-ROW-MUST-NOT-CARRY"],
         "new-tool" => ["brand_new_tool"],
         "many-new" => [.. Enumerable.Range(1, 8).Select(index => $"new_tool_{index}")],
-        "hostile-names" => ["bad\nname", "control\u0001char", "sk-ant-oat01-abcdefghij/klmnop+qrstuv==", new string('a', 300)],
+        "hostile-names" => ["bad\nname", "control\u0001char", "sk-ant-oat01-abcdefghij/klmnop+qrstuv==", "sk-ant-oat01-abcdefghijklmnopqrstuvwxyz0123456789ABCDEF", new string('a', 300)],
         _ => [],
     };
+
+    /// <summary>How many calls of <c>debug</c> (prompt-input or models) this CODEX_HOME has seen, this one included (<c>fake-verbs.log</c>).</summary>
+    private static int ProbeCalls() => CodexHome() is { Length: > 0 } home && File.Exists(Path.Combine(home, "fake-verbs.log")) ? File.ReadAllLines(Path.Combine(home, "fake-verbs.log")).Count(line => line == "debug") : 0;
 
     private static void Namespace(Utf8JsonWriter json, string name, IEnumerable<(string Name, string Description)> tools)
     {

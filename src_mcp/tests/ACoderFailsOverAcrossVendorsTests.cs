@@ -94,12 +94,18 @@ public sealed class ACoderFailsOverAcrossVendorsTests
     private static string[] Expected(Verdict codex, Verdict agy) => ["claude", .. Ships(codex) ? new[] { "codex" } : [], .. Ships(agy) ? new[] { "agy" } : []];
 
     /// <summary>The models that are launched, in route order: both claude models, then the one model of each shipped vendor.</summary>
-    private static string[] ExpectedModels(Verdict codex, Verdict agy) => ["sonnet", "opus", .. Ships(codex) ? new[] { "terra" } : [], .. Ships(agy) ? new[] { Argon } : []];
+    private static string[] ExpectedModels(Verdict codex, Verdict agy) => ["sonnet", "opus", .. Ships(codex) ? new[] { "gpt-6.1-terra" } : [], .. Ships(agy) ? new[] { Argon } : []];
 
     private static RouteResult.Routed Narrowed(CoderVendorSet set) =>
         CoderRoute.Narrow(new RouteResult.Routed(Full, "the coder list"), vendors: set).Should().BeOfType<RouteResult.Routed>().Subject;
 
     private static string Resumed(string[] argv) => argv.SkipWhile(arg => arg != "--resume").Skip(1).FirstOrDefault() ?? string.Empty;
+
+    /// <summary>The name a model is LAUNCHED with: a codex family is resolved to the newest model the installed CLI lists when the job reaches the entry (the recording of the live list holds gpt-6.1-terra), and the fake CLI answers by that name.</summary>
+    private static string Launched(string model) => model == "terra" ? "gpt-6.1-terra" : model;
+
+    /// <summary>The name a route entry was written with, for a name a model was launched with (the other way round of <see cref="Launched"/>).</summary>
+    private static string AskedAs(string launched) => launched == "gpt-6.1-terra" ? "terra" : launched;
 
     private static string ModelOf(string[] argv) => argv[Array.FindIndex(argv, arg => arg is "--model" or "-m") + 1];
 
@@ -119,7 +125,7 @@ public sealed class ACoderFailsOverAcrossVendorsTests
     private static CoderRig.Launch Writes(string text, string session, IReadOnlyList<string>? reads = null, IReadOnlyDictionary<string, string>? home = null) =>
         new(new Dictionary<string, string> { [CoderRig.StateFile] = text + "\n" }, CoderRig.Report(), Session: session, HomeFiles: home, Reads: reads);
 
-    private static string Stray(string model) => $"stray-{model}.txt";
+    private static string Stray(string model) => $"stray-{(model == "gpt-6.1-terra" ? "terra" : model)}.txt";
 
     /// <summary>The CLI falls over with a build break and a file nobody asked for half written, and exit 1.</summary>
     private static CoderRig.Launch Falls(string model, IReadOnlyList<string> reads, IReadOnlyDictionary<string, string>? home = null) =>
@@ -182,18 +188,18 @@ public sealed class ACoderFailsOverAcrossVendorsTests
         var finalSession = Expected(codex, agy)[^1] switch { "claude" => ClaudeLast, "codex" => CodexLast, _ => AgyLast };
         foreach (var model in new[] { "sonnet", "opus", "terra", Argon })
         {
-            var vendor = Full.First(known => known.Model == model).Vendor;
-            if (model == last)
+            var vendor = Full.First(known => known.Model == AskedAs(model)).Vendor;
+            if (Launched(model) == last)
             {
-                rig.Says(model, Writes(CoderRig.Red + " f", finalSession, probes, CopyOf(vendor)), Writes(CoderRig.Green, finalSession, probes, CopyOf(vendor)));
+                rig.Says(Launched(model), Writes(CoderRig.Red + " f", finalSession, probes, CopyOf(vendor)), Writes(CoderRig.Green, finalSession, probes, CopyOf(vendor)));
             }
             else if (model == "sonnet")
             {
-                rig.Says(model, Writes(CoderRig.Red + " s", Claude1, probes), Falls(model, probes));
+                rig.Says(Launched(model), Writes(CoderRig.Red + " s", Claude1, probes), Falls(model, probes));
             }
             else
             {
-                rig.Says(model, Falls(model, probes, CopyOf(vendor)));
+                rig.Says(Launched(model), Falls(model, probes, CopyOf(vendor)));
             }
         }
 
@@ -203,8 +209,8 @@ public sealed class ACoderFailsOverAcrossVendorsTests
         var launches = rig.Launches(job);
         var order = launches.Select(ModelOf).ToArray();
         order.Distinct().Should().Equal(launchedModels, "the job went through exactly the shipped vendors' models, in route order");
-        order.Select(model => Full.First(known => known.Model == model).Vendor).Distinct().Should().Equal(Expected(codex, agy));
-        ended.Attempts.Select(attempt => (attempt.Model, attempt.Vendor)).Should().Equal(launchedModels.Select(model => (model, Full.First(known => known.Model == model).Vendor)));
+        order.Select(model => Full.First(known => known.Model == AskedAs(model)).Vendor).Distinct().Should().Equal(Expected(codex, agy));
+        ended.Attempts.Select(attempt => (attempt.Model, attempt.Vendor)).Should().Equal(launchedModels.Select(model => (AskedAs(model), Full.First(known => known.Model == AskedAs(model)).Vendor)));
 
         // Every switch: one line, one notice, and the notice names the vendor the repository text now goes to.
         var switches = launchedModels.Length - 1;
@@ -213,7 +219,7 @@ public sealed class ACoderFailsOverAcrossVendorsTests
         notices.Should().HaveCount(switches);
         for (var i = 0; i < switches; i++)
         {
-            var to = Full.First(known => known.Model == launchedModels[i + 1]);
+            var to = Full.First(known => known.Model == AskedAs(launchedModels[i + 1]));
             notices[i].Provider.Should().Be(to.Vendor);
             notices[i].Detail.Should().Contain($"to the {to.Vendor} vendor ({to.Model})");
         }
@@ -225,7 +231,7 @@ public sealed class ACoderFailsOverAcrossVendorsTests
         var lastOf = launchedModels.ToDictionary(model => model, model => Array.LastIndexOf(order, model));
         for (var i = 0; i < launches.Count; i++)
         {
-            var vendor = Full.First(known => known.Model == order[i]).Vendor;
+            var vendor = Full.First(known => known.Model == AskedAs(order[i])).Vendor;
             var seen = reads[i];
             if (vendor == "claude")
             {
@@ -289,7 +295,7 @@ public sealed class ACoderFailsOverAcrossVendorsTests
         names.Should().HaveCount(launches.Count);
         for (var i = 0; i < launches.Count; i++)
         {
-            var vendor = Full.First(known => known.Model == order[i]).Vendor;
+            var vendor = Full.First(known => known.Model == AskedAs(order[i])).Vendor;
             foreach (var other in new[] { "codex", "agy" })
             {
                 names[i].Contains($"{other.ToUpperInvariant()}_AUTH_FILE").Should().Be(vendor == other, $"launch {i} ({vendor}) holds the variable name of its own vendor only");
@@ -315,20 +321,20 @@ public sealed class ACoderFailsOverAcrossVendorsTests
         var launchedModels = ExpectedModels(codex, agy);
         foreach (var model in new[] { "sonnet", "opus", "terra", Argon })
         {
-            var vendor = Full.First(known => known.Model == model).Vendor;
+            var vendor = Full.First(known => known.Model == AskedAs(model)).Vendor;
             var empty = Array.Empty<string>();
-            if (model == launchedModels[^1])
+            if (Launched(model) == launchedModels[^1])
             {
-                rig.Says(model, Writes(CoderRig.Green, vendor == "claude" ? ClaudeLast : vendor == "codex" ? CodexLast : AgyLast, empty));
+                rig.Says(Launched(model), Writes(CoderRig.Green, vendor == "claude" ? ClaudeLast : vendor == "codex" ? CodexLast : AgyLast, empty));
             }
-            else if (launchedModels.Contains(model))
+            else if (launchedModels.Contains(Launched(model)))
             {
-                rig.Says(model, Falls(model, empty));
+                rig.Says(Launched(model), Falls(model, empty));
             }
             else
             {
                 // A refused vendor's model would ANSWER if it were launched: a launch would make the job succeed on it, and be seen in the record.
-                rig.Says(model, Writes(CoderRig.Green, Claude1, empty));
+                rig.Says(Launched(model), Writes(CoderRig.Green, Claude1, empty));
             }
         }
 
@@ -410,7 +416,7 @@ public sealed class ACoderFailsOverAcrossVendorsTests
         await using var rig = await RigAsync(set);
         var job = rig.NewJob(route: ["codex/terra", $"agy/{Argon}"]);
         string[] probes = [CopyPath(rig, job, "codex"), CopyPath(rig, job, "agy")];
-        rig.Says("terra", Falls("terra", probes, CopyOf("codex")), Falls("terra", probes, CopyOf("codex")))
+        rig.Says("gpt-6.1-terra", Falls("terra", probes, CopyOf("codex")), Falls("terra", probes, CopyOf("codex")))
             .Says(Argon, Writes(CoderRig.Green, AgyLast, probes, CopyOf("agy")));
 
         var (_, ended) = await rig.RunAsync(job);
@@ -431,13 +437,13 @@ public sealed class ACoderFailsOverAcrossVendorsTests
         await using var rig = await RigAsync(set);
         var job = rig.NewJob(route: ["codex/terra", $"agy/{Argon}"]);
         // The vendor leaves a FOLDER where its copy belongs: coai cannot delete it as a file, and the next vendor must not start with it there.
-        rig.Says("terra", Falls("terra", [], new Dictionary<string, string> { [".codex/auth.json#folder"] = CodexCopy })).Says(Argon, Writes(CoderRig.Green, AgyLast, []));
+        rig.Says("gpt-6.1-terra", Falls("terra", [], new Dictionary<string, string> { [".codex/auth.json#folder"] = CodexCopy })).Says(Argon, Writes(CoderRig.Green, AgyLast, []));
 
         var (_, ended) = await rig.RunAsync(job);
 
         (ended.State, ended.Stop).Should().Be((RoleJobStates.Failed, RoleStopWords.CoderBoundary), ended.Reason);
         ended.Reason.Should().Contain("sign-in copy").And.Contain("codex");
-        rig.Launches(job).Select(ModelOf).Should().Equal("terra");
+        rig.Launches(job).Select(ModelOf).Should().Equal("gpt-6.1-terra");
     }
 
     [Theory]
@@ -452,14 +458,14 @@ public sealed class ACoderFailsOverAcrossVendorsTests
         rig.Degrade = arguments => arguments.Any(argument => argument.StartsWith("coai-coder-", StringComparison.Ordinal)) ? WithoutStopTimeout(arguments) : arguments;
         var job = rig.NewJob(route: ["codex/terra", $"agy/{Argon}"]);
         var hangs = new CoderRig.Launch(null, CoderRig.Report(), SleepMs: 300_000, IgnoreTerm: true, HomeFiles: CopyOf("codex"));
-        rig.Says("terra", inAFixTurn ? [Writes(CoderRig.Red + " 0", CodexLast, null, CopyOf("codex")), hangs] : [hangs]).Says(Argon, Writes(CoderRig.Green, AgyLast, [CopyPath(rig, job, "codex")], CopyOf("agy")));
+        rig.Says("gpt-6.1-terra", inAFixTurn ? [Writes(CoderRig.Red + " 0", CodexLast, null, CopyOf("codex")), hangs] : [hangs]).Says(Argon, Writes(CoderRig.Green, AgyLast, [CopyPath(rig, job, "codex")], CopyOf("agy")));
         try
         {
             var (_, ended) = await rig.RunAsync(job);
 
             (ended.State, ended.Stop).Should().Be((RoleJobStates.Failed, RoleStopWords.CoderBoundary), ended.Reason);
             ended.Reason.Should().Contain("could not be stopped");
-            rig.Launches(job).Select(ModelOf).Should().OnlyContain(model => model == "terra", "the next vendor is never started beside a unit that is still alive");
+            rig.Launches(job).Select(ModelOf).Should().OnlyContain(model => model == "gpt-6.1-terra", "the next vendor is never started beside a unit that is still alive");
             File.ReadAllText(CopyPath(rig, job, "codex")).Should().Contain(CodexCopy, "the copy of the vendor whose unit may still be alive is not deleted: nothing was reached that deletes it");
             File.Exists(CopyPath(rig, job, "agy")).Should().BeFalse("the next vendor never ran");
             rig.Rig.SwitchLines().Should().BeEmpty();
@@ -519,7 +525,7 @@ public sealed class ACoderFailsOverAcrossVendorsTests
         await using var rig = await RigAsync(set);
         Environment.SetEnvironmentVariable("FAKECLI_VERSION_STDOUT", "7.7.7 (Claude Code)\n");
         var job = rig.NewJob(route: ["codex/terra"]);
-        rig.Says("terra", Writes(CoderRig.Green, CodexLast));
+        rig.Says("gpt-6.1-terra", Writes(CoderRig.Green, CodexLast));
 
         var (_, ended) = await rig.RunAsync(job);
 
@@ -603,13 +609,13 @@ public sealed class ACoderFailsOverAcrossVendorsTests
         var job = rig.NewJob(route: ["claude/sonnet", "codex/terra", $"agy/{Argon}"]);
         // sonnet: turn 0 red, one fix turn red, a second fix turn that crashes (two turns of the job); codex: turn 0 red, ONE fix turn that crashes (the third); agy: turn 0 red and no fix turn is left.
         rig.Says("sonnet", Writes(CoderRig.Red + " 0", Claude1), Writes(CoderRig.Red + " 1", string.Empty), Falls("sonnet", []))
-            .Says("terra", Writes(CoderRig.Red + " 3", CodexLast), Falls("terra", []))
+            .Says("gpt-6.1-terra", Writes(CoderRig.Red + " 3", CodexLast), Falls("terra", []))
             .Says(Argon, Writes(CoderRig.Red + " 5", AgyLast), Writes(CoderRig.Red + " 6", AgyLast));
 
         var (_, ended) = await rig.RunAsync(job);
 
         (ended.State, ended.Stop).Should().Be((RoleJobStates.Failed, "not-green"), ended.Reason);
-        rig.Launches(job).Select(ModelOf).Should().Equal("sonnet", "sonnet", "sonnet", "terra", "terra", Argon);
+        rig.Launches(job).Select(ModelOf).Should().Equal("sonnet", "sonnet", "sonnet", "gpt-6.1-terra", "gpt-6.1-terra", Argon);
         var envelope = rig.Envelope(job);
         envelope.GetProperty("fixTurns").GetInt32().Should().Be(3, "the cap is the job's: two turns of the first vendor, one of the second, none left for the third");
         envelope.GetProperty("fixRounds").GetProperty("cap").GetInt32().Should().Be(3);
@@ -625,12 +631,12 @@ public sealed class ACoderFailsOverAcrossVendorsTests
         var set = Set(Verdict.Ship, Verdict.Ship);
         await using var rig = await RigAsync(set);
         var job = rig.NewJob(route: RoleRoute.Format(Full));
-        rig.Says("sonnet", Falls("sonnet", []) with { Stdout = SpentQuota }).Says("opus", Writes(CoderRig.Green, Claude1)).Says("terra", Writes(CoderRig.Green, CodexLast));
+        rig.Says("sonnet", Falls("sonnet", []) with { Stdout = SpentQuota }).Says("opus", Writes(CoderRig.Green, Claude1)).Says("gpt-6.1-terra", Writes(CoderRig.Green, CodexLast));
 
         var (_, ended) = await rig.RunAsync(job);
 
         ended.State.Should().Be(RoleJobStates.Succeeded, ended.Reason);
-        rig.Launches(job).Select(ModelOf).Should().Equal("sonnet", "terra");
+        rig.Launches(job).Select(ModelOf).Should().Equal("sonnet", "gpt-6.1-terra");
     }
 
     [Fact]
@@ -639,12 +645,12 @@ public sealed class ACoderFailsOverAcrossVendorsTests
         var set = Set(Verdict.Ship, Verdict.Ship);
         await using var rig = await RigAsync(set);
         var job = rig.NewJob(route: ["claude/sonnet", "codex/terra", "codex/astra", $"agy/{Argon}"]);
-        rig.Says("sonnet", Falls("sonnet", [])).Says("terra", Falls("terra", []) with { Stdout = SpentQuota }).Says("astra", Writes(CoderRig.Green, CodexLast)).Says(Argon, Writes(CoderRig.Green, AgyLast));
+        rig.Says("sonnet", Falls("sonnet", [])).Says("gpt-6.1-terra", Falls("terra", []) with { Stdout = SpentQuota }).Says("gpt-6.2-astra", Writes(CoderRig.Green, CodexLast)).Says(Argon, Writes(CoderRig.Green, AgyLast));
 
         var (_, ended) = await rig.RunAsync(job);
 
         ended.State.Should().Be(RoleJobStates.Succeeded, ended.Reason);
-        rig.Launches(job).Select(ModelOf).Should().Equal("sonnet", "terra", Argon);
+        rig.Launches(job).Select(ModelOf).Should().Equal("sonnet", "gpt-6.1-terra", Argon);
     }
 
     [Fact]
@@ -658,7 +664,7 @@ public sealed class ACoderFailsOverAcrossVendorsTests
         rig.RealHomeFile(".codex/auth.json", $"{{\"tokens\":{{\"access_token\":\"{Token}\"}}}}");
         var job = rig.NewJob(route: ["codex/terra"]);
         // The coder reads its own copy and puts the token into the notes of an otherwise valid report.
-        rig.Says("terra", new CoderRig.Launch(new Dictionary<string, string> { [CoderRig.StateFile] = CoderRig.Green + "\n" }, CoderRig.Report(notes: "debug: " + Token), Session: CodexLast));
+        rig.Says("gpt-6.1-terra", new CoderRig.Launch(new Dictionary<string, string> { [CoderRig.StateFile] = CoderRig.Green + "\n" }, CoderRig.Report(notes: "debug: " + Token), Session: CodexLast));
 
         var (_, ended) = await rig.RunAsync(job);
 

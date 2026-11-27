@@ -205,7 +205,7 @@ public sealed class TheRolesCompleteEpicAcceptanceTests
         {
             var repo = await TempGitRepo.InitAsync(new ProcessLauncher(), "coai-roles-epic-repo-");
             _repos.Add(repo);
-            var map = JsonSerializer.Serialize(new Dictionary<string, object> { [kit.Model] = new[] { kit.Turn(CoderRig.Red), kit.Turn(CoderRig.Green) } });
+            var map = JsonSerializer.Serialize(new Dictionary<string, object> { [kit.Id == "codex" && kit.Model == "terra" ? "gpt-6.1-terra" : kit.Model] = new[] { kit.Turn(CoderRig.Red), kit.Turn(CoderRig.Green) } });
             var baseSha = await CoderRig.LayFixtureAsync(repo, toolchain, new Dictionary<string, string>
             {
                 [".fake/model-map.json"] = map,

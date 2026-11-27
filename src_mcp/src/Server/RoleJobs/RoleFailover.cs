@@ -76,7 +76,7 @@ internal static class RoleAnswers
 /// <summary>The session an attempt's answer came from: the model, the handle its first turn reported (empty when the vendor named none) and the key the session runs on (<see cref="RoleKey.KeyId"/>; empty for a launch with no key) — every later turn of the session uses the SAME key — and the CLI release the session ran with (a record, never a condition).</summary>
 internal sealed record RoleSession(ModelRef Model, string Handle, string KeyId = "", Server.Keys.ClaudeKeySecret? Secret = null, string CliVersion = "")
 {
-    /// <summary>The model as the route asked for it (epoch 3 E3 s2 t5): a codex family (<c>terra</c>) where <see cref="Model"/> is what it resolved to (<c>gpt-6.1-terra</c>) and what every later turn of the session launches with. The same as <see cref="Model"/> when the name was used as given.</summary>
+    /// <summary>The model as the route asked for it (epoch 3 E3 s2 t5): a family name where <see cref="Model"/> is what it resolved to (<c>terra</c> to <c>gpt-6.1-terra</c>) and what every later turn of the session launches with. The same as <see cref="Model"/> when the name was used as given.</summary>
     public ModelRef Asked { get; init; } = Model;
 
     /// <summary>What a cumulative vendor had reported when the session's turn 0 (and its repair turns) ended: the counter the first fix turn is measured against, so each fix turn's usage line holds that turn only.</summary>
@@ -181,6 +181,7 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
     private bool _poolExhausted;
     private bool _warnedNoSnapshot;
     private string _lastVendor = string.Empty;
+    private string _lastStopWord = string.Empty;
     private readonly Dictionary<string, ModelRef> _resolved = new(StringComparer.Ordinal);
 
     /// <summary>The road to the claude key pool of this job's data folder; made once, on the first claude launch.</summary>
@@ -228,6 +229,12 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
             return new RoleWorkOutcome.Failed(RoleStopWords.Limit, _poolSentence);
         }
 
+        // The last entry that was tried could not be used (S4 item 7): the job ends failed with THAT word, at once, and the person sees the cause and not a count.
+        if (_lastStopWord == RoleStopWords.ModelUnavailable)
+        {
+            return new RoleWorkOutcome.Failed(RoleStopWords.ModelUnavailable, $"every model of the route stopped, and the last could not be used: {string.Join("; ", _history)}");
+        }
+
         return new RoleWorkOutcome.Failed("models-exhausted", $"every model of the route stopped: {string.Join("; ", _history)}");
     }
 
@@ -260,6 +267,7 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
 
             var stop = ((Ended.Stop)end).Why;
             _history.Add($"{RoleRoute.Format(model)}: {stop.Word} — {stop.Reason}");
+            _lastStopWord = stop.Word;
             if (!stop.FailsOver)
             {
                 return new Step.Finished(new RoleWorkOutcome.Failed(stop.Word, stop.Reason));
@@ -389,8 +397,8 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
         RepairTurnsUsed = 0;
         var attempt = new AttemptRun(n, Path.Combine(run.Folder, "attempts", n.ToString(System.Globalization.CultureInfo.InvariantCulture)), run.Clock.GetUtcNow().UtcDateTime, await SnapshotAsync(ct)) { KeyId = key.KeyId, Secret = (key as RoleKey.Pool)?.Secret, Asked = asked };
 
-        // The name of the entry, once, now that the job has reached it (epoch 3 E3 s2 t5): a codex family becomes the newest model the installed CLI lists, and the name is used as recorded by every later turn of this attempt's session. A name that cannot be used ends the entry before anything is launched.
-        var entry = await CodexEntryModel.ResolveAsync(new RoleModelLauncher(run.Settings, run.Children) { Coder = Coder, Layer = OsLayer, Vendors = Vendors }, asked, run.Request.RepoPath, Path.Combine(attempt.Folder, "models"), ct);
+        // The name of the entry, once, now that the job has reached it (epoch 3 E3 s2 t5): a family name becomes the newest model the installed CLI lists, and the name is used as recorded by every later turn of this attempt's session. A name that cannot be used ends the entry before anything is launched.
+        var entry = await EntryModels.ResolveAsync(new RoleModelLauncher(run.Settings, run.Children) { Coder = Coder, Layer = OsLayer, Vendors = Vendors }, asked, run.Request.RepoPath, Path.Combine(attempt.Folder, "models"), ct);
         if (ct.IsCancellationRequested)
         {
             return Interrupted(asked, attempt, null);
@@ -407,8 +415,8 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
         model = entry.Launch;
         if (model != asked)
         {
+            // job.json's "model" stays the route entry as asked; the name the attempt launched with is the attempt's resolvedModel.
             _resolved[RoleRoute.Format(asked)] = model;
-            run.Trying(RoleRoute.Format(model));
         }
 
         var sent = prompt;
@@ -440,7 +448,7 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
                 return Interrupted(model, attempt, launched);
             }
 
-            var read = await ReadAsync(model, launched, attempt.Before, turn == 0 ? string.Empty : attempt.Handle, ct);
+            var read = await ReadAsync(model, launched, attempt.Before, turn == 0 ? string.Empty : attempt.Handle, turn == 0, ct);
             KeepTurn(attempt, turn, launched);
             var blocked = read.Repair is { } wanted ? CannotRepair(wanted, turn, launched.Handle) : null;
             if (read.Repair is null || blocked is not null)
@@ -568,7 +576,7 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
     private sealed record Read(RoleStop? Stop, string Result, RoleAnswerVerdict.Repair? Repair = null);
 
     /// <summary>The stop of a finished launch, or null with the role's result: the tree first (a changed tree ends the job whatever the model said), then the launch, then the answer.</summary>
-    private async Task<Read> ReadAsync(ModelRef model, RoleLaunched launched, FilesystemSnapshot? before, string expectedSession, CancellationToken ct)
+    private async Task<Read> ReadAsync(ModelRef model, RoleLaunched launched, FilesystemSnapshot? before, string expectedSession, bool firstLaunchOfTheEntry, CancellationToken ct)
     {
         if (await ChangedAsync(before, ct) is { Length: > 0 } sentence)
         {
@@ -581,7 +589,7 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
             return new Read(wrong, string.Empty);
         }
 
-        if (StopOfLaunch(model, launched) is { } stopped)
+        if (StopOfLaunch(model, launched, firstLaunchOfTheEntry) is { } stopped)
         {
             return new Read(stopped, string.Empty);
         }
@@ -602,7 +610,7 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
     /// What a finished launch came to when it gave no answer the role can judge, or null when it did: the layer's own word first (a coder that was stopped from writing did not do its work, whatever its report claims, and the next model would meet the same
     /// layer), then a refused preparation, then a launch that ended with a terminal state or said nothing. One reading for every launch of a job — a coder's fix turns read theirs here too.
     /// </summary>
-    internal static RoleStop? StopOfLaunch(ModelRef model, RoleLaunched launched)
+    internal static RoleStop? StopOfLaunch(ModelRef model, RoleLaunched launched, bool firstLaunchOfTheEntry = false)
     {
         // The text of the launch's own key was in what it printed: the key is dead and the job ends — another model would be handed a tree and a transcript that may hold it.
         if (launched.KeyExposed || launched.ExposedIds.Count > 0)
@@ -618,8 +626,8 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
 
         if (launched.OsStop is { } osStop)
         {
-            // A preflight refused ONLY because the model cannot be used here now (a tool list that could not be read, in both reads): no boundary broke, and the next entry is tried (epoch 3 E3 s2 t5).
-            return new RoleStop(osStop.Kind == CoderOsStop.ModelUnavailableKind ? RoleStopWords.ModelUnavailable : RoleStopWords.CoderBoundary, Redaction.SafeText(osStop.Sentence, Redaction.TitleLimit), osStop.Kind, false, false) { UnknownTools = osStop.UnknownTools };
+            // The word of a refused preflight is mapped in ONE place, and it takes the number of the launch (epoch 3 E3 s2 t5).
+            return RoleStops.OfPreflightRefusal(osStop, firstLaunchOfTheEntry);
         }
 
         if (launched.Refused is { } refused)
@@ -634,20 +642,18 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
             : null;
     }
 
-    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<IRoleRun, object> ToolNoticed = new();
-
     /// <summary>
-    /// ONE notice <c>coder-tool-unknown</c> for the job (epoch 3 E3 s2 t5; SPEC_CHANGES Q3 item 5), when a launch was refused by a preflight that found a tool outside the known set: the job, the vendor, the name as asked and as resolved, the installed CLI release and the names the row let through.
-    /// Asked for every launch of every turn (a fix turn runs a preflight too); the second time for a job it does nothing.
+    /// ONE notice <c>coder-tool-unknown</c> for an entry that a preflight refused for its tool inventory (epoch 3 E3 s2 t5; S4 items 8 and 11): the job, the vendor, the name as asked and as resolved, the installed CLI release, the reason (a tool outside the known set, or an inventory that was not read whole) and — only for the first — the names the row let through.
+    /// A refused launch is the last of its entry (the entry fails over, or the job ends), so there is no second one to coalesce.
     /// </summary>
     internal static void NoticeToolUnknown(IRoleRun run, ModelRef asked, ModelRef used, RoleLaunched launched)
     {
-        if (launched.OsStop is not { UnknownTools.Length: > 0 } stopped || !ToolNoticed.TryAdd(run, run))
+        if (launched.OsStop is not { ToolReason.Length: > 0 } stopped)
         {
             return;
         }
 
-        run.Notice(RoleJobNotices.CoderToolUnknown(run.Job, used.Vendor, asked.Model, used.Model, launched.CliVersion, stopped.UnknownTools, run.Clock.GetUtcNow().UtcDateTime));
+        run.Notice(RoleJobNotices.CoderToolUnknown(run.Job, used.Vendor, asked.Model, used.Model, launched.CliVersion, stopped.ToolReason, stopped.UnknownTools, run.Clock.GetUtcNow().UtcDateTime));
     }
 
     // ---------- the tree ----------

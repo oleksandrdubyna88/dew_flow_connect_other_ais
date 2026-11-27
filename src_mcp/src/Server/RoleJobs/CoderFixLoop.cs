@@ -281,7 +281,7 @@ internal sealed class CoderFixLoop(IRoleRun run, GitHistory git, CoderOsLayer la
 /// <summary>The session of a model's turn 0, which every fix turn of that model resumes: the model that answered, the handle it reported, and the confinement that binds the handle to this job and worktree — and the key (<see cref="RoleKey.KeyId"/>) the session runs on: every fix turn resumes with the SAME key.</summary>
 internal sealed record CoderFixSession(ModelRef Model, string Handle, LaunchConfinement.Coder Confinement, string KeyId = "", Server.Keys.ClaudeKeySecret? Secret = null)
 {
-    /// <summary>The model as the route asked for it (epoch 3 E3 s2 t5): a codex family where <see cref="Model"/> is the name it resolved to, which every fix turn launches with. Null: the name was used as given.</summary>
+    /// <summary>The model as the route asked for it (epoch 3 E3 s2 t5): a family name where <see cref="Model"/> is the name it resolved to, which every fix turn launches with. Null: the name was used as given.</summary>
     public ModelRef? AskedAs { get; init; }
 
     /// <summary>The model as asked: <see cref="AskedAs"/>, else <see cref="Model"/>.</summary>

@@ -64,8 +64,11 @@ internal sealed record RoleStop(string Word, string Reason, string Kind, bool Sk
     /// <summary>True when what the launch printed must not be kept as evidence (agy's lost sign-in: its stderr holds a login address): the evidence is the reason alone.</summary>
     public bool NoEvidence { get; init; }
 
-    /// <summary>The names of tools outside the known set that a codex coder's preflight found, as a person may read them (epoch 3 E3 s2 t5); empty for every other stop. Raises the notice <c>coder-tool-unknown</c>.</summary>
+    /// <summary>The names of tools outside the known set that a codex coder's preflight found, as a person may read them (epoch 3 E3 s2 t5); empty for every other stop, and when the inventory was not read whole (then no name is shown).</summary>
     public string UnknownTools { get; init; } = string.Empty;
+
+    /// <summary>Why the notice <c>coder-tool-unknown</c> is raised for this stop (<c>unknown-tool</c> or <c>inventory-not-whole</c>); empty for a stop that is not about the tool inventory.</summary>
+    public string ToolReason { get; init; } = string.Empty;
 
     /// <summary>Limit, refusal, crash and model-unavailable go on to the next model; every other word ends the job.</summary>
     public bool FailsOver => Word is RoleStopWords.Limit or RoleStopWords.Refusal or RoleStopWords.Crash or RoleStopWords.ModelUnavailable;
@@ -103,6 +106,24 @@ internal static class RoleStops
         }
 
         return Stopped(failure, said);
+    }
+
+    /// <summary>
+    /// THE one place that maps a preflight that refused a coder launch to its stop word (epoch 3 E3 s2 t5; S4 items 7, 10 and 12): a refusal whose every red row says "this model cannot be used" (<see cref="CoderOsStop.ModelUnavailableKind"/>) is <c>model-unavailable</c> at the FIRST launch of an entry — nothing was launched, the next entry is tried — and
+    /// is <c>coder-boundary</c> at every later launch of the entry (a repair turn, a fix turn, a resumed session): the session changed under the job, and another model would go on in a worktree and a session state that nobody can vouch for. Any other refusal is <c>coder-boundary</c> at every launch.
+    /// </summary>
+    public static RoleStop OfPreflightRefusal(CoderOsStop osStop, bool firstLaunchOfTheEntry)
+    {
+        var unavailable = osStop.Kind == CoderOsStop.ModelUnavailableKind && firstLaunchOfTheEntry;
+        var sentence = osStop.Kind == CoderOsStop.ModelUnavailableKind && !firstLaunchOfTheEntry
+            ? $"after the first launch of this model a refused preflight ends the job: {osStop.Sentence}"
+            : osStop.Sentence;
+
+        return new RoleStop(unavailable ? RoleStopWords.ModelUnavailable : RoleStopWords.CoderBoundary, Redaction.SafeText(sentence, Redaction.TitleLimit), unavailable ? osStop.Kind : osStop.Kind == CoderOsStop.ModelUnavailableKind ? "boundary-refused" : osStop.Kind, false, false)
+        {
+            UnknownTools = osStop.UnknownTools,
+            ToolReason = osStop.ToolReason,
+        };
     }
 
     /// <summary>A stop for a failure the classifier already named — also what a refused preparation (a CLI that cannot be started) becomes.</summary>

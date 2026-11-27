@@ -64,7 +64,7 @@ public sealed class APassTenShouldsTests
         var toolchain = ToolchainFixture.Shell("chmod 000 .coai/toolchain.yaml; echo built", "echo tested");
         await using var world = await CodexRigWorld.CreateAsync(toolchain);
         var rig = world.Rig;
-        rig.SaysRaw("terra", Turn(Writes(CoderRig.Green), Report()));
+        rig.SaysRaw("gpt-6.1-terra", Turn(Writes(CoderRig.Green), Report()));
         var job = rig.NewJob(route: ["codex/terra"]);
 
         var (_, ended) = await rig.RunAsync(job).WaitAsync(TimeSpan.FromSeconds(90), TestContext.Current.CancellationToken);
@@ -82,7 +82,7 @@ public sealed class APassTenShouldsTests
         var rig = world.Rig;
         var turn = (Dictionary<string, object?>)Turn(Writes(CoderRig.Green), Report());
         turn["cwdDelete"] = new[] { ToolchainName };
-        rig.SaysRaw("terra", turn);
+        rig.SaysRaw("gpt-6.1-terra", turn);
         var job = rig.NewJob(route: ["codex/terra"]);
 
         var (_, ended) = await rig.RunAsync(job).WaitAsync(TimeSpan.FromSeconds(90), TestContext.Current.CancellationToken);
@@ -98,7 +98,7 @@ public sealed class APassTenShouldsTests
         var rig = world.Rig;
         var turn = (Dictionary<string, object?>)Turn(Writes(CoderRig.Green), Report());
         turn["cwdFifos"] = new[] { ToolchainName };
-        rig.SaysRaw("terra", turn);
+        rig.SaysRaw("gpt-6.1-terra", turn);
         var job = rig.NewJob(route: ["codex/terra"]);
 
         var (_, ended) = await rig.RunAsync(job).WaitAsync(TimeSpan.FromSeconds(90), TestContext.Current.CancellationToken);

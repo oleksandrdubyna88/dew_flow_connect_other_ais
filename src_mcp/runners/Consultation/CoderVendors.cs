@@ -198,6 +198,9 @@ internal interface ICoderVendor
     /// </summary>
     string BeforeModelFree(BoundaryJob job) => string.Empty;
 
+    /// <summary>Whether the vendor resolves a family name to the newest model its CLI lists when a job reaches the entry (epoch 3 E3 s2 t5): then the envelope names the model as asked and as resolved, and the known tools the model does not have.</summary>
+    bool NamesResolvedModel => false;
+
     /// <summary>After the vendor's unit ended: what it wrote inside the unit that the host must read is brought to where the launch named it (codex: the report file). The default does nothing.</summary>
     void CollectLaunch(BoundaryJob job, ProcessRequest original, ProcessRequest launched)
     {

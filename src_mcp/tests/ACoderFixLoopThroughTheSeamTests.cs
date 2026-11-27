@@ -58,7 +58,7 @@ public sealed class ACoderFixLoopThroughTheSeamTests
     public async Task D1_ATestVendor_GoesRedThenGreenAfterTwoFixTurns_InTheSessionOfTurnZero()
     {
         await using var rig = await RigAsync();
-        rig.Says("terra", Writes(CoderRig.Red + " a"), Writes(CoderRig.Red + " b"), Writes(CoderRig.Green));
+        rig.Says("gpt-6.1-terra", Writes(CoderRig.Red + " a"), Writes(CoderRig.Red + " b"), Writes(CoderRig.Green));
         var job = rig.NewJob(route: ["codex/terra"]);
 
         var (_, ended) = await rig.RunAsync(job);
@@ -77,7 +77,7 @@ public sealed class ACoderFixLoopThroughTheSeamTests
     public async Task D1_AnInvalidReport_GetsOneRepairTurn_InTheSessionOfTurnZero()
     {
         await using var rig = await RigAsync();
-        rig.Says("terra", new CoderRig.Launch(new Dictionary<string, string> { [CoderRig.StateFile] = CoderRig.Green + "\n" }, "not a report at all", Session: Session), Writes(CoderRig.Green));
+        rig.Says("gpt-6.1-terra", new CoderRig.Launch(new Dictionary<string, string> { [CoderRig.StateFile] = CoderRig.Green + "\n" }, "not a report at all", Session: Session), Writes(CoderRig.Green));
         var job = rig.NewJob(route: ["codex/terra"]);
 
         var (_, ended) = await rig.RunAsync(job);
@@ -95,7 +95,7 @@ public sealed class ACoderFixLoopThroughTheSeamTests
     {
         await using var rig = await CoderRig.CreateAsync();
         rig.Rig.Setting("COAI_ROLE_CODEX_CLI", RoleJobWorld.FakeCli);
-        rig.Says("terra", Writes(CoderRig.Green)).Says("sonnet", Writes(CoderRig.Green));
+        rig.Says("gpt-6.1-terra", Writes(CoderRig.Green)).Says("sonnet", Writes(CoderRig.Green));
         var job = rig.NewJob(route: ["codex/terra", "claude/sonnet"]);
 
         var (_, ended) = await rig.RunAsync(job);
@@ -111,8 +111,8 @@ public sealed class ACoderFixLoopThroughTheSeamTests
     public async Task D2_ALostSessionOnAFixTurn_IsACrash_AndTheNextModelStartsFromTheLastCoaiCommit_InANewSession()
     {
         await using var rig = await RigAsync();
-        rig.Says("terra", Writes(CoderRig.Red + " a"), new CoderRig.Launch(new Dictionary<string, string> { ["stray.txt"] = "half\n" }, CoderRig.Report(), Session: Session, Stderr: "no rollout found for thread " + Session))
-            .Says("astra", Writes(CoderRig.Green, Other));
+        rig.Says("gpt-6.1-terra", Writes(CoderRig.Red + " a"), new CoderRig.Launch(new Dictionary<string, string> { ["stray.txt"] = "half\n" }, CoderRig.Report(), Session: Session, Stderr: "no rollout found for thread " + Session))
+            .Says("gpt-6.2-astra", Writes(CoderRig.Green, Other));
         var job = rig.NewJob(route: Two);
 
         var (_, ended) = await rig.RunAsync(job);
@@ -132,7 +132,7 @@ public sealed class ACoderFixLoopThroughTheSeamTests
     public async Task D3_ABadItemOnTurnZero_EndsTheJobCoderBoundary_AndNothingOfThatTurnIsCommitted()
     {
         await using var rig = await RigAsync();
-        rig.Says("terra", Writes(CoderRig.Green, Session, CoderRig.Report(notes: Bad)));
+        rig.Says("gpt-6.1-terra", Writes(CoderRig.Green, Session, CoderRig.Report(notes: Bad)));
         var job = rig.NewJob(route: ["codex/terra"]);
 
         var (_, ended) = await rig.RunAsync(job);
@@ -146,7 +146,7 @@ public sealed class ACoderFixLoopThroughTheSeamTests
     public async Task D3_ABadItemOnAFixTurn_EndsTheJobCoderBoundary_BeforeThatTurnIsCommitted()
     {
         await using var rig = await RigAsync();
-        rig.Says("terra", Writes(CoderRig.Red + " a"), Writes(CoderRig.Green, Session, CoderRig.Report(notes: Bad)));
+        rig.Says("gpt-6.1-terra", Writes(CoderRig.Red + " a"), Writes(CoderRig.Green, Session, CoderRig.Report(notes: Bad)));
         var job = rig.NewJob(route: ["codex/terra"]);
 
         var (_, ended) = await rig.RunAsync(job);
@@ -159,7 +159,7 @@ public sealed class ACoderFixLoopThroughTheSeamTests
     public async Task D3_ASessionThatIsNotTheHandles_EndsTheAttemptAsACrash_AndTheNextModelRuns()
     {
         await using var rig = await RigAsync();
-        rig.Says("terra", Writes(CoderRig.Red + " a"), Writes(CoderRig.Green, Other)).Says("astra", Writes(CoderRig.Green, Other));
+        rig.Says("gpt-6.1-terra", Writes(CoderRig.Red + " a"), Writes(CoderRig.Green, Other)).Says("gpt-6.2-astra", Writes(CoderRig.Green, Other));
         var job = rig.NewJob(route: Two);
 
         var (_, ended) = await rig.RunAsync(job);
@@ -250,7 +250,7 @@ public sealed class ACoderFixLoopThroughTheSeamTests
         var prompts = new RolePrompts(rig.World.DataDir);
         prompts.Override("coder", "CLAUDE-OVERRIDE for {{taskId}}");
         prompts.Override("coder-seamprobe", "PROBE-OVERRIDE for {{taskId}}");
-        rig.Says("terra", Writes(CoderRig.Red + " a"), Writes(CoderRig.Green)).Says("sonnet", Writes(CoderRig.Green));
+        rig.Says("gpt-6.1-terra", Writes(CoderRig.Red + " a"), Writes(CoderRig.Green)).Says("sonnet", Writes(CoderRig.Green));
         var other = rig.NewJob(route: ["codex/terra"]);
         var claude = rig.NewJob(route: ["claude/sonnet"]);
 
@@ -267,7 +267,7 @@ public sealed class ACoderFixLoopThroughTheSeamTests
     public async Task D5_TheEnvelopeNamesThePromptIdAndTheSha256OfTheRenderedTurnZeroPrompt_NeverItsText()
     {
         await using var rig = await RigAsync();
-        rig.Says("terra", Writes(CoderRig.Green)).Says("sonnet", Writes(CoderRig.Green));
+        rig.Says("gpt-6.1-terra", Writes(CoderRig.Green)).Says("sonnet", Writes(CoderRig.Green));
         var seam = rig.NewJob(route: ["codex/terra"]);
         var claude = rig.NewJob(route: ["claude/sonnet"]);
 
@@ -294,7 +294,7 @@ public sealed class ACoderFixLoopThroughTheSeamTests
     public async Task D6_WithAStep_TheOutputIsAppendedToTheTurnZeroPromptOfEveryVendor_ClaudeToo_AsOneBlock()
     {
         await using var rig = await RigAsync(Step(StepScript));
-        rig.Says("terra", Writes(CoderRig.Red + " a"), Writes(CoderRig.Green)).Says("sonnet", Writes(CoderRig.Red + " a"), Writes(CoderRig.Green));
+        rig.Says("gpt-6.1-terra", Writes(CoderRig.Red + " a"), Writes(CoderRig.Green)).Says("sonnet", Writes(CoderRig.Red + " a"), Writes(CoderRig.Green));
         var seam = rig.NewJob(route: ["codex/terra"]);
         var claude = rig.NewJob(route: ["claude/sonnet"]);
 
@@ -316,7 +316,7 @@ public sealed class ACoderFixLoopThroughTheSeamTests
     public async Task D6_WithNoStep_ClaudeIsSentNoBlock_AndAVendorWhosePromptPointsAtItIsSentTheBlockThatSaysNothingWasRun()
     {
         await using var rig = await RigAsync();
-        rig.Says("terra", Writes(CoderRig.Green)).Says("sonnet", Writes(CoderRig.Green));
+        rig.Says("gpt-6.1-terra", Writes(CoderRig.Green)).Says("sonnet", Writes(CoderRig.Green));
         var seam = rig.NewJob(route: ["codex/terra"]);
         var claude = rig.NewJob(route: ["claude/sonnet"]);
 
@@ -331,7 +331,7 @@ public sealed class ACoderFixLoopThroughTheSeamTests
     public async Task D6_ANewSessionAfterAFailover_CarriesTheBlockAgain()
     {
         await using var rig = await RigAsync(Step(StepScript));
-        rig.Says("terra", new CoderRig.Launch(null, string.Empty, Exit: 1, Stderr: "the CLI fell over: boom")).Says("astra", Writes(CoderRig.Green));
+        rig.Says("gpt-6.1-terra", new CoderRig.Launch(null, string.Empty, Exit: 1, Stderr: "the CLI fell over: boom")).Says("gpt-6.2-astra", Writes(CoderRig.Green));
         var job = rig.NewJob(route: Two);
 
         var (_, ended) = await rig.RunAsync(job);
