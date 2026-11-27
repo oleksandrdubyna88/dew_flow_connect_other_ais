@@ -1304,3 +1304,12 @@ decision is the lead's. The judge's view, for that decision: the four must-chang
 drop no protection, add no risk and ask the owner nothing.
 
 **The verdict for the vendor does not change**: codex is `ship`, as sections 1 and 13.1 say, and the row of the table stays as it is.
+
+### 15.12 After the real list read (2026-11-27; RESULTS_e3_codex_model_name.md, 1.1): A4-M3 item 4 is met.
+
+The read left `models_cache.json` in the job's CODEX_HOME and none of the three named files. The unit held, beside the CLI, `sh`,
+`lsb_release`, `cut`, `sed` and `tr`: helper programs of the system PATH that the CLI starts to learn the operating system. They are
+inside the ruling of 15.6: they bring no text of a repository and no file of the home into the run. Item 4 is read so: a process that
+is not the CLI and is not one of these five names stops the task. The names were sampled; the parent and the executable path of each
+were not recorded. `models_cache.json` is the CLI's own copy of the list it read; the launch checks do not rely on it. J37 is closed:
+`gpt-5.6-terra` does not have `functions.request_user_input_async` and `clock__curr_time`. The verdict of 15.11 does not change.
