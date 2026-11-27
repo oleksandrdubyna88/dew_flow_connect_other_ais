@@ -18,13 +18,24 @@ round all night.
 | MCP servers in `~/.claude.json` | 3 names | the same 3 names |
 | `agy` binary | 280593096 bytes, mtime 2026-11-26 08:42:19 +0100 | the same |
 
-### VM `ai1-dev3` — OPEN
+### VM `ai1-dev3` — PASS
 
-The before values are recorded: 14 claude/node pids, logged in, a settings sha, 3 MCP names, the `agy` size, and
-5 backups. The after read goes through the creds MCP. Each call needs the owner's consent in the editor. The night
-call timed out with no one to answer. The next call, at 05:29 UTC, was refused with "Another request holds this
-window's dialog place": the night dialog still stands. It was not worked around. The row runs when the owner
-closes that dialog.
+After values: 2026-11-27 11:00:17 UTC, read through the creds MCP with the owner's consent. Two earlier calls did not
+run: the night call timed out with no one to answer, and the call at 05:29 UTC was refused with "Another request
+holds this window's dialog place". Neither was worked around. A restart of the owner's PC freed the dialog.
+
+| What | Before (2026-11-26 22:47:54 UTC) | After (2026-11-27 11:00:17 UTC) |
+|---|---|---|
+| claude/node processes | 14 pids, started from 2026-11-05 to 2026-11-26 | the same 14 pids, the same start times |
+| `~/.claude/settings.json` sha256 (first 16) | `4ceed143825dda57` | `4ceed143825dda57` |
+| MCP servers in `~/.claude.json` | 3 names | the same 3 names |
+| `~/.local/bin/agy` | 280593096 bytes, mtime 2026-11-26 11:36:18 UTC | the same |
+| backups in `~/.claude/backups` | 5 | 5 |
+
+A first after-read of `agy` showed 4096 bytes: `command -v agy` found nothing in a non-login ssh shell, so the
+read measured the home folder. The read by the full path above is the one that counts.
+
+The logged-in state was not read again; the 14 sessions ran on through the whole night.
 
 ## R10 — the places that lack `jq`
 
@@ -32,10 +43,12 @@ closes that dialog.
 |---|---|---|---|
 | WSL `Ubuntu`, the default user | missing | `apt-get` | `sudo` asks for a password |
 | WSL `Ubuntu`, root | missing (the same file system) | `apt-get` | is root |
-| VM `ai1-dev3` | open: the same creds block as R7 | — | — |
+| VM `ai1-dev3`, the ssh user | present (`/usr/bin/jq`) | `apt-get` | `sudo` asks for a password |
 
-The tab shows the fixed command `sudo apt-get install -y jq` for the Ubuntu rows. Whether the next round reads the
-accounts after the owner runs it is open: the command has not been run yet. This table is the input of E6.
+The tab showed the fixed command `sudo apt-get install -y jq` for the Ubuntu rows. The owner ran it on
+2026-11-27 at 07:39 UTC. `dpkg` recorded three packages: `jq`, `libjq1` and `libonig5`. Both the default user and
+root find `/usr/bin/jq` now. Whether the next round reads the accounts in the tab is not yet recorded. This table
+is the input of E6: of the places measured, none lacks `jq` now, and none has `sudo` without a password.
 
 ## R12 — two windows — OPEN
 
