@@ -50,6 +50,10 @@ The tab showed the fixed command `sudo apt-get install -y jq` for the Ubuntu row
 root find `/usr/bin/jq` now. Whether the next round reads the accounts in the tab is not yet recorded. This table
 is the input of E6: of the places measured, none lacks `jq` now, and none has `sudo` without a password.
 
+**R10 (f), root of the WSL distro, 2026-11-27 13:2x UTC:** `command -v` finds none of `claude`, `codex` and `agy` for
+root, and `/root/.claude` and `/root/.codex` do not exist. So root is a place with no AI tool: E6 would install nothing
+there. With the rows above, E6 would install on no measured place of the owner.
+
 ## R12 — two windows — OPEN
 
 The owner's night word was "R12 not by hand". The automated tests cover parts of it on fakes and in one editor
