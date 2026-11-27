@@ -1,5 +1,26 @@
 # Changelog
 
+## Extension 2.1.0 — 2026-11-27
+
+**The AI accounts of your terminals, and their limits, in one tab.** The new icon in the terminal panel's title bar (beside *Ask
+other AI*) opens a tab that shows, for every host of an open `Creds: <host> / <session>` terminal, which of Claude Code, Codex and
+Antigravity are there, the account each is signed in to, and how much of the 5-hour and the weekly window is left — with the
+time until it resets (a countdown under 24 hours, the date after that). A number that was not read is a dash, never a zero. The
+tab groups the readings by server, by Claude account (the account's usage once, every place it is signed in under it) or by
+user, and every column sorts. While a round runs the toolbar says which host it reads. Rounds repeat every 10 minutes.
+
+**One permission, asked once.** Nothing is contacted until you choose *Allow reading*, once, for every host now and later. *Not
+this host* stops one host; *Withdraw the permission* stops everything, in every window. **If you answered *Read* for a host in
+an earlier build (0.87.0 or a 2.0.90x pre-release), that answer is no longer used: you are asked once more, for all hosts.**
+
+**WSL on this PC.** In a Windows window with a `Creds: wsl / …` terminal, every running WSL distro and every Linux user in it —
+root too, as itself — is read through `wsl.exe`. A distro that is not running is never started. On a distro with systemd, WSL
+opens a login session for each user it reads, which runs that user's profile. As root, nothing that another user can write is
+started.
+
+**What is not in this release:** installing `jq` where it is missing. A host without `jq` shows the command to run there, with
+a copy button; the installer comes in a later release.
+
 ## Extension 2.0.0 · Server 2.0.0 — 2026-11-24
 
 **coai 2.0: the gate never waits for a person.** A review round ends with one of four outcomes: `proceed`, `revise`,

@@ -3,6 +3,19 @@
 > The next release of the extension is 2.0.0, requested by hand with a `Release-As: 2.0.0` footer: the v1 data migration runs only from major version 2 (v2 epoch 1, E5).
 > What changes for a person is in `RELEASE_NOTES_2.0.md` at the repository root.
 
+## [2.1.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v2.0.0...extension-v2.1.0) (2026-11-27)
+
+
+### Features
+
+* **extension:** one permission for every host, a tab grouped by server, Claude account or user, WSL on this PC and the Claude usage (accounts E2–E4) ([#1055](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/1055)) ([da9760f](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/da9760feb23b1e60256d69ec76e8b9e03530bd0a))
+* **extension:** the terminal panel shows the AI accounts and their usage (E1, read-only, usage off) ([#1047](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/1047)) ([d0241e4](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/d0241e459ce58339859e050104fe7fa3ff7d0165))
+
+
+### Bug Fixes
+
+* **extension:** the accounts round reads no host until the one permission of the next build ([#1051](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/1051)) ([b1ec467](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/b1ec467c0f3440d04b4515e62cd4093c7ee27ccc))
+
 ## [2.0.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.89.2...extension-v2.0.0) (2026-11-24)
 
 
