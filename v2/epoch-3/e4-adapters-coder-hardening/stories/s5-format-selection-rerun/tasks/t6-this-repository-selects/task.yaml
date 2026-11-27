@@ -1,8 +1,8 @@
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: t6-this-repository-selects
 title: ".coai/toolchain.yaml of this repository gets testFiles and testFor; a recorded run proves a selected real test and the full suite under the boundary"
-kind: config
-complexity: 3
+kind: code
+complexity: 4
 dependsOn:
   - t3-selected-then-full
 parallel: false
@@ -10,8 +10,16 @@ files:
   - .coai/toolchain.yaml
   - v2/epoch-3/e4-adapters-coder-hardening/RESULTS_s5_this_repository.md
   - src_mcp/tests/AThisRepositoryToolchainFileTests.cs
+  - src_mcp/core/Toolchain/TestSelection.cs
+  - src_mcp/runners/Toolchain/CheckRunner.cs
+  - src_mcp/core/Toolchain/ToolchainParse.cs
+  - src_mcp/tests/AFlakyRerunTests.cs
 dod:
   - id: d1
-    item: "the task starts only after the owner's answer to question 3 of SPEC section N; the committed file names testFiles src_mcp/tests and the testFor argv that s1 t1 measured (M3); the test that reads the committed file gets both, and its build and test argv are unchanged"
+    item: "the task starts only after the owner's answer to question 3 of SPEC section N; the committed file names testFiles tests — a prefix is relative to the PROJECT, which is src_mcp here (corrected by the re-review of 2026-11-27, SPEC section S, finding 1; the text said src_mcp/tests) — and the testFor argv that s1 t1 measured (M3), with {stem} as an item of its own; the test that reads the committed file gets both, and its build and test argv are unchanged"
   - id: d2
     item: "S8: a recorded run on a clean clone under the boundary (skipped unless its variable names a folder): a commit that adds one failing test class gives a red selected run with that test in the digest; the fix gives a green selected run and then the full suite green; the results file holds the argv, the times and the exit codes of every step"
+  - id: d3
+    item: "the re-review of 2026-11-27 (SPEC section S, finding 2): testFiles is read ONE way, relative to the project, by the selected run (TestSelection.Select) and by the narrowed re-run (TestSelection.IsUnder, called from CheckRunner); a test holds that a failed test of a project that is not at the repository root gets a narrowed re-run, where the code before this item ran the whole step again; a project at the root behaves as before"
+  - id: d4
+    item: "the re-review of 2026-11-27 (SPEC section S, finding 3; SPEC section A2 as corrected): an item of testFor that is EXACTLY {file} or {stem} becomes one item for each file; the reader refuses a testFor item that is longer than a placeholder and holds one, and the refusal names the item, so a literal placeholder never reaches a tool; the file of this repository passes the reader"

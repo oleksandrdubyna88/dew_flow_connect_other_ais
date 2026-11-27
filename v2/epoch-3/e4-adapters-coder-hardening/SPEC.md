@@ -1,7 +1,7 @@
 # Spec — epoch 3, E4 "Adapters dotnet + node + coder hardening"
 
 > Status: **plan only, nothing built, 2026-11-25.** Plan gate: `proceed`, 2026-11-25; its 5 accepted findings are section P. The
-> owner answered questions 1, 2, 4 and 5 of section N on 2026-11-25, and question 3 on 2026-11-27. After the gate one `doneWhen` line came
+> owner answered questions 1, 2, 4 and 5 of section N on 2026-11-25, and question 3 on 2026-11-27. The parent plan is stopped for re-review since 2026-11-27; what its revision changed here is section S. After the gate one `doneWhen` line came
 > from the security judgement of E3 (section Q). Scope: the server half (`src_mcp`, `shared/`,
 > `.coai/toolchain.yaml`). Written by the planner (Fable) from `v2/` and the code at `feat/v2-ep3-e2-coder` `f19a7fcb`, read-only.
 > Parent plan: [PLAN.md](../../PLAN.md); architecture: [server.md](../../architecture/server.md) §10, §11, §12, §15, §16 row 9, §23.
@@ -95,8 +95,10 @@ for each round.
   This repository's file reads to the same model as today.
 - A project that states NO command (`path` and `adapter` only) gets the adapter's defaults for its own folder, read at the base and at the head;
   the both-trees rule of A4 holds for it. The source is then `file+defaults`.
-- New names of a project: `restore` (argv), `format` (argv; an item may hold `{file}`), `testFor` (argv; an item may hold `{file}`
-  or `{stem}`), `testFiles` (a list of folder prefixes inside the project that hold test files). `testFor` needs `testFiles`.
+- New names of a project: `restore` (argv), `format` (argv; an item may hold `{file}`), `testFor` (argv; an item that is EXACTLY
+  `{file}` or `{stem}` becomes one item for each file; a longer item that holds one of the two is refused by the reader:
+  section S), `testFiles` (a list of folder prefixes inside the project that hold test files, relative to the PROJECT, read
+  the same way by the selected run and by the narrowed re-run). `testFor` needs `testFiles`.
 - `skip: [restore]` and `skip: [format]` take that step out of a defaulted project. The reader's existing refusal rule for argv
   text covers the new lists.
 
@@ -609,3 +611,25 @@ These are plan changes; the plan is read again after the owner's whole-plan revi
 2. **F1, accepted — one precedence rule for the toolchain file across the head's transitions** (section A1, D15 to D17; s2 t5 d1 and d2, s3 t3 d2 and d4). The head's state wins: added → the head's file runs; changed → the head's file runs; deleted → the head's detection runs. Each is reported as a difference.
 3. **F2, accepted — the format step in its own unit, and the clean after it** (section D item 3 and 4, F7; s5 t1 d5). A formatter can change ignored files; only tracked changes of the given files are taken, then `git clean -ffdx` and an empty `status --ignored` before the checks, then restore again.
 4. **F3, rejected — "`dotnet test` on this repository".** The finding said the generic `dotnet test --project` form is wrong for this repository (PROJECT.md says the MTP executable, never `dotnet test`). Why it stays: that rule is for agents running this repository on the host; the product's detection uses `dotnet test --project <unit> --no-build -c Debug`, and it was MEASURED in story s1 (RESULTS_s1_dotnet.md, M3 and r17): in the check unit it gave exit 0, 2.7 seconds, 18 tests passed for `--filter-class CoaiMcp.Tests.AFailureDigestTests`. A repository that wants its own test command states `test` in `.coai/toolchain.yaml` (this repository's file does).
+
+## S. The re-review of ledger epoch 3 (2026-11-27): what the revision changed in E4
+
+The parent plan stopped on its ledger entry 2.2 (`v2/PLAN.md` on `feat/v2-ep3-e3-roles`, commit `62c6878c`). Neither entry of
+ledger epoch 2 is about E4. The revision of the whole plan (step 4 of the rule of plan changes) reads E4 too. **What it changes
+is the baseline that ledger epoch 3 is approved on, not an entry.** Nothing of this section is built.
+
+**The owner's answer to question 3** (section N) is folded in: it is not a plan change.
+
+**Three findings of s5 t6.** The task was started on the owner's answer and stopped with the plan. Its work is the local commit
+`dee4b684` (branch `wip/e4-s5-t6-plan-stop-20261127`, not pushed), which the judge of the re-review sorted as fits. The planner
+has the three findings from the lead and checked each by reading the code at `9897dc2b`.
+
+| # | Finding | Checked at | Disposition |
+|---|---|---|---|
+| 1 | `testFiles` is relative to the PROJECT. This repository's project is `src_mcp`, so the value is `tests`. s5 t6 d1 said `src_mcp/tests` | `TestSelection.Select` (`src_mcp/core/Toolchain/TestSelection.cs:20-23`: the prefix is joined to the project folder); `StepPlan.cs:125`; section A2 ("inside the project") | **the task text was wrong.** s5 t6 d1 names `tests` |
+| 2 | The selected run and the narrowed re-run read `testFiles` in two ways. `Select` joins the prefix to the project folder. `IsUnder` compares the prefix with a path from the repository root (`TestSelection.cs:79-80`; called by `CheckRunner.cs:272` with the project's own list). So for a project that is not at the root a narrowed re-run never matches, and the whole step runs again | the same files | **a defect of the re-run, fixed in s5 t6** (new d3): one reading, the project's. A re-run on a project that is not at the root is narrowed, and a test holds it. The cost of the defect is time, never a wrong verdict: the whole step ran |
+| 3 | Section A2 said that a `testFor` item "may hold `{stem}`". `TestSelection.Argv` replaces only an item that is EXACTLY `{file}` or `{stem}`, with one item for each file. This repository's measured argv (M3) needs one `--filter-class` for each class, so the file uses a `/bin/sh -c` wrapper with `{stem}` as an item of its own | `TestSelection.cs:37-56`; `.coai/toolchain.yaml` of `dee4b684` | **the plan follows the code** (section A2 is corrected): coai builds no string from a name of the repository. New (s5 t6 d4): the reader refuses a `testFor` item that is longer than a placeholder and holds one, and names the item, so a literal `{stem}` never reaches a tool |
+
+**Tasks.** None added, none removed. s5 t6: d1 corrected, d3 and d4 new, the kind is `code` and the complexity 4 (it was
+`config` and 3), four files more. **For the lead:** E4's `EPIC_BUNDLE.md` is not made again here, so it does not hold these
+three corrections. s5 t6 goes on only when ledger epoch 3 is open.
