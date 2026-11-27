@@ -166,17 +166,18 @@ public sealed class ACodexCoderBoundaryTests
         File.ReadAllText(bed.AuthFile).Should().Contain(SignInCopy.Placeholder);
     }
 
-    // ---------- d4: the mark stays off, and what the flip rests on is built ----------
+    // ---------- d4: the mark is on (the flip commit), and what the flip rests on is built ----------
 
     [Fact]
-    public void D4_TheCodexRowIsNotLaunchableByData_UntilTheLastCommitOfTheStoryTurnsTheMarkOn()
+    public void D4_TheCodexRowIsLaunchableByData_AfterTheFlipCommitOfTheStory_AndAgyIsStillOff()
     {
         var row = CoderBoundaryTable.Shipped.Row("codex");
 
         row.Should().NotBeNull();
         row!.Verdict.Should().Be("ship");
-        row.Launchable.Should().BeFalse("ONE commit turns the mark on, the last of the story, after the must-changes are built and green: this test holds it off until then and that commit changes it");
-        CoderVendors.Shipped.Launchable.Should().NotContain("codex");
+        row.Launchable.Should().BeTrue("ONE commit turns the mark on, the last of the story, after the must-changes are built and green: this test holds it off until then and that commit changes it");
+        CoderVendors.Shipped.Launchable.Should().Contain("codex").And.NotContain("agy");
+        CoderBoundaryTable.Shipped.Row("agy")!.Launchable.Should().BeFalse("the flip commit changes nothing for agy");
     }
 
     [Fact]

@@ -209,18 +209,19 @@ public sealed class ACoderVendorSeamTests
     // ---------- d3: the table ----------
 
     [Fact]
-    public void D3_TheShippedTable_HoldsTheVerdictShipTheMarkLaunchableOffAndTheHistoryOfOneMeasureForCodexAndAgy_AndSoLaunchesNeither()
+    public void D3_TheShippedTable_HoldsTheVerdictShipAndTheHistoryOfOneMeasureForCodexAndAgy_TheMarkOnForCodexAfterTheFlipAndOffForAgy()
     {
         var table = CoderBoundaryTable.Shipped;
 
         table.Vendors.Select(row => row.Id).Should().Equal("codex", "agy");
-        table.Vendors.Should().OnlyContain(row => row.Verdict == "ship" && !row.Launchable && !row.Ships && row.Measured.Count == 1, "the owner's condition of 2026-11-26: the verdict is ship, the history of the measure is there, and the mark is OFF until the commit of s5 t5 (codex) or s8 t6 (agy)");
-        table.LaunchableVendors.Should().Equal("claude");
-        CoderVendors.Shipped.Launchable.Should().Equal(["claude"]);
+        table.Vendors.Should().OnlyContain(row => row.Verdict == "ship" && row.Measured.Count == 1, "the owner's condition of 2026-11-26: the verdict is ship and the history of the measure is there");
+        table.Row("codex")!.Launchable.Should().BeTrue("the commit of s5 t5 turned the mark of codex on");
+        table.Row("agy")!.Launchable.Should().BeFalse("the mark of agy stays off until the commit of s8 t6");
+        table.LaunchableVendors.Should().Equal("claude", "codex");
+        CoderVendors.Shipped.Launchable.Should().Equal(["claude", "codex"]);
     }
 
     [Theory]
-    [InlineData("codex")]
     [InlineData("agy")]
     public void D3_AVendorWhoseMarkIsOff_IsRefusedWithASentenceThatNamesTheLaunchableVendors_AndNeverForItsHistoryOrItsRelease(string vendor)
     {
@@ -248,11 +249,11 @@ public sealed class ACoderVendorSeamTests
     }
 
     [Fact]
-    public void D3_TheMarkLaunchable_IsOffInTheProductsTable_AndOnlyTheCommitsOfS5T5AndS8T6MayTurnItOn()
+    public void D3_TheMarkLaunchable_IsOnForCodexAfterS5T5_AndOffForAgyUntilS8T6()
     {
         var text = File.ReadAllText(Path.Combine(Repo(), "shared", "coder-boundary-releases.json"));
 
-        System.Text.RegularExpressions.Regex.Matches(text, "\"launchable\":\\s*(true|false)").Select(match => match.Groups[1].Value).Should().Equal("false", "false");
+        System.Text.RegularExpressions.Regex.Matches(text, "\"launchable\":\\s*(true|false)").Select(match => match.Groups[1].Value).Should().Equal("true", "false");
     }
 
     [Fact]

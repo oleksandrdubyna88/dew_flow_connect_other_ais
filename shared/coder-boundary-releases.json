@@ -20,7 +20,7 @@
   {
    "id": "codex",
    "verdict": "ship",
-   "launchable": false,
+   "launchable": true,
    "results": "v2/spikes/RESULTS_codex_coder.md",
    "measured": [
     {
