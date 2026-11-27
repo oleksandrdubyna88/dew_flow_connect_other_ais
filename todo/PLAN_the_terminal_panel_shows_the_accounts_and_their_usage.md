@@ -1,16 +1,18 @@
 # PLAN — the terminal panel shows the AI accounts of the open ssh hosts, and their usage
 
-> Status: **In progress, 2026-11-26 — epoch 5 is approved by the owner; E1 and the cut are merged; E2 is being built.**
-> How the plan came here is in the ledger below; the status as it said so before: the appendix, § K.24 and
-> § K.34. **Epoch 4 took three changes** — 4.1 (the table is grouped and sorted), 4.2 (the release in 24
-> hours: ONE real-window check on the combined build of E2 to E4, E6 to the next release, E5's gates once)
-> and 4.3 (residual 9 is accepted) — **and the owner approved epoch 5 the same day with NO re-review**
-> (*Re-review for epoch 5*). **Epoch 5 has no change yet**; its second one stops the plan. The cut is merged
-> (#1051, `b1ec467c`). E2's stories and spec are written and its S1 is in code
-> (`feat/terminal-accounts-e2`); nothing of E2 to E4 is merged. Scope: `src_vs_code` only — the icon in the terminal panel's title bar; ONE permission to read, asked once; a tab with a table — by host, or by Claude account or by user (4.1) — of the Claude Code, Codex and
+> Status: **In progress, 2026-11-27 — epoch 7 is approved by the owner; E1 to E4 are released as extension 2.1.0; of E5, the gate R12 is not run; E6, the `jq` installer, is parked (6.1); the tab is to read agy's quota and account (6.2) and Codex's account, plan and limits from Codex itself (6.3) — plan only here, the code is a pull request of its own.**
+> How the plan came here is in the ledger below; the status as it said so before: the appendix, § K.24,
+> § K.34, § K.42 and § K.45. **Epoch 6 took three changes on 2026-11-27**, all the owner's — 6.1 (E6 is
+> parked), 6.2 (agy: `agy -p /quota`, and one line of agy's own log for the account) and 6.3 (Codex:
+> `codex app-server` in place of the session files) — **and the owner approved epoch 7 the same day with NO
+> re-review** (*Re-review for epoch 7*; how 6.3 is counted is marked there for the owner). **Epoch 7 has one
+> change**, 7.1 — as root a vendor program in a folder that another user can write is run with a warning,
+> not refused; **one more stops the plan**. Extension 2.1.0 (2026-11-27; #1055, #1057) holds E2 to E4;
+> 2.1.1 is a wording fix. E5: R7 passed in WSL and on the VM, R10 is recorded, R12 is open. No code of E6
+> exists. The script of 6.2 and 6.3 is revision 3 (§ 4), on the branch `fix/accounts-agy-tab`. Scope: `src_vs_code` only — the icon in the terminal panel's title bar; ONE permission to read, asked once; a tab with a table — by host, or by Claude account or by user (4.1) — of the Claude Code, Codex and
 > Antigravity accounts and their limits; a round every 10 minutes over the hosts of the open
 > `Creds: <host> / <session>` terminals, over ssh, and over the Linux users of the WSL distros of this PC, root
-> among them. This release only reads: where `jq` is missing the tab shows the install command with a copy button, and the installer (decision 17, E6) is the next release's (4.2). No change to
+> among them. **2.1.0 only reads**: where `jq` is missing the tab shows the install command with a copy button; the installer, E6, is parked (decision 17; entry 6.1). No change to
 > `src_mcp`, `src_server` or CredsForDevs. The plan as it stood at the stop (138 KB) is in the appendix, § I, word
 > for word: [PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_appendix.md](PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_appendix.md).
 
@@ -233,7 +235,194 @@ Narrowed: yes — E6, the `jq` installer, with its gate R18, left this release; 
   (Also in this commit, from the review of pull request #1052, baseline and no entry: *Growth surfaces*
   counts *Refresh now* in the bound of the usage calls, and the record of W7 says why it passes.)
 
-> Epoch 5 · approved 2026-11-26 · by owner · state: open
+> Epoch 5 · approved 2026-11-26 · by owner · state: closed
+
+  (The owner answered the six questions of E6's document, its § 11, on 2026-11-27, in one answer: every
+  recommendation is taken. Entries 5.1 to 5.4 are four of those answers. Entries 5.5 to 5.9 are the places
+  where E6's spec, after gate E6-G1 and round 1 of its plan round, goes past what § K.38 says is revised
+  when the epic starts: the consent in place of the setting, and a WSL place.)
+
+- 5.1 · 2026-11-27 · owner · epics, scope — E6, the `jq` installer, is the sixth epic of this plan again, not a plan of its own; its spec is the third cornerstone
+  (The owner's answer O1. Entry 4.2 had moved E6 "under a later plan or epic of its own". The cornerstone
+  quota is counted again for six epics, Q = ⌈2·6/5⌉ = 3, and E6.S1 takes the third mark, for area (f), as
+  § K.38 planned. With the epic come its items of the Definition of Done, its merge conditions and its steps
+  of *Build order*. The plan stays in `todo/` until E6 ships. This entry was first written on `5c15d213` in
+  one entry with what is now 5.2. Gate E6-G1 found two independent causes in it, so this commit counts them
+  apart: the count goes up. The first wording: the appendix, § K.41.)
+- 5.2 · 2026-11-27 · owner · merge-conditions, dod — extension 2.1.0 was released before R12 and the VM half of R7 had a result; the run of R12 on E6's build stands for 2.1.0 too
+  (The owner's answer O5. The condition for the release was "the gates R7 and R12 passed, once, on the head
+  that is tagged". 2.1.0 was tagged on 2026-11-27 at 03:42 UTC, with R7 passed in WSL only. The VM half of R7
+  passed on 2.1.0 itself at 11:00 UTC, after the release. R12 is not run: the owner's word of that night was
+  "R12 not by hand". It is a gate of E6's build, and its result there is the one for 2.1.0. A release gate
+  got smaller, so the record below says `Narrowed: yes`. This second change stopped the plan.)
+- 5.3 · 2026-11-27 · owner · build-order — E6.S1 and E6.S2 may be built before it is known that a place of the owner would get an install; a gate stands before the code of E6.S3
+  (The owner's answer O2, with finding 6 of gate E6-G1. § K.38 said "Depends on. E5's R10". Now S1 and S2,
+  which touch no machine, may start. Before any code of S3 the rows of R10 and the fact of R10 (f) are on
+  record; with no place of the owner that would get an install, the work stops after S2 and the owner is
+  asked. As measured on 2026-11-27 there is no such place: E6's document, § 1.)
+- 5.4 · 2026-11-27 · owner · contract — *Withdraw the permission* of reading withdraws the install "yes" too
+  (The owner's answer O4. § 3 and § K.38 had two withdrawals with no tie between them. Now that one press
+  makes the install withdrawal first and then the one of reading, and an *Allow reading* given later brings
+  no install back: E6's document, § M2.)
+- 5.5 · 2026-11-27 · agent · contract — the record of installs is a file of the side under the claim of `refused.json`, not a `globalState` key
+  (E6's spec, its J6, against § E: "`globalState` key `coai.terminalAccountsInstalls`". The cause is that of
+  entry 1.2: a stale window that writes `globalState` could put an old record back, and the "once" guard
+  with it.)
+- 5.6 · 2026-11-27 · agent · contract — the install reply has no word `locked`
+  (E6's spec, its J3, against § E: "`failed <word>` — `locked`, `timeout` or `exit`". The manager's exit
+  code does not say that a lock was held, and its text never leaves the target. A held package lock is
+  `failed exit` or `failed timeout`.)
+- 5.7 · 2026-11-27 · agent · contract — the install script takes one of two operand words, not one fixed operand
+  (E6's spec, its J7, against § E: "one fixed operand, `install-jq`". The second word is a press on an old
+  lock; the script checks the 200 s itself. The judge of gate E6-G1 offered ONE word as a cut. It was not
+  taken: with one word a timer's call too would take an old lock away, against finding 2 of § E.)
+- 5.8 · 2026-11-27 · reviewer · contract — what an install can change besides `jq` is said as it is: a package that `jq` needs can be updated, and nothing is removed
+  (Findings 3 and 14 of gate E6-G1 and finding c3 of E6's plan round: one cause. § E's "no upgrade of
+  anything else" and the pass of R10 (a), "nothing else installed, upgraded or removed", were not true of a
+  package manager. Now `apt-get` gets `--no-remove`, `dnf` gets no weak dependencies, the question and
+  `SECURITY.md` say the sentence above, and R10 (a) passes on "`jq` and the packages it needs, and no
+  removal".)
+- 5.9 · 2026-11-27 · reviewer · contract — the record holds one row for each attempt, with an id, not one row for a host that is rewritten
+  (Finding c4 of E6's plan round, codex, round 1: a late `end` could land on a newer attempt of the same
+  place. Now `end` rewrites only the row of its own id, and the cap of 1000 rows counts attempts. Finding c5
+  of that round — a damaged record is kept under a stamped name and never replaced — only satisfies finding
+  6 of § E as written, and is no entry. Neither are the other findings of the gate and of the round: they
+  change E6's document where no approved text said otherwise; its § 12 lists them.)
+  (The check refuses two entries in an epoch that is not stopped, so the commit of these entries closes
+  epoch 5. The owner was told that the entry of `5c15d213` held several changes, and chose the answer "Epoch
+  6 at once": epoch 6 is approved in the same commit with no re-review, as epochs 4 and 5 were. The record
+  below says what was not run.)
+
+### Re-review for epoch 6
+
+Narrowed: yes — the release gate "R7 and R12 passed, once, on the head that is tagged" did not hold for extension 2.1.0: it was released before R12 and the VM half of R7 had a result, and the run of R12 on E6's build stands for it (entry 5.2)
+
+| Work | Where | Verdict | Action |
+|---|---|---|---|
+| Extension 2.1.0: E2, E3 and E4 (#1055 `da9760fe`; the put-back of the scenarios, #1058 `aaf2d139`; the release, #1057 `9060cb87`) | main, released 2026-11-27 | fits | kept; R12 is owed on E6's build (entry 5.2) |
+| Extension 2.1.1: the words of a usage cell while its place is read (#1061 `cdcfa0b9`; #1063 `5801b846`) | main, tagged | fits | kept |
+| The post-deploy record of 2.1.0, and the results of E5 (#1059 `999e9bea`; #1060 `ec08996e`) | main | fits | kept |
+| The results of E5: the VM rows of R7 and R10 (`2ad6e54e`) | pushed, unmerged (`docs/terminal-accounts-e6`) | fits | kept; they are the input of the gate before E6.S3 (entry 5.3) |
+| The stories and the spec of E6 (`6306d0f2`; the owner's answers, `5c15d213`; this commit) | pushed, unmerged (`docs/terminal-accounts-e6`) | fits | kept; this commit revises them for gate E6-G1 and for round 1 of E6's plan round |
+| A first draft of the install script | local, not committed | — | it is not product code; E6.S1 writes the text from the spec |
+| Product code of E6 | none was written | — | nothing was built, so nothing is cut |
+
+  (THIS RECORD IS NOT A RE-REVIEW, as the ones for epochs 4 and 5 were not: none was run, by the owner's
+  word. Of *The full stop*, step 1 is the commit of this record, which holds the stop and the approval
+  together: no commit stood with the state `stopped`. Steps 2 to 7 were NOT run — no halt, no consultation
+  of the stop, no revision of the whole plan, no Opus judge of the done work, no cut, no re-split. Of step 8
+  there is the owner's approval only. The verdicts of the table are the planner's.)
+  (What did read a part: gate E6-G1, Opus, 2026-11-27, read E6's document against this plan, and found the
+  bundled entry. Round 1 of E6's plan round, codex, read E6's document. Neither read the whole plan, and
+  neither read this text or E6's document as they stand after this commit.)
+  (Epoch 6 is narrowed, so the owner approves it. The owner chose the changes 5.1 to 5.4 himself, in his
+  answers. Entries 5.5 to 5.9 were counted by the planner in this commit: the owner's "Epoch 6 at once" was
+  given on the judge's word that the changes are several, not on this list. The texts reworded for the
+  entries, as approved for epoch 5: the appendix, § K.42, word for word. Moved for room, word for word: the
+  new tests of the test plan (§ K.43) and the sections of E2, E3 and E4 in *Epics* (§ K.44), which are of
+  the epics that 2.1.0 holds.)
+  (Baseline of epoch 6, and so no entry: the owner's two other answers of that day. O3 — in WSL, CoAI does
+  not install as root of a distro for a user who has no rights: decision 24 stands. O6 — the checks on real
+  machines run on a VM and a distro that can be lost; each still needs the owner's go for its exact
+  commands.)
+  (Not known to this record: whether `review_feature`, step 9 of *Build order*, ran before extension 2.1.0
+  was tagged. The Definition of Done keeps that box open.)
+
+> Epoch 6 · approved 2026-11-27 · by owner · state: closed
+
+- 6.1 · 2026-11-27 · owner · epics, scope — E6 is parked: as measured, it would install `jq` on no place of the owner
+  (R10 and R10 (f) of the E5 results. The owner, asked, chose to park it. Its document stays as written; no code.
+  It comes back when a place lacks `jq` and its login user is root or has `sudo` with no password.)
+- 6.2 · 2026-11-27 · owner · scope, contract, dod — Antigravity: the tab shows agy's quota and its account; the script, revision 3, starts `agy -p /quota` and reads one line of agy's own log
+  (The owner showed agy's own screen "Models & Quota" and asked for the account and for "what is left, when
+  it renews". Measured that day, agy 1.5.18: `agy -p /quota --output-format json` prints the quota groups —
+  "Gemini Models" and "Claude and GPT models" — each with a 5-hour and a weekly bucket (`remaining_fraction`,
+  `reset_time`), in about 3 s, with `num_turns` 0 and no conversation. An UNKNOWN slash command is sent to
+  the model. So the script takes a reply only when it shows no turn and the command `usage`; else that host
+  is not asked again at that agy version, as with Claude's usage command.)
+  (The account is the last line `applyAuthResult: email=` of agy's own log, `~/.gemini/antigravity-cli/cli.log`.
+  The owner chose this, knowing that the form of a log is not a contract; with no such line the tab says
+  "account not read". agy's token file stays unopened.)
+  (It reverses § 7 of the VM results — "agy states no usage", of `cli.log` "The plan does not read it", agy
+  "with no usage source and with its account not read" — and texts of this plan, kept as they stood in
+  the appendix, § K.45. In *Security* one edge changes and one is new: `agy -p /quota` calls Google with
+  agy's own sign-in, and one line of agy's log is read. The code is a pull request of its own,
+  `fix/accounts-agy-tab`, which also updates the script block of the E3.S2 spec. This second change of
+  epoch 6 stopped the plan.)
+- 6.3 · 2026-11-27 · owner · scope, contract, dod — Codex: the tab shows Codex's account, plan and fresh limits, read from `codex app-server` and no longer from the last session files
+  (The owner, in Russian, translated: "Codex shows everything too … the account, the subscription and what
+  is left." Measured that day, codex-cli 0.171.0: `codex app-server` answers the JSON-RPC calls
+  `account/read` and `account/rateLimits/read` with the email, the plan type and the primary and secondary
+  windows (`usedPercent`, `windowDurationMins`, `resetsAt`), with no model call, in about 1.5 s. Its stdin
+  must stay open for about 2 s, or it exits without an answer.)
+  (It replaces the read of the last Codex session files — "from a Codex session … ago" — and "account name
+  not shown by Codex", both of § 6 of the VM results, and this plan's "No live Codex read": § K.45. One edge
+  of *Security* is new: `codex app-server` calls OpenAI with Codex's own sign-in. The script still never
+  reads `~/.codex/auth.json`. The code lands with that of entry 6.2, in the same revision 3 of the script.)
+  (The check refuses two entries in an epoch that is not stopped, so the commit of these two entries closes
+  epoch 6. The owner was asked a question that said: this is the second change of epoch 6, and it needs
+  epoch 7. The owner chose the answer "Yes, epoch 7 at once". So epoch 7 is approved in this commit with no
+  re-review, as epochs 4, 5 and 6 were. The record below says what was not run.)
+  (FOR THE OWNER TO CONFIRM OR TO REFUSE. That question named the Antigravity quota only. The Codex change
+  came in a later message of the owner, in the same hour. The lead counts it in the same stop and under the
+  same answer: this is the lead's reading, and the owner did not say it. If the owner reads it otherwise,
+  the Codex change is the first change of epoch 7, its entry 7.1, and one more change stops the plan.)
+
+### Re-review for epoch 7
+
+Narrowed: yes — E6, the `jq` installer, is parked (entry 6.1): no install is built until a place of the owner needs one; entries 6.2 and 6.3 add to the scope, and take back two promises of *What this plan does NOT do*
+
+| Work | Where | Verdict | Action |
+|---|---|---|---|
+| Extensions 2.1.0 and 2.1.1, as the record for epoch 6 sorted them; the post-deploy record of 2.1.1 (#1064 `72e2784d`) | main | fits | kept; what they show of agy (no usage, no account) and of Codex (the session files, no account name) is replaced by entries 6.2 and 6.3, in a later release |
+| The stories and the spec of E6; R10 (f) (`60be211d`); entry 6.1 (`dab8a8bd`) | pushed, unmerged (`docs/terminal-accounts-e6`, #1062) | fits | kept; E6's document stays as written while it is parked |
+| The width of the *Read* column of the Antigravity table in the tab (`a70f5fbc`) | pushed, unmerged (`fix/accounts-agy-tab`) | fits | kept |
+| Code of entries 6.2 and 6.3: revision 3 of the script and its parser | local, not committed (the worktree of `fix/accounts-agy-tab`) | — | no commit holds it; it is the work that these entries plan |
+| Product code of E6 | none was written | — | nothing was built, so nothing is cut |
+
+  (THIS RECORD IS NOT A RE-REVIEW, as the ones for epochs 4, 5 and 6 were not: none was run, by the owner's
+  word. Of *The full stop*, step 1 is the commit of this record, which holds the stop and the approval
+  together: no commit stood with the state `stopped`. Steps 2 to 7 were NOT run — no halt, no consultation
+  of the stop, no revision of the whole plan, no Opus judge of the done work, no cut, no re-split. Of step 8
+  there is the owner's approval only. The verdicts of the table are the planner's. No judge and no coai
+  round read this text, the three entries of epoch 6 or the plan as it stands after this commit.)
+  (Epoch 7 is narrowed, so the owner approves it. The owner chose all three changes of epoch 6. How the
+  third is counted is the lead's reading, marked above for the owner.)
+  (The texts reworded for entries 6.2 and 6.3, as approved for epoch 6: the appendix, § K.45, word for word.
+  Moved for room, word for word, and holding as written: what is E6's while it is parked — its steps of
+  *Build order*, its merge conditions and its section of *Epics* (§ K.46); the rows of E5 (§ K.47); the
+  grouping and the sort of § 1 (§ K.48); the upgrade table of § 3 (§ K.49); § 5 on the four measurements
+  (§ K.50); the three steps of *Which places* in § 2 (§ K.51); the rules of the withdrawal's stamp in § 3
+  (§ K.52); three rules of the page in § 1 (§ K.53); the short list of the owner's answers (§ K.54); and
+  the four changes of revision 2 with the users script, of § 4 (§ K.55). The plan keeps a line or two of
+  each.)
+  (Open, and decided by no entry. Whether a "yes" given to the permission's text of 2.1.0, which names
+  `claude` and `agy` as started, is asked again now that `codex` is started too and two more vendors are
+  called. Which merge conditions the pull request of entries 6.2 and 6.3 answers to: the plan names those
+  of E2 to E4 and those of E6. And no security judge was asked on the new edges: their text in *Security*
+  is the planner's. The measurements of 2026-11-27 stand in the entries as the lead gave them; no RESULTS
+  file holds them yet.)
+
+> Epoch 7 · approved 2026-11-27 · by owner · state: open
+
+- 7.1 · 2026-11-27 · owner · contract, dod — as UID 0 a vendor program (`claude`, `codex`, `agy`) whose path fails the check of owner and mode is run all the same, and its row carries a warning that names the folder; the basic tools keep the refusal
+  (At the real window of VSIX 2.1.901 the Codex rows of the two root places of the owner's VMs said: "not
+  read: /root/.codex/packages/standalone/releases/…/bin is writable by another user". The owner, in Russian,
+  translated: "it is done on purpose, so that I log in to Codex and Antigravity once, not three times. Let
+  it read.")
+  (Decided: the refusal stays for the basic tools — `timeout`, `tail`, `sed`, `grep`, `sleep`, `sha256sum`,
+  `jq` — and goes for the three vendor programs, whose row then warns and names the folder. It narrows the
+  rule that came with decision 24, "nothing that another user can write is started as root", to the basic
+  tools. What the owner accepts with it: a user who can write that folder can replace a program that root
+  then runs — residual 15. That rule was a condition of the judge of § K.9, and no judge was asked on this
+  change. The rules have no kind for security: the kinds are `contract` and `dod`.)
+  (The first change of epoch 7, on the lead's reading of entry 6.3: one more stops the plan. The paragraph
+  marked for the owner, above, gives the number 7.1 to the Codex change if the owner reads that one as a
+  change of epoch 7. Then this entry is the SECOND change of epoch 7, and it stops the plan.)
+  (Its code: #1066. As root the worst path is 29 s with the connect, 1 s under the ceiling, not 2: each
+  vendor's `#!` line is read, up to 1 s. A test holds 29.)
+  (Moved for room in this commit, word for word, § K.56 to § K.59: the merge conditions of what is merged
+  and released, steps 1 to 10 of *Build order*, four bullets of § 2, and T9 and T8 of § 3.)
 
 ## The goal
 
@@ -270,18 +459,27 @@ replace or change: the appendix, § K.21, word for word, with the gloss of the o
 24. **2026-11-26, at the approval of epoch 3: "root too".** Root of a running distro is a place of its own, read
     **as itself**, with root's own `HOME`; root's `claude` and `agy` are then started as root. Still never: root
     with another user's `HOME`, or a user's read as root (§ 2, *Security*). It was candidate C9; it is in E3.
+    **Narrowed on 2026-11-27 (entry 7.1), "Let it read":** root's vendor programs are started even where
+    another user can write their folder, with a warning in the row.
 25. **2026-11-26, with the approval of epoch 4: the login session of a WSL read is accepted.** On a distro with
     systemd, WSL opens a login session for a user that is read, root included: it runs that user's profile —
     root's as root — makes two empty files at a first login and stays until the distro stops (in full: the
     appendix, § K.40). The owner was shown it (W9) and chose to accept it, not to read fewer users.
     So a read is named for what it is: the permission's text (§ 3) and *Security* say it.
+26. **2026-11-27: the answers to the six questions of E6's document, every recommendation taken.** E6 is the
+    sixth epic of this plan (entry 5.1). Its S1 and S2 may start, and a gate stands before its S3 (5.3). In
+    WSL nothing is installed as root of a distro for a user who has no rights: 24 stands. *Withdraw the
+    permission* withdraws the install "yes" too (5.4). R12 on E6's build stands for 2.1.0 (5.2). The real
+    checks run on a VM and a distro that can be lost. Then, told that these are several changes: "Epoch 6
+    at once".
+27. **2026-11-27: agy and Codex are read as they show themselves** (entries 6.2 and 6.3). agy: the quota of
+    its own screen "Models & Quota", and the account from its log — chosen knowing that a log's form is no
+    contract. Codex: "the account, the subscription and what is left", from Codex itself. Then, told that
+    this is the second change of epoch 6: "Yes, epoch 7 at once" (how 6.3 is counted: the ledger).
+28. **2026-11-27: the "yes" given to 2.1.0 stands for revision 3; not asked again.**
 
-**The owner's answers** of 2026-11-25 evening and of 2026-11-26, word for word: the appendix, § K.25. In short:
-Q1 **yes** — one "yes" for everything read from a host, the chat's session read included; Q2 a stopped distro
-is **not started**; Q3 **one more one-time "yes"** for the install of `jq`; Q4 **yes** — merge condition 5;
-root is read (24); the go for the cut of *Build order* step 1 and for W6, W7 and W9. **Later that day, for
-a release in 24 hours** (entries 4.2 and 4.3): Q4 is ONE check, on the combined build of E2 to E4; E6 moves
-to the next release; E5's gates run once; residual 9 is accepted.
+**The owner's answers** to Q1 to Q4, of 2026-11-25 evening and of 2026-11-26: the appendix, § K.25, word
+for word; this plan's short list of them, with what entries 4.2 and 4.3 changed: § K.54.
 
 The four questions as they were asked, with the line the text took for each, are in the appendix, § J.
 
@@ -326,55 +524,33 @@ scope host; a reading, its time and its failure are of the place.
   - *Account:* for Claude Code the full email and the organization (decision 7); under it, muted, the plan; and
     *shared across N hosts* when N places of this window answer with the same account — each of them then shows
     the SAME figures, those of the one usage read (§ 2). Two places are one account only when the vendor and the
-    whole account text are equal; an account that is not known is never shared. Codex states no account name, so
-    the cell says so and shows the plan; **the age of the Codex session file is on Codex's own row**. agy: *its
-    account is not read*.
+    whole account text are equal; an account that is not known is never shared. **Codex (entry 6.3):** the
+    account and, muted, the plan, as `codex app-server` states them in that round; no session file is read,
+    so the row carries no file's age. **agy (entry 6.2):** the account of the last sign-in line of agy's own
+    log (§ 4), or *account not read*.
   - *A window cell:* the first line is `<n>% left`; under it `resets in <time>`. A missing value is `—`, never
     `0%` (decision 5). Claude's weekly windows for single models are sub-lines of the weekly cell. A Codex window
     is placed by its length — 300 minutes in the 5-hour column, 10 080 in the weekly one; another length is named
-    in its cell.
+    in its cell. **agy (entry 6.2):** the 5-hour and the weekly bucket of each quota group that agy prints —
+    measured: "Gemini Models", "Claude and GPT models" — each as `% left` with its reset; how the groups are
+    laid out is the code's.
   - *Usage that was not read* spans both window cells and says why: *Usage not read: CoAI does not ask Claude Code
     for usage in this build*; *Usage unavailable: Claude Code 2.1.326 printed no usage line this version
-    understands*; *agy states no usage*. It is never a row of dashes with no reason.
-- **Group by: Server | Claude account | User** (the owner, entry 4.1): a switch in the toolbar, default
-  *Server*. Each grouping shows the SAME readings in real tables (`<table>`, a header row); none hides a place,
-  a tool, an account or a failure.
-  - *Server:* the blocks and rows above.
-  - *Claude account:* one block for each Claude account, headed by the account text as read; one that cannot
-    be told apart is a block of its own (the rule of *shared across N*). Its usage — the two windows, or the
-    sentence why they were not read — stands ONCE, on the block: it is the account's, not a place's. Under it,
-    a row for each place where it is signed in (*host-a*, *Ubuntu · user-a*) with the age of that read; a place
-    whose last read failed stays under the account of its older read, with the failure and that read's time.
-    Then two sections, *Codex* and *Antigravity*, a row for each place that has the tool: their accounts
-    cannot be told apart, so none is joined. Last, *no Claude account*: every place that is in no Claude
-    block, with what its heading says.
-  - *User:* ONE table, a row for each place, a column for each tool with its account and its windows. A WSL
-    place is *distro · user*; an ssh host is one Linux user of a VM and is named by its host — the script
-    prints no user name, and this entry adds none.
-- **Every column header sorts**: one click ascending, a second descending, and the header shows which
-  (`aria-sort`). The keys: name, account, % left, reset time, age of the read. Rows are sorted inside their
-  block, and blocks by their own value of the key where they have one (a host's name and age; an account's
-  text, % left and reset), else by their first row. **A dash — a missing number — sorts LAST in both
-  directions, never as a zero** (decision 5). Equal keys keep the name order; the sections keep their places.
-- **The grouping and the sort are of this tab only**: in the page's own webview state, and in no message,
-  file, `globalState` key, setting or log. A state that names an unknown grouping or column is read as
-  *Server*, by name. **The three groupings and the order rule are ONE pure module, tested without a browser**;
-  the stories document decides whether it runs in the host, which then posts all three, or in the page,
-  bundled as the word rules are.
+    understands*; for agy and for Codex a sentence of the same kind, worded with the code — *agy states no
+    usage* is gone (entry 6.2). It is never a row of dashes with no reason.
+- **Group by: Server | Claude account | User, and every column header sorts** (the owner, entry 4.1; in
+  2.1.0). What each grouping shows, the sort keys, the dash that sorts LAST and never as a zero, the state
+  that is of this tab only, and the ONE pure module: the appendix, § K.48, word for word. It holds as
+  written, but for one reason given there. Of the sections *Codex* and *Antigravity* of the grouping *Claude
+  account* it says "their accounts cannot be told apart, so none is joined". Since entries 6.2 and 6.3 a
+  row there shows its account. They stay sections of their own: only Claude accounts are joined.
 - **The toolbar**: *Group by*; *Refresh now*; *Stop the round* (it becomes *Start the round* while stopped); and the summary
   *last round <age> (<clock time>) · <k> of <n> read*, or *reading host-c… 5 of 16* while a round runs.
 - **Without the permission the page holds one block**: what would be read, and the one button *Allow reading…*
   (§ 3). With it, a last line says when it was given and has *Withdraw the permission*.
-- **Each place is drawn when its call lands**, not at the end of the round: the host posts that place's part of the
-  model, and the page changes that block only — in the other groupings the rows of that place and the blocks
-  that hold them — so a reader's scroll place and the find bar stay, and so do the grouping and the sort.
-- **Times stay true while the tab is open.** The model carries every time as an absolute instant. The page writes
-  the ages and the *resets in* texts itself and writes them again every 15 s from its own clock, so an age grows
-  with no message from the host. The clock time of the last read is always on the heading; a hover over an age or
-  a reset shows the exact local date and time. The pure word rules (`usageWords.ts`, `agoWords`) are bundled into
-  the page; there is one copy of them.
-- **Narrow widths**: under a width fixed in the spec the columns stack, each field with its label, in every
-  grouping; the switch and a way to choose the sort stay on the page.
+- **Each place is drawn when its call lands; times stay true while the tab is open** — the page writes the
+  ages and the *resets in* texts again every 15 s from its own clock; **narrow widths** stack the columns.
+  These three rules in full: the appendix, § K.53, word for word.
 - **Nothing from a VM can become markup.** The page is built by its script from the model: every value that came
   from a VM, from WSL or from a terminal's name is set as `textContent`. No HTML is assembled from data, and a
   `$(name)` is plain text. The CSP is strict: `default-src 'none'`, a script and a style by nonce only, no remote
@@ -403,25 +579,11 @@ What E1 built stays unless a line here changes it (the appendix, § I, *2. The r
   (decision 22).
 - **Which places.** An ssh host is one place. For `wsl` in a Windows window (the extension host runs on Windows,
   not in a remote), the round enumerates, in every round:
-  1. the distros: `wsl.exe --list --quiet`, and the running ones: `wsl.exe --list --running --quiet`. A name counts
-     only when it fits `[A-Za-z0-9][A-Za-z0-9._-]{0,63}`; another line is counted and never passed on. **A distro
-     that is not running is listed and not started** (Q2). A list call starts nothing, but any `-d` call
-     starts a stopped distro, and an idle one stops about 15 s after its last call (W9f). **So the running
-     list is read again right before every call to a distro, and a distro that is not in it gets no call.**
-  2. the Linux users of each running distro: the pinned users script (§ 4), run **as root**. It names the users
-     with a UID from 1000 to 59 999 whose home folder exists and whose shell is not `nologin` or `false`, **and
-     root itself — UID 0 under the name `root` — on the same two conditions** (decision 24). A UID from 1 to 999
-     is a system account and is never named; neither is a second name with UID 0.
-  3. for each such user, the pinned accounts script **as that user**:
-     `wsl.exe -d <distro> -u <user> --cd / --exec /bin/sh -s -- <mode>`, the script on stdin. `--exec` starts no
-     shell of the user, and the process it starts reads no profile (W9b). **But on a distro with systemd
-     WSL itself opens a login session for that user at the first such call, and it runs the user's profile:
-     accepted (decision 25; *Security*).** **Root is a place of its own, (distro, `root`), read as itself**:
-     the same argv with `-u root`, the same script and limits, and root's own `HOME`, the one of its passwd
-     entry. That starts root's `claude` and `agy` as root, which the owner chose (*Security*). **Never root
-     with another user's `HOME`**: that would run that user's own `~/.local/bin/claude` as root (`cons`
-     `78e6d44b`). **And never a user's read as root**: the `-u` word of an accounts call is the user of its
-     place, and nothing of ours names a `HOME`.
+  the distros and which of them run; the Linux users of each running distro, by the users script (§ 4) as
+  root — root itself among them (decision 24); and for each such user the accounts script **as that
+  user**, root as itself with root's own `HOME`. **A distro that is not running is listed and not started**
+  (Q2): the running list is read again right before every call to a distro. The three steps with their
+  argv, classes and reasons: the appendix, § K.51, word for word; who runs as whom: *Security*.
   The caps: 16 distros, 16 users in a distro, root among them, 32 WSL places in a round; what is past a cap is
   counted in the heading, never read. In a window that does not run on Windows, `wsl` says *WSL is read from a Windows window
   only* and no call of any kind goes to it. `wsl` is never given to `ssh` on Windows.
@@ -447,16 +609,8 @@ What E1 built stays unless a line here changes it (the appendix, § I, *2. The r
   call that fails or cannot be read:* the first reading stays whole and says why the usage is not read.
 - **The usage policy** is the one constant `USAGE_POLICY`, `off` until E4. Its other values are the rows of the
   W6 table (the appendix, § K.17).
-- ***Refresh now*** starts a round at once, unless one runs or the last one ended less than 60 s ago. Opening the
-  tab draws what the memory holds and starts a round only when a place that may be read has no reading.
-- **The size of a round.** One call for each place and one more for each Claude account. With 20 ssh hosts of 20
-  accounts and the usage on, that is 40 calls: 2 to 7 minutes at the measured 3 to 10 s a call, 20 minutes at the
-  ceiling. The next round starts 10 minutes after the end, so rounds never overlap.
-- **The summary** of the toolbar is of the last round that ended: its end time, and how many of its places
-  answered.
-- **One notice, once for each installation**, when a `Creds:` terminal is first seen without the permission:
-  *CoAI can show the AI accounts and usage of the hosts of your Creds terminals.* Its one button opens the tab and
-  decides nothing. **The timer never asks a person.**
+- ***Refresh now*** starts a round at once, but not within 60 s of the last one. **The timer never asks a
+  person.** These two, the size of a round, the toolbar's summary and the one notice: § K.58.
 
 ### 3. The consent — ONE permission, a "no" for one host, and the Stop
 
@@ -469,18 +623,11 @@ the appendix, § I, *3. The consent*, the S1 spec, and the short list in § K.12
 - **The permission** is one record of the side, `grant: { utc, stamp }`, in the SAME locked file. `globalState`
   cannot keep it for the reason of entry 1.2: a stale window that sends its whole copy could put back a permission
   the person withdrew. A build that does not know the key keeps it through a write, as the file's rule already says.
-- **A withdrawal wins like a "no" — and it is a file of its own.** A withdrawal does not delete the record: it
-  makes `withdrawn-<stamp>.json` beside `refused.json`, by an exclusive create, as a marker is made. **The
-  permission is in force only when the grant's stamp is HIGHER than the stamp of every withdrawal file.** An
-  *Allow* writes a grant whose stamp is one above the highest withdrawal it reads, and a withdrawal takes a stamp
-  one above the highest stamp it sees — of a grant, of a withdrawal file or of the copy; a grant-write with a
-  lower stamp is refused. So a former lock holder that wakes up and renames its stale `refused.json` over the new one brings
-  back a grant with an OLD stamp, which is not in force: no writer of `refused.json` ever renames over a withdrawal
-  file. The stamp is a whole number that only grows. A write of *Allow* removes the withdrawal files it
-  cannot read and the ones below the newest, and leaves one readable file whose stamp is one below the grant's.
-  An *Allow* goes above only the withdrawals that were there when it began: one that appears later ends it as
-  not given. The copy of the newest withdrawal stamp in the state row of `globalState` tells another
-  window at once and is copied into the folder at every read, as a "no" row is.
+- **A withdrawal wins like a "no" — and it is a file of its own**, `withdrawn-<stamp>.json` beside
+  `refused.json`, made by an exclusive create. **The permission is in force only when the grant's stamp is
+  HIGHER than the stamp of every withdrawal file**, so a stale rename of `refused.json` brings back a grant
+  that is not in force. The rules of the stamp in full — what an *Allow* and a withdrawal write and remove,
+  and the copy in `globalState`: the appendix, § K.52, word for word, and the spec of E2.S1.
 - **Given only by a person's press.** The first press of the icon without a permission opens the tab and asks ONE
   modal question through the one door (`notifyAndAsk`, code `read-accounts-permission`). The state row of
   `globalState` remembers that it was asked; a row that is lost asks once more. Later it is asked by
@@ -496,7 +643,9 @@ the appendix, § I, *3. The consent*, the S1 spec, and the short list in § K.12
     (decision 25);
   - what is read: which of Claude Code, Codex and Antigravity are there, the account each is signed in to, and
     their usage; that `claude` and `agy` as found there are started for it, and that **Claude Code rewrites its
-    own cache files on a usage read** (decision 13);
+    own cache files on a usage read** (decision 13); **from revision 3 the text also says that `codex` is
+    started, and that `agy` and `codex` each call their vendor with their own sign-in** (entries 6.2 and 6.3)
+    — a "yes" given before stands and is not asked again (decision 28);
   - the Claude session of a terminal, when a chat door of that terminal is pressed (Q1);
   - that CoAI itself installs and writes nothing there; and how to stop: *Not this host*, *Stop the round*, *Withdraw the
     permission*.
@@ -506,7 +655,8 @@ the appendix, § I, *3. The consent*, the S1 spec, and the short list in § K.12
   of either kind. **A withdrawal can also answer `busy`** (the spec of E2.S1, gate E2-G1): its file is made, and
   its read-back is not final while another window holds the claim of the hosts file — its window says `waiting`
   until that write ends, or until *Save now*. An *Allow* that the file did not take changes nothing, and the
-  person is told.
+  person is told. **From E6 on, that press withdraws the install "yes" too, and first** (entry 5.4; E6's
+  document, § M2).
 - **Who may be contacted — EVERY door needs the permission** (Q1: one "yes" for everything read; the plan round's
   finding 0). One function, asked before every call and before every result, and by the session door before
   every spawn:
@@ -519,25 +669,15 @@ the appendix, § I, *3. The consent*, the S1 spec, and the short list in § K.12
   **A per-host "yes" of `coai.terminalHosts` allows nothing any more**, for either door: such a row is kept as it
   is stored, never honoured and never written again, and the per-host question `read-remote-session` is retired —
   the one question takes its place. The Stop stops the round and not the session read, as today.
-- **T9, taken up: the session road asks that function before EVERY spawn of a press**, not once. A later spawn of
-  a press never asks a person: when the answer is no longer "yes" it stops with the sentence of that answer.
-- **T8, taken up: "something waits unsaved" is an answer of its own, `waiting`**, beside `yes`, `no`, `no-permission` and
-  `damaged`. The session door and the tab then say: *A “Not this host”, a stop or a withdrawal is not saved yet on
-  this side, so nothing was read. Choose “Save now”.* The sentence "the list cannot be read" is for a list that
-  cannot be read.
+- **T9 and T8, taken up**: the session road asks that function before EVERY spawn of a press, and
+  "something waits unsaved" is an answer of its own, `waiting`. In full: § K.59.
 - **What is retired** (each is in main since #1047 and in no release): the automatic "yes" with its cap rule,
   its setting, its two notices and its fields; the timer's use of a session "yes"; the door answers for a new
   host; the per-host question and its *Read* button. The parser still KNOWS a "yes" row and `how: 'auto'`: a
   list that holds one is not damaged, and neither is an answer. Every key, file and field: the appendix, § K.26.
-- **The upgrade starts with NO permission, whatever is stored.**
-
-  | Stored before | After the upgrade |
-  |---|---|
-  | A person's "yes" for a host (from 0.87.0 on) | **Not honoured.** The first press of a chat door asks the one question and reads nothing; after *Allow reading* every host that is not refused is read, by both doors. This changes a released behaviour, and the release notes say so |
-  | An automatic "yes" (only the pre-release 2.0.901 wrote one) | No answer. Nothing is read |
-  | A "no", in the file or as a row | A refusal, as before, on every side that reads it |
-  | The Stop | Stays. A permission given later does not start a stopped round |
-  | `coai.terminalAccountsAllowNewHosts` in a settings file | Not read |
+- **The upgrade starts with NO permission, whatever is stored**: a person's "yes" for a host is not
+  honoured and an automatic one is no answer; a "no" and the Stop stay; the retired setting is not read.
+  The table, row by row: the appendix, § K.49, word for word.
 
 - **The sides.** The permission is of one side, like the file: a WSL or remote window has its own, and asks its
   own question. A withdrawal is not of one side: its copy in `globalState` stops every side that reads it, and
@@ -551,42 +691,39 @@ E1's script, its reply and its parser stay as built and as specified (the append
 its reply*, and the S2 spec; the short list of what stays: § K.12). **Revision 2 changes four things, in ONE new
 pinned text with one new sha256** (E3.S2, the cornerstone):
 
-1. **The script sets its own `PATH`; it does not add to the one it was given.** `$HOME/.local/bin`, then a fixed
-   list of system folders that the spec names. On WSL the inherited `PATH` holds the Windows folders (W9b), and a
-   `claude` of the Windows side found there would be started through interop and read as the Linux user's. Over
-   ssh the list is what a shell that is not a login shell has today. A test holds that a `claude` which is
-   reachable only through the inherited `PATH` is not started. **The list holds no folder that a user who is not
-   root can write**: a place may be root (§ 2), and what root's read finds by its `PATH` runs as root. Every
-   entry is absolute and of the spec's closed list — no `/tmp`, nothing under `/home` or `/mnt`, no empty or
-   relative entry — and a test holds it. **The list is not trusted alone: as UID 0 the script checks, before
-   it starts a program, the owner and the mode of its file and of every folder above it** (*Security*).
-2. **The mode `claude-usage` reads Claude only**: the account, the version and the usage. It reads no Codex file
-   and does not start `agy`: the first call of that place did both seconds before. So a place that reads an
-   account's usage starts `agy` once in a round, not twice. The reply of that mode holds the Claude part only, the
-   parser reads a reply against the mode that was sent (as today), and the round joins the two replies, with its
-   check of the account (§ 2). **The join is part of this story, E3.S2**: a script whose usage reply holds no
-   Codex and no agy part must not merge without the round that keeps those parts from the first reply.
-3. **The mode `claude-usage` takes the account it is for, and checks it before the usage command** (the plan
-   round's finding 2). Its second operand is 64 hex digits: the sha256, made on this side, of the account lines of
-   the first reply exactly as the script printed them. The script reads the account, makes the same digest of the
-   lines it is about to print (`sha256sum`, checked first with the other tools), and **runs the usage command
-   only when the two are equal**. Else the reply holds the account it found and `COAI-USAGE claude skipped
-   account-changed`, and no usage command ran. A digest, not the email: an argument can be read by every user of
-   that machine. What is left is an account that changes between the script's own two commands, a second apart.
-4. **The time table counts the KILL second (T46).** A vendor command gets a TERM at its limit and a KILL one
-   second later (`timeout -k 1`). Where the reader's limit equals the vendor's — the two version commands — that
-   second is added: 17 s and 16 s for the two modes, 22 s and 21 s with ssh's 5 s to connect — 8 s or more
-   under the ceiling of 30 s, no limit shortened — and a test holds each sum to at most the ceiling minus 2 s
-   (the test plan). The table, stage by stage, and the test as worded: the appendix, § K.29.
-   What was not taken: the appendix, § K.4.
+1. **The script sets its own `PATH`**: `$HOME/.local/bin`, then a closed list of absolute system folders,
+   none that a user who is not root can write; and as UID 0 it checks, before it starts a program, the owner
+   and the mode of its file and of every folder above it (*Security*). **Since entry 7.1 a check that
+   fails stops a basic tool only: a vendor program is started, and its row warns.**
+2. **The mode `claude-usage` reads Claude only**, and the round joins the two replies (§ 2).
+3. **That mode takes the account it is for** — a sha256 of the account lines, never the email — and runs the
+   usage command only when the account it finds is the same.
+4. **The time table counts the KILL second (T46)**: each mode's worst path stays at least 2 s under the
+   ceiling of 30 s, held by a test.
 
-**The users script** (new; E3.S1, the security spec): a second fixed text with its own sha256, in the same shape
-— one function, called only at its end, a begin line `COAI-USERS 1` and an end line. It opens `/etc/passwd` and no
-other file, starts no program, and prints for each entry that § 2 names one line with the user's name and UID. A
-name counts, there and on this side, only when it fits `[a-z_][a-z0-9_-]{0,31}`; at most 16 lines. A UID counts,
-there and on this side, only when it is from 1000 to 59 999 under a name that is not `root`, **or 0 under the
-name `root`** (decision 24). Never printed and, if a reply holds one, never read: a UID from 1 to 999; UID 0
-under another name; the name `root` with another UID. It has no operand.
+The four in full, in 2.1.0: the appendix, § K.55, word for word, and the E3.S2 spec.
+
+**Revision 3 (entries 6.2 and 6.3) — plan only here.** ONE new pinned text with one new sha256. The text
+and its time table are the E3.S2 spec's, updated in the pull request of the code (`fix/accounts-agy-tab`).
+All of it is in a place's FIRST call: the mode `claude-usage` still reads Claude only, and starts neither
+`agy` nor `codex`.
+
+1. **Codex is read from `codex app-server`**, not from session files: the calls `account/read` and
+   `account/rateLimits/read`, its stdin held open for about 2 s. The script reads no session file any more,
+   and it still never opens `~/.codex/auth.json`.
+2. **agy's quota is read by `agy -p /quota --output-format json`**, after the version command. **A reply
+   counts only when it shows no turn and the command `usage`**: an unknown slash command is sent to the
+   model. A reply that fails this is dropped, and that place gets no quota command again while its agy has
+   that version. How the script is told so is the spec's — by a fixed word, never by text from a place.
+3. **agy's account is ONE line of agy's own log**: the last line `applyAuthResult: email=` of
+   `~/.gemini/antigravity-cli/cli.log`, and of that line the address only, by a pattern the spec fixes. No
+   other text of the log is printed. agy's token file is never opened.
+4. **Each new start has its own limit, with its KILL second**; the sums are counted again: 2 s under the
+   ceiling, held by a test — as root 1 s (entry 7.1).
+
+**The users script** (E3.S1, the security spec): a second fixed text with its own sha256 and no operand. It
+opens `/etc/passwd` and no other file, starts no program, and prints the name and the UID of each user that
+§ 2 names: UID 1000 to 59 999, or 0 under the name `root` (decision 24). In full: § K.55.
 
 **The operands** of the accounts script: one of two fixed words, and with `claude-usage` the digest, which this
 side makes and which must fit `[0-9a-f]{64}` here and again in `sh`. No text from a terminal's name, from a VM or
@@ -594,25 +731,12 @@ from a distro is ever an operand as it is; a distro's and a user's name are argu
 
 ### 5. What is still to be measured
 
-Each needs the owner's go for its exact commands. **W9, W6 and W7 have the owner's go (2026-11-26); W8 had none and ran
-with W7; the owner was told.** **W-numbers here are measurements** (the S1 spec uses W-numbers for its sentences). **Run 2026-11-26:** W7
-passed (it started Claude Code's own `rg` and `ps` call; no hook, MCP server or plugin of the person),
-W6 → every round (retirement seen), W8 recorded:
-[RESULTS § 13](../research/RESULTS_accounts_and_usage_on_a_vm.md); **W9:**
-[RESULTS_wsl_on_this_pc.md](../research/RESULTS_wsl_on_this_pc.md).
-
-**The table of the four as they were set, and what W9 showed part by part: the appendix, § K.17, word for
-word.** What holds of it: W6 is the gate for growth, W7 the gate for the usage read, W8 a record (decision
-16), and **W9 the gate for E3**. The WSL road is specified on what W9 showed: no `HOME` or `WSLENV` of the
-caller changes the `HOME` of a call, for root too (b); no script changed a file in a home (c); a killed call
-leaves no process of its own (e); a call starts a stopped distro (f). **"Read-only" is promised for WSL only
-as far as (c) showed**, and beside it stands what WSL's login session does in the home of its user (decision
-25). *Not measured:* the lists with no distro and with none running; a read with a real vendor tool; a
-Windows process as the caller of every call.
-
-**The login session — accepted (decision 25).** W9 left this one item open (§ K.17, its last paragraph), and
-the owner chose with the approval of epoch 4. **The spec of E3.S1 specifies the mechanics** — what a read may
-assume of a session, and the words for it in the tab, the help and `SECURITY.md`.
+**All four are run**, on 2026-11-26: W6, W7 and W8 on a VM
+([RESULTS § 13](../research/RESULTS_accounts_and_usage_on_a_vm.md)), W9 on this PC
+([RESULTS_wsl_on_this_pc.md](../research/RESULTS_wsl_on_this_pc.md)). W7 passed, W6 selects "every round",
+W8 is a record, and W9 is the gate that E3 stood on. **"Read-only" is promised for WSL only as far as W9
+(c) showed**, and beside it stands the login session of decision 25. The section as it stood — who gave
+which go, what W9 showed part by part, what was not measured: the appendix, § K.50, word for word.
 
 Within the plan as written: the field names; the limits under the ceilings; the policy that W6 selects; the exact
 argv words of `wsl.exe` that W9 confirms; root or the default user for the users script; the exact form of the
@@ -628,8 +752,9 @@ user's `HOME`; a read of a system account; road (b).
 - No change to `src_mcp`, `src_server` or CredsForDevs.
 - No read of any kind before the permission, and none of a refused host, ever. No question raised by a timer.
 - No automatic allow of a host, and no setting for it. No setting that a workspace can set for the person.
-- **No install in this release** (E6 is the next release's, entry 4.2). Nothing is written or installed on a
-  VM or in a distro by a script of ours.
+- **No install in extension 2.1.0** (entry 4.2): nothing is written or installed on a VM or in a distro by
+  a script of ours. **E6, the next release, installs ONE package, `jq`, after one more "yes"** (entry 5.1);
+  what it never does: its document, § M4, rule 10.
 - No `ssh` to `wsl` on Windows. No read of WSL from a window that does not run on Windows. A distro that is
   not running is never started on purpose (Q2); the race is residual 12. No read of this PC's Windows-side
   accounts.
@@ -641,8 +766,11 @@ user's `HOME`; a read of a system account; road (b).
 - No history, no chart, no ledger of the readings, no alert when a limit runs low. No colour for the numbers.
 - No reading of a host that has no open `Creds:` terminal; WSL is read only while a `Creds: wsl / …` terminal is
   open.
-- No live Codex read, no `codex login status`, no opening of `~/.codex/auth.json`; no start of `agy` but with its
-  version flag; no opening of `~/.claude.json` or of a credential file by our script. **No road (b).**
+- No opening of `~/.codex/auth.json`, of agy's token file, of `~/.claude.json` or of another credential file
+  by our script; no `codex login status`. `codex` is started as `codex app-server` only, for the two reads of
+  entry 6.3; `agy` with its version flag and as `agy -p /quota` only (entry 6.2); of agy's log, one line.
+  **No road (b).** (Until epoch 7 this item said "No live Codex read" and "no start of `agy` but with its
+  version flag": the appendix, § K.45.)
 - No grouping of accounts that are not known, by host alias or from equal numbers.
 - No change to `SSH_OPTIONS`.
 - No lock between VS Code windows for the round, and no file shared between two sides of the machine.
@@ -656,9 +784,14 @@ user's `HOME`; a read of a system account; road (b).
 This section is the security judgement of the revision (Fable, `subagent-models.md`: the security row). The specs
 of E2.S1 and E3.S1 repeat it for the exact store rules and the exact argv, before any code.
 
-**The edges** are five, and E6 adds a sixth (word for word: the appendix, § K.23): ssh calls by a timer, now
+**The edges** were five, and E6 adds one (word for word: the appendix, § K.23): ssh calls by a timer, now
 only after the permission; local `wsl.exe` calls by it — **with the login session that WSL opens for a user
 that is read**; a start of Claude Code on a usage read; a start of `agy` every round; VM text in a webview.
+**Revision 3 changes the fourth and adds two (entries 6.2 and 6.3).** The start of `agy` is now also
+`agy -p /quota`, which **calls Google with agy's own sign-in**. A start of `codex app-server`, which **calls
+OpenAI with Codex's own sign-in**. And a read of **one line of agy's own log**: a log can hold other text,
+so of that line the address only is printed, and the tab draws it as text (§ 1). Our script still holds no
+token and opens no credential file. **No judge was asked on these three**: their text is the planner's.
 
 **Finding F1 is answered, not gone** (the appendix, § B). **Before the permission nothing is contacted,
 whatever is stored and whatever a terminal is called.** After it, a terminal's name chooses a host again, and
@@ -684,9 +817,12 @@ own.** A distro's and a user's name reach an argv only after their class, and ne
 or an operand. Five things are named, not prevented:
 
 - **Root's own `claude` and `agy` are started as root, by our timer** (decision 24), on an ssh host whose
-  login user is root as well. **The rule: as UID 0 the script starts nothing that another user can write,
+  login user is root as well; from revision 3 root's own `codex` too (entry 6.3). **The rule: as UID 0 the script starts nothing that another user can write,
   and it checks that before every start** — the file and every folder above it; if not, that tool's row says
   *not read: <path> is writable by another user* (the spec of E3.S1; a test holds it; residual 13).
+  **Since entry 7.1 this rule holds for the basic tools only** — `timeout`, `tail`, `sed`, `grep`, `sleep`,
+  `sha256sum`, `jq`. A vendor program — `claude`, `codex`, `agy` — whose check fails is started all the
+  same, and its row carries a warning that names the folder (the owner: "Let it read"; residual 15).
 - **A program that a Linux user owns is started by our timer**, as that user and never as root; in WSL such
   a process can start Windows programs as the Windows user (interop). **The inherited `PATH`** is not used
   (§ 4). **A kill** leaves no process of the call (W9e). These three, word for word: the appendix, § K.19.
@@ -704,7 +840,9 @@ changes of § K.22 and § K.16, word for word. In short: a terminal's name gains
 and after it what F1 says; no reply reaches the extension; a second window or a reload cannot undo a refusal,
 the Stop or a withdrawal (the file); **another Linux user of a distro whose root is read** gains nothing by a
 tool's file or a folder above it that they can write, because the script checks both as UID 0 — what is left,
-root's profile among it, is residual 13. **Logs**: a failed read logs the place, how it ended and the
+root's profile among it, is residual 13. **Since entry 7.1 that holds for the basic tools only: a user who
+can write the folder of root's `claude`, `codex` or `agy` can replace a program that our timer then runs
+as root, on a VM as in a distro. The owner accepts it (residual 15).** **Logs**: a failed read logs the place, how it ended and the
 runner's own last line; a script's stderr goes to `/dev/null`; stdout is never logged.
 
 **Residuals.** Those of the stopped plan hold (the appendix, § I, *Security*: a person's `ControlMaster`; a login
@@ -726,12 +864,19 @@ and to 7.** New are residuals 9 to 13. All of it in full: the appendix, § K.28,
 13. **What the check before a start as UID 0 leaves** (decision 24): root's own programs run as root, and the
     check stands on `/bin/sh` and on the tool it reads modes with. **The login session is outside the check**
     (decision 25).
+14. **agy's log is no contract** (entry 6.2, the owner's choice; not in § K.28): another agy can write
+    that line in another form, and then the account is not read. **And an unknown slash command reaches
+    the model**: the check of § 4, revision 3, item 2, is all that stands between an agy that changed and
+    a model call in every round.
+15. **A vendor program of root in a folder that another user can write is run as root** (entry 7.1, the
+    owner's choice; not in § K.28): whoever can write that folder decides what our timer runs as root in
+    the next round. The row's warning names the folder, and nothing else stands against it.
 
 **Judgements.** Those of 2026-11-25 are in the appendix, § K.5, and the one on root as a place, of 2026-11-26,
 in § K.9, both word for word. The judge's conditions are rules above: the detail of the question (§ 3); root
 reads only as itself, with its own `HOME`; nothing that another user can write is started as root; the
 permission's text says it. **On the login session (decision 25) no judge was asked**: its text here is the
-planner's.
+planner's. **Since entry 7.1 the third condition holds for the basic tools only; no judge was asked.**
 
 `SECURITY.md` is rewritten by E2, E3 and E4, each for what it builds; the list: the appendix, § K.32.
 
@@ -762,16 +907,24 @@ planner's.
   most, until the distro stops, and two empty files in that user's home at a first login (decision 25).
 - **The timer**: one for each window, cleared when nothing may be read, disposed with the extension.
 - **Log lines**: one when a place starts to fail and one when it reads again.
-- **On a VM or in a distro, by our scripts**: nothing.
+- **On a VM or in a distro, by our scripts**: nothing in 2.1.0. **E6 adds** a record of installs on this
+  side (1000 rows at most, kept for ever), a lock folder in a home on the target for the time of an install,
+  and the package `jq` with what its manager adds for it: sizes, who retires each and what an interruption
+  leaves are in its document, § 10.
 - **There, by Claude Code on a usage read**: four cache files, rewritten in place; and `~/.claude/backups/`, where
   **Claude Code keeps five files, about 0.9 MB, and deletes the older ones — seen on 2026-11-26 (W6)**, so it
   does not grow, and the policy is "every round" (§ 5). This plan deletes no file of Claude Code.
 - **There, by `agy` on a start**: not measured (W8). Once a round for each place, since revision 2.
+- **There, by `agy -p /quota` and by `codex app-server`** (revision 3): at most one start of each in a
+  round for each place that has the tool. Measured: no conversation of agy, no model call of either.
+  **What else either writes or fetches there was not measured.**
 - **Calls to the vendor**, by Claude Code, none by our code: with the policy "every round", one usage call for
   each Claude account in each round of a window. The timer alone gives 6 rounds an hour, so 6 calls an hour
   for each account and window. *Refresh now* can start a round 60 s after the last one ended (§ 2), so a
   person who presses it again and again reaches up to about 60 an hour for each account and window. None
-  while the policy is `off`.
+  while the policy is `off`. **From revision 3 also by agy, to Google, and by Codex, to OpenAI:** at most
+  one of each in a round for each place that has the tool, so by the same count 6 an hour for a place and
+  a window by the timer, and up to about 60 with *Refresh now*.
 
 ## Boundaries with other plans
 
@@ -785,112 +938,39 @@ The todo files' own side: the appendix, § K.33.
 
 ## Build order
 
-1. **The cut** — done: merged as #1051, `b1ec467c`. (Steps 1, 2 and 4 as written: the appendix, § K.30.)
-2. **The owner approves epoch 3** — done, 2026-11-26.
-3. **E2 — the permission and the table.** Its stories by Opus; the security spec of E2.S1 by Fable before its
-   code; the code gate. Not merged before step 7.
-4. **W9 on this PC, and W6, W7 and W8 on a VM, by hand** — all four run on 2026-11-26 (§ 5).
-5. **E3 — WSL on this PC, and revision 2 of the script**, on top of E2: in E2's pull request or in its own.
-6. **E4 — the Claude usage on**, with revision 2: W7 passed and W6 selected the policy (§ 5). It may be in
-   E3's pull request.
-7. **ONE real-window check, on the combined build** (entry 4.2): a VSIX from a head that holds E2, E3 and E4;
-   the owner runs the rows of the three on it, once. Then the pull request, or the several, merge.
-8. **E5 — the long runs, once, on the release build** of E2 to E4. No product code.
-9. `review_feature` over the built epics, every finding resolved.
-10. The extension release, one for the whole plan: the tag pushed alone and its run observed; `POST_DEPLOY.md`
-    run; the plan promoted with its deviations, its appendix and its stories documents.
+Steps 1 to 10, as written: the appendix, § K.57, word for word. In short: 1, the cut (merged, #1051); 2,
+the approval of epoch 3; 3, E2; 4, the measurements; 5, E3; 6, E4; 7, ONE real-window check on the combined
+build; 8, E5; 9, `review_feature`; 10, the extension release and the promotion.
 
-**E6 — the installer — is not in this order: it is the next release's** (entry 4.2), with its gate R18.
+**Where this order stands, 2026-11-27.** The release of step 10 is cut, as extension 2.1.0 — before R12 of
+step 8 and the VM half of R7 had a result (entry 5.2). Its promotion waits for E6 (entry 5.1).
+**Entries 6.2 and 6.3 are built outside these steps**, in a pull request of their own (`fix/accounts-agy-tab`).
 
-**Why this order:** the appendix, § K.2, word for word.
+**E6 — the installer — is parked (entry 6.1).** Its steps 11 to 16 hold as written for the day it comes
+back: the appendix, § K.46, word for word. In short: 11, gate E6-G1 and E6's plan round, before any code;
+12, E6.S1 and E6.S2; 13, the gate before any code of E6.S3 (entry 5.3); 14, E6.S3 to S5; 15, the owner's
+rows on ONE VSIX, with R18, R12 and R7 as gates; 16, `review_feature`, the release, the promotion.
+
+**Why this order:** the appendix, § K.2, word for word; for steps 11 to 16, E6's document, § 7.
 
 ## Test plan
 
 **E1's tests stay** for what stays (the appendix, § I, *Test plan*; the short list: § K.12). **Deleted with what
 they hold:** the tests of the automatic "yes", of the cap's eviction, of the setting at both values
-(`terminalAccountsSetting.test.ts`), of the two notices, of the QuickPick's rows and its host scenario. New:
+(`terminalAccountsSetting.test.ts`), of the two notices, of the QuickPick's rows and its host scenario.
 
-- **The permission — the acceptance of entry 2.3** (pure, over the fake disk and stale views of E1's tests). A
-  store seeded with a person's "yes", an automatic "yes" of the pre-release, one refusal and 20 live hosts, `wsl`
-  among them: **zero calls** of any runner, by ticks and by presses, before the permission. After *Allow*: one
-  call for each host that is not refused, **none to the refused host**, and a host whose terminal opens later is
-  read in the next round with no question. With `wsl` refused: **no call to `wsl.exe` at all**, the list calls
-  among them. The timer raises no question (a test fails if the ask seam is called from a tick). The modal is
-  raised by the first press of the icon and not by the second.
-- **Every door (finding 0).** A person's "yes" for host h and NO permission: a press of a chat door on h asks the
-  one question and **runs nothing**; *Not now* → still nothing; *Allow* → the next press reads. After a
-  withdrawal: a press on h runs nothing, and neither does a spawn of a press that was in flight.
-- **Withdrawal and its races (finding 1).** A withdrawal clears the timer and the readings; a result in flight is
-  dropped. A withdrawal in window A; A is disposed; a stale window B writes `globalState`; both are built again
-  as after a reload → no call. **Withdraw; close the window that saw it; a former lock holder renames its stale
-  `refused.json`, which holds the grant, over the new one; reload → still withdrawn, no call of either door.** A
-  grant-write whose stamp is not above the newest withdrawal is refused. *Allow* after a withdrawal reads again,
-  and leaves one withdrawal file. A withdrawal file that cannot be read is a withdrawal. A withdrawal the disk did
-  not take → no call in any window of the side; *Save now* lands it. A stopped round stays stopped through *Allow*.
-- **The upgrade**, as the table of § 3, row by row; a list with a "yes" row or a `how: 'auto'` row is not damaged.
-- **The session door.** Each cell of § 3's table. **T9:** a "no" saved during the first spawn of a press → no
-  second spawn; consent still "yes" → the fallbacks run; a later spawn never calls the ask seam. **T8:** a held
-  refusal for host h, a press on host g → the `waiting` sentence, never the sentence of a list that cannot be
-  read; a damaged list → that sentence, as today.
-- **Places.** Two users of one distro are two readings, and neither overwrites the other; an ssh host and a WSL
-  user with one account are ONE usage read and both say *shared across 2 hosts*; a reading of a place whose scope
-  host was refused in flight is dropped.
-- **The WSL road** (pure, with a false `wsl.exe` seam, and one test that runs the real scripts by `sh`). The argv
-  word for word: the absolute path, `-d`, `-u`, `--cd /`, `--exec /bin/sh -s --` and the mode. A distro or user
-  name that fails its class never reaches an argv: a leading `-`, a space, a name of 100 characters, a line of a
-  message in another language. The list output as UTF-16LE and as UTF-8, with CR LF, with no distro, with none
-  running. A distro that is not running gets no call, and neither does one that left the running list after
-  the round began. The caps of 16, 16 and 32, root counted as a user. The
-  users script: the users from 1000 to 59 999, and root as UID 0 under the name `root`, and no other — **a UID
-  from 1 to 999, UID 0 under another name and `root` with another UID are not printed, and a reply that holds
-  one gives no place for it**; `nologin`, `false` and a home that is missing are
-  left out, for root as for a user; its hash is held. **Root as a place (decision 24): `-u root` with a mode
-  word is allowed only for the place (distro, `root`).** A test fails if the `-u` word of an accounts call is
-  not the user of its place — so on a user's read as root; if an argv or the environment of a call names a
-  `HOME` or holds `WSLENV`; and, with the real script run under a `HOME` that stands for root's, if a `claude`
-  or an `agy` in another user's `~/.local/bin` or outside the script's own `PATH` is started. The `PATH` is held
-  to its closed list. **The check before a start as UID 0** (the real script; the spec fixes how a run that is
-  not root stands for UID 0): a `claude` or an `agy` whose file, whose link's target or a folder above either is
-  another user's, or writable by group or others, records NO start, and the reply names that path; with all of
-  them root's and closed, it starts. A root place with no tool has no line; a root read that failed has one. Not on Windows: `wsl` gets no call of either runner.
-- **Revision 2 of the script.** A `claude` reachable only through the inherited `PATH` is not started. In
-  `claude-usage` the false `agy` records no start and no Codex file is opened; the reply holds the Claude part
-  only. **The join:** after the second call the place still holds the Codex and agy parts of the first reply; the
-  same account → its usage is shown and counted for it; a second call that fails → the first reading whole, with
-  the reason. **The account check (finding 2), with the real script:** the digest fits → the false `claude`
-  records ONE usage start; another digest, or one that fails its class → `skipped account-changed` and NO usage
-  start. **In the round:** place A read the usage of X; place B first answers Y and, at its usage call, has X →
-  the script skips, X's usage command ran once in the round, B shows X with A's figures, and no third call is
-  made; a call for an account already in the round's usage set is never built. **T46:** the sum of each mode with its KILL seconds and the
-  connect time is at most 28 s; a false `claude --version` and a false `agy` that ignore TERM, with every other
-  stage at its limit, end inside the sum and the end line is written. The new hash is in the spec and in the test.
-- **The table's model** (pure): by host; each heading sentence; a tool that is absent has no row; the cells — `44%
-  left`, a dash with no `% left`, `resets in —`, a Codex window by its length, the model sub-lines; each "not
-  read" and "unavailable" sentence spans the cells; a failed host keeps its older table with its time; the
-  summary's counts; for a host without `jq`, the copied string is the fixed one of the table for its manager
-  word, and **a test fails if any text of a reply is part of it**. **The three groupings (entry 4.1)**, from
-  one set of readings: *Claude account* — two places of one account are one block with its usage once; an
-  account that is not known is a block of its own; a failed place stays under its older account; *Codex* and *Antigravity* join nothing; a place with no
-  Claude account, a refused and a never-read one are in the last block with their sentence; *User* — a row
-  for each place; **and a count: every place and every tool reading of the input is in each grouping.** **The
-  order rule**: each key both ways; a dash last in both, never a zero; equal keys in name order; an unknown
-  grouping or column gives *Server* by name.
-- **The page, by RUNNING it** (`bundledPage.test.ts`, the DOM shim; no assertion over page source for behaviour).
-  A model whose values hold `<img src=x onerror=…>`, `$(account)` and 10 KB of text: every one is the text of a
-  node, and no element exists that the model did not order. Each button posts its message and nothing else.
-  **The owner's observation as a test:** the clock of the shim goes on 10 minutes with no message from the host,
-  and the heading reads *read 10 min ago*; the clock time on it does not change. A place's update changes that
-  block only. A message the host does not know is dropped; `copy-install` for a place with no manager word copies
-  nothing. The CSP and the nonce are held by a source assertion, which is legitimate there. **The switch and
-  the headers (entry 4.1):** each grouping is drawn, and *Server* again gives the first tree; a header click
-  sorts and a second reverses, the dash last both times; neither posts a message; the webview state holds both
-  and a page built again reads them; the hostile values are text in each grouping; a place's update keeps both.
-- **Host scenario** (`npm run test:host`): the icon opens the tab; a second press reveals the same tab; with the
-  call replaced through the test door and the permission given through the keeper, two terminals of two hosts are
-  one call each, and the tab's model holds both.
-- **The manifest and the help**: the command and its menu entry; the retired setting is gone from the manifest,
-  `SAFETY_KEYS` and the help of five languages; `notification-sites.json` generated again; the log scan covers the
-  new modules.
+**The new tests of E2, E3 and E4 are in the appendix, § K.43, word for word**; extension 2.1.0 holds them.
+They are: the permission, with the acceptance of entry 2.3; every door; a withdrawal and its races; the
+upgrade; the session door (T8, T9); places; the WSL road; revision 2 of the script, with the join and the
+account check; the table's model, with the three groupings and the order rule; the page, by RUNNING it; the
+host scenario; the manifest and the help.
+
+**The tests of E6** — the script and its container cases, the install "yes" and the record, the install in
+the round, the tab, the documents — are in its document, § 6. Its rule for all of them: `npm test` never
+gives the install script a legal operand, and no test installs anything on a real machine.
+
+**The tests of revision 3** (entries 6.2 and 6.3) are written with its code, in the E3.S2 spec. They hold
+at least what its item of the Definition of Done names, and that each new start ends under its limit.
 
 ## Definition of Done
 
@@ -925,7 +1005,8 @@ they hold:** the tests of the automatic "yes", of the cap's eviction, of the set
 - [ ] **WSL is read on this PC**: every running distro and every Linux user in it, root among them, each as that
       user, each a reading of its own. **Root is read as itself** (decision 24): with its own `HOME`, never for
       another user; as root, of ours, only the users script and root's own read run, and our script starts
-      nothing as root that another user can write. **The login session that WSL opens for a user it reads, with
+      nothing as root that another user can write — since entry 7.1: no basic tool; a vendor program that
+      fails that check is started, and its row warns and names the folder. **The login session that WSL opens for a user it reads, with
       that user's profile, is named in the permission's text, the help and `SECURITY.md`** (decision 25). `wsl`
       is never given to `ssh` on Windows; with `wsl` refused nothing is
       enumerated. W9 has a recorded result, and what the documents promise as read-only is
@@ -935,44 +1016,54 @@ they hold:** the tests of the automatic "yes", of the cap's eviction, of the set
       KILL seconds counted, at least 2 s under the ceiling, held by a test; one new hash in the spec and in a
       test. No secret is in an argument, the environment, a reply or a log; the person's activity is not in a
       reply.
+- [ ] **The script is revision 3** (entries 6.2 and 6.3): agy's row shows its quota — the 5-hour and the
+      weekly bucket of each group, with its reset — and the account of agy's log, or says why not; Codex's
+      row shows the account, the plan and the windows that `codex app-server` states, and no session file
+      is read; a quota reply that shows a turn, or another command, is never taken, and that place is not
+      asked again at that agy version; of agy's log the address of one line is printed and no other text;
+      no credential file is opened; one new hash in the E3.S2 spec and in a test; the permission's text,
+      the help and `SECURITY.md` name the two new starts and the vendors they call.
 - [ ] **The Claude usage is on**, with the policy W6 selected, after W7 passed — or it is off and the release
       says why. No build ran the usage command by itself before W6 and W7 had recorded results.
 - [ ] Nothing of a reading is persisted. Road (b) is not in the code.
 - [ ] The real-window rows of E2, E3 and E4 have the owner's recorded result from ONE check, on a VSIX of the
-      combined build, before any of the three merged (entry 4.2); the rows of E5 have one before the tag, and
-      R7 and R12 passed, once, on the build that is tagged. W6, W7, W8 and W9 are in the two RESULTS files.
+      combined build, before any of the three merged (entry 4.2). The rows of E5 have a recorded result: R7
+      passed on 2.1.0 — in WSL before its tag, on the VM after it — and **R12 passes on E6's build, which
+      stands for 2.1.0 too** (entry 5.2). W6, W7, W8 and W9 are in the two RESULTS files.
 - [ ] Docs with each epic: the help in five languages; `research/module_extension.md`, `research/module_tests.md`,
       `research/architecture.md`; `SECURITY.md`; the `POST_DEPLOY.md` question asked.
-- [ ] **This release installs nothing** (entry 4.2): a place without `jq` shows the install command with a
-      copy button, and no more. E6, with R18, is the next release's.
-- [ ] `review_feature` ran before the tag and every finding is resolved; one extension release is cut and
-      verified; the plan is promoted with its deviations.
+- [ ] **Extension 2.1.0 installs nothing** (entry 4.2): a place without `jq` shows the install command with a
+      copy button, and no more.
+- [ ] **E6 — nothing is installed without ONE more "yes"** (entry 5.1): asked once for every place, by a
+      person's press; never given by the permission to read; its own withdrawal and *Withdraw the
+      permission* (entry 5.4) each stop every later install, also against a stale window and a stale lock
+      holder (R18). Where the login user has no rights, nothing is run and the command is shown. No setting
+      for it exists.
+- [ ] **E6 — one install at a time for a place, one deadline on the target, and a record from which no row
+      goes.** The question and `SECURITY.md` say what an install can change on a machine (entry 5.8). Every
+      item of the Definition of Done of E6's document, § 13, holds.
+- [ ] **E6 — the gate before its S3 has a recorded answer** (entry 5.3); **R18, R12 and R7 passed on E6's
+      build** before its merge.
+- [ ] `review_feature` ran over the built epics before the tag of the plan's last release — E6's (entry
+      5.1) — and every finding is resolved; that release is cut and verified, as 2.1.0 was; the plan is
+      promoted with its deviations.
 
 ## Merge conditions
 
-**For the pull request of the code epics E2, E3 and E4 — one for the three, or several** (entry 4.2):
+**For the pull request of the code epics E2, E3 and E4** (merged, #1055), **for E4, for the cut**
+(merged, #1051) **and for the release 2.1.0**: the conditions as written: the appendix, § K.56, word for
+word. What did not hold of them: 2.1.0 was released before R12 and the VM half of R7 had a result; R12 is
+a gate of E6's build, and its result there stands for 2.1.0 (entry 5.2).
 
-1. The parent is not stopped, and each epic's stories document is written; a cornerstone or security spec is
-   written by Fable before its code.
-2. Every row of the test plan that belongs to the epic is green; each leak test and each "never" test of the epic
-   was seen RED once with its message.
-3. The code gate passed (`review_code`, fed the scope), the own Opus review ran, and every finding is resolved.
-4. CI is green on the head that merges, with its checks present.
-5. **ONE real-window check, on the combined build: the owner's rows of E2, E3 and E4 have a recorded result on
-   ONE VSIX, built from a head that holds the code of all three** (Q4 as changed on 2026-11-26). No pull
-   request of the three merges before it. A row that fails is fixed and run again on the new combined head.
-6. `SECURITY.md` and the help say what the head does.
-
-**For E4 also:** W6 and W7 are recorded, W7 passed, and revision 2 of the script is on main or in the same
-pull request.
-**For the cut of step 1** (merged, #1051): the appendix, § K.33.
-**For the release:** E5's rows recorded; **the gates R7 and R12 passed, once, on the head that is tagged** —
-the build of E2 to E4 (R18 goes with E6, to the next release); `review_feature` resolved; no extension release
-from main between #1047 and the cut.
+**For the pull request of E6, and for its release** (entries 5.1 and 5.3; parked, entry 6.1): six
+conditions and the release's, which hold as written — the appendix, § K.46, word for word. In short: the
+parent is not stopped, and gate E6-G1 and E6's plan round come before any code; the gate of entry 5.3
+before any code of E6.S3; its tests and the container run green on the head that merges; the code gate and
+CI; the owner's rows on ONE VSIX, with R18, R12 and R7 passed; `SECURITY.md` and the help.
 
 ## Epics
 
-**Five epics in this release; one is done. The sixth, E6, moved to the next release (entry 4.2).**
+**Six epics. E1 to E5 are the release 2.1.0 — but for E5's R12, which runs on E6's build (entry 5.2); E6 is the next release (entries 4.2 and 5.1).**
 The split is Fable's, after both consultations of the stop (`78e6d44b`, `7315feb0`).
 The consultants' rule of 2026-11-19 holds for each, and it is why the split is as it is (the appendix, § K.3).
 The rows keep the numbers of the stopped plan where their
@@ -980,15 +1071,15 @@ meaning is kept (the appendix, § I, *E2*); R11, the row of the retired setting,
 
 Stories documents are written by Opus when an epic starts:
 `todo/PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E<n>.md`. Cornerstone quota, counted again
-for five epics (entry 4.2): Q = ⌈2·E/5⌉ = ⌈2·5/5⌉ = 2. The cornerstone areas Fable names, each with its
+for six epics (entry 5.1): Q = ⌈2·E/5⌉ = ⌈2·6/5⌉ = 3. The cornerstone areas Fable names, each with its
 reason in the appendix, § K.14: **(a)** what a
 script touches there and what it prints; **(b)** the reply's frame and the parser; **(c)** who is contacted and
 when; **(d)** the different results of a read, and a missing number that is never a zero; **(e)** who runs as
 whom on this PC; **(f)** a change of a machine (E6, so the next release's). Areas (c) and (e) are
-authorisation: their specs are Fable's by the security row, outside the quota. Planned mark, made by its
-stories document: E3.S2 for (a) and (b).
+authorisation: their specs are Fable's by the security row, outside the quota. Marks made by the stories
+documents: E3.S2 for (a) and (b); E6.S1 for (f) (entry 5.1).
 
-Cornerstones: 2 of 2 — E1.S2, E3.S2
+Cornerstones: 3 of 3 — E1.S2, E3.S2, E6.S1
 
 ### E1 — The read-only feature, end to end · DONE, merged as #1047 (`d0241e45`)
 
@@ -997,66 +1088,30 @@ documents. Its text: the appendix, § I, *E1*; its stories:
 [PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E1.md](PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E1.md).
 What is kept, reworked and retired of it: *Re-review for epoch 3*, above.
 
-### E2 — One permission, and a table that can be read
+### E2 — One permission, and a table that can be read · RELEASED in extension 2.1.0
 
 - **Goal.** After one "yes" the owner reads, in a tab, every ssh host of the open terminals: its tools, their
   accounts and the limits that this build reads. Before that "yes" nothing is contacted.
-- **Scope.** The permission and the one door, the tab with its model and page, the round under the
-  permission, the setting out, the help, the tests and the documents: every file, in the appendix, § K.39.
-- **Depends on.** The cut merged; epoch 3 approved. Both hold. It merges after the ONE check (merge
-  condition 5).
-- **Stories** (by Opus; its stories document is written). E2.S1 — the permission (SECURITY SPEC by Fable,
-  outside the quota); E2.S2 — the table's model; E2.S3 — the tab; E2.S4 — the round under the permission;
-  E2.S5 — the documents. What each holds: § K.39.
-- **Done when.** The merge conditions hold, with these rows in the owner's window, on the owner's ssh hosts:
+- **Its text**, word for word — its scope, what it depends on, its stories (E2.S1 the permission, a SECURITY
+  SPEC by Fable, outside the quota; S2 the table's model; S3 the tab; S4 the round under the permission; S5
+  the documents) and its rows R1, R14, R15, R5, R6 and R8: the appendix, § K.44, with § K.39.
 
-| # | What is run | Pass |
-|---|---|---|
-| R1 | The icon | It sits beside *Ask other AI* and opens ONE tab; a second press shows the same tab; Ctrl+F finds a host; with no `Creds:` terminal the tab says so |
-| R14 | **The permission.** The profile holds a person's "yes", the automatic rows of 2.0.901 and one *Not this host*; the owner's terminals are open | Before the permission: **0** ssh logins on any host in 20 minutes (the VMs' ssh logs). The question is asked once. After *Allow reading*: the first login within 60 s; and when the toolbar says the round has ended — one host at a time, up to 30 s each — exactly 1 login on each host that is not refused, plus R2's one usage login for each Claude account, and 0 on the refused one. A chat door pressed before the permission, on the host with the "yes": the question, and 0 logins. A terminal of a new host, opened later: read in the next round, no question. *Withdraw*: 0 logins in 20 minutes, by the round or by a chat door, also after a reload |
-| R15 | **The table.** At least 3 hosts, one of them with a Codex record | For each host the owner reads, without help: the host, its tools, each account, the two windows with "% left" and the reset. The Codex figure equals the record on that VM. A Claude account says why its usage is not read. **The tab stays open 12 minutes untouched: the age of each read grows and matches the clock time beside it.** A hover shows the exact time. A narrow tab stacks the fields. **Entry 4.1:** *Group by* is switched to *Claude account*, to *User* and back to *Server*: each shows every host and account, and an account on 2 hosts has its usage once, both hosts under it. A sort by "% left" with a dash present: the dash is last, both ways. Each grouping stays readable in a narrow tab |
-| R5 | A host that cannot be reached | Its failure in full under its heading within 30 s; the other hosts are read in that round |
-| R6 | Stopping | Every `Creds:` terminal closed: 0 logins in the next 20 minutes. *Stop the round*: 0 logins in 20 minutes, also after a reload; started again, a round follows within 60 s |
-| R8 | The session door | *Take the question* works with the permission and asks no per-host question. *Not this host* on a heading: 0 logins to that host in 20 minutes, also after a reload, and the chat door there refuses. *Read this host again*: read in the next round |
-
-### E3 — WSL on this PC, and revision 2 of the script
+### E3 — WSL on this PC, and revision 2 of the script · RELEASED in extension 2.1.0
 
 - **Goal.** A `Creds: wsl / …` terminal shows every running distro of this PC and every Linux user in it, root
   among them, each read as that user — root as root; and the script that every place runs is the one the usage
   read can be turned on with.
-- **Scope.** A new module for the WSL road, the users script, revision 2 of the accounts script with its
-  reply and the S2 spec, places in the round, the `wsl` block of the table: every file, in § K.39.
-- **Depends on.** E2 — merged, or under it in the same pull request or branch (entry 4.2). **W9 has a
-  recorded result before the spec of E3.S1 is final**: it has one (decision 25).
-- **Stories.** E3.S1 — the WSL road (SECURITY SPEC by Fable, outside the quota); E3.S2 — the scripts,
-  revision 2, with the round's join (CORNERSTONE, `model: fable`; one pull request, never two; no row of
-  its own); E3.S3 — places; E3.S4 — the documents. What each holds: § K.39 — but the early merge of E3.S2
-  is gone (entry 4.2).
-- **Done when.** The merge conditions hold, with these rows in the owner's window on this PC:
+- **Its text** — with its stories (E3.S1 the WSL road, a SECURITY SPEC by Fable, outside the quota; E3.S2
+  the scripts, revision 2, with the round's join, the CORNERSTONE; S3 places; S4 the documents) and its rows
+  R13, R16, R17 and R9a: § K.44, with § K.39.
+- **After the release — revision 3 of the script** (entries 6.2 and 6.3): agy's quota and account, and
+  Codex from `codex app-server`. It changes the cornerstone E3.S2, whose spec is updated with the code.
 
-| # | What is run | Pass |
-|---|---|---|
-| R13 | **Two WSL users, and root.** A distro with two Linux users, each signed in to a tool, and a distro whose root is signed in to a tool; a `Creds: wsl / …` terminal | Both users are under `wsl`, each with its own tools and accounts, and each account is the one that user is signed in to. **Root is listed under its distro, read as root, with the account root is signed in to**; in a distro where root has no tool there is no line for root. A second running distro is listed with its users; one that is not running says so and stays stopped. No ssh login to a host `wsl` is tried. Each of them is a place of its own in *Claude account* and in *User* (entry 4.1) |
-| R16 | **A known sample** (the consultants' criterion) | One figure whose value the owner knows from the tool itself — a Codex window, or a Claude window once E4 is in — shows that value; a window with no reading says why; the age of the read stays true while the tab is open |
-| R17 | *Not this host* on `wsl` | No `wsl.exe` call of this window in 20 minutes, watched on the PC by the method the stories document fixes; also after a reload |
-| R9a | The time of a read, 10 calls for each place, ssh and WSL | None is killed at 30 s; the slowest is under 20 s; the medians are recorded |
-
-### E4 — The Claude usage, on
+### E4 — The Claude usage, on · RELEASED in extension 2.1.0
 
 - **Goal.** The Claude windows show numbers.
-- **Scope.** ONE constant, `USAGE_POLICY`, set to the row W6 selected, with the tests that hold it; the sentences
-  of `SECURITY.md` on W6 and W7. A result of W6 or W7 that needs another flag or another script line is a change
-  of this plan.
-- **Depends on.** E3.S2 — the script of revision 2 AND the round's join, which that story owns — on main or in
-  the same pull request: E4 may be in E3's pull request (entry 4.2). W6 and W7 recorded, W7 passed: both hold.
-- **Done when.** The merge conditions hold, with these rows:
-
-| # | What is run | Pass |
-|---|---|---|
-| R3 | The numbers, on at least 3 places | Each Claude percent equals `/usage` run there in the same minute, and the mod line within 1 point, with the same dashes; an account with no 5-hour window shows `—` there |
-| R4 | Two places of one account, 6 rounds | Both say *shared across 2 hosts* with the same figures; in each round that reads usage under the policy, `policy-limits.json.stamp.json` changes on exactly one of the two |
-| R2 | The logins of a round | Exactly 1 on each host, and 1 more on ONE host of each Claude account and on no other; 0 on a refused host |
-| R9b | The time of the usage call, 10 calls | None is killed at 30 s; the slowest is under 20 s |
+- **Its text** — ONE constant, `USAGE_POLICY`, set to the row W6 selected — and its rows R3, R4, R2 and R9b:
+  § K.44. The three epics merged as #1055 (`da9760fe`).
 
 ### E5 — The long runs before the release
 
@@ -1064,21 +1119,23 @@ What is kept, reworked and retired of it: *Re-review for epoch 3*, above.
 - **Scope.** No product code. A row that fails is fixed by a new pull request and run again.
 - **Depends on.** E2, E3 and E4 merged after their one check — or E2 and E3 merged and E4 recorded as off.
 - **Done when.** Each row has a recorded result; **R7 and R12 are gates**, run ONCE, on the release build of
-  E2 to E4 (entry 4.2).
+  E2 to E4 (entry 4.2). **As it went (entry 5.2):** R7 passed on 2.1.0 and R10 is recorded
+  ([RESULTS_accounts_e5_long_runs.md](../research/RESULTS_accounts_e5_long_runs.md)); W8: § 5; R12 runs
+  on E6's build.
+- **The rows R7, R12, R10 and W8, each with its pass**: the appendix, § K.47, word for word. R12 is the
+  run with two windows; a "no", a Stop or a withdrawal that is lost there fails the gate.
 
-| # | What is run | Pass |
-|---|---|---|
-| R7 | At least two hours and until 12 rounds have ended, on a VM AND in a distro, each WITH live Claude Code, Codex or agy sessions | **Gate. 0** live sessions that ask to sign in again, lose their settings or MCP servers, or stop or restart. The time and size of the agy program before and after: recorded |
-| R12 | **Two windows.** (a) *Not this host* in window A while B's round runs. (b) *Not this host* in A; A is closed at once; B goes on for three rounds and is made to write `globalState`; both are reloaded. (c) The same with *Stop the round*. (d) The same with *Withdraw the permission*, and then a chat door is pressed in B | **Gate.** (a) At most 1 login to that host after the press, 0 from then on. (b) 0 logins to that host from the press on. (c) and (d) 0 logins to any host from the press on. In each the folder is read back and holds the change. A lost "no", Stop or withdrawal fails the gate: the build is not released, and the cure is a change of this plan |
-| R10 | Which places lack `jq` | A table: `jq` there or not, the manager word, root or `sudo` without a password. A place without `jq` shows the fixed command; after the owner runs it, the next round reads the accounts. The count is the input of E6 |
-| W8 | A start of `agy` (§ 5) | A record |
+### E6 — The `jq` installer · PARKED (entry 6.1)
 
-### E6 — The `jq` installer · MOVED to the next release (entry 4.2)
+**Parked by the owner on 2026-11-27 (entry 6.1): as measured, it would install `jq` on no place of the
+owner. No code of it exists.** It is the sixth epic of THIS plan (entry 5.1), for a release after 2.1.0.
 
-**Not built in this release.** The owner, 2026-11-26: the installer of decision 17, its one-time "yes" (Q3)
-and its gate R18 go to the next release, under a later plan or epic of its own. This release shows the
-install command with a copy button (§ 1); R10 of E5 stays as its input. The epic as approved for epoch 4:
-the appendix, § K.38; its design: § E.
+- **Goal.** Decision 17: where `jq` is missing and needed, it is installed when the login user may; where
+  the user may not, the tab shows the command and says why.
+- **Its stories and spec**, ONE document:
+  [PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E6.md](PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E6.md).
+- **Its section as it stood** — the consent (Q3; entry 5.4), the five stories with the cornerstone E6.S1,
+  what it depends on with the gate of entry 5.3, and done-when: the appendix, § K.46, word for word.
 
 ### Candidates
 
