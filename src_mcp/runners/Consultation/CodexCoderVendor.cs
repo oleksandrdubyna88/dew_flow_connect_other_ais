@@ -266,20 +266,29 @@ internal sealed class CodexCoderVendor : ICoderVendor
     public void CollectLaunch(BoundaryJob job, ProcessRequest original, ProcessRequest launched)
     {
         var output = original.Arguments.ToList().IndexOf("-o");
-        if (output < 0 || output + 1 >= original.Arguments.Count || RealPath.Lstat(ReportFile(job)).Kind != EntryKind.File || new FileInfo(ReportFile(job)).Length > MostReportBytes)
+        if (output < 0 || output + 1 >= original.Arguments.Count)
+        {
+            return;
+        }
+
+        // The report file lies in the folder the unit can write: read by the one road for such entries (no wait, no link, a regular file, a limit — pass 8, M19, S55). One that is not a regular file is no answer here; the turn check (HostReadEntries) ends the job.
+        if (UnitWrittenFile.Read(ReportFile(job), (int)MostReportBytes) is not FileReadResult.Content report)
         {
             return;
         }
 
         try
         {
-            File.Copy(ReportFile(job), original.Arguments[output + 1], overwrite: true);
+            File.WriteAllBytes(original.Arguments[output + 1], report.Bytes);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             // The executor finds no answer and says so; the copy is the vendor's own words and a missing one is a turn without a report.
         }
     }
+
+    /// <summary>The sign-in copy and the report file: written by a unit, read by the host after every turn (pass 8, M19).</summary>
+    public IReadOnlyList<(string Path, long MaxBytes)> HostReadEntries(BoundaryJob job) => [(Home(job).SignInFile, UnitWrittenFile.MostCopyBytes), (ReportFile(job), MostReportBytes)];
 
     private static CoderLaunchPrepared Refused(ProcessRequest request, string problem) => new(request, problem);
 

@@ -164,7 +164,8 @@ internal static class SignInCopy
     {
         try
         {
-            if (JsonNode.Parse(File.ReadAllBytes(copyFile)) is not JsonObject root)
+            // The copy lies in a folder the unit can write: it is read by the one road for such entries (no wait, no link, a regular file, a limit, a time bound — pass 8, M19). What it cannot read gives no tokens; the turn check says why the job ends.
+            if (UnitWrittenFile.Read(copyFile, UnitWrittenFile.MostCopyBytes) is not Files.FileReadResult.Content content || JsonNode.Parse(content.Bytes) is not JsonObject root)
             {
                 return [];
             }

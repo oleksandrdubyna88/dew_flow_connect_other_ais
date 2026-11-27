@@ -51,6 +51,15 @@ internal static class AgyCoder
             fifo.WaitForExit();
         }
 
+        if (steer("AGY_FIFO_SIGNIN") == "1")
+        {
+            // The same, for the sign-in copy in the unit's home: a FIFO at its name.
+            var copy = Path.Combine(home, ".gemini", "antigravity-cli", "antigravity-oauth-token");
+            File.Delete(copy);
+            using var signInFifo = Process.Start(new ProcessStartInfo("/usr/bin/mkfifo", [copy]) { UseShellExecute = false })!;
+            signInFifo.WaitForExit();
+        }
+
         foreach (var call in JsonNode.Parse(toolsJson)!.AsArray().OfType<JsonObject>())
         {
             step += 2;

@@ -59,6 +59,9 @@ internal sealed class AgyCoderVendor(HookHandler? handler = null) : ICoderVendor
     /// <summary>Without the job's records no turn can be tied to the guard: the check fails closed.</summary>
     public CoderTurnVerdict CheckTurn(ProcessResult process, string expectedSession) => AgyTurnCheck.Check(process, expectedSession, records: null);
 
+    /// <summary>The sign-in copy, in the home the unit can write: the host reads it after every turn, so it must still be a plain file (pass 8, M19).</summary>
+    public IReadOnlyList<(string Path, long MaxBytes)> HostReadEntries(BoundaryJob job) => [(AgyCoderUnit.SignInFile(job), Files.UnitWrittenFile.MostCopyBytes)];
+
     public CoderTurnVerdict CheckTurn(ProcessResult process, string expectedSession, BoundaryJob job)
     {
         var unreadable = false;
@@ -138,52 +141,19 @@ internal sealed class AgyCoderVendor(HookHandler? handler = null) : ICoderVendor
 }
 
 /// <summary>The guard's records file of a job: read for the turn check, put away before each launch.</summary>
-internal static partial class AgyGuardRecords
+internal static class AgyGuardRecords
 {
     /// <summary>
-    /// The text of the records, or empty when there is no file (no tool was asked), or null when it could not be read — and it is not read when the entry is anything but a regular file (pass 7, M18): the file lies in a folder the unit can write, and the open of a FIFO with no writer
-    /// does not return. The open itself cannot wait (<c>O_NONBLOCK</c>), and what it opened must be a seekable file.
+    /// The text of the records, or empty when there is no file (no tool was asked), or null when it could not be read — and it is not read when the entry is anything but a regular file within a limit (pass 7, M18; pass 8, S59, S55): the file lies in a folder the unit can write. One road for that:
+    /// <see cref="Files.UnitWrittenFile.Read"/>.
     /// </summary>
-    public static string? Read(string file)
-    {
-        try
+    public static string? Read(string file) =>
+        Files.UnitWrittenFile.Read(file, Files.UnitWrittenFile.MostRecordsBytes) switch
         {
-            return Files.RealPath.Lstat(file).Kind switch
-            {
-                Files.EntryKind.Missing => string.Empty,
-                Files.EntryKind.File => ReadRegular(file),
-                _ => null,
-            };
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            return null;
-        }
-    }
-
-    private const int OpenReadOnlyNonBlocking = 0x800 | 0x80000; // O_RDONLY | O_NONBLOCK, O_CLOEXEC (Linux: the same value on x86-64 and arm64)
-
-    private static string? ReadRegular(string file)
-    {
-        if (!OperatingSystem.IsLinux())
-        {
-            return File.ReadAllText(file);
-        }
-
-        var descriptor = Open(file, OpenReadOnlyNonBlocking);
-        if (descriptor < 0)
-        {
-            return null;
-        }
-
-        using var handle = new Microsoft.Win32.SafeHandles.SafeFileHandle(descriptor, ownsHandle: true);
-        using var stream = new FileStream(handle, FileAccess.Read, bufferSize: 1, isAsync: false);
-
-        return stream.CanSeek ? new StreamReader(stream).ReadToEnd() : null;
-    }
-
-    [System.Runtime.InteropServices.LibraryImport("libc", EntryPoint = "open", StringMarshalling = System.Runtime.InteropServices.StringMarshalling.Utf8, SetLastError = true)]
-    private static partial int Open(string path, int flags);
+            Files.FileReadResult.Missing => string.Empty,
+            Files.FileReadResult.Content content => System.Text.Encoding.UTF8.GetString(content.Bytes),
+            _ => null,
+        };
 
     /// <summary>Moves the records file to a name beside it (the earlier records stay for a person to read, under the job's folder); a sentence when that cannot be done.</summary>
     public static string PutAway(string file)

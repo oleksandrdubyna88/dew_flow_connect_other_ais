@@ -255,6 +255,19 @@ if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor" || minimal is
         return 65;
     }
 
+    // A command of the model in the unit (model map `homeFifos`, a JSON array of paths below $HOME): a FIFO is made at each name — what a host read that opens with a plain open would wait on for ever.
+    if (steering.Get("HOME_FIFOS") is { Length: > 0 } homeFifos && Environment.GetEnvironmentVariable("HOME") is { Length: > 0 } fifoHome)
+    {
+        foreach (var relative in System.Text.Json.JsonSerializer.Deserialize<string[]>(homeFifos) ?? [])
+        {
+            var at = Path.Combine(fifoHome, relative);
+            Directory.CreateDirectory(Path.GetDirectoryName(at)!);
+            File.Delete(at);
+            using var fifo = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("/usr/bin/mkfifo", [at]) { UseShellExecute = false })!;
+            fifo.WaitForExit();
+        }
+    }
+
     // A coder that tries to write where it must not (model map `tryWriteFiles`): absolute paths, each attempted; a refusal is a line on stderr and the answer still follows.
     if (steering.Get("TRY_WRITE_FILES") is { Length: > 0 } tryWriteFiles)
     {
@@ -299,7 +312,17 @@ if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor" || minimal is
     if (outIndex >= 0 && outIndex + 1 < args.Length && Path.IsPathRooted(args[outIndex + 1]) &&
         steering.Get("OUTFILE_TEXT") is { Length: > 0 } fileText)
     {
-        File.WriteAllText(args[outIndex + 1], Placeholders.Fill(fileText, prompt.Text));
+        if (steering.Get("OUTFILE_FIFO") == "1")
+        {
+            // The report file of the launch is a FIFO, not a file (a command of the model in the unit).
+            File.Delete(args[outIndex + 1]);
+            using var report = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("/usr/bin/mkfifo", [args[outIndex + 1]]) { UseShellExecute = false })!;
+            report.WaitForExit();
+        }
+        else
+        {
+            File.WriteAllText(args[outIndex + 1], Placeholders.Fill(fileText, prompt.Text));
+        }
     }
 
     if (steering.Get("STDOUT") is { Length: > 0 } stdoutText)

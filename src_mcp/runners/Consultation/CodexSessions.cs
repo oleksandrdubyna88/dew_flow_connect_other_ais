@@ -22,10 +22,16 @@ internal static class CodexSessions
             case EntryKind.Missing:
                 return string.Empty;
             case EntryKind.Directory:
-                // The record of a child is never deleted unread (pass 6, M16): an agent call in an earlier turn's rollout refuses the launch and keeps the folder, whatever stop that turn came to.
-                if (CodexTurnCheck.HoldsAnAgentCall(sessions))
+                // The record of a child is never deleted unread (pass 6, M16): an agent call in an earlier turn's rollout refuses the launch and keeps the folder, whatever stop that turn came to. An entry in it that is not what the CLI writes refuses it too (pass 8, M19).
+                var inspected = CodexTurnCheck.InspectSessions(sessions);
+                if (inspected.Holds)
                 {
                     return "a rollout file of an earlier turn in the sessions of the job's CODEX_HOME holds an agent call (collaboration.*), so the folder was kept and the codex coder was not launched (CX-T5)";
+                }
+
+                if (inspected.Problem.Length > 0)
+                {
+                    return $"{inspected.Problem}, so the folder was kept and the codex coder was not launched (CX-T5)";
                 }
 
                 try

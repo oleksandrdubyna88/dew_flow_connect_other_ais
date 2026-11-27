@@ -139,6 +139,12 @@ internal interface ICoderVendor
     /// </summary>
     CoderTurnVerdict CheckTurn(ProcessResult process, string expectedSession, BoundaryJob job) => CheckTurn(process, expectedSession);
 
+    /// <summary>
+    /// The entries — with the most bytes each may have — in the folders that this vendor's UNIT can write and that the HOST reads after a turn: its sign-in copy and, for codex, the report file (pass 8, M19, S55). After every turn the check asks each is a plain file (or not there): a FIFO, a link or a file over the limit means a command of the model
+    /// replaced it, and the job ends <c>coder-boundary</c>. The default is none (claude's sign-in is a bind of the real file, and it has no file of this kind).
+    /// </summary>
+    IReadOnlyList<(string Path, long MaxBytes)> HostReadEntries(BoundaryJob job) => [];
+
     /// <summary>The longest ONE turn of this vendor may be given, or null for no cap of its own (agy: its access token lives about an hour and a launch needs it to outlast the unit and a margin, so a turn is capped to fit under it). The launcher applies it to the deadline of every turn, fix turns too.</summary>
     TimeSpan? TurnDeadline => null;
 

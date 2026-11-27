@@ -198,7 +198,8 @@ internal static class CodexTurnCheck
         var listed = Listed(Path.Combine(CodexCoderVendor.CodexHome(job), "sessions"));
         if (listed.Problem.Length > 0)
         {
-            return whole ? listed.Problem : string.Empty;
+            // An entry that is not what the CLI writes (a link, a node of another kind) proves a command of the model ran, on a cut turn too (pass 8, M19).
+            return whole || listed.Odd ? listed.Problem : string.Empty;
         }
 
         var rollouts = listed.Files.Where(file => Path.GetFileName(file).StartsWith("rollout-", StringComparison.Ordinal) && file.EndsWith(".jsonl", StringComparison.Ordinal)).ToList();
@@ -221,6 +222,7 @@ internal static class CodexTurnCheck
 
         return read.FirstOrDefault(result => result == Agent) is { } agent
             ? "the rollout of the codex turn holds a call named collaboration.*, an agent call (CX-T5)"
+            : read.Any(result => result == NotRegular) ? "a rollout file of the codex turn is not a regular file within its limit (a FIFO, a link or a file that is too big), so a command ran in the unit (CX-T5)"
             : whole && read.Any(result => result == Unreadable) ? "a rollout file of the codex turn cannot be read, so the turn cannot be checked (CX-T5)" : string.Empty;
     }
 
@@ -228,27 +230,25 @@ internal static class CodexTurnCheck
 
     private const string Unreadable = "unreadable";
 
+    private const string NotRegular = "not-regular";
+
     private const string Clean = "clean";
 
     /// <summary>The files below a sessions folder, or the sentence that says they cannot be listed. The entry is looked at WITHOUT following it: a link, or any entry that is not a folder, is not a real sessions folder; a folder that is not there is no file.</summary>
-    private static (IReadOnlyList<string> Files, string Problem) Listed(string sessions)
+    private static (IReadOnlyList<string> Files, string Problem, bool Odd) Listed(string sessions)
     {
         switch (Runners.Files.RealPath.Lstat(sessions).Kind)
         {
             case Runners.Files.EntryKind.Missing:
-                return ([], string.Empty);
+                return ([], string.Empty, false);
             case Runners.Files.EntryKind.Directory:
-                try
-                {
-                    return ([.. Directory.EnumerateFiles(sessions, "*", SearchOption.AllDirectories)], string.Empty);
-                }
-                catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-                {
-                    return ([], "the rollout files of the codex turn cannot be listed (CX-T5)");
-                }
+                // One walk for every folder a unit can write: no link followed, nothing opened, a limit on entries and depth, a time bound (pass 8, S55).
+                var walked = Runners.Files.UnitWrittenFile.Walk(sessions);
+
+                return walked.Problem.Length == 0 ? (walked.Files, string.Empty, false) : ([], $"the rollout files of the codex turn cannot be listed: {walked.Problem} (CX-T5)", walked.Odd);
 
             default:
-                return ([], "the sessions entry of the job's CODEX_HOME is not a real folder, so the turn cannot be checked (CX-T5)");
+                return ([], "the sessions entry of the job's CODEX_HOME is not a real folder, so the turn cannot be checked (CX-T5)", true);
         }
     }
 
@@ -256,22 +256,44 @@ internal static class CodexTurnCheck
     private static string AgentCallIn(string file)
     {
         var unreadable = false;
+        var (stream, failure) = Runners.Files.RegularFiles.OpenNoFollow(file);
+        if (stream is null)
+        {
+            // A FIFO, a link or a node of another kind never waits and is never followed: it is a file a command made (pass 8, M19, S55).
+            return failure is Runners.Files.FileReadResult.Unreadable { Reason: var reason } && (reason.Contains(Runners.Files.RegularFiles.NotRegular, StringComparison.Ordinal) || reason.Contains("symbolic link", StringComparison.Ordinal)) ? NotRegular : Unreadable;
+        }
+
         try
         {
-            foreach (var line in File.ReadLines(file).Where(line => line.Length > 0))
+            using (stream)
             {
-                try
+                if (stream.Length > Runners.Files.UnitWrittenFile.MostRolloutBytes)
                 {
-                    using var document = JsonDocument.Parse(line);
-                    if (document.RootElement.TryGetProperty("payload", out var payload) && payload.ValueKind == JsonValueKind.Object && IsAgentCall(payload))
-                    {
-                        return Agent;
-                    }
+                    return NotRegular;
                 }
-                catch (JsonException)
+
+                using var reader = new StreamReader(stream);
+                string? line;
+                while ((line = reader.ReadLine()) is not null)
                 {
-                    // One line that cannot be read does not end the search of the file: a call after it is still found.
-                    unreadable = true;
+                    if (line.Length == 0)
+                    {
+                        continue;
+                    }
+
+                    try
+                    {
+                        using var document = JsonDocument.Parse(line);
+                        if (document.RootElement.TryGetProperty("payload", out var payload) && payload.ValueKind == JsonValueKind.Object && IsAgentCall(payload))
+                        {
+                            return Agent;
+                        }
+                    }
+                    catch (JsonException)
+                    {
+                        // One line that cannot be read does not end the search of the file: a call after it is still found.
+                        unreadable = true;
+                    }
                 }
             }
         }
@@ -294,12 +316,25 @@ internal static class CodexTurnCheck
     /// Whether any rollout file below <paramref name="sessions"/> holds an agent call, read leniently (a line that cannot be read is skipped, a missing folder has none): what a FRESH launch asks before it removes the folder, so the one record of a child is never deleted unread (pass 6, M16). It looks at the entry
     /// without following a link.
     /// </summary>
-    internal static bool HoldsAnAgentCall(string sessions)
-    {
-        var listed = Listed(sessions);
+    internal static bool HoldsAnAgentCall(string sessions) => InspectSessions(sessions).Holds;
 
-        return listed.Problem.Length == 0 && listed.Files.Where(file => Path.GetFileName(file).StartsWith("rollout-", StringComparison.Ordinal)).Any(file => AgentCallIn(file) == Agent);
-    }
+    /// <summary>
+    /// What a FRESH launch must know before it removes the <c>sessions</c> folder: whether a rollout holds an agent call, and the sentence that says an entry in it is not what the CLI writes (a link, a FIFO, a file past its limit, a walk too wide) or that the look did not finish — empty when all is as it should be.
+    /// The walk and every read go through the one road for folders a unit can write, and the whole look is bounded in time (pass 8, M19, S55).
+    /// </summary>
+    internal static (bool Holds, string Problem) InspectSessions(string sessions) =>
+        Runners.Files.UnitWrittenFile.Bounded(() =>
+        {
+            var listed = Listed(sessions);
+            if (listed.Problem.Length > 0)
+            {
+                return (false, listed.Odd ? listed.Problem : string.Empty);
+            }
+
+            var read = listed.Files.Where(file => Path.GetFileName(file).StartsWith("rollout-", StringComparison.Ordinal)).Select(AgentCallIn).ToList();
+
+            return (read.Contains(Agent), read.Contains(NotRegular) ? "a rollout file in the sessions of the job's CODEX_HOME is not a regular file within its limit (a FIFO, a link or a file that is too big)" : string.Empty);
+        }, (false, "the look at the sessions of the job's CODEX_HOME did not finish in time"));
 
     private static string Text(JsonElement element, string name) =>
         element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() ?? string.Empty : string.Empty;
