@@ -19,13 +19,16 @@ public static class PerUserFolderForTheRun
     /// <summary>The variable .NET reads first for the application-data folder on Unix.</summary>
     public const string Variable = "XDG_DATA_HOME";
 
+    /// <summary>True when the run made its own per-user folder because the machine gave none: the few tests that assert the machine's own folder lies OUTSIDE the temp folder skip then, saying so.</summary>
+    public static bool MadeByTheRun { get; private set; }
+
     [ModuleInitializer]
     internal static void Start()
     {
         try
         {
             RunTemp.Start();
-            _ = Ensure(RunTemp.Folder, OperatingSystem.IsWindows(), () => Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), static (name, value) => Environment.SetEnvironmentVariable(name, value));
+            MadeByTheRun = Ensure(RunTemp.Folder, OperatingSystem.IsWindows(), () => Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), static (name, value) => Environment.SetEnvironmentVariable(name, value)) is not null;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException)
         {

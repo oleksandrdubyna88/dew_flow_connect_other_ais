@@ -187,6 +187,7 @@ public sealed class ACoderWorktreeIsMadeAtTheBaseShaTests
     [Fact]
     public void TheDefaultRoot_IsMachineLocal_OutsideTheCheckoutAndTheTempFolder_AndItsNameIsShort()
     {
+        Assert.SkipWhen(PerUserFolderForTheRun.MadeByTheRun, "this run has no per-user data folder of the machine (a check unit: an empty HOME), so it made its own inside the run folder, which is under the temp folder");
         var root = CoderWorktree.Default;
 
         Path.IsPathFullyQualified(root).Should().BeTrue();

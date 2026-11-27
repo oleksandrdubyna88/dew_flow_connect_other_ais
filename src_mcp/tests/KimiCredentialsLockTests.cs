@@ -229,6 +229,7 @@ public sealed class KimiCredentialsLockTests : IDisposable
     [Fact]
     public async Task TheDefaultRoot_IsOutsideTheHomesFoldersAndTemp_AndItsWaitIsCutByTheToken()
     {
+        Assert.SkipWhen(PerUserFolderForTheRun.MadeByTheRun, "this run has no per-user data folder of the machine (a check unit: an empty HOME), so it made its own inside the run folder, which is under the temp folder");
         using var standIn = WindowsStandIn.Begin();
         var normalised = KimiCredentialsLock.Root.Replace('\\', '/');
         normalised.Should().EndWith("/coai-mcp/kimi-locks");

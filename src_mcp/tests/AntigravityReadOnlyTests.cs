@@ -151,6 +151,7 @@ public sealed class AntigravityReadOnlyTests : IDisposable
     [Fact]
     public void TheFolder_IsThePersonsOwn_NeverTheSharedTemporaryFolder()
     {
+        Assert.SkipWhen(PerUserFolderForTheRun.MadeByTheRun, "this run has no per-user data folder of the machine (a check unit: an empty HOME), so it made its own inside the run folder, which is under the temp folder");
         // Security review of 0a32211c: on Linux /tmp is shared by every user, so another account could plant the
         // folder — and its hook script, which agy runs as this user — before coai wrote it.
         AntigravityReadOnly.DefaultBase.Should().Be(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "coai-agy"));
