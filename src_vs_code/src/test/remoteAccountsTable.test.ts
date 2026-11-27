@@ -4,7 +4,7 @@ import test from 'node:test';
 import { MANAGER_WORDS } from '../remoteAccountsReply';
 import type { ManagerWord } from '../remoteAccountsReply';
 import { INSTALL_JQ } from '../remoteAccountsRows';
-import { NO_TERMINAL_SAID, WSL_ELSEWHERE_SAID, WSL_HEADING, WSL_LOGIN_SAID, blockOf, changedBlocks, tableModel } from '../remoteAccountsTable';
+import { NO_TERMINAL_SAID, USAGE_READING_NOW_SAID, WSL_ELSEWHERE_SAID, WSL_HEADING, WSL_LOGIN_SAID, blockOf, changedBlocks, tableModel } from '../remoteAccountsTable';
 import type { Block, TableModel } from '../remoteAccountsTable';
 import { HOSTS_SAID } from '../remoteHostsSaid';
 import {
@@ -251,6 +251,26 @@ test('E2S2-T7: every reason spans the two cells with its own sentence, and no to
     }
   }
   assert.equal(blockFor(model, 'cred').rows.length, 3);
+});
+
+test('E2S2-T7b: while the round is at a place, its Claude row with no figures says the usage is being read now, not that it was not asked', () => {
+  const skipped = (email: string) => reading({ claude: claude({ email, usage: { state: 'skipped' } }) });
+  const memory = memoryOf(
+    ['here', seen(skipped('here@example.test'), 1)],
+    ['there', seen(skipped('there@example.test'), 1)],
+    ['missed', { ...seen(skipped('missed@example.test'), 1), usageMiss: { why: 'account-changed' } }],
+    ['wsl:Ubuntu/root', seen(skipped('root@example.test'), 1)],
+  );
+  const at = (host: string, hosts: readonly string[]) => tableModel(inputOf({ hosts, memory, windows: true, round: { kind: 'running', host, index: 1, total: hosts.length } }));
+  const model = at('here', ['here', 'there', 'missed']);
+
+  assert.equal(blockFor(model, 'here').rows[0]?.span, USAGE_READING_NOW_SAID);
+  assert.equal(blockFor(model, 'there').rows[0]?.span, 'Usage not read: it was not asked for in this round', 'a place the round is not at keeps the old sentence');
+  assert.equal(blockFor(at('missed', ['missed']), 'missed').rows[0]?.span, 'Usage not read: the account changed between the two reads', 'a known miss is said, not hidden');
+  const ended = tableModel(inputOf({ hosts: ['here'], memory, round: { kind: 'ended', endedMs: NOW, read: 1, asked: 1 } }));
+  assert.equal(blockFor(ended, 'here').rows[0]?.span, 'Usage not read: it was not asked for in this round', 'after the round the old sentence is back');
+  const wsl = at('wsl', ['wsl']);
+  assert.equal(blockOf(wsl, 'wsl:Ubuntu/root')?.rows[0]?.span, USAGE_READING_NOW_SAID, 'a WSL place is read in the turn of the scope host wsl');
 });
 
 // ───────────────── T8 ─────────────────
