@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 import type { CoaiExports } from '../../extension';
 import type { RemoteRun } from '../../remoteSsh';
 import { until, activated } from './hostHelpers';
+import { closedAll, committedAndHeld, listRowOf, untilAsync } from './hostStoreHelpers';
 
 /**
  * The permission, the per-host "no" and the picked id of the BOUND road, in a real editor (S3-H1 of the E2 stories document, the chat reads the
@@ -53,7 +54,7 @@ export async function theConsentOfAHostIsKeptInTheRealGlobalState(): Promise<voi
   });
   let questions = 0;
   door.replaceQuestion(async () => { questions += 1; return false; });
-  const before = await door.stored();
+  const before = await door.found();
   const terminal = vscode.window.createTerminal({ name: `Creds: ${HOST} / ${SESSION}` });
   try {
     terminal.show();
@@ -65,8 +66,7 @@ export async function theConsentOfAHostIsKeptInTheRealGlobalState(): Promise<voi
     assert.equal(off.kind, 'refused', 'a press on a host answered "no" did not refuse');
     assert.ok(off.kind === 'refused' && off.refusal.includes('is turned off'), `the refusal is not the "turned off" sentence: ${JSON.stringify(off)}`);
 
-    await door.commit({ kind: 'forget', host: HOST });
-    assert.ok(!(await door.standings()).some((row) => row.host === HOST && row.answer === 'no'), 'Read this host again did not lift the "no" in the list read back from globalState');
+    await committedAndHeld(door, { kind: 'forget', host: HOST }, (rows) => !rows.some((row) => row.host === HOST && row.answer === 'no'), 'Read this host again did not lift the "no" in the list read back from globalState');
     const none = await door.read(terminal, 'question');
     assert.equal(calls.length, 0, 'ssh was spawned with no permission');
     assert.ok(none.kind === 'refused' && none.refusal.includes('no permission'), `a press with no permission did not refuse with W15's sentence: ${JSON.stringify(none)}`);
@@ -90,8 +90,8 @@ export async function theConsentOfAHostIsKeptInTheRealGlobalState(): Promise<voi
   } finally {
     door.replaceRun(undefined);
     door.replaceQuestion(undefined);
+    await closedAll([terminal]);
     await door.restore(before);
-    terminal.dispose();
   }
 }
 
@@ -111,7 +111,7 @@ async function doorOf(): Promise<NonNullable<CoaiExports['remoteSessions']>> {
  */
 export async function theHostsStoreWritesTheListAndTheRefusalsFile(): Promise<void> {
   const door = await doorOf();
-  const before = await door.stored();
+  const before = await door.found();
   try {
     const first = await door.may('round', 'h1');
     assert.equal(first, 'no-permission', `a host with no permission was not left unread: ${JSON.stringify(first)}`);
@@ -119,7 +119,7 @@ export async function theHostsStoreWritesTheListAndTheRefusalsFile(): Promise<vo
     await door.commit({ kind: 'person', host: 'h1', answer: 'no' });
     assert.equal(await door.may('round', 'h1'), 'no', 'a "no" did not refuse the host');
     const stored = await door.stored();
-    assert.equal((stored.list as { host: string; how?: string }[]).find((row) => row.host === 'h1')?.how, undefined, 'the person\'s row carries `how`');
+    assert.equal((await listRowOf(door, 'h1')).how, undefined, 'the person\'s row carries `how`');
     assert.ok(stored.file !== undefined && (JSON.parse(stored.file) as { refused: { host: string }[] }).refused.some((one) => one.host === 'h1'), 'the refusals file on the real disk does not hold the host');
     await door.stopRound();
     assert.equal(await door.roundStop(), 'stopped');
@@ -139,7 +139,7 @@ export async function theHostsStoreWritesTheListAndTheRefusalsFile(): Promise<vo
  */
 export async function thePermissionIsGivenAndWithdrawnThroughTheRealStores(): Promise<void> {
   const door = await doorOf();
-  const before = await door.stored();
+  const before = await door.found();
   const terminal = vscode.window.createTerminal({ name: `Creds: ${HOST} / ${SESSION}` });
   door.replaceRun(async () => { assert.fail('a host was read without the permission'); });
   door.replaceQuestion(async () => false);
@@ -162,7 +162,8 @@ export async function thePermissionIsGivenAndWithdrawnThroughTheRealStores(): Pr
     assert.ok(files.length >= 1, `a withdrawal made no file: ${JSON.stringify(files)}`);
     const stamp = Math.max(...files.map((one) => Number(/^withdrawn-(\d+)\.json$/u.exec(one)?.[1])));
     assert.ok(Number.isInteger(stamp) && stamp >= 1, `a withdrawal file is not named by a stamp: ${JSON.stringify(files)}`);
-    assert.equal(((await door.stored()).row as { withdrawnStamp?: number } | undefined)?.withdrawnStamp, stamp, 'the copy in the state row is not the stamp of the file');
+    // The row is a copy in the real `globalState`: the editor may take its write away, and a read of the door writes the copy out again when it is behind the folder.
+    await untilAsync(async () => ((await door.stored()).row as { withdrawnStamp?: number } | undefined)?.withdrawnStamp === stamp, 'the copy in the state row is not the stamp of the file', () => door.permission());
     assert.equal(await door.may('session', HOST), 'no-permission');
     assert.equal(await door.may('round', HOST), 'no-permission');
     assert.equal((await door.allow()).kind, 'given');
@@ -172,7 +173,7 @@ export async function thePermissionIsGivenAndWithdrawnThroughTheRealStores(): Pr
   } finally {
     door.replaceRun(undefined);
     door.replaceQuestion(undefined);
+    await closedAll([terminal]);
     await door.restore(before);
-    terminal.dispose();
   }
 }
