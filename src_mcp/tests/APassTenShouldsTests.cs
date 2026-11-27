@@ -17,8 +17,6 @@ public sealed class APassTenShouldsTests
 {
     private const string ToolchainName = ".coai/toolchain.yaml";
 
-    private static string FifoMaker => "if [ ! -e .coai/toolchain.yaml ]; then /usr/bin/mkfifo .coai/toolchain.yaml; fi";
-
     // ---------- S26, R-S7, S54: the refresh unit ----------
 
     [Fact]
@@ -77,11 +75,11 @@ public sealed class APassTenShouldsTests
     [Fact]
     public async Task S74_ACheckThatMakesAFifoInARoundThatPasses_EndsTheJobNotGreen_ThePostRoundLookIsTheLineThatStopsIt()
     {
-        var toolchain = ToolchainFixture.Shell($"{FifoMaker}; echo built", "echo tested");
+        // E4 joined: the head's own toolchain file runs (read from the commit), so it is NOT deleted here — a deleted file would run nothing. The check replaces the tracked file by a FIFO.
+        var toolchain = ToolchainFixture.Shell("rm -f .coai/toolchain.yaml && /usr/bin/mkfifo .coai/toolchain.yaml; echo built", "echo tested");
         await using var world = await CodexRigWorld.CreateAsync(toolchain);
         var rig = world.Rig;
         var turn = (Dictionary<string, object?>)Turn(Writes(CoderRig.Green), Report());
-        turn["cwdDelete"] = new[] { ToolchainName };
         rig.SaysRaw("terra", turn);
         var job = rig.NewJob(route: ["codex/terra"]);
 
