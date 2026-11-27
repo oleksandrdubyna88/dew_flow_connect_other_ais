@@ -911,6 +911,15 @@ out item 5 of S4, which the revision had added, and the parts of d2 and d4 that 
 2.1 wrote — a full name of the exact shape that the list does not hold ends the entry `model-unavailable` — is kept: it
 was in the plan the owner's entry made, and no decision names it. If 13 a means that row too, a full name is never
 looked up at all, and the CLI's own refusal answers every full name; that is one more edit of Q2, S4 item 7 and d4.
+**The lead accepted this reading on 2026-11-27:** the row of Q2 for a full name of the exact shape stays.
+
+**The lead's decision on section P** (S2, point 2), 2026-11-27: its two contract changes are recorded as a deviation in
+the ledger and are not entries. Counting them would only move a stop that has already happened.
+
+**The owner approved the revised plan on 2026-11-27.** The owner's word was "approve", in answer to the lead's summary of
+the plan at commit `e23bd404`; the planner has it from the lead. Epoch 3 of the ledger is open, `by owner`, and epoch 2
+is closed. The stop of section R is over: what R3 lists as waiting may go on. Addendum 4 of the judgement is still to
+come; it gates the commit of the tool rows (s2 t5 d9), not the rest of the work.
 
 **Scenarios and tasks after this section.** V1 to V36. 8 stories, 45 tasks; none added, none removed.
 
