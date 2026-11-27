@@ -3,7 +3,7 @@
 > Status: **plan, nothing built, 2026-11-22.** Branch `feat/v2-plan`. Built with the v2 work method itself: a feature
 > folder → epochs (≤ 5 epics each, MVP first) → epics → stories → tasks, each node with a YAML file. Stories and tasks
 > are written for an epic when it starts (now: epoch 1). The split was re-decided by Fable on 2026-11-22: 5 epochs, MVP epics with measurable pass criteria, 10 cornerstone stories (feature.yaml `cornerstones`; 12 since 2026-11-25, when the E3 plan gate added E3 s3 and s4).
-> **Stopped for re-review, 2026-11-27** (the ledger below, entry 2.2): the plan is stopped for re-review after the second change of ledger epoch 2. No new code on any epic of this plan, and no merge of its work, until epoch 3 of the ledger is open. The revision of the whole plan is written (the record "Re-review for epoch 3" below; sections S and T of the E3 SPEC_CHANGES) and its plan round said proceed; the owner's approval is not given yet.
+> **Ledger epoch 3 is open since 2026-11-27** (the ledger below): the second change of ledger epoch 2 halted the plan on that day; the whole plan was revised (the record "Re-review for epoch 3" below; sections S and T of the E3 SPEC_CHANGES), its plan round said proceed, and the owner approved the revised plan. The work goes on. Epoch 3 has no change yet: one change is allowed, the second one halts the plan again.
 
 ## Plan changes
 
@@ -83,7 +83,7 @@ Narrowed: yes — the release pin, the agy program store and the refusal of a he
   and 1.7, in that order. By the lead's account the owner ordered each of them in the lead's conversation, and the owner
   accepted the whole plan afterwards. The judge sorted their content with the rest.)
 
-> Epoch 2 · approved 2026-11-26 · by owner · state: stopped
+> Epoch 2 · approved 2026-11-26 · by owner · state: closed
 
 - 2.1 · 2026-11-27 · owner · contract, approach, dod, epics, stories, build-order — a codex name with no version (`terra`, `astra`) is the newest model of its family that the installed CLI lists, resolved when a job reaches the entry, so a new model needs no hand edit; a name that cannot be used ends the entry with the new stop word `model-unavailable`, which fails over, and not `coder-boundary`; the tool list of a codex coder passes when it holds no tool outside the known set, in place of exactly the 11 measured names (epoch 3 E3, SPEC_CHANGES section Q; new task s2 t5; a new doneWhen line of epoch 4 e4-local-pages)
   (The owner's words of 2026-11-27, as the lead gave them, in translation: "Default: the latest terra. When 6.2 or 7 comes
@@ -188,7 +188,9 @@ Narrowed: yes — the tool list of a codex coder no longer has to be the exact 1
   and they were not written as entries on their day: after a turn a host-read entry that is not a plain file, and a turn
   check that takes more than 30 seconds, end a job coder-boundary; and the stop word checks-changed-tree got a second
   meaning. They are in section P of the same file. With them counted, the stop was due at entry 2.1. They are part of the
-  baseline of epoch 3. Whether they become entries is the lead's decision.)
+  baseline of epoch 3. Whether they become entries is the lead's decision. The lead decided on 2026-11-27: they are
+  recorded as this deviation and are not entries, because counting them would only move a stop that has already
+  happened.)
   (Carried into epoch 3, not cut, from the judge's list and from the lead. The tool text at src_mcp/src/Tools.cs:583
   still says that codex and agy are not launchable: one line, E3 s7 t4 d3. The turn of an agy coder is still cut at 45
   minutes in the code: E3 s6 t3 d3 now names 30. The default codex name terra cannot be launched until E3 s2 t5 is built.
@@ -210,8 +212,16 @@ Narrowed: yes — the tool list of a codex coder no longer has to be the exact 1
   the look-up of every full codex name in the live list, and the skip of a second launch of the same model. What the
   round and the review changed is the baseline of epoch 3 and is not an entry, by the rule; the entries 1.9 to 1.14 of
   epoch 1 were written for such findings by the lead's order, and the same order would make entries of these.)
-  (Not done when this was written: the owner's approval, which a narrower plan needs. The line of epoch 3 is not written,
-  and the plan stays stopped. After the approval that line says by owner, and epoch 2 becomes closed.)
+  (The lead's decision of 2026-11-27 on the planner's reading of item 13 a of that review: accepted. A full codex name
+  with no family is not looked up in the live list. A full name of the exact shape that the list does not hold still
+  ends its entry model-unavailable, as entry 2.1 wrote it.)
+  (The owner approved the revised plan on 2026-11-27. The owner's word was "approve", in answer to the lead's summary of
+  the plan at commit e23bd404, which holds the bundle that the plan round read and the changes after that round. The
+  planner has this from the lead. The plan got narrower, so the line of epoch 3 says by owner. Epoch 2 is closed with its
+  two entries. Epoch 3 starts with no change. The bundle of e23bd404 is what the approval rests on; it is not made again.
+  Still open and no condition of the approval: addendum 4 of the judgement, which gates one commit of E3 s2 t5.)
+
+> Epoch 3 · approved 2026-11-27 · by owner · state: open
 
 ## Goal
 

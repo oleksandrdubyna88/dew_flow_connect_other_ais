@@ -1,7 +1,8 @@
 # Spec — epoch 3, E3 "Roles complete: scout, important/judge, codex + agy rows, review_plan(featureFolder)"
 
-> Status: **stopped for re-review, 2026-11-27. This is the REVISED plan. Its plan round said `proceed` (coai session
-> `da911775`); the owner has not approved it yet** (ledger entries 2.1 and 2.2 of [PLAN.md](../../PLAN.md)).
+> Status: **the revised plan of the re-review of 2026-11-27. Its plan round said `proceed` (coai session `da911775`),
+> and the owner approved it on 2026-11-27: epoch 3 of the ledger is open** (entries 2.1 and 2.2 of
+> [PLAN.md](../../PLAN.md) closed epoch 2).
 > [SPEC_CHANGES.md](SPEC_CHANGES.md) holds sections J to T — Q and R are the two entries, S the revision, T the plan
 > round and the lead's review — and the records moved out of this file: a spec file may hold 64 KiB. By the git
 > history of this branch: s1 to s7 have their code, and the codex and the agy coder are launchable since 2026-11-27
