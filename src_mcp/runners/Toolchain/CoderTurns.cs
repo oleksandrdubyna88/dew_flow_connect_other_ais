@@ -87,6 +87,30 @@ public sealed class CoderTurns(CoderBoundary boundary, FilesystemInvariant invar
         return Classify(run, evidence);
     }
 
+    /// <summary>
+    /// A MODEL-FREE program of the vendor in the unit of its launch (epoch 3 E3 s2 t5: codex <c>debug models</c>, the live list of models, read when a job reaches an entry whose model has no version): the sign-in copy is made first (the list needs the sign-in), the unit is the launch's own
+    /// (<see cref="CoderBoundary.RunModelFreeAsync"/>), and what came of it is named as a launch's is — without the vendor's own files (no <c>config.toml</c> is written: no model is named yet) and without a snapshot of the main checkout (nothing of the job is written). The outcome is read by the same classifier as a launch.
+    /// </summary>
+    internal async Task<CoderTurnOutcome> RunModelFreeAsync(BoundaryJob job, ProcessRequest request, string part, ICoderVendor vendor, SignInJobs signIns, CancellationToken ct)
+    {
+        var bound = boundary.For(vendor);
+        if (WrongWorktree(bound.Vendor.WorkingDirectory(job), job, request) is { Length: > 0 } wrong)
+        {
+            return new CoderTurnOutcome.Refused(wrong, new BoundaryRecord(BoundaryRecord.UnitBoundary, [], "host", CoderBoundary.NetworkReason, []));
+        }
+
+        if (await bound.PrepareSignInAsync(job, request.Executable, request.Timeout + UnitControl.Backstop, signIns, DateTime.UtcNow, ct) is { Length: > 0 } unsigned)
+        {
+            return new CoderTurnOutcome.Refused(unsigned, new BoundaryRecord(BoundaryRecord.UnitBoundary, [], "host", CoderBoundary.NetworkReason, []));
+        }
+
+        var listed = await bound.RunModelFreeAsync(job, request, part, ct);
+
+        return listed.Run is { } run
+            ? Classify(run, CoderMainEvidence.None)
+            : new CoderTurnOutcome.Refused(listed.Refusal, new BoundaryRecord(BoundaryRecord.UnitBoundary, [], "host", CoderBoundary.NetworkReason, []));
+    }
+
     /// <summary>The sentence that says the launch does not stand where the vendor's unit starts (the job's worktree for claude; <see cref="ICoderVendor.WorkingDirectory"/>), or empty. The unit starts there whatever the request says, so a request for another folder is refused rather than quietly moved.</summary>
     private static string WrongWorktree(string expected, BoundaryJob job, ProcessRequest request)
     {

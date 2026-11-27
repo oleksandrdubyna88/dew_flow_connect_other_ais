@@ -455,7 +455,7 @@ public sealed class ACodexCoderFixTurnsTests
         var named = Regex.Matches(string.Join(' ', middle), "`([a-z_]+)`").Select(match => match.Groups[1].Value).Where(name => name.Contains('_')).Distinct().ToList();
 
         named.Should().NotBeEmpty();
-        named.Should().OnlyContain(name => CodexToolList.Measured.Contains(name) || name == "notes", "every tool the prompt names is in the measured list of CX-T1");
+        named.Should().OnlyContain(name => CodexToolList.Known.Contains(name) || name == "notes", "every tool the prompt names is in the known set of CX-T1");
         string.Join(' ', middle).Should().NotContain("no shell").And.NotContain("coai runs a command").And.NotContain("because coai runs the checks");
     }
 

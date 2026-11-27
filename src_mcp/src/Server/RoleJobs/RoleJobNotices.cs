@@ -74,6 +74,24 @@ internal static class RoleJobNotices
         Repo = job.Repo,
     };
 
+    /// <summary>
+    /// The preflight of a codex coder found a tool outside the known set (epoch 3 E3 s2 t5, SPEC_CHANGES Q3 item 5): the job, the vendor, the model as asked and as resolved, the installed CLI release and the names. <paramref name="names"/> is already what
+    /// <see cref="Runners.Consultation.CodexToolList.Shown"/> lets through: a name only when it is 1 to 64 safe characters, at most 5, then the count; any other name is said as a name that cannot be shown, with its length.
+    /// </summary>
+    public static ServerNotice CoderToolUnknown(RoleJobRecord job, string vendor, string asked, string resolved, string cliVersion, string names, DateTime nowUtc) => new()
+    {
+        Utc = ServerNotice.Iso(nowUtc),
+        Class = "failure",
+        Source = Source,
+        Code = ServerNoticeCodes.CoderToolUnknown,
+        Subject = job.JobId,
+        Title = $"Role job {job.JobId} ({job.Role}): the {vendor} coder was refused, its model has a tool coai does not know",
+        Detail = $"Vendor {vendor}; model as asked {asked}, as resolved {resolved}; installed CLI release {(cliVersion.Length > 0 ? cliVersion : "(not read)")}; tool names outside the known set of 11: {names}. The coder was not started: a tool nobody looked at could do more than the boundary was proven for.",
+        Cure = "Look at the tool; if it is harmless, add its name to the known set in one commit (CodexToolList.Known). Until then use another model for the coder.",
+        Role = job.Role,
+        Repo = job.Repo,
+    };
+
     /// <summary>A job that ended <c>failed</c>: its stop and its reason, the way <c>role_status</c> shows them.</summary>
     public static ServerNotice Failed(RoleJobRecord job, DateTime nowUtc) => new()
     {

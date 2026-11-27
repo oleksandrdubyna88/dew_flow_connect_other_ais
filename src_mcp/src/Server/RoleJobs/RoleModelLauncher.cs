@@ -133,6 +133,61 @@ internal sealed partial class RoleModelLauncher(Func<string, string?> settings, 
         return (await LaunchCoderAsync(runtime, invocation, pooled?.Secret, keyId, outputDir, (Vendors.Resolve(model.Vendor) as CoderVendorResolution.Launchable)?.Vendor ?? CoderVendors.Claude, ct)) with { CliVersion = ((ConsultantPreparation.Ready)prepared).CliVersion };
     }
 
+    /// <summary>
+    /// Reads the live list of models of the installed codex CLI (<c>codex debug models</c>: a network call, no model call; epoch 3 E3 s2 t5, SPEC_CHANGES Q1 item 2) with the SAME executable, home and environment as the launch that follows: the invocation is the one <see cref="LaunchAsync"/> would build for
+    /// <paramref name="model"/>, with its arguments replaced. A coder's list is read in a unit with the property list of the launch and the job's own <c>CODEX_HOME</c> (<see cref="CoderOsLayer.ModelFreeAsync"/>), never with the real home. It has a deadline and a size limit
+    /// (<see cref="CodexModelList"/>). The launch that comes back is read by the caller as any launch is, so a missing CLI, a lost sign-in and a spent quota keep their own words; no ledger line is made for it, because no model was called.
+    /// </summary>
+    public async Task<RoleLaunched> ListCodexModelsAsync(ModelRef model, string repoPath, string outputDir, CancellationToken ct)
+    {
+        var (runtime, _) = RuntimeOf(model.Vendor);
+        ICoderVendor? vendor = null;
+        if (Coder is not null && Vendors.Resolve(model.Vendor) is CoderVendorResolution.Refused unshipped)
+        {
+            return new RoleLaunched(null, new ConsultFailure.LaunchRefused(unshipped.Sentence), runtime, null, string.Empty);
+        }
+
+        if (Coder is not null && Vendors.Resolve(model.Vendor) is CoderVendorResolution.Launchable launchable)
+        {
+            runtime = launchable.Vendor.Runtime;
+            vendor = launchable.Vendor;
+        }
+
+        if (Coder is not null && Layer is null)
+        {
+            return new RoleLaunched(null, new ConsultFailure.LaunchRefused("a coder launch runs only inside the OS layer, and none was given; nothing was launched"), runtime, null, string.Empty);
+        }
+
+        var launcher = new ProcessLauncher(tracker);
+        var launch = new ConsultantLaunch(repoPath, string.Empty, string.Empty, outputDir, new ReviewerSettings(model.Vendor)
+        {
+            ExecutablePath = settings(CliKey(model.Vendor)) ?? string.Empty,
+            Model = model.Model,
+            Timeout = CodexModelList.Deadline,
+            McpServersToSwitchOff = NoMcpServers.CodexConfigured(settings),
+        })
+        {
+            Confinement = Coder is null ? LaunchConfinement.AsShipped : Coder with { KeyId = string.Empty, Vendor = model.Vendor, WorkFolder = vendor is not null ? vendor.WorkingDirectory(Layer!.Job) : string.Empty, Resume = CoderHandle.None },
+        };
+        Directory.CreateDirectory(outputDir);
+        var prepared = await runtime.PrepareAsync(launch, launcher, ct);
+        if (prepared is ConsultantPreparation.Refused refused)
+        {
+            return new RoleLaunched(null, refused.Failure, runtime, null, string.Empty);
+        }
+
+        var ready = (ConsultantPreparation.Ready)prepared;
+
+        var built = runtime.Build(ready.Launch);
+        var listing = built with { Request = built.Request with { Arguments = CodexModelList.Arguments, StdIn = string.Empty, Timeout = CodexModelList.Deadline, MaxOutputChars = CodexModelList.MostChars + 1 }, OutputFile = string.Empty };
+        if (Coder is null)
+        {
+            return new RoleLaunched(await new ReviewerExecutor(launcher).LaunchOnceAsync(listing, ct), null, runtime, listing, string.Empty) { CliVersion = ready.CliVersion };
+        }
+
+        return (await LaunchCoderAsync(runtime, listing, null, string.Empty, outputDir, vendor!, ct, modelFree: true)) with { CliVersion = ready.CliVersion };
+    }
+
     /// <summary>The folders a CLI with its own home expects to find (<c>HOME</c>, the four <c>XDG_*</c> folders, the CLI's own configuration folder), made before the launch so a CLI that does not create them still starts.</summary>
     private static void CreateHome(string home)
     {
@@ -152,9 +207,9 @@ internal sealed partial class RoleModelLauncher(Func<string, string?> settings, 
     /// The coder's launch: the same executor and classification, with the process itself started by the layer. A write the layer stopped, or a launch it refused, is on the result as <see cref="RoleLaunched.OsStop"/>; a refused launch
     /// has no <see cref="RoleLaunched.Launch"/> — nothing ran, so nothing is read and no ledger line is made.
     /// </summary>
-    private async Task<RoleLaunched> LaunchCoderAsync(IConsultantRuntime runtime, ReviewerInvocation invocation, ClaudeKeySecret? secret, string keyId, string outputDir, ICoderVendor vendor, CancellationToken ct)
+    private async Task<RoleLaunched> LaunchCoderAsync(IConsultantRuntime runtime, ReviewerInvocation invocation, ClaudeKeySecret? secret, string keyId, string outputDir, ICoderVendor vendor, CancellationToken ct, bool modelFree = false)
     {
-        var turn = new CoderTurnLauncher(Layer!, outputDir, vendor);
+        var turn = new CoderTurnLauncher(Layer!, modelFree ? string.Empty : outputDir, vendor) { ModelFree = modelFree };
         var finished = await new ReviewerExecutor(turn).LaunchOnceAsync(invocation, ct);
         var stop = turn.Outcome is { } outcome ? CoderOsLayer.StopOf(outcome) : null;
         var keyScrubbed = secret is null ? new Scrubbed(finished, false, []) : Scrub(finished, secret);

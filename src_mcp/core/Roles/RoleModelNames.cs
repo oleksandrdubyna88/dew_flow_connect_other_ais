@@ -5,11 +5,14 @@ namespace CoaiMcp.Core.Roles;
 /// <summary>
 /// The model names a role job may launch with (<c>shared/role-model-names.json</c>, embedded): the four claude aliases and the full ids of the verified list (<c>claude.verifiedIds</c>, each with the place it was seen as real), and the names of the codex and agy lists.
 /// A name that is not here is refused BEFORE a folder or a launch is made, with a sentence that names the setting that holds it.
+/// For codex a name is also accepted when it is a FAMILY (<c>codex.families</c>: terra, astra, sol, luna — the newest model of the family that the installed CLI lists, resolved when a job reaches the entry) or has the exact shape
+/// <c>gpt-&lt;version&gt;-&lt;family&gt;</c> (<see cref="CodexModelShape"/>), so a new model needs no hand edit of the file (epoch 3 E3 s2 t5; ledger entry 2.1).
 /// </summary>
 /// <remarks>
 /// <para><b>Why this exists.</b> claude 2.1.330 does not refuse an unknown model name: it runs its default model and bills it (measured twice on 2026-11-23, about 1.62 USD; <c>SIGNALS.md</c> of story s3, section 6). So for
-/// the one CLI that bills a typo the check is the only barrier. For that reason a claude id is never accepted by its shape: <c>claude-opuss-5-5</c>, <c>claude-sonet-5-5</c> and <c>claude-opus-5-55</c> have the shape of a real id, and the CLI would run and bill its default model. Only the aliases and the listed ids pass; a newly verified id is added to the file (its <c>howToAdd</c> says how). Codex and agy refused an unknown model before any paid call (recorded), so for them the list costs a refusal and not money — it is kept for the same reason the
-/// owner asked for: a role never runs on a name nobody ever saw work.</para>
+/// the one CLI that bills a typo the check is the only barrier. For that reason a claude id is never accepted by its shape: <c>claude-opuss-5-5</c>, <c>claude-sonet-5-5</c> and <c>claude-opus-5-55</c> have the shape of a real id, and the CLI would run and bill its default model. Only the aliases and the listed ids pass; a newly verified id is added to the file (its <c>howToAdd</c> says how). Codex and agy refused an unknown model before any paid call (recorded), so for them a wrong name costs a refusal and not money.
+/// <b>The shape is right for codex ONLY</b>: the codex CLI refuses a name it does not know before any paid call, and the name must also be in the CLI's own list (asked when the job reaches the entry), so a typo of a codex name costs nothing; the claude CLI runs and bills its default model, so a claude id is never accepted by its shape.
+/// The agy list does not change.</para>
 /// <para><b>Case counts.</b> The CLI is handed the name exactly as written, and <c>Sonnet</c> is not a name claude is known to accept; the router's own lookup in a list is case-insensitive and hands on the LIST's spelling, so only
 /// a name that reaches this check as typed is judged as typed.</para>
 /// <para>A vendor this file does not name is not judged here (<see cref="VendorRouting"/> knows the three CLIs a route may use; an unknown vendor is refused by the launcher).</para>
@@ -33,8 +36,9 @@ internal static class RoleModelNames
         private readonly HashSet<string> _claudeIds;
         private readonly Dictionary<string, IReadOnlyList<string>> _lists;
 
-        internal Table(IReadOnlyList<string> claudeAliases, IReadOnlyList<string> claudeKnownIds, IReadOnlyDictionary<string, IReadOnlyList<string>> lists)
+        internal Table(IReadOnlyList<string> claudeAliases, IReadOnlyList<string> claudeKnownIds, IReadOnlyDictionary<string, IReadOnlyList<string>> lists, IReadOnlyList<string>? codexFamilies = null)
         {
+            CodexFamilies = codexFamilies ?? [];
             ClaudeAliases = claudeAliases;
             ClaudeKnownIds = claudeKnownIds;
             _claudeAliases = new HashSet<string>(claudeAliases, StringComparer.Ordinal);
@@ -43,6 +47,15 @@ internal static class RoleModelNames
         }
 
         internal IReadOnlyList<string> ClaudeAliases { get; }
+
+        /// <summary>The families of codex (<c>codex.families</c>): a name with no version, the newest model of which the installed CLI lists.</summary>
+        internal IReadOnlyList<string> CodexFamilies { get; }
+
+        /// <summary>Whether <paramref name="model"/> is a codex family — a name with no version.</summary>
+        internal bool IsCodexFamily(string model) => CodexFamilies.Contains(model, StringComparer.Ordinal);
+
+        /// <summary>Whether <paramref name="model"/> is a codex name with the exact shape <c>gpt-&lt;version&gt;-&lt;family&gt;</c>, a family of <see cref="CodexFamilies"/>.</summary>
+        internal bool IsCodexShaped(string model) => CodexModelShape.Has(model, CodexFamilies);
 
         internal IReadOnlyList<string> ClaudeKnownIds { get; }
 
@@ -64,9 +77,12 @@ internal static class RoleModelNames
 
             if (_lists.TryGetValue(cli, out var names))
             {
-                return names.Contains(model, StringComparer.Ordinal)
+                // codex only: a family, or the exact shape of a model with a family of the list, is a name the CLI itself is asked about when the job reaches the entry (a name it does not list ends that entry model-unavailable).
+                var codexOwn = cli == "codex" && (IsCodexFamily(model) || IsCodexShaped(model));
+
+                return codexOwn || names.Contains(model, StringComparer.Ordinal)
                     ? string.Empty
-                    : $"model '{model}' is not in the list of names known for the {cli} CLI ({string.Join(", ", names)}); fix it in {key}, or add a name you measured to shared/role-model-names.json";
+                    : $"model '{model}' is not in the list of names known for the {cli} CLI ({string.Join(", ", names)}){(cli == "codex" ? $", is not a family ({string.Join(", ", CodexFamilies)}) and has not the shape gpt-<version>-<family>" : string.Empty)}; fix it in {key}, or add a name you measured to shared/role-model-names.json";
             }
 
             return string.Empty;
@@ -87,7 +103,9 @@ internal static class RoleModelNames
 
         var verified = claude.GetProperty("verifiedIds").EnumerateArray().Select(row => row.GetProperty("id").GetString() ?? string.Empty);
 
-        return new Table(Strings(claude.GetProperty("aliases")), [.. verified], lists);
+        var families = root.GetProperty("codex").TryGetProperty("families", out var listed) ? Strings(listed) : [];
+
+        return new Table(Strings(claude.GetProperty("aliases")), [.. verified], lists, families);
     }
 
     private static IReadOnlyList<string> Strings(JsonElement list) => [.. list.EnumerateArray().Select(item => item.GetString() ?? string.Empty)];

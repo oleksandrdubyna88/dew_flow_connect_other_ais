@@ -30,7 +30,7 @@ internal static class RoleJobAnswers
         json.WriteString("launcher", job.Launcher);
     });
 
-    /// <summary><c>role_status</c>: <c>{state, generation, attempts[{n, model, vendor, stop, reason, evidenceRef, keyId}], stalled, result}</c> and the facts a reader needs beside them.</summary>
+    /// <summary><c>role_status</c>: <c>{state, generation, attempts[{n, model, resolvedModel (when the name was a codex family), vendor, stop, reason, evidenceRef, keyId}], stalled, result}</c> and the facts a reader needs beside them.</summary>
     public static string Status(RoleJobObservation seen, string resultJson) => Write(json =>
     {
         var job = seen.Job;
@@ -53,6 +53,12 @@ internal static class RoleJobAnswers
             json.WriteString("reason", attempt.Reason);
             json.WriteString("evidenceRef", attempt.EvidenceRef);
             json.WriteString("keyId", attempt.KeyId);
+            if (attempt.ResolvedModel.Length > 0)
+            {
+                // The name as asked is "model"; this is the name the attempt launched with (a codex family resolved at the entry of the job).
+                json.WriteString("resolvedModel", attempt.ResolvedModel);
+            }
+
             if (attempt.CliVersion.Length > 0 || attempt.LastMeasuredVersion.Length > 0)
             {
                 json.WriteString("cliVersion", attempt.CliVersion);

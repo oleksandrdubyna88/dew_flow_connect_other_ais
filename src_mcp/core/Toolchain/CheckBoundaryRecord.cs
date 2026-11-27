@@ -4,7 +4,20 @@ namespace CoaiMcp.Core.Toolchain;
 /// <param name="Item">The item's name — a fixed word, the same on every run.</param>
 /// <param name="Held">True when the answer was the right one; one false row refuses the job.</param>
 /// <param name="Detail">One sentence: what was seen. It never holds a secret.</param>
-public sealed record PreflightRow(string Item, bool Held, string Detail);
+public sealed record PreflightRow(string Item, bool Held, string Detail)
+{
+    /// <summary>
+    /// True for a RED row that is not a fault of the boundary but a model that cannot be used here now (epoch 3 E3 s2 t5; <c>SPEC_CHANGES.md</c> Q2): the tool list of a codex coder could not be read, in both reads. When EVERY red row of a preflight is one of these, the refusal is <c>model-unavailable</c> and fails over;
+    /// with any other row red too, the boundary row wins and the job ends <c>coder-boundary</c>.
+    /// </summary>
+    public bool Unavailable { get; init; }
+
+    /// <summary>For a held row that reads a tool list: the known tools this model does not have (coai's own strings, so they can be shown). Empty for every other row.</summary>
+    public IReadOnlyList<string> Absent { get; init; } = [];
+
+    /// <summary>For the red row of a tool list with names outside the known set: those names as a person may read them (at most 5, each only when it is 1 to 64 safe characters; the rest as a name that cannot be shown, with its length). Empty for every other row.</summary>
+    public string Tools { get; init; } = string.Empty;
+}
 
 /// <summary>
 /// What a check step was run inside, written down: the boundary, every property it was started with, the network state and what the preflight saw — so a reader of a result never has to guess whether "green" was bounded.

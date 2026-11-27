@@ -160,6 +160,7 @@ internal sealed class CoderFixLoop(IRoleRun run, GitHistory git, CoderOsLayer la
         var launched = await new RoleModelLauncher(run.Settings, run.Children) { Coder = session.Confinement, Layer = layer, Vendors = Vendors }
             .LaunchAsync(session.Model, prompt, run.Request.RepoPath, folder, left < AttemptTimeout ? left : AttemptTimeout, ct, session.Handle, RoleKeyRoad.For(run).Resume(session.Model, session.KeyId));
         var ended = run.Clock.GetUtcNow().UtcDateTime;
+        RoleFailover.NoticeToolUnknown(run, session.Asked, session.Model, launched);
         Keep(folder, "prompt.txt", prompt, turn);
         var stop = ct.IsCancellationRequested
             ? await CoderTurnCheck.StopOfACutTurnAsync(Vendors, session.Model, launched, session.Handle, layer.Job) ?? new RoleStop("stopped", "the job was stopped while this model ran", "stopped", false, false)
@@ -280,6 +281,12 @@ internal sealed class CoderFixLoop(IRoleRun run, GitHistory git, CoderOsLayer la
 /// <summary>The session of a model's turn 0, which every fix turn of that model resumes: the model that answered, the handle it reported, and the confinement that binds the handle to this job and worktree — and the key (<see cref="RoleKey.KeyId"/>) the session runs on: every fix turn resumes with the SAME key.</summary>
 internal sealed record CoderFixSession(ModelRef Model, string Handle, LaunchConfinement.Coder Confinement, string KeyId = "", Server.Keys.ClaudeKeySecret? Secret = null)
 {
+    /// <summary>The model as the route asked for it (epoch 3 E3 s2 t5): a codex family where <see cref="Model"/> is the name it resolved to, which every fix turn launches with. Null: the name was used as given.</summary>
+    public ModelRef? AskedAs { get; init; }
+
+    /// <summary>The model as asked: <see cref="AskedAs"/>, else <see cref="Model"/>.</summary>
+    public ModelRef Asked => AskedAs ?? Model;
+
     /// <summary>The counter of a cumulative vendor after turn 0: the first fix turn's report is measured against it.</summary>
     public ConsultationBilled Counter { get; init; } = new();
 }

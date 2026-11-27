@@ -236,6 +236,12 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
         var record = new BoundaryRecord(BoundaryRecord.UnitBoundary, Vendor.UnitProperties(launchHost, job, program, PreflightBudget + UnitControl.Backstop), "host", NetworkReason, rows);
         var bad = rows.FirstOrDefault(row => !row.Held);
 
+        // Every red row says "this model cannot be used here now" and none says "the boundary broke" (epoch 3 E3 s2 t5): the entry is refused as a model that is unavailable, and the failover goes on. One boundary row red too, and the boundary row wins.
+        if (bad is not null && rows.Where(row => !row.Held).All(row => row.Unavailable))
+        {
+            return Refuse($"This model cannot be used on this machine now, so the job was refused before the coder was launched: {bad.Item} — {bad.Detail}.", rows);
+        }
+
         return bad is not null
             ? Refuse($"The coder boundary did not hold on this machine, so the job was refused before the coder was launched: {bad.Item} — {bad.Detail}.", rows)
             : new BoundaryAdmission.Admitted(job.JobId, new Dictionary<CheckNetwork, BoundaryRecord> { [CheckNetwork.Host] = record });
@@ -290,6 +296,57 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
             throw new InvalidOperationException($"the preflight of job '{job.JobId}' did not admit a coder launch; the coder may not start before it has");
         }
 
+        return (await RunUnitAsync(job, request, part, seen, ct)).Run;
+    }
+
+    /// <summary>
+    /// A MODEL-FREE program of the vendor — one that makes no model call and so needs no preflight of its own (codex: <c>debug models</c>, the live list of models, epoch 3 E3 s2 t5) — run in the very unit of the launch that follows: the same properties, the same working folder, the same environment allow-list, the job's own home
+    /// and its sign-in copy. The checks that make a unit possible at all are asked first, as the preflight asks them (a platform with no boundary, a folder the job cannot have, a program the unit cannot be given), and the job's folders are made and tidied as the preflight makes and tidies them; a refusal is a sentence, and nothing was started.
+    /// </summary>
+    /// <param name="job">The job.</param>
+    /// <param name="request">The program and its arguments; its working folder is the job's worktree (the unit starts there). No stdin is needed.</param>
+    /// <param name="part">The unit's part name, unique within the job (<c>m1</c>, <c>m2</c>…).</param>
+    /// <param name="ct">The caller's cancel.</param>
+    internal async Task<ModelFreeRun> RunModelFreeAsync(BoundaryJob job, ProcessRequest request, string part, CancellationToken ct = default)
+    {
+        var early = host.PlatformRefusal() is { Length: > 0 } platform ? platform : KeyedLaunch(false) && job.KeysFolderProblem() is { Length: > 0 } hidden ? hidden : job.CoderProblem() is { Length: > 0 } problem ? problem : job.MountsOnDiskProblem() is { Length: > 0 } mounts ? mounts : job.CoderTempOnDiskProblem(Vendor.Id);
+        if (early.Length > 0)
+        {
+            return new ModelFreeRun(null, early);
+        }
+
+        var program = ProgramOf(request.Executable, job);
+        if (program.Problem.Length > 0)
+        {
+            return new ModelFreeRun(null, $"The coder was not launched: {program.Problem}.");
+        }
+
+        var prepared = BoundaryFolders.Prepare(host, job, Vendor.Home(job).Folders, job.CoderTempOf(Vendor.Id), job.CoderVarTempOf(Vendor.Id));
+        if (prepared.Sentence.Length > 0)
+        {
+            return new ModelFreeRun(null, prepared.Sentence);
+        }
+
+        try
+        {
+            if (job.JobRootOnDiskProblem() is { Length: > 0 } linked)
+            {
+                return new ModelFreeRun(null, linked);
+            }
+
+            var (run, notStarted) = await RunUnitAsync(job, request, part, new BoundaryRecord(BoundaryRecord.UnitBoundary, [], "host", NetworkReason, []), ct);
+
+            // A unit that could not be started is the boundary's fault (no user manager, a refused property), never the model's: the sentence is the unit control's own.
+            return notStarted.Length > 0 ? new ModelFreeRun(null, $"The unit that reads the list of models could not be started: {notStarted}") : new ModelFreeRun(run, string.Empty);
+        }
+        finally
+        {
+            BoundaryFolders.Tidy(job, prepared.Copy, job.CoderTempOf(Vendor.Id), job.CoderVarTempOf(Vendor.Id));
+        }
+    }
+
+    private async Task<(BoundaryRun Run, string NotStarted)> RunUnitAsync(BoundaryJob job, ProcessRequest request, string part, BoundaryRecord seen, CancellationToken ct)
+    {
         ArgumentException.ThrowIfNullOrEmpty(part);
         if (!CoderUnit.IsPart(part))
         {
@@ -325,7 +382,7 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
             }, ct);
             var result = started.Problem.Length > 0 ? started.Result with { StdErr = started.Problem } : started.Result;
 
-            return new BoundaryRun(result, unit, await _units.EnsureGoneAsync(unit), record);
+            return (new BoundaryRun(result, unit, await _units.EnsureGoneAsync(unit), record), started.Problem);
         }
         catch
         {
@@ -334,3 +391,6 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
         }
     }
 }
+
+/// <summary>What <see cref="CoderBoundary.RunModelFreeAsync"/> came to: the run of the unit, or — when nothing was started — the sentence that says why.</summary>
+internal sealed record ModelFreeRun(BoundaryRun? Run, string Refusal);

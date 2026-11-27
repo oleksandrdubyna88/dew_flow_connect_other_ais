@@ -192,7 +192,7 @@ public sealed class ACodexCoderBoundaryTests
         CodexCoderVendor.EnvironmentsFile.Should().Be("environments.toml", "13.11: the launch half of CX-C1");
         var preIds = CoderBoundaryTable.Shipped.PropertiesOf("codex").Where(property => property.Class == "pre" || property.Also.Contains("pre")).Select(property => property.Id).ToHashSet();
         CodexPreflight.RowIds.Values.Should().Contain(preIds.Where(id => id is not ("K1" or "K2")), "the preflight rows with doctor and the job's own model (t3 d3)");
-        CodexToolList.Measured.Should().HaveCount(11);
+        CodexToolList.Known.Should().HaveCount(11);
         var recipe = (CoderSignInRecipe.CopyForJob)vendor.SignIn;
         recipe.Margin.Should().Be(TimeSpan.FromMinutes(60), "the margin CX-R1");
         recipe.Placeholders.Should().ContainKey("tokens/refresh_token", "the copy with the placeholder");

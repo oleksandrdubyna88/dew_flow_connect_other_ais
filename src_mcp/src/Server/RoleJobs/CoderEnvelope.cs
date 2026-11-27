@@ -52,6 +52,36 @@ internal sealed record CoderCliRecord(string Vendor, string Installed, string La
     }
 }
 
+/// <summary>
+/// The model a codex coder job launched with (epoch 3 E3 s2 t5; SPEC_CHANGES Q1 item 7 and Q3 item 2): the name as asked and as resolved (a family becomes the newest model the installed CLI lists when the job reaches the entry; a name given in full is the same twice), and the known tools the model does not have
+/// (coai's own strings, so they can be shown). Written as <c>model</c>; nothing for another vendor.
+/// </summary>
+internal sealed record CoderModelRecord(string Vendor, string Asked, string Resolved, IReadOnlyList<string> ToolsAbsent)
+{
+    /// <summary>No model was recorded (a job that ended before any launch, or a vendor with nothing to say).</summary>
+    public static CoderModelRecord None { get; } = new(string.Empty, string.Empty, string.Empty, []);
+
+    public void Write(Utf8JsonWriter json)
+    {
+        if (Vendor != "codex")
+        {
+            return;
+        }
+
+        json.WriteStartObject("model");
+        json.WriteString("asked", Asked);
+        json.WriteString("resolved", Resolved);
+        json.WriteStartArray("toolsAbsent");
+        foreach (var tool in ToolsAbsent)
+        {
+            json.WriteStringValue(tool);
+        }
+
+        json.WriteEndArray();
+        json.WriteEndObject();
+    }
+}
+
 /// <summary>The real sign-in file of a vendor that signs in with a file, before and after the job (s7 t6 d4): a sha256 and a modification time each — a hash, never text — and whether they differ. coai opens that file for reading only, so a difference is something else's doing.</summary>
 internal sealed record CoderSignInRecord(string Vendor, string BeforeSha256, string BeforeModifiedUtc, string AfterSha256, string AfterModifiedUtc, bool Changed)
 {
@@ -110,6 +140,9 @@ internal sealed record CoderEnvelope(string JobId, string BaseSha, string HeadSh
     /// <summary>The CLI release of the model that produced the result, beside the last measured one. Written as <c>cli</c> when there is one.</summary>
     public CoderCliRecord Cli { get; init; } = CoderCliRecord.None;
 
+    /// <summary>The model a codex coder launched with, as asked and as resolved, and the known tools it does not have. Written as <c>model</c> for codex.</summary>
+    public CoderModelRecord Model { get; init; } = CoderModelRecord.None;
+
     /// <summary>The real sign-in files of the vendors that were given a copy, before and after the job. Written as <c>signIn</c> when there is one.</summary>
     public IReadOnlyList<CoderSignInRecord> SignIn { get; init; } = [];
 
@@ -141,6 +174,7 @@ internal sealed record CoderEnvelope(string JobId, string BaseSha, string HeadSh
             Instructions.Write(json);
             Prompt.Write(json);
             Cli.Write(json);
+            Model.Write(json);
             if (SignIn.Count > 0)
             {
                 json.WriteStartArray("signIn");

@@ -176,10 +176,31 @@ internal sealed class CoderRig : IAsyncDisposable
         return this;
     }
 
+    private readonly Dictionary<string, string> _extra = [];
+
+    /// <summary>More steering names for the fake besides the map and the record folder (epoch 3 E3 s2 t5: the list <c>codex debug models</c> answers, the tool-list mode). Written with the next staging, and in the steering file at once.</summary>
+    internal CoderRig Steering(params (string Name, string Value)[] names)
+    {
+        foreach (var (name, value) in names)
+        {
+            _extra[name] = value;
+        }
+
+        Steer(_lastMap, _lastRecord);
+
+        return this;
+    }
+
+    private string _lastMap = string.Empty;
+
+    private string _lastRecord = string.Empty;
+
     private void Steer(string map, string record)
     {
+        _lastMap = map;
+        _lastRecord = record;
         _steering.Dispose();
-        _steering = FakeCliSteering.Write(new Dictionary<string, string> { ["FAKECLI_MODEL_MAP"] = map, ["FAKECLI_RECORD_DIR"] = record });
+        _steering = FakeCliSteering.Write(new Dictionary<string, string> { ["FAKECLI_MODEL_MAP"] = map, ["FAKECLI_RECORD_DIR"] = record }.Concat(_extra).ToDictionary(pair => pair.Key, pair => pair.Value));
     }
 
     /// <summary>One model-map entry: claude's recorded success envelope around the answer, and — only when there are edits — the <c>writeFiles</c> object (a null would be read by the fake as an edit it cannot make).</summary>

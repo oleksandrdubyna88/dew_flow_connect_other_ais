@@ -5,7 +5,7 @@ using System.Text.Json;
 namespace CoaiMcp.FakeCli;
 
 /// <summary>
-/// The fake CLI as the codex CODER's model-free verbs (epoch 3 E3 s5 t3): <c>sandbox -P coai -- &lt;command&gt;</c>, <c>debug prompt-input &lt;flags&gt; x</c> and <c>doctor --json</c>, as MEASURED on codex-cli 0.171.0 (<c>v2/spikes/RESULTS_codex_coder.md</c> sections 4 and 9). A real codex is never started by a test.
+/// The fake CLI as the codex CODER's model-free verbs (epoch 3 E3 s5 t3): <c>sandbox -P coai -- &lt;command&gt;</c>, <c>debug prompt-input &lt;flags&gt; x</c>, <c>doctor --json</c> and — since epoch 3 E3 s2 t5 — <c>debug models</c>, as MEASURED on codex-cli 0.171.0 (<c>v2/spikes/RESULTS_codex_coder.md</c> sections 4 and 9). A real codex is never started by a test.
 /// </summary>
 /// <remarks>
 /// <para><b>The sandbox is a REAL one.</b> <c>sandbox</c> runs the command under <c>bwrap</c> with what the profile <c>coai</c> shows a command: the system folders and the fake's own folder read-only, the working folder (the worktree) writable with <c>.git</c>, <c>.agents</c> and
@@ -17,17 +17,18 @@ namespace CoaiMcp.FakeCli;
 internal static class CodexVerbs
 {
     /// <summary>Whether <paramref name="args"/> are one of the three verbs.</summary>
-    public static bool Handles(string[] args) => args is ["sandbox", ..] or ["doctor", ..] or ["debug", "prompt-input", ..];
+    public static bool Handles(string[] args) => args is ["sandbox", ..] or ["doctor", ..] or ["debug", "prompt-input", ..] or ["debug", "models", ..];
 
     /// <summary>Runs the verb and answers its exit code. Every call is one line of <c>fake-verbs.log</c> in the <c>CODEX_HOME</c> it ran with (when it has one): a test reads which of the vendor's programs a preflight started.</summary>
     public static int Run(string[] args)
     {
-        Log(args[0]);
+        Log(args is ["debug", "models", ..] ? "debug-models" : args[0]);
 
-        return args[0] switch
+        return args switch
         {
-            "sandbox" => Sandbox(args),
-            "doctor" => Doctor(args),
+            ["sandbox", ..] => Sandbox(args),
+            ["doctor", ..] => Doctor(args),
+            ["debug", "models", ..] => Models(args),
             _ => PromptInput(args),
         };
     }
@@ -193,6 +194,72 @@ internal static class CodexVerbs
         return masks;
     }
 
+    // ---------- debug models ----------
+
+    /// <summary>
+    /// <c>codex debug models</c> (epoch 3 E3 s2 t5): a network call and no model call, which prints the live list of the account as ONE JSON object <c>{"models":[…]}</c>. It answers from the RECORDING of the real command (<c>fixtures/role-stops/codex-debug-models.json</c>, scrubbed to the fields coai reads: stdout, stderr and the exit code as the real CLI
+    /// gave them), or from the file <c>FAKECLI_CODEX_MODELS</c> names (a recording of the same shape), or — for a word — the one failure a test needs, or <c>slugs:a=list,b=hide</c> for a list of exactly these models: <c>exit1</c> (a CLI that fails), <c>garbage</c> (an exit 0 that is no list), <c>huge</c> (a list over the limit), <c>sign-in-lost</c> (the refresh failure of a copy that is no use) and <c>slow</c> (a list that comes after the deadline).
+    /// Each call is a sidecar <c>sidecars/&lt;pid&gt;.models</c> of the record folder (working folder, <c>HOME</c>, <c>CODEX_HOME</c>, one to a line), which a test reads to see where and with which home the list was asked; it is NO launch of a model, so the record folder holds no launch record for it.
+    /// </summary>
+    private static int Models(string[] args)
+    {
+        if (Steering("FAKECLI_RECORD_DIR") is { Length: > 0 } record)
+        {
+            var folder = Path.Combine(record, "sidecars");
+            Directory.CreateDirectory(folder);
+            File.WriteAllLines(Path.Combine(folder, Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture) + ".models"), [Directory.GetCurrentDirectory(), Environment.GetEnvironmentVariable("HOME") ?? string.Empty, CodexHome(), string.Join(" ", args)]);
+        }
+
+        var mode = Steering("FAKECLI_CODEX_MODELS");
+        switch (mode)
+        {
+            case "exit1":
+                Console.Error.WriteLine("fake codex: debug models failed");
+
+                return 1;
+            case "garbage":
+                Console.Out.Write("this is not a list\n");
+
+                return 0;
+            case "huge":
+                Console.Out.Write("{\"models\":[" + new string(' ', 4_500_000) + "]}");
+
+                return 0;
+            case "sign-in-lost":
+                Console.Error.WriteLine("Failed to refresh token: 401 Unauthorized");
+
+                return 1;
+            case "slow":
+                Thread.Sleep(TimeSpan.FromMinutes(2));
+
+                return 0;
+        }
+
+        if (mode.StartsWith("slugs:", StringComparison.Ordinal))
+        {
+            // slugs:<slug>=<visibility>,<slug>=<visibility>… — a list of exactly these models, in this order, in the shape of the real one.
+            var models = mode["slugs:".Length..].Split(',', StringSplitOptions.RemoveEmptyEntries).Select(pair => pair.Split('=')).Select(pair => $"{{\"slug\":\"{pair[0]}\",\"visibility\":\"{(pair.Length > 1 ? pair[1] : "list")}\"}}");
+            Console.Out.Write("{\"models\":[" + string.Join(',', models) + "]}");
+
+            return 0;
+        }
+
+        var file = mode.Length > 0 ? mode : Path.Combine(AppContext.BaseDirectory, "fixtures", "role-stops", "codex-debug-models.json");
+        if (!File.Exists(file))
+        {
+            Console.Error.WriteLine("fake codex: no recording of debug models at " + file);
+
+            return 1;
+        }
+
+        using var recording = JsonDocument.Parse(File.ReadAllText(file));
+        var root = recording.RootElement;
+        Console.Out.Write(root.TryGetProperty("stdout", out var stdout) ? stdout.GetString() : string.Empty);
+        Console.Error.Write(root.TryGetProperty("stderr", out var stderr) ? stderr.GetString() : string.Empty);
+
+        return root.TryGetProperty("exitCode", out var code) && code.TryGetInt32(out var exit) ? exit : 0;
+    }
+
     // ---------- debug prompt-input ----------
 
     /// <summary>The nested tools of the JavaScript tool <c>exec</c>, named in its description as the real CLI names them.</summary>
@@ -208,9 +275,26 @@ internal static class CodexVerbs
         }
 
         var mode = Steering("FAKECLI_CODEX_TOOLS");
+        // A project that has its own config (the stand-in project of the preflight) changes the list in these modes: it takes a tool AWAY, or leaves none (epoch 3 E3 s2 t5).
+        var project = File.Exists(Path.Combine(Directory.GetCurrentDirectory(), ".codex", "config.toml"));
+        if (mode == "unreadable")
+        {
+            Console.Out.Write("this is not a report\n");
+
+            return 0;
+        }
+
         var agents = !args.Contains("agents.enabled=false") || mode == "agents";
-        var nested = Nested.Where(name => mode != "fewer" || name != "write_stdin");
+        string[] without = mode switch
+        {
+            "fewer" => ["write_stdin"],
+            "nine" => ["write_stdin", "read_mcp_resource"],
+            "project-removes" when project => ["write_stdin"],
+            _ => [],
+        };
+        var nested = Nested.Where(name => !without.Contains(name));
         var description = "Run JavaScript. " + string.Concat(nested.Select(name => $"### `{name}`\n"));
+        var bare = mode == "one" || mode == "empty" || (mode == "project-empty" && project);
         using var buffer = new MemoryStream();
         using (var json = new Utf8JsonWriter(buffer))
         {
@@ -223,7 +307,18 @@ internal static class CodexVerbs
             json.WriteStartObject();
             json.WriteString("type", "additional_tools");
             json.WriteStartArray("tools");
-            Namespace(json, "functions", [("exec", description), ("wait", string.Empty), ("request_user_input", string.Empty), ("request_user_input_async", string.Empty)]);
+            if (mode == "empty" || (mode == "project-empty" && project))
+            {
+                json.WriteEndArray();
+                json.WriteEndObject();
+                json.WriteEndArray();
+                json.Flush();
+                Console.Out.Write(Encoding.UTF8.GetString(buffer.ToArray()));
+
+                return 0;
+            }
+
+            Namespace(json, "functions", bare ? [("exec", string.Empty)] : [("exec", description), ("wait", string.Empty), ("request_user_input", string.Empty), ("request_user_input_async", string.Empty)]);
             if (agents)
             {
                 Namespace(json, "collaboration", [.. new[] { "followup_task", "interrupt_agent", "list_agents", "send_message", "spawn_agent", "wait_agent" }.Select(name => (name, string.Empty))]);
@@ -252,6 +347,9 @@ internal static class CodexVerbs
         "mcp" => ["mcp__ologs__get_profile"],
         "project-mcp" when File.Exists(Path.Combine(cwd, ".codex", "config.toml")) => ["mcp__standin__probe"],
         "hostile" => ["HOSTILE-TEXT-A-ROW-MUST-NOT-CARRY"],
+        "new-tool" => ["brand_new_tool"],
+        "many-new" => [.. Enumerable.Range(1, 8).Select(index => $"new_tool_{index}")],
+        "hostile-names" => ["bad\nname", "control\u0001char", "sk-ant-oat01-abcdefghij/klmnop+qrstuv==", new string('a', 300)],
         _ => [],
     };
 

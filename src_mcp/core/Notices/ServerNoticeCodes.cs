@@ -115,6 +115,12 @@ public static class ServerNoticeCodes
     /// </summary>
     public const string SignInFileChanged = "sign-in-file-changed";
 
+    /// <summary>
+    /// The preflight of a codex coder found a tool that is not in the known set of 11 (epoch 3 E3 s2 t5; <c>SPEC_CHANGES.md</c> Q3 item 5): the job was refused before the coder started. ONE notice for the job. Subject is the job id. It names the vendor, the model as asked and as resolved, the installed CLI release and the names — a name only when it is
+    /// 1 to 64 characters of letters, digits, underscore, dot and hyphen (any other name is said as a name that cannot be shown, with its length), at most 5, then the count. The tab that shows it is epoch 4 <c>e4-local-pages</c>.
+    /// </summary>
+    public const string CoderToolUnknown = "coder-tool-unknown";
+
     /// <summary>Every code, for the test that asserts the redactor rewrites none of them.</summary>
     public static IReadOnlyList<string> All =>
     [
@@ -145,5 +151,6 @@ public static class ServerNoticeCodes
         ClaudePersonSignInUsed,
         InstructionsSecret,
         SignInFileChanged,
+        CoderToolUnknown,
     ];
 }

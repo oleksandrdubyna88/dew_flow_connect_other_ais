@@ -19,7 +19,7 @@ namespace CoaiMcp.Tests;
 internal sealed class CodexBed : IAsyncDisposable
 {
     /// <summary>The model every probe of a bed is asked for.</summary>
-    internal const string Model = "terra";
+    internal const string Model = "gpt-6.1-terra";
 
     /// <summary>A token that is in the copy of a bed: no row, no log line and no record may hold it.</summary>
     internal const string AccessToken = "made-up-access-token-not-a-credential-7f31";

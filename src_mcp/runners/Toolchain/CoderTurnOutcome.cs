@@ -57,7 +57,14 @@ public abstract record CoderTurnOutcome
     public sealed record UnitNotStopped(BoundaryRun Run, string Sentence, CoderMainEvidence Evidence) : CoderTurnOutcome;
 
     /// <summary>The launch was refused BEFORE any process of the coder started: no boundary here, a preflight row that said no, a launch for another worktree. <paramref name="Record"/> carries the rows.</summary>
-    public sealed record Refused(string Sentence, BoundaryRecord Record) : CoderTurnOutcome;
+    public sealed record Refused(string Sentence, BoundaryRecord Record) : CoderTurnOutcome
+    {
+        /// <summary>True when the preflight refused ONLY because every red row says the model cannot be used here now (a tool list that could not be read, <see cref="PreflightRow.Unavailable"/>): the entry fails over. With any boundary row red too, false: the boundary row wins.</summary>
+        public bool ModelUnavailable => Record.Preflight.Any(row => !row.Held) && Record.Preflight.Where(row => !row.Held).All(row => row.Unavailable);
+
+        /// <summary>The names outside the known set of tools that a red row carries, as a person may read them (<see cref="PreflightRow.Tools"/>); empty when no row carries any.</summary>
+        public string UnknownTools => Record.Preflight.FirstOrDefault(row => !row.Held && row.Tools.Length > 0)?.Tools ?? string.Empty;
+    }
 
     /// <summary>What the launch was bounded by and what the preflight said: the record of the unit it ran in, or the one of the refusal. Null for none.</summary>
     public BoundaryRecord? Boundary => this switch

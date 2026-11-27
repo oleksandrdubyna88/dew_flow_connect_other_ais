@@ -1,0 +1,17 @@
+{
+  "cli": "codex",
+  "cliVersion": "codex-cli 0.171.0",
+  "recordedUtc": "2026-11-27T10:00:00.000Z",
+  "recordedBy": "epoch 3 E3 s2 t5 (INTERIM, built from the bundled catalog of the same release and the live set of RESULTS_model_lists.md; replaced by the live recording of d8)",
+  "how": "codex-debug-models",
+  "argv": [
+    "debug",
+    "models"
+  ],
+  "envOverrides": [],
+  "stdin": "",
+  "exitCode": 0,
+  "signal": null,
+  "stdout": "{\"models\":[{\"slug\":\"gpt-6.2-sol\",\"display_name\":\"GPT-6.2-Sol\",\"visibility\":\"list\",\"priority\":1},{\"slug\":\"gpt-6.2-astra\",\"display_name\":\"GPT-6.2-Astra\",\"visibility\":\"list\",\"priority\":2},{\"slug\":\"gpt-6-astra\",\"display_name\":\"GPT-6-Astra\",\"visibility\":\"list\",\"priority\":5},{\"slug\":\"gpt-6.1-sol\",\"display_name\":\"GPT-6.1-Sol\",\"visibility\":\"list\",\"priority\":4},{\"slug\":\"gpt-6.1-terra\",\"display_name\":\"GPT-6.1 Terra\",\"visibility\":\"list\",\"priority\":3},{\"slug\":\"gpt-6-sol\",\"display_name\":\"GPT-6-Sol\",\"visibility\":\"list\",\"priority\":6},{\"slug\":\"gpt-6-luna\",\"display_name\":\"GPT-6-Luna\",\"visibility\":\"list\",\"priority\":7},{\"slug\":\"gpt-5.6-sol\",\"display_name\":\"GPT-5.6-Sol\",\"visibility\":\"list\",\"priority\":8},{\"slug\":\"gpt-5.6-terra\",\"display_name\":\"GPT-5.6-Terra\",\"visibility\":\"list\",\"priority\":9},{\"slug\":\"gpt-5.6-luna\",\"display_name\":\"GPT-5.6-Luna\",\"visibility\":\"list\",\"priority\":10},{\"slug\":\"codex-auto-review\",\"display_name\":\"Codex Auto Review\",\"visibility\":\"hide\",\"priority\":43},{\"slug\":\"gpt-reserve\",\"display_name\":\"gpt-reserve\",\"visibility\":\"hide\",\"priority\":99}]}",
+  "stderr": ""
+}

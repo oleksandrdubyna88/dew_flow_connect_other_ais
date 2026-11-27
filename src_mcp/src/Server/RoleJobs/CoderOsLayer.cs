@@ -14,7 +14,14 @@ namespace CoaiMcp.Server.RoleJobs;
 /// <param name="Kind">The word the attempt's ledger line and evidence carry: <c>write-stopped</c> or <c>boundary-refused</c>.</param>
 /// <param name="Sentence">What a person reads: the boundary's own sentence, with the paths it refused.</param>
 /// <param name="Started">True when the coder process ran (a write was stopped, and the launch consumed what it consumed); false when the preflight refused it first.</param>
-internal sealed record CoderOsStop(string Kind, string Sentence, bool Started);
+internal sealed record CoderOsStop(string Kind, string Sentence, bool Started)
+{
+    /// <summary>The kind of a refusal that says the model cannot be used here now (epoch 3 E3 s2 t5): the entry fails over, as <c>model-unavailable</c> and never as a boundary stop.</summary>
+    public const string ModelUnavailableKind = "model-unavailable";
+
+    /// <summary>The names outside the known set of tools, as a person may read them (<see cref="Runners.Toolchain.CoderTurnOutcome.Refused.UnknownTools"/>); empty when the stop is not about a tool. Raises the notice <c>coder-tool-unknown</c>.</summary>
+    public string UnknownTools { get; init; } = string.Empty;
+}
 
 /// <summary>
 /// The OS layer of ONE coder job, as the role work holds it (epoch 3 E2, s2/s3 integration; <c>v2/architecture/server.md</c> § 16 item 8): the job's folders, the <see cref="CoderTurns"/> that runs the claude coder inside its unit, and everything the
@@ -35,6 +42,8 @@ internal sealed class CoderOsLayer(BoundaryJob job, CoderTurns turns, IProcessLa
     private readonly Lock _gate = new();
     private readonly List<CoderMainEvidence> _evidence = [];
     private int _parts;
+    private int _lists;
+    private IReadOnlyList<string> _toolsAbsent = [];
 
     /// <summary>The sign-in copies of the job, by vendor (s7 t6): the real file as the job first saw it, and every token text a copy of the job ever held.</summary>
     public SignInJobs SignIns { get; } = new();
@@ -92,12 +101,50 @@ internal sealed class CoderOsLayer(BoundaryJob job, CoderTurns turns, IProcessLa
     public static CoderTurns ShippedTurns(IProcessLauncher launcher) =>
         new(new CoderBoundary(launcher, BoundaryHost.Current()), new FilesystemInvariant(launcher));
 
+    /// <summary>
+    /// The known tools the model of the LAST admitted launch does not have (the row <c>tool-list</c> of its preflight, epoch 3 E3 s2 t5): what the envelope names. Empty for a model that has all of them, for a vendor with no such row, and before any launch.
+    /// </summary>
+    public IReadOnlyList<string> ToolsAbsent
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _toolsAbsent;
+            }
+        }
+    }
+
+    /// <summary>
+    /// A model-free program of <paramref name="vendor"/> (codex: <c>debug models</c>) in the very unit of the vendor's launches (<see cref="CoderTurns.RunModelFreeAsync"/>): a unit part of its own (<c>m1</c>, <c>m2</c>…), the job's own home and sign-in copy. What it came to is named as a launch's is.
+    /// </summary>
+    public async Task<CoderTurnOutcome> ModelFreeAsync(ProcessRequest request, CancellationToken ct, ICoderVendor vendor)
+    {
+        var part = "m" + Interlocked.Increment(ref _lists).ToString(CultureInfo.InvariantCulture);
+        var outcome = await turns.RunModelFreeAsync(job, request, part, vendor, SignIns, ct);
+        if (outcome is CoderTurnOutcome.UnitNotStopped)
+        {
+            // As after a turn: a unit that may still be alive is writing in the job's home, so its copy is not deleted under it. No evidence is kept: nothing of the main checkout was looked at.
+            _unitMayBeAlive = true;
+        }
+
+        return outcome;
+    }
+
     /// <summary>One launch of the coder inside the layer: the next unit part, the turn, its evidence kept, and — when <paramref name="recordTo"/> names a folder — the properties of its unit written there (<see cref="CoderUnitRecord"/>).</summary>
     public async Task<CoderTurnOutcome> TurnAsync(ProcessRequest request, CancellationToken ct, string recordTo = "", ICoderVendor? vendor = null)
     {
         var part = "c" + Interlocked.Increment(ref _parts).ToString(CultureInfo.InvariantCulture);
         var outcome = await turns.RunAsync(job, request, part, vendor, ct, SignIns);
         Keep(outcome);
+        if (outcome.Boundary?.Preflight.FirstOrDefault(row => row.Item == "tool-list" && row.Held) is { } tools)
+        {
+            lock (_gate)
+            {
+                _toolsAbsent = tools.Absent;
+            }
+        }
+
         if (recordTo.Length > 0 && outcome.Boundary is { } record)
         {
             CoderUnitRecord.Write(recordTo, part, CoderUnitRecord.UnitName(job, part), record, Mounts, outcome.UnitStarted);
@@ -124,7 +171,9 @@ internal sealed class CoderOsLayer(BoundaryJob job, CoderTurns turns, IProcessLa
     public static CoderOsStop? StopOf(CoderTurnOutcome outcome) => outcome switch
     {
         CoderTurnOutcome.WriteStopped stopped => new CoderOsStop("write-stopped", stopped.Sentence, Started: true),
-        CoderTurnOutcome.Refused refused => new CoderOsStop("boundary-refused", refused.Sentence, Started: false),
+        // A refusal that is ONLY "this model cannot be used here now" is not a fault of the boundary (epoch 3 E3 s2 t5, SPEC_CHANGES Q2): its own kind, which the failover reads as the stop word model-unavailable.
+        CoderTurnOutcome.Refused { ModelUnavailable: true } refused => new CoderOsStop(CoderOsStop.ModelUnavailableKind, refused.Sentence, Started: false) { UnknownTools = refused.UnknownTools },
+        CoderTurnOutcome.Refused refused => new CoderOsStop("boundary-refused", refused.Sentence, Started: false) { UnknownTools = refused.UnknownTools },
         CoderTurnOutcome.UnitNotStopped notStopped => new CoderOsStop("unit-not-stopped", notStopped.Sentence, Started: true),
         _ => null,
     };
@@ -186,6 +235,9 @@ internal sealed class CoderOsLayer(BoundaryJob job, CoderTurns turns, IProcessLa
 /// </summary>
 internal sealed class CoderTurnLauncher(CoderOsLayer layer, string recordTo = "", ICoderVendor? vendor = null) : IProcessLauncher
 {
+    /// <summary>True for the read of a model-free program of the vendor (codex <c>debug models</c>): it runs in the unit of the vendor but is no turn of the coder, so no preflight, no config and no record of a turn belong to it.</summary>
+    public bool ModelFree { get; init; }
+
     /// <summary>What the layer made of the launch; null until the launch has run.</summary>
     public CoderTurnOutcome? Outcome { get; private set; }
 
@@ -193,7 +245,7 @@ internal sealed class CoderTurnLauncher(CoderOsLayer layer, string recordTo = ""
     {
         try
         {
-            Outcome = await layer.TurnAsync(request, ct, recordTo, vendor);
+            Outcome = ModelFree && vendor is not null ? await layer.ModelFreeAsync(request, ct, vendor) : await layer.TurnAsync(request, ct, recordTo, vendor);
         }
         catch (OperationCanceledException)
         {

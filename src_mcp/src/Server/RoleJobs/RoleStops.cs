@@ -6,7 +6,7 @@ using CoaiMcp.Runners.Reviewers;
 
 namespace CoaiMcp.Server.RoleJobs;
 
-/// <summary>The words of a stop — what <c>role_status</c> shows in <c>attempts[].stop</c> and what <c>job.json</c> records. Three of them fail over; the others end the job.</summary>
+/// <summary>The words of a stop — what <c>role_status</c> shows in <c>attempts[].stop</c> and what <c>job.json</c> records. Four of them fail over; the others end the job.</summary>
 internal static class RoleStopWords
 {
     /// <summary>The vendor refused the call for want of allowance: a spent quota, a throttle, a stated reset. Fails over.</summary>
@@ -17,6 +17,12 @@ internal static class RoleStopWords
 
     /// <summary>Anything else that ended the launch without an answer: an exit, a timeout, an empty answer, a dropped conversation, a missing CLI, a lost sign-in. Fails over.</summary>
     public const string Crash = "crash";
+
+    /// <summary>
+    /// This entry's model cannot be used on this machine now, and NOTHING was launched (epoch 3 E3 s2 t5; <c>SPEC_CHANGES.md</c> Q2): a codex family the installed CLI lists no model of, a full name the CLI does not list, a list of models that could not be read, or a tool list that could not be read. Fails over at once,
+    /// like <see cref="Limit"/>. It is never <see cref="CoderBoundary"/> (no boundary was asked and none broke: that word would send a person looking for a security fault, and it ends the job with the next entry not tried) and never <c>route-invalid</c> (that ends the job and names a setting of the person).
+    /// </summary>
+    public const string ModelUnavailable = "model-unavailable";
 
     /// <summary>The caller withdrew the job. Ends it.</summary>
     public const string Cancelled = "cancelled";
@@ -58,8 +64,11 @@ internal sealed record RoleStop(string Word, string Reason, string Kind, bool Sk
     /// <summary>True when what the launch printed must not be kept as evidence (agy's lost sign-in: its stderr holds a login address): the evidence is the reason alone.</summary>
     public bool NoEvidence { get; init; }
 
-    /// <summary>Limit, refusal and crash go on to the next model; every other word ends the job.</summary>
-    public bool FailsOver => Word is RoleStopWords.Limit or RoleStopWords.Refusal or RoleStopWords.Crash;
+    /// <summary>The names of tools outside the known set that a codex coder's preflight found, as a person may read them (epoch 3 E3 s2 t5); empty for every other stop. Raises the notice <c>coder-tool-unknown</c>.</summary>
+    public string UnknownTools { get; init; } = string.Empty;
+
+    /// <summary>Limit, refusal, crash and model-unavailable go on to the next model; every other word ends the job.</summary>
+    public bool FailsOver => Word is RoleStopWords.Limit or RoleStopWords.Refusal or RoleStopWords.Crash or RoleStopWords.ModelUnavailable;
 }
 
 /// <summary>

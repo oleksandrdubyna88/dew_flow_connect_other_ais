@@ -26,8 +26,7 @@ internal static class CodexPreflightRows
 
         var data = DataOf(started.Result.StdOut);
         var byItem = basic.Skip(1).ToDictionary(row => row.Item, StringComparer.Ordinal);
-        var worktree = CodexToolList.Problem(Names(data, "tools-worktree"));
-        var standIn = CodexToolList.Problem(Names(data, "tools-standin"));
+        var tools = CodexToolList.Judge(Names(data, "tools-worktree"), Names(data, "tools-standin"));
         var doctor = CodexDoctorReport.Read(Text(data, "doctor"));
         var profile = CodexDoctorReport.ProfileProblem(doctor);
         var mcp = CodexDoctorReport.McpProblem(doctor);
@@ -42,12 +41,12 @@ internal static class CodexPreflightRows
 
         var computed = new Dictionary<string, PreflightRow>(StringComparer.Ordinal)
         {
-            ["tool-list"] = worktree.Length + standIn.Length == 0
-                ? new PreflightRow("tool-list", true, "the tool list of the CLI, asked with the job's own model and flags, is the 11 measured names, in the worktree and in a stand-in project with an MCP server of its own config (it says nothing about the web search)")
-                : new PreflightRow("tool-list", false, string.Join("; ", new[] { worktree.Length > 0 ? "in the worktree: " + worktree : string.Empty, standIn.Length > 0 ? "in a stand-in project: " + standIn : string.Empty }.Where(text => text.Length > 0))),
-            ["no-project-tools"] = standIn.Length + mcp.Length == 0
+            ["tool-list"] = tools.ToolList.Length == 0
+                ? new PreflightRow("tool-list", true, HeldSentence(tools)) { Absent = tools.Absent }
+                : new PreflightRow("tool-list", false, tools.ToolList) { Unavailable = tools.ToolListUnavailable, Tools = tools.Outside.Count > 0 ? tools.ShownNames : string.Empty },
+            ["no-project-tools"] = tools.NoProjectTools.Length + mcp.Length == 0
                 ? new PreflightRow("no-project-tools", true, "a project's own .codex/config.toml with an MCP server does not change the tool list, and the doctor report says no MCP server is configured")
-                : new PreflightRow("no-project-tools", false, string.Join("; ", new[] { standIn.Length > 0 ? "in a stand-in project: " + standIn : string.Empty, mcp }.Where(text => text.Length > 0))),
+                : new PreflightRow("no-project-tools", false, string.Join("; ", new[] { tools.NoProjectTools, mcp }.Where(text => text.Length > 0))),
             ["permission-profile"] = profile.Length == 0
                 ? new PreflightRow("permission-profile", true, "the doctor report of the CLI shows the profile coai, a restricted filesystem and network sandbox and the approval policy Never")
                 : new PreflightRow("permission-profile", false, profile),
@@ -55,6 +54,11 @@ internal static class CodexPreflightRows
 
         return [basic[0], .. items.Select(item => computed.TryGetValue(item, out var made) ? made : byItem[item])];
     }
+
+    /// <summary>The sentence of a tool-list row that holds (Q3): no name outside the known set, in the worktree and in a stand-in project with an MCP server of its own config; the known tools the model does not have are named — coai's own strings.</summary>
+    private static string HeldSentence(CodexToolList.Judgement tools) =>
+        $"the tool list of the CLI, asked with the job's own model and flags, holds {CodexToolList.Known.Count - tools.Absent.Count} of the {CodexToolList.Known.Count} known names and no name outside the known set, the same in the worktree and in a stand-in project with an MCP server of its own config (it says nothing about the web search)"
+        + (tools.Absent.Count == 0 ? string.Empty : $"; this model does not have: {string.Join(", ", tools.Absent)}");
 
     /// <summary>Whether a marker file is there; it is removed by its own name (a link is unlinked, never followed).</summary>
     private static bool Removed(string marker)
