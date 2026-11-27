@@ -267,9 +267,9 @@ public sealed class AAgyCoderLaunchTests
         ended.State.Should().Be(RoleJobStates.Succeeded, ended.Reason);
         var record = JsonDocument.Parse(File.ReadAllText(Directory.EnumerateFiles(rig.World.Store.FolderOf(job.JobId)!.Location, "unit-c1.json", SearchOption.AllDirectories).First())).RootElement;
         var seconds = record.GetProperty("properties").EnumerateArray().Single(item => item.GetProperty("name").GetString() == "RuntimeMaxSec").GetProperty("value").GetString();
-        // 45 minutes of turn and a minute of backstop: the unit's end is under the hour a token lives, with the five minutes of margin the gate asks beyond it.
-        int.Parse(seconds!, System.Globalization.CultureInfo.InvariantCulture).Should().Be((45 + 1) * 60);
-        AgyCoderBed.Vendor().TurnDeadline.Should().Be(TimeSpan.FromMinutes(45));
+        // 30 minutes of turn and a minute of backstop: the unit's end is under the hour a token lives, with the five minutes of margin the gate asks beyond it (the owner, 2026-11-27: not 45).
+        int.Parse(seconds!, System.Globalization.CultureInfo.InvariantCulture).Should().Be((30 + 1) * 60);
+        AgyCoderBed.Vendor().TurnDeadline.Should().Be(TimeSpan.FromMinutes(30));
         CoderVendors.Claude.TurnDeadline.Should().BeNull("only a vendor with a sign-in that runs out caps its turns");
     }
 
@@ -291,6 +291,20 @@ public sealed class AAgyCoderLaunchTests
         File.GetLastWriteTimeUtc(unit.Real).Should().Be(realTime);
         unit.SignIns.All().Single().Refreshes.Should().Be(1, "the refresh is counted");
         Directory.Exists(unit.Bed.Job.RefreshFolder).Should().BeFalse("the scratch copy, with the full file in it, is deleted before the coder starts");
+    }
+
+    [Fact]
+    public void V28_TheMarginOfAnAgyLaunch_Is36Minutes_30OfTurn_1OfBackstop_And5Beyond()
+    {
+        var vendor = AgyCoderBed.Vendor();
+        var recipe = (CoderSignInRecipe.CopyForJob)vendor.SignIn;
+        var runtimeMax = vendor.TurnDeadline!.Value + UnitControl.Backstop;
+        var now = new DateTime(2026, 11, 27, 12, 0, 0, DateTimeKind.Utc);
+
+        vendor.TurnDeadline.Should().Be(TimeSpan.FromMinutes(30));
+        (runtimeMax + recipe.Margin).Should().Be(TimeSpan.FromMinutes(36));
+        SignInCopy.Gate(recipe, now.AddMinutes(35), now, runtimeMax, "agy").Should().Contain("needs 36", "35 minutes of token are not enough for a turn of 30");
+        SignInCopy.Gate(recipe, now.AddMinutes(36), now, runtimeMax, "agy").Should().BeEmpty("36 minutes are exactly the margin");
     }
 
     [Fact]

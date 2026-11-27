@@ -47,8 +47,8 @@ internal sealed class AgyCoderVendor(HookHandler? handler = null) : ICoderVendor
 
     public IConsultantRuntime Runtime => new AntigravityConsultant(new AntigravityRuntime("agy"), VendorId);
 
-    /// <summary>A token of agy lives about an hour (3599 s measured) and a launch needs <c>expiry &gt;= now + the unit's end + 5 minutes</c>, the unit's end being the deadline and a minute of backstop: 45 minutes leaves the margin and the minute with room to spare (judgement 14.4, G10).</summary>
-    public TimeSpan? TurnDeadline => TimeSpan.FromMinutes(45);
+    /// <summary>A token of agy lives about an hour (3599 s measured) and a launch needs <c>expiry &gt;= now + the unit's end + 5 minutes</c>, the unit's end being the deadline and a minute of backstop: 30 minutes of turn, 1 of backstop and 5 of margin need 36 of the token's hour (the owner, 2026-11-27, in answer to question (b) of pass 5 of the security verify; the code held 45; judgement 14.4, G10).</summary>
+    public TimeSpan? TurnDeadline => TimeSpan.FromMinutes(30);
 
     public string NotProvedByPreflight => AgyCoderPreflight.NotProved;
 

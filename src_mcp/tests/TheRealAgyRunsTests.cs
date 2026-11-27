@@ -98,11 +98,11 @@ public sealed partial class TheRealAgyRunsTests
 
             // (b) The product's own road before a launch: the sign-in copy (a refresh only when the margin is missing), the guard folder, the preflight in the real unit, with the real agy as the program. agy itself is not launched.
             var states = new SignInJobs();
-            var runtimeMax = TimeSpan.FromMinutes(45) + UnitControl.Backstop;
+            var runtimeMax = TimeSpan.FromMinutes(30) + UnitControl.Backstop;
             var unsigned = await boundary.PrepareSignInAsync(job, agy, runtimeMax, states, DateTime.UtcNow, TestContext.Current.CancellationToken);
             report.AppendLine($"(b) sign-in copy for the job: {(unsigned.Length == 0 ? "made and gated" : "REFUSED — " + Redact(unsigned))}");
             report.AppendLine($"(b) refreshes counted by the road: {states.Of(vendor.Id, () => throw new InvalidOperationException("no state")).Refreshes.ToString(CultureInfo.InvariantCulture)}");
-            var request = new ProcessRequest(agy, vendor.FreshArgv("gemini-4-argon-medium", job.Tree.Root), vendor.WorkingDirectory(job)) { Timeout = TimeSpan.FromMinutes(45), InheritsEnvironment = false };
+            var request = new ProcessRequest(agy, vendor.FreshArgv("gemini-4-argon-medium", job.Tree.Root), vendor.WorkingDirectory(job)) { Timeout = TimeSpan.FromMinutes(30), InheritsEnvironment = false };
             var prepared = boundary.PrepareLaunch(job, request);
             report.AppendLine($"(b) guard folder: {(prepared.Problem.Length == 0 ? "written and read back" : "REFUSED — " + Redact(prepared.Problem))}");
             var admission = await boundary.AdmitAsync(job, agy, TestContext.Current.CancellationToken, withKey: false, runtimeMax);
