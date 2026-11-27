@@ -4,7 +4,7 @@
 > `proceed`, 2026-11-25 (section J); the changes after it (section K); second plan round: `proceed`, 2026-11-26 (section L).
 > The owner's decisions of 2026-11-26 (sections M and O) are plan changes in the parent plan's ledger
 > ([PLAN.md](../../PLAN.md), `## Plan changes`). The re-review round of E3: `proceed`, 2026-11-26, 3 findings accepted
-> (section N). The owner accepted the revised plan on 2026-11-26; epoch 2 of the ledger is open; its entry 2.1 (2026-11-27) is section Q. Sections J to Q are in
+> (section N). The owner accepted the revised plan on 2026-11-26; epoch 2 of the ledger is **stopped for re-review** (entries 2.1 and 2.2, 2026-11-27: sections Q and R). Sections J to R are in
 > [SPEC_CHANGES.md](SPEC_CHANGES.md): a spec file may hold 64 KiB (B item 5). Scope: the server half (`src_mcp`, `shared/`,
 > `.coai/toolchain.yaml`). Written by the planner
 > (Fable) from `v2/` and the code at `feat/v2-ep3-e2-coder` `0e8e8941`, read-only. Parent plan: [PLAN.md](../../PLAN.md);
@@ -223,7 +223,7 @@ own sandbox, seen working INSIDE the unit. The unit of E2 binds the main checkou
    each job. It has one row for each id of class `pre` of the table: what is hidden from a child command, the sign-in files,
    the network limit where one exists (for codex: a command of the model has no network, CX-V4), no user manager inside, the
    vendor's own sandbox or guard where the verdict relies on it. A wrong answer ends `coder-boundary`
-   before any launch and names the row (a codex tool list that cannot be read: `model-unavailable`, section Q). A test holds the rows and the `pre` ids of the table equal, and each row goes red when
+   before any launch and names the row (a codex tool list that cannot be read or holds an unknown tool: `model-unavailable`, section Q). A test holds the rows and the `pre` ids of the table equal, and each row goes red when
    its property is dropped.
 4. **The other ids are asked where they can be asked** (the judgement, section 8). Class `launch`: by coai before every launch,
    turn 0 and every fix turn, on the files the unit will get. Class `turn`: read by coai from the CLI's own stream after every
@@ -613,8 +613,8 @@ Risks:
     stream of every turn. What is only ASSUMED on a version that was not measured: every property of class `release`
     (it cannot be asked without a model turn), and that a flag of the same name still does what it did. The envelope
     names the installed version beside the measured one, so a person can see how far apart they are.
-14. **A codex model that nobody measured runs as a coder on the day the CLI lists it** (the owner, 2026-11-27):
-    `SPEC_CHANGES.md`, section Q.
+14. **A codex model that nobody measured runs as a coder on the day the CLI lists it** (the owner, 2026-11-27;
+    accepted the same day): `SPEC_CHANGES.md`, sections Q and R.
 
 The questions that were put to the owner on 2026-11-25 (questions 1 to 5, which task files cite as "SPEC section H,
 question n") and the answers of that day (decisions 35 to 40) are in `SPEC_CHANGES.md`, section H-Q, word for word.

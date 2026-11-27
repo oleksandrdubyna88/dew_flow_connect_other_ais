@@ -3,6 +3,7 @@
 > Status: **plan, nothing built, 2026-11-22.** Branch `feat/v2-plan`. Built with the v2 work method itself: a feature
 > folder → epochs (≤ 5 epics each, MVP first) → epics → stories → tasks, each node with a YAML file. Stories and tasks
 > are written for an epic when it starts (now: epoch 1). The split was re-decided by Fable on 2026-11-22: 5 epochs, MVP epics with measurable pass criteria, 10 cornerstone stories (feature.yaml `cornerstones`; 12 since 2026-11-25, when the E3 plan gate added E3 s3 and s4).
+> **Stopped for re-review, 2026-11-27** (the ledger below, entry 2.2): the plan is stopped for re-review after the second change of ledger epoch 2. No new code on any epic of this plan, and no merge of its work, until epoch 3 of the ledger is open.
 
 ## Plan changes
 
@@ -82,7 +83,7 @@ Narrowed: yes — the release pin, the agy program store and the refusal of a he
   and 1.7, in that order. By the lead's account the owner ordered each of them in the lead's conversation, and the owner
   accepted the whole plan afterwards. The judge sorted their content with the rest.)
 
-> Epoch 2 · approved 2026-11-26 · by owner · state: open
+> Epoch 2 · approved 2026-11-26 · by owner · state: stopped
 
 - 2.1 · 2026-11-27 · owner · contract, approach, dod, epics, stories, build-order — a codex name with no version (`terra`, `astra`) is the newest model of its family that the installed CLI lists, resolved when a job reaches the entry, so a new model needs no hand edit; a name that cannot be used ends the entry with the new stop word `model-unavailable`, which fails over, and not `coder-boundary`; the tool list of a codex coder passes when it holds no tool outside the known set, in place of exactly the 11 measured names (epoch 3 E3, SPEC_CHANGES section Q; new task s2 t5; a new doneWhen line of epoch 4 e4-local-pages)
   (The owner's words of 2026-11-27, as the lead gave them, in translation: "Default: the latest terra. When 6.2 or 7 comes
@@ -100,6 +101,33 @@ Narrowed: yes — the release pin, the agy program store and the refusal of a he
   [SPEC_CHANGES.md](epoch-3/e3-roles-complete/SPEC_CHANGES.md). The security reading of "fewer tools pass" there is the
   planner's, not a judgement addendum. Not counted here, and for the lead to decide: section P of the same file lists
   changes that the security verify made on 2026-11-27, after the approval of this epoch, and none of them is an entry.)
+- 2.2 · 2026-11-27 · owner · contract, dod — a new codex model that offers a tool outside the known set does not end the job: the entry ends `model-unavailable`, the job goes to the next model, and the notice `coder-tool-unknown` names the tool; this replaces the `coder-boundary` that entry 2.1 wrote for this case; two reads of the tool list that differ stay `coder-boundary` (epoch 3 E3, SPEC_CHANGES sections Q and R; s2 t5 d4 to d6)
+  (The owner's words of 2026-11-27, later the same day, as the lead gave them, in translation: "Move to the next model." It
+  answers a question that the planner put after entry 2.1: a new model with a tool outside the known set ended the job, and
+  the planner asked if it should fail over. The planner has the words from the lead, not in the owner's own language.)
+  (This second entry stopped the plan. It is a change and not a part of entry 2.1: entry 2.1 was accepted and pushed with
+  `coder-boundary` for this case, in commit ae855982, and a later decision changed that contract. An owner's request counts
+  like any other change.)
+  (Three more answers came with it. None is an entry, and the reason is said for each, so that nobody reads it as a way to
+  keep the count low: the count is two with or without them, and the plan is stopped. First: "I accept", for risk 14 of
+  the E3 SPEC. A risk that the owner accepts changes no scope, goal, Definition of Done, merge condition, epic, story, build
+  order, contract or approach: entry 2.1 already launches the newest model, and nothing waited for this word. It is unlike
+  the entries 1.3 and 1.15 of epoch 1, where a vendor could ship only after the owner's word. Second: the turn of an agy coder
+  is cut at 30 minutes, not 45. The plan names no number: s6 t3 d3 of E3 says that the deadline fits under the life of a
+  token, about one hour, and 30 minutes fits as 45 did. The number 45 is in the code, and the security verify left it to the
+  owner as question (b) of its pass 5. So it is an answer inside the plan as written. Third: question 3 of section N of the
+  E4 SPEC, "yes". That question was open in the plan, with the words that s5 t6 of E4 starts after the answer. If the lead
+  or the owner reads one of the three as a change, it is one more entry of this stopped epoch.)
+  (What the re-review must cover, by the rule of plan changes. One consultation with the entries 2.1 and 2.2 quoted. The
+  WHOLE plan read again and revised against what is known now: the goal, the Definition of Done, the merge conditions, the
+  epics and the build order, not a patch of the two entries. An Opus judge sorts every commit made since the approval of
+  this epoch, commit 6125f2ce, on every branch that carries work of this plan, as fits or cut, in the
+  re-review record for epoch 3. What contradicts the revised plan is cut by a new commit, never by a history rewrite. Then a
+  plan round, and the owner's approval if the plan got narrower. The planner's view: it did. The tool list no longer has to
+  be the exact 11 names, and a tool outside the set no longer ends a job. The open points that the re-review must decide
+  are listed in section R of [SPEC_CHANGES.md](epoch-3/e3-roles-complete/SPEC_CHANGES.md).)
+  (During the stop: no new code on any epic of this plan and no merge of a pull request that carries its work. Allowed: the
+  re-review, its reverts, work outside the plan, and an incident fix that the owner orders.)
 
 ## Goal
 
