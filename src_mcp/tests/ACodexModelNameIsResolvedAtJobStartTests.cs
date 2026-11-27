@@ -547,13 +547,41 @@ public sealed class ACodexModelNameIsResolvedAtJobStartTests
         var call = ModelCalls(rig.LaunchFolder(job)).Should().ContainSingle().Subject;
         call[3].Should().Be("debug models", "the argv is debug models and nothing else");
         call[4].Should().BeEmpty("the folder is empty");
+        var cover = rig.JobFolder(job); // on this machine the unit covers the job folder itself (a job folder under /tmp): nothing above it is shown
         for (var above = Path.GetDirectoryName(call[0]); !string.IsNullOrEmpty(above); above = Path.GetDirectoryName(above))
         {
             Directory.Exists(Path.Combine(above, ".git")).Should().BeFalse($"no folder above the working folder is a folder of a repository ({above})");
             File.Exists(Path.Combine(above, ".git")).Should().BeFalse(above);
+            if (above == cover)
+            {
+                break;
+            }
         }
 
         call[0].Should().NotContain(Path.GetFileName(rig.WorktreeOf(job)), "never a folder inside the worktree, the main checkout or a mount");
+    }
+
+    [Fact]
+    public async Task V30_AFolderOfARepositoryAboveTheWorkingFolder_InsideWhatTheUnitShows_IsCoderBoundary_BeforeTheListIsRead()
+    {
+        await using var world = await CodexRigWorld.CreateAsync();
+        var rig = world.Rig;
+        var job = rig.NewJob(route: Two);
+        var holder = rig.JobFolder(job);
+        Directory.CreateDirectory(Path.Combine(holder, ".git"));
+        try
+        {
+            var (_, ended) = await rig.RunAsync(job);
+
+            (ended.State, ended.Stop).Should().Be((RoleJobStates.Failed, "coder-boundary"), ended.Reason);
+            ended.Reason.Should().Contain("holds .git").And.Contain("so it is a folder of a repository");
+            ended.Attempts.Should().ContainSingle();
+            rig.Launches(job).Should().BeEmpty();
+        }
+        finally
+        {
+            Directory.Delete(Path.Combine(holder, ".git"));
+        }
     }
 
     [Fact]

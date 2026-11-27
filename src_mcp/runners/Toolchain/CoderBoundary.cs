@@ -369,12 +369,19 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
             return $"the folder the list of models is read in ({folder}) is not inside the vendor's folder of the job, so the list was not read";
         }
 
-        // No folder above it is a folder of the repository (A4-M3 item 1): a '.git' on the way up would be text the run sits under.
+        // No folder above it is a folder of a repository (A4-M3 item 1): a '.git' on the way up would be text the run sits under. The way up is asked as far as the unit SHOWS it: up to and including the folder the unit covers (the one that holds the jobs, or the job folder itself): above that the unit has an
+        // empty tmpfs, so a folder of the host there — a '.git' a person or another process made in a shared temp folder — is nothing the run can sit under.
+        var cover = Path.TrimEndingDirectorySeparator(job.JobCover);
         for (var above = Path.GetDirectoryName(Path.GetFullPath(folder)); !string.IsNullOrEmpty(above); above = Path.GetDirectoryName(above))
         {
             if (new[] { ".git" }.FirstOrDefault(name => RealPath.Lstat(Path.Combine(above, name)).Kind != EntryKind.Missing) is { } found)
             {
                 return $"a folder above the folder the list of models is read in ({above}) holds {found}, so it is a folder of a repository, and the list was not read";
+            }
+
+            if (string.Equals(Path.TrimEndingDirectorySeparator(above), cover, StringComparison.Ordinal))
+            {
+                break;
             }
         }
 

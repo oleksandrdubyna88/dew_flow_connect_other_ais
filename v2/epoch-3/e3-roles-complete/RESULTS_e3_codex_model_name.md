@@ -19,7 +19,7 @@ own sign-in recipe (the copy with the placeholder in the place of the refresh to
 |---|---|
 | command | `codex debug models` (no `--bundled`), argv exactly `debug models`, stdin empty |
 | where | the real unit of the job (the property list of the launch), `CODEX_HOME` = the job's own, with the job's sign-in copy |
-| working folder | `<job>/coder/codex/models-cwd`: an empty folder inside the job's vendor folder, never the worktree; it held 0 entries after the run; no folder above it holds a `.git` (the product asks this before the run) |
+| working folder | `<job>/coder/codex/models-cwd`: an empty folder inside the job's vendor folder, never the worktree; it held 0 entries after the run; no folder above it, as far as the unit shows the way up (up to the folder the unit covers: on a job folder under /tmp that is the job folder itself), holds a `.git` (the product asks this before the run; a `.git` that another process makes in a shared `/tmp` above the cover is nothing the unit shows, and made the earlier form of the check fail the tests at random) |
 | wall time | 0.8 s (a first run of the same harness: 3.6 s) |
 | outcome | finished, 12 models. With visibility `list`: gpt-6.2-sol, gpt-6.2-astra, gpt-6.1-terra, gpt-6.1-sol, gpt-6-astra, gpt-6-sol, gpt-6-luna, gpt-5.6-sol, gpt-5.6-terra, gpt-5.6-luna |
 | files of the job's `CODEX_HOME` before the read | `auth.json` |
