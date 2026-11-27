@@ -17,7 +17,7 @@
 > owner's answers of that day. Seven more (K.17 to K.23) were moved with the approval of epoch 4, and ten more
 > (K.24 to K.33) with the ledger entry 4.1, both on 2026-11-26. Seven more (K.34 to K.40) came with entries
 > 4.2 and 4.3 that day, and four (K.41 to K.44) with the entries of epoch 5 on 2026-11-27. Eleven more
-> (K.45 to K.55) came with entries 6.2 and 6.3 the same day.
+> (K.45 to K.55) came with entries 6.2 and 6.3 the same day, and four (K.56 to K.59) with entry 7.1.
 
 | § | What it holds | Why it is not in the plan |
 |---|---|---|
@@ -3509,3 +3509,90 @@ name counts, there and on this side, only when it fits `[a-z_][a-z0-9_-]{0,31}`;
 there and on this side, only when it is from 1000 to 59 999 under a name that is not `root`, **or 0 under the
 name `root`** (decision 24). Never printed and, if a reply holds one, never read: a UID from 1 to 999; UID 0
 under another name; the name `root` with another UID. It has no operand.
+
+### K.56 to K.59 — four more passages, moved with entry 7.1 on 2026-11-27
+
+These four were moved here in the commit that records the ledger entry 7.1: the owner's word that, as
+root, a vendor program whose folder another user can write is run all the same, with a warning in its row.
+Each is taken from the plan as it stood at `abd770b1`, word for word, so that the plan stays under 100 KB.
+They hold as written, and the plan keeps a line or two of each. K.56 and K.57 are of what is merged and
+released; K.58 and K.59 are rules of the design that extension 2.1.0 holds.
+
+**What entry 7.1 itself changes is not here.** The words it narrows stay in the plan, each with a sentence
+"Since entry 7.1" beside it. **It also narrows what two sections of this appendix say in full**: § K.40,
+on root's own programs, and item 1 of § K.55. There, "as UID 0 the script checks, before it starts a
+program" still says what is checked. Since entry 7.1 a check that fails stops a basic tool only —
+`timeout`, `tail`, `sed`, `grep`, `sleep`, `sha256sum`, `jq`; a vendor program — `claude`, `codex`, `agy` —
+is started, and its row warns and names the folder.
+
+### K.56 — *Merge conditions*: for the pull request of E2, E3 and E4, for E4, for the cut and for the release 2.1.0
+
+It stood at the head of *Merge conditions*. The pull request is merged (#1055), and so is the cut (#1051);
+extension 2.1.0 is released.
+
+**For the pull request of the code epics E2, E3 and E4 — one for the three, or several** (entry 4.2):
+
+1. The parent is not stopped, and each epic's stories document is written; a cornerstone or security spec is
+   written by Fable before its code.
+2. Every row of the test plan that belongs to the epic is green; each leak test and each "never" test of the epic
+   was seen RED once with its message.
+3. The code gate passed (`review_code`, fed the scope), the own Opus review ran, and every finding is resolved.
+4. CI is green on the head that merges, with its checks present.
+5. **ONE real-window check, on the combined build: the owner's rows of E2, E3 and E4 have a recorded result on
+   ONE VSIX, built from a head that holds the code of all three** (Q4 as changed on 2026-11-26). No pull
+   request of the three merges before it. A row that fails is fixed and run again on the new combined head.
+6. `SECURITY.md` and the help say what the head does.
+
+**For E4 also:** W6 and W7 are recorded, W7 passed, and revision 2 of the script is on main or in the same
+pull request.
+**For the cut of step 1** (merged, #1051): the appendix, § K.33.
+**For the release 2.1.0:** E5's rows recorded; **the gates R7 and R12 passed, once, on the head that is tagged** —
+the build of E2 to E4 (R18 goes with E6, to the next release); `review_feature` resolved; no extension release
+from main between #1047 and the cut. **This did not hold as written: 2.1.0 was released on 2026-11-27 before
+R12 and the VM half of R7 had a result. The VM half of R7 passed after it; R12 is a gate of E6's build, and
+its result there stands for 2.1.0 (entry 5.2).**
+
+### K.57 — *Build order*: steps 1 to 10
+
+It stood at the head of *Build order*, before the paragraph "Where this order stands, 2026-11-27".
+
+1. **The cut** — done: merged as #1051, `b1ec467c`. (Steps 1, 2 and 4 as written: the appendix, § K.30.)
+2. **The owner approves epoch 3** — done, 2026-11-26.
+3. **E2 — the permission and the table.** Its stories by Opus; the security spec of E2.S1 by Fable before its
+   code; the code gate. Not merged before step 7.
+4. **W9 on this PC, and W6, W7 and W8 on a VM, by hand** — all four run on 2026-11-26 (§ 5).
+5. **E3 — WSL on this PC, and revision 2 of the script**, on top of E2: in E2's pull request or in its own.
+6. **E4 — the Claude usage on**, with revision 2: W7 passed and W6 selected the policy (§ 5). It may be in
+   E3's pull request.
+7. **ONE real-window check, on the combined build** (entry 4.2): a VSIX from a head that holds E2, E3 and E4;
+   the owner runs the rows of the three on it, once. Then the pull request, or the several, merge.
+8. **E5 — the long runs, once, on the release build** of E2 to E4. No product code.
+9. `review_feature` over the built epics, every finding resolved.
+10. The extension release, one for the whole plan: the tag pushed alone and its run observed; `POST_DEPLOY.md`
+    run; the plan promoted with its deviations, its appendix and its stories documents.
+
+### K.58 — § 2: *Refresh now*, the size of a round, the summary, the one notice
+
+It stood in § 2, after the bullet *The usage policy*.
+
+- ***Refresh now*** starts a round at once, unless one runs or the last one ended less than 60 s ago. Opening the
+  tab draws what the memory holds and starts a round only when a place that may be read has no reading.
+- **The size of a round.** One call for each place and one more for each Claude account. With 20 ssh hosts of 20
+  accounts and the usage on, that is 40 calls: 2 to 7 minutes at the measured 3 to 10 s a call, 20 minutes at the
+  ceiling. The next round starts 10 minutes after the end, so rounds never overlap.
+- **The summary** of the toolbar is of the last round that ended: its end time, and how many of its places
+  answered.
+- **One notice, once for each installation**, when a `Creds:` terminal is first seen without the permission:
+  *CoAI can show the AI accounts and usage of the hosts of your Creds terminals.* Its one button opens the tab and
+  decides nothing. **The timer never asks a person.**
+
+### K.59 — § 3: T9 and T8, taken up
+
+It stood in § 3, after the table *Who may be contacted* and the paragraph on a per-host "yes".
+
+- **T9, taken up: the session road asks that function before EVERY spawn of a press**, not once. A later spawn of
+  a press never asks a person: when the answer is no longer "yes" it stops with the sentence of that answer.
+- **T8, taken up: "something waits unsaved" is an answer of its own, `waiting`**, beside `yes`, `no`, `no-permission` and
+  `damaged`. The session door and the tab then say: *A “Not this host”, a stop or a withdrawal is not saved yet on
+  this side, so nothing was read. Choose “Save now”.* The sentence "the list cannot be read" is for a list that
+  cannot be read.
