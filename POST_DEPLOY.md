@@ -19,7 +19,17 @@ one of them arriving wrong.
 
 Target: the released **extension** version — `--target 0.33.1`. The MCP binary ships on its own tag and its own number, so item 1 reads `MCP_VERSION` (`mcp-v<version>`) rather than the target.
 
-Last verified: 2026-11-27 · extension **2.1.0** (released: `extension-v2.1.0` on 9060cb87, cut by a release-please
+Last verified: 2026-11-27 · extension **2.1.1** (released: `extension-v2.1.1` on 5801b846, cut by a release-please
+dispatch after release PR #1063; release run 46000027336 green) · mcp **2.0.0** unchanged · server **0.16.3** served by the
+box. Run locally: `MCP_VERSION=2.0.0 SERVER_VERSION=0.16.3 node .agents/conventions/tools/post-deploy-check.mjs --target
+2.1.1`. The first run printed `FAIL 2 — marketplace serves 2.1.0` (the Marketplace's own delay); re-run each minute, it
+printed every automated item PASS at 12:49:19 UTC: `PASS 1`, `PASS 2`, `PASS 6`, `PASS 9` and `PASS 10`. The released
+vsix (`connect-other-ais-2.1.1.vsix`, sha256 `974865d69205b8b486b70d5e35bd3fc95f687274f971afe1c210d5e474428c2e`) was
+opened: `package.json` says 2.1.1, and `dist/modules/chat.js` holds "Usage is being read now". The release carries #1061
+(the accounts tab's usage cell while a round reads that host). The owner runs a local VSIX of the same commit's code. Manual
+items 3, 4, 5, 7, 8, 11 and 12 were not run.
+
+Previously verified: 2026-11-27 · extension **2.1.0** (released: `extension-v2.1.0` on 9060cb87, cut by a release-please
 dispatch after release PR #1057; release run 45934474822, its `extension` job green with "Publish to the Marketplace"; every
 other job skipped, as on an extension-only tag) · mcp **2.0.0** unchanged · server **0.16.3** served by the box (0.16.4 is
 released but not deployed: `SERVER_VERSION=0.16.4` printed `FAIL 10 — 200 {"ok":true,"version":"0.16.3"}`, which is that, not
