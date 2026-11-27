@@ -64,3 +64,11 @@ Processes the road started (argv cut at 360 characters, secrets redacted; the lo
 - `systemctl` (0.0 s, exit 0): --user show --property=ActiveState --value <redacted>
 - `systemd-run` (1.6 s, exit 0): --wait --pipe --user --collect --quiet --expand-environment=no --unit coai-coder-t4-f222a30536a1-pre --working-directory /home/jinx/coai-t3/runs/real-agy-jobs/t4-f222a30536a1/coder/agy/guard -p ProtectSystem=strict -p ProtectHome=tmpfs -p TemporaryFileSystem=/run/user -p TemporaryFileSystem=/mnt -p TemporaryFileSystem=/dev/sh …
 - `systemctl` (0.0 s, exit 0): --user show --property=ActiveState --value coai-coder-t4-f222a30536a1-pre.service
+
+## Again after pass 10 (2026-11-27): the refresh unit with its new lists
+
+The refresh unit now hides the key pool and every real sign-in file of the person at their real paths, and asks the home rule for its program (pass 10: S26, R-S7, S54). Its argv and binds changed, so the two runs were repeated once with that build, with the same rules (a temp job folder outside `/tmp`, the product's sign-in copy, no model, only "equal" or "changed" about the real file).
+
+- (a) `agy models` on a stale copy that coai made: the refresh unit finished and the scratch copy's expiry was in the future (60 minutes). The refresh folder was gone afterwards.
+- (b) The product's road before a launch: the sign-in copy was made and gated (the real token had been expired 268 minutes, so the road itself ran one refresh, counted 1), the guard folder was written and read back, and the preflight held **23 of 23 rows: ADMITTED**.
+- Real sign-in file, measured inside the shared lock around the run: **equal**, mtime in the same second. The made-up jobs folder was removed.
