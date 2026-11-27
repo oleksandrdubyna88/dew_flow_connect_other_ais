@@ -155,31 +155,61 @@ public sealed class TheRealCodexCoderRunTests
             string[] FilesOfHome() => Directory.Exists(CodexCoderVendor.CodexHome(job)) ? [.. Directory.EnumerateFileSystemEntries(CodexCoderVendor.CodexHome(job), "*", SearchOption.AllDirectories).Select(path => Path.GetRelativePath(CodexCoderVendor.CodexHome(job), path)).Order(StringComparer.Ordinal)] : [];
             var filesBefore = FilesOfHome();
             // The names of the processes of the unit, sampled while the read runs (A4-M3 item 4): the control group of the unit, read every 20 ms.
-            var seen = new SortedSet<string>(StringComparer.Ordinal);
+            var seen = new List<SeenProcess>();
+            var mainPid = string.Empty;
             using var stopSampling = new CancellationTokenSource();
             var sampler = Task.Run(async () =>
             {
                 var unitName = CoderUnit.UnitName(job, "m1") + ".service";
+                var sample = 0;
                 while (!stopSampling.IsCancellationRequested)
                 {
                     try
                     {
-                        var group = (await new ProcessLauncher().RunAsync(new ProcessRequest("systemctl", ["--user", "show", "-p", "ControlGroup", "--value", unitName], coder.Worktree) { Timeout = TimeSpan.FromSeconds(5) })).StdOut.Trim();
+                        var shown = (await new ProcessLauncher().RunAsync(new ProcessRequest("systemctl", ["--user", "show", "-p", "ControlGroup", "-p", "MainPID", unitName], coder.Worktree) { Timeout = TimeSpan.FromSeconds(5) })).StdOut.Split('\n');
+                        var group = shown.FirstOrDefault(line => line.StartsWith("ControlGroup=", StringComparison.Ordinal))?["ControlGroup=".Length..].Trim() ?? string.Empty;
+                        var main = shown.FirstOrDefault(line => line.StartsWith("MainPID=", StringComparison.Ordinal))?["MainPID=".Length..].Trim() ?? string.Empty;
                         var procs = Path.Combine("/sys/fs/cgroup", group.TrimStart('/'), "cgroup.procs");
                         if (group.Length > 0 && File.Exists(procs))
                         {
-                            foreach (var pid in File.ReadAllLines(procs))
+                            if (main.Length > 0 && main != "0")
                             {
-                                if (File.Exists($"/proc/{pid}/comm"))
+                                mainPid = main;
+                            }
+
+                            var here = new List<SeenProcess>();
+                            foreach (var pid in File.ReadAllLines(procs).Where(line => int.TryParse(line, out _)))
+                            {
+                                try
                                 {
-                                    seen.Add(File.ReadAllText($"/proc/{pid}/comm").Trim());
+                                    var comm = File.ReadAllText($"/proc/{pid}/comm").Trim();
+                                    // The parent pid and the real path of the executable, best effort: a process may end between the looks, and then they are not read.
+                                    string parent = "?", exe = "?";
+                                    try
+                                    {
+                                        parent = File.ReadAllText($"/proc/{pid}/stat") is var stat && stat.LastIndexOf(')') is var close and >= 0 ? stat[(close + 2)..].Split(' ')[1] : "?";
+                                        exe = new FileInfo($"/proc/{pid}/exe").ResolveLinkTarget(true)?.FullName ?? "?";
+                                    }
+                                    catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+                                    {
+                                        // not readable: the rule says what then decides
+                                    }
+
+                                    here.Add(new SeenProcess(sample, int.Parse(pid, System.Globalization.CultureInfo.InvariantCulture), comm, parent, exe));
+                                }
+                                catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+                                {
+                                    // the process ended between the two looks
                                 }
                             }
+
+                            seen.AddRange(here);
+                            sample++;
                         }
                     }
                     catch (Exception e) when (e is IOException or UnauthorizedAccessException)
                     {
-                        // the process ended between the two looks
+                        // the unit ended between the two looks
                     }
                 }
             });
@@ -190,7 +220,13 @@ public sealed class TheRealCodexCoderRunTests
             var filesAfter = FilesOfHome();
             report.Line($"files of the job's CODEX_HOME before the read: {string.Join(", ", filesBefore)}");
             report.Line($"files of the job's CODEX_HOME after the read, not there before: {(filesAfter.Except(filesBefore).Any() ? string.Join(", ", filesAfter.Except(filesBefore)) : "none")}");
-            report.Line($"names of the processes seen in the unit of the read (sampled; the unit is gone before the last sample may see more): {string.Join(", ", seen)}");
+            report.Line($"names of the processes seen in the unit of the read (sampled in the order taken; the unit is gone before the last sample may see more): {string.Join(", ", seen.Select(process => process.Comm).Distinct(StringComparer.Ordinal))}");
+            report.Line($"the first sample that shows the unit's main process as sh or codex: {(ListReadProcesses.Cutoff(seen) is { } cutoff ? cutoff : "none")}; the unit's main pid as the manager said it: {(mainPid.Length > 0 ? mainPid : "not read")}; samples taken: {seen.Select(process => process.Sample).Distinct().Count()}");
+            report.Line($"each name with its first sample, its parent pid and the real path of its executable: {string.Join("; ", seen.GroupBy(process => (process.Comm, process.Parent, process.Exe)).Select(group => $"{group.Key.Comm} (first in sample {group.Min(process => process.Sample)}, parent {group.Key.Parent}, {group.Key.Exe})"))}");
+            // A4-M3 item 4, as the judge read it (parts 15.12 and the ruling on sd-userns): the CLI, the helper programs of its OS probe and the unit's own start-up are allowed — and only they, with the time rule of ListReadProcesses. Anything else fails the real run and is named.
+            var violations = ListReadProcesses.Violations(seen, mainPid);
+            report.Line($"processes that break the rule: {(violations.Count == 0 ? "none" : string.Join("; ", violations))}");
+            violations.Should().BeEmpty("the list read starts no process but the CLI, its OS probe and the unit's own start-up (A4-M3 item 4): {0}", string.Join("; ", violations));
             report.Line($"list read (codex debug models, live, in the real unit): {clock.Elapsed.TotalSeconds:F1} s, outcome {listed.GetType().Name}");
             report.Line($"working folder of the list read: <job>/coder/codex/models-cwd (inside the job's vendor folder: {folder.StartsWith(job.CoderVendorFolder("codex"), StringComparison.Ordinal)}); entries in it after the run: {(Directory.Exists(folder) ? Directory.EnumerateFileSystemEntries(folder).Count() : -1)}");
             var finished = listed.Should().BeOfType<CoderTurnOutcome.Finished>(listed.ToString()).Subject;
@@ -226,7 +262,7 @@ public sealed class TheRealCodexCoderRunTests
                 report.Line($"tool-list: {rows.Single(row => row.Item == "tool-list").Detail}");
                 report.Line($"no-project-tools: {rows.Single(row => row.Item == "no-project-tools").Detail}");
 
-                var printed = await turns.RunModelFreeAsync(job, new ProcessRequest(exe, ["debug", "prompt-input", .. CodexCoderVendor.ProbeFlags(model!), "x"], folder) { Timeout = TimeSpan.FromSeconds(60) }, $"m{++part}", vendor, signIns, TestContext.Current.CancellationToken);
+                var printed = await turns.RunModelFreeAsync(job, new ProcessRequest(exe, ["debug", "prompt-input", .. CodexCoderVendor.ProbeFlags(model!), "x"], Path.Combine(job.CoderVendorFolder("codex"), $"probe-cwd-{part + 1}")) { Timeout = TimeSpan.FromSeconds(60) }, $"m{++part}", vendor, signIns, TestContext.Current.CancellationToken);
                 var text = printed.Should().BeOfType<CoderTurnOutcome.Finished>(printed.ToString()).Subject.Run.Result.StdOut;
                 var read = CodexToolList.Read(text);
                 report.Line($"the tool report read with the grammar: whole {read.Whole}, {read.Names.Count} names, outside the known set: {CodexToolList.Outside(read.Names).Count}, absent known tools: {string.Join(", ", CodexToolList.Absent(read.Names))}");

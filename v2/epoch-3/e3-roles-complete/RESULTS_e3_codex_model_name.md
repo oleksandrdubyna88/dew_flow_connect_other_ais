@@ -24,12 +24,13 @@ own sign-in recipe (the copy with the placeholder in the place of the refresh to
 | outcome | finished, 12 models. With visibility `list`: gpt-6.2-sol, gpt-6.2-astra, gpt-6.1-terra, gpt-6.1-sol, gpt-6-astra, gpt-6-sol, gpt-6-luna, gpt-5.6-sol, gpt-5.6-terra, gpt-5.6-luna |
 | files of the job's `CODEX_HOME` before the read | `auth.json` |
 | files the read left, not there before | **`models_cache.json`**. No `config.toml`, no `environments.toml`, nothing under `sessions` |
-| names of the processes seen in the unit during the read (sampled every 20 ms from the control group of the unit) | `(sh)`, `codex`, `cut`, `lsb_release`, `sed`, `sh`, `tr` |
+| the processes of the unit during the read (sampled about every 50 ms from the control group of the unit, 63 samples; the harness records for each name its first sample, its parent pid and the real path of its executable, when they could be read) | `(sh)`, `(sd-userns)`, `codex`, `lsb_release`, `cut`, `tr` (`sed` in an earlier run) |
 
-**What A4-M3 item 4 says about this, and what is not done:** "If the read leaves an `environments.toml`, a `config.toml` or a file under `sessions`, or starts a process that is not
-the CLI, the task stops and says so." The read leaves none of the three files. It DOES show processes that are not the CLI: `lsb_release` with `sh`, `cut`, `sed` and `tr` (the
-operating-system probe that the CLI makes at its start, and the `sh` of coai's own unit wrapper). The judge did not know of it. **The task says so here and asks the judge**: whether
-the processes of the CLI's own OS probe are inside what addendum 4 ruled safe. Nothing was changed to hide them, and the read is not widened.
+**Item 4, under the judge's reading (part 15.12 and the ruling on `sd-userns`): met.** The harness (phase `names`) holds the rule in `ListReadProcesses.cs` and fails the real run, naming the process, when it breaks it:
+- allowed at any time: `codex`, `sh`, `lsb_release`, `cut`, `sed`, `tr`; a name in brackets is the same name;
+- `(sh)` and `sd-userns` (also `(sd-userns)`) only in samples taken BEFORE the first sample that shows the unit's main process as the wrapper `sh` or as `codex` (the unit start); at or after it they fail. There is no parent rule: `(sh)`, `sh` and `codex` are one pid that changes by exec;
+- for `sd-userns`, when they could be read, the executable must be a program of systemd and the parent the unit's main pid; when they could not be read the time rule alone decides.
+Result of the real run: the first sample that shows `sh` or `codex` is sample 8; `(sh)` and `(sd-userns)` were seen in samples 0 to 3, before it; the parent of `(sd-userns)` was the unit's main pid (3537229); its executable could not be read (the process is gone before the read); `(sh)` was read once as `/usr/lib/systemd/systemd-executor`; `codex` ran from the release binary; `lsb_release` ran from `/usr/bin/dash`, `cut` and `tr` from `/usr/lib/cargo/bin/coreutils`. **Processes that break the rule: none.** The time rule has its own tests (`AListReadProcessRuleTests`: before is allowed, after fails, the name is shown, the exe and the parent are held when readable, no parent rule). `models_cache.json` was left in the job's `CODEX_HOME`, by decision (15.12), and is not removed.
 
 ### 1.2 The three names
 
