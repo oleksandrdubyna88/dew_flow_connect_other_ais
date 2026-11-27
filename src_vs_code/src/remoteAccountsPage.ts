@@ -332,7 +332,7 @@ const SCRIPT = `
   }
   /** A second line that is there even when it has nothing to say, so the rows of a block are as tall as one another. */
   var PAD = String.fromCharCode(160);
-  function secondLine(text) { return el('div', 'muted', text === null || text === '' ? PAD : text); }
+  function secondLine(text) { return el('div', 'muted', text ? text : PAD); }
   function accountCell(row) {
     var cell = td('Account');
     cell.appendChild(accountText(el('div'), row.account));
@@ -459,7 +459,7 @@ const SCRIPT = `
   function lineRows(line) {
     return expand(line.row).map(function (one) {
       var tr = el('tr');
-      put(tr, put(td('Place', 'tb-' + one.tool), el('strong', null, line.shown)), accountCell(one));
+      put(tr, put(td('Place', 'tb-' + one.tool), el('strong', null, line.shown), secondLine(one.group)), accountCell(one));
       windowCells(one).forEach(function (cell) { tr.appendChild(cell); });
       tr.appendChild(readCell(line.place, line.failure, one.readAt));
       return tr;

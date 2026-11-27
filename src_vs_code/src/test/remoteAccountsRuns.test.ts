@@ -831,7 +831,7 @@ function plantCredentials(t: Tree): readonly string[] {
   return files;
 }
 
-shellTest('A2-T7: agy gets --version and /quota, codex gets app-server in the first mode only, and no credential file is opened', async (shell, context) => {
+jqTest('A2-T7: agy gets --version and /quota, codex gets app-server in the first mode only, and no credential file is opened', async (shell, context) => {
   const probe = join(ownedTemp('accounts-probe'), 'probe');
   write(probe, 'x');
   utimesSync(probe, YEAR_2001, YEAR_2001);
@@ -1237,6 +1237,12 @@ jqTest('R3-T7: an unknown slash command is sent to the model — every reply tha
     ['a turn was made', quotaJson({ num_turns: 1 })],
     ['tokens were spent', quotaJson({ usage: { input_tokens: 5, output_tokens: 0, total_tokens: 5 } })],
     ['tokens that are no number', quotaJson({ usage: { total_tokens: 'many' } })],
+    ['no usage at all', quotaJson({ usage: undefined })],
+    ['usage null', quotaJson({ usage: null })],
+    ['usage with no total', quotaJson({ usage: { input_tokens: 0, output_tokens: 0 } })],
+    ['total null', quotaJson({ usage: { total_tokens: null } })],
+    ['total false', quotaJson({ usage: { total_tokens: false } })],
+    ['total an empty list', quotaJson({ usage: { total_tokens: [] } })],
     ['a usage that is no object', quotaJson({ usage: 'x' })],
     ['a conversation was created', quotaJson({ conversation_id: 'CONVERSATION-MARK' })],
     ['another command', quotaJson({ command: { name: 'help', data: { groups: [] } } })],
@@ -1338,7 +1344,7 @@ jqTest('A2-T22: a 10 MB result, 16 000 good lines, and an email and an organizat
   const hostile = tree({ jq: true });
   claudeFixtures(hostile, { auth: JSON.stringify({ ...ACCOUNT, email: 'a b '.repeat(2500), orgName: 'Org\nCOAI-USAGE claude read' }) });
   const small = await read(shell, hostile, 'no-claude-usage');
-  assert.equal(lines(small.outcome).filter((line) => line.startsWith(':email ')).length, 1);
+  assert.equal(lines(small.outcome).filter((line) => line.startsWith(':email ')).length, 0, 'an email of that size is not sent, and not cut into another one');
   assert.equal(lines(small.outcome).filter((line) => line.startsWith(':org ')).length, 1);
   for (const done of [huge, wide, small]) {
     const all = done.outcome.stdout.split('\n');
@@ -1672,6 +1678,65 @@ jqTest('R3-S5: as UID 0, agy\'s log is checked before it is read — a folder of
   symlinkSync(join(open, 'cli-x.log'), join(t2.home, '.gemini', 'antigravity-cli', 'cli.log'));
   const second = await read(shell, t2, 'no-claude-usage');
   assert.ok(second.got.agy.state === 'found' && second.got.agy.email === '', second.outcome.stdout);
+});
+
+// ───────────────── the review of CodeRabbit on PR #1066 ─────────────────
+
+const LONG_VALID = `${'a'.repeat(60)}@${'b'.repeat(70)}.test`;
+const AT_CAP = `${'a'.repeat(50)}@${'b'.repeat(64)}.test`;
+
+jqTest('R3-CR7: an email is judged whole, and one longer than the 120 that are sent is not sent at all — never cut into another address that looks valid; the cap itself is sent', async (shell) => {
+  assert.equal(LONG_VALID.length > 120 && AT_CAP.length === 120, true, 'the fixtures are not at their sizes');
+  // Codex
+  assert.deepEqual((await codexWith(shell, codexOut({ email: LONG_VALID }))).filter((line) => line.startsWith(':account')), [], 'Codex: a valid address of 136 characters');
+  assert.deepEqual((await codexWith(shell, codexOut({ email: AT_CAP }))).filter((line) => line.startsWith(':account')), [`:account ${AT_CAP}`], 'Codex: 120 characters are sent whole');
+  // Claude: the account is then not known, the rest of the answer stays
+  for (const [email, expected] of [[LONG_VALID, []], [AT_CAP, [`:email ${AT_CAP}`]]] as const) {
+    const t = tree({ jq: true });
+    claudeFixtures(t, { auth: JSON.stringify({ ...ACCOUNT, email }) });
+    const { outcome } = await read(shell, t, 'no-claude-usage');
+    assert.deepEqual(lines(outcome).filter((line) => line.startsWith(':email ')), expected, `Claude ${email.length}`);
+    assert.ok(lines(outcome).includes('COAI-VENDOR claude found') && lines(outcome).includes(':org Example Org'));
+  }
+  // agy's log
+  for (const [email, expected] of [[LONG_VALID, []], [AT_CAP, [`:account ${AT_CAP}`]]] as const) {
+    const t = tree({ jq: true });
+    agyLog(t, email);
+    assert.deepEqual(agyLinesOf((await read(shell, t, 'no-claude-usage')).outcome).filter((line) => line.startsWith(':account ')), expected, `agy ${email.length}`);
+  }
+});
+
+jqTest('R3-CR3: as UID 0, `#!/some/folder/env name` — the env program itself is checked first: in a folder open to all it warns with that folder, whatever the named interpreter is', async (shell) => {
+  const t = rootTree();
+  const open = join(t.root, 'open');
+  mkdirSync(open, { recursive: true });
+  chmodSync(open, 0o777);
+  symlinkSync('/usr/bin/env', join(open, 'env'));
+  write(join(t.local, 'fakenode'), '#!/bin/sh\nexec /bin/sh "$@"\n', 0o755);
+  write(join(t.local, 'claude'), CLAUDE(t.fx).replace('#!/bin/sh', `#!${open}/env fakenode`), 0o755);
+  const { outcome, got } = await read(shell, t, 'no-claude-usage');
+  assert.ok(got.claude.state === 'found' && got.claude.unsafePath === open, outcome.stdout);
+  assert.ok(calls(t, 'claude').length >= 1, 'claude was not started');
+  assert.deepEqual(warnLines(outcome), [`:unsafe-path ${open}`], 'one warning, the first that failed');
+});
+
+jqTest('R3-CR4: as UID 0, a vendor that stops early keeps its :unsafe-path warning — Claude signed out, Claude whose account command printed nothing, and the row shows it', async (shell) => {
+  const signedOut = rootTree();
+  chmodSync(signedOut.local, 0o775);
+  claudeFixtures(signedOut, { auth: '{"loggedIn":false}' });
+  put(signedOut, 'claude.auth.code', '1');
+  const one = await read(shell, signedOut, 'no-claude-usage');
+  assert.ok(lines(one.outcome).includes('COAI-VENDOR claude signed-out') && lines(one.outcome).includes(`:unsafe-path ${signedOut.local}`), one.outcome.stdout);
+  assert.deepEqual(one.got.claude, { state: 'signed-out', unsafePath: signedOut.local });
+  const noJson = rootTree();
+  chmodSync(noJson.local, 0o775);
+  claudeFixtures(noJson, { auth: 'this is not json' });
+  const two = await read(shell, noJson, 'no-claude-usage');
+  assert.deepEqual(two.got.claude, { state: 'unreadable', why: 'auth', unsafePath: noJson.local });
+  const closed = rootTree();
+  claudeFixtures(closed, { auth: '{"loggedIn":false}' });
+  put(closed, 'claude.auth.code', '1');
+  assert.deepEqual((await read(shell, closed, 'no-claude-usage')).got.claude, { state: 'signed-out' }, 'a closed path says no warning');
 });
 
 jqTest('E3S1-T24: as UID 0, a tool (jq) writable by others — COAI-BAD unsafe with its path, and NO program of that place records a start', async (shell) => {

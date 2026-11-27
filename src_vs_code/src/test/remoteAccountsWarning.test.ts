@@ -124,3 +124,19 @@ test('R3-W3: a row that only says why its tool was not read says it ONCE — the
   assert.equal(run.text().split('/opt/x is writable by another user').length - 1, 1, 'Server: the refused path sentence stands once');
   assert.equal(run.text().split('signed out').length - 1, 1, 'Server: signed out stands once');
 });
+
+test('R3-CR4: the warning stands on the early states too — signed-out, unreadable auth, timeout and no-jq of Claude, and no-jq of Codex; absent takes none', () => {
+  const claudeAt = (...lines: readonly string[]): ReturnType<typeof readAccounts> => readAccounts(ok(frame('COAI-JQ found', ...lines, 'COAI-VENDOR codex absent', 'COAI-VENDOR agy absent')), 'no-claude-usage', PARSER_NOW);
+  for (const [word, side] of [['signed-out', { state: 'signed-out' }], ['unreadable auth', { state: 'unreadable', why: 'auth' }], ['unreadable timeout', { state: 'unreadable', why: 'timeout' }]] as const) {
+    const got = readOf(claudeAt(`COAI-VENDOR claude ${word}`, `:unsafe-path ${WARN}`));
+    assert.deepEqual(got.claude, { ...side, unsafePath: WARN }, word);
+    assert.deepEqual(readOf(claudeAt(`COAI-VENDOR claude ${word}`)).claude, side, `${word}: no warning, no field`);
+  }
+  assert.equal(claudeAt('COAI-VENDOR claude absent', ':unsafe-path /a').kind, 'unreadable', 'absent takes no warning');
+  const noJq = readAccounts(ok(frame('COAI-JQ missing apt-get', 'COAI-VENDOR claude unreadable no-jq', `:unsafe-path ${WARN}`, 'COAI-VENDOR codex unreadable no-jq', `:unsafe-path ${WARN}`, ...GOOD_LINES.slice(13).slice(0, 0), 'COAI-VENDOR agy absent')), 'no-claude-usage', PARSER_NOW);
+  const read = readOf(noJq);
+  assert.deepEqual(read.claude, { state: 'unreadable', why: 'no-jq', unsafePath: WARN });
+  assert.deepEqual(read.codex, { state: 'unreadable', why: 'no-jq', unsafePath: WARN });
+  const memory = tableModel(inputOf({ hosts: ['a'], memory: memoryOf(['a', seen(readOf(claudeAt('COAI-VENDOR claude signed-out', `:unsafe-path ${WARN}`)), 1)]) })).blocks[0]?.rows[0];
+  assert.equal(memory?.warning, `runs as root although ${WARN} is writable by another user`, 'the row of a signed-out Claude shows the warning');
+});

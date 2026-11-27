@@ -6,6 +6,7 @@ import { agyUsageOf } from '../remoteAccountsUsage';
 import { tableModel } from '../remoteAccountsTable';
 import type { TableModel } from '../remoteAccountsTable';
 import { EMAIL_COLOURS, emailSlots } from '../vendorColour';
+import { stylesheet, winning } from './cssRules';
 import { runAccountsPage } from './accountsPageHarness';
 import type { AccountsPage } from './accountsPageHarness';
 import { ANN, NOW, agyOf, claude, codexOf, hour, inputOf, memoryOf, reading, seen, usageOf } from './accountsTableFixtures';
@@ -109,9 +110,32 @@ test('R3-F9a: in every grouping the tool cells of a block have two lines, an acc
   select.value = 'server';
   run.document.dispatch('change', select);
   assert.equal(run.text().split('signed out').length - 1, 1);
-  const css = /<style[^>]*>([\s\S]*?)<\/style>/u.exec(accountsHtml('n'))?.[1] ?? '';
-  assert.match(css, /table\.acct tbody td \{ height: 3em; \}/u, 'the cells have a least height');
-  assert.match(css, /@media \(max-width: 560px\)[\s\S]*table\.acct tbody td \{ height: auto; \}/u, 'and none where they are stacked');
+  // the height of a cell, by the cascade: a least height at full width, and none where the columns are stacked (the rules of the narrow layout come after the others)
+  const sheet = stylesheet(accountsHtml('n').replace(/<style nonce="[^"]*">/u, '<style>'));
+  const narrow = sheet.findIndex((rule) => rule.selector.startsWith('table.acct, table.acct tbody'));
+  assert.ok(narrow > 0, 'the narrow layout is not in the stylesheet');
+  const cell = { tag: 'td', classes: [], attrs: {} };
+  const around = [{ tag: 'table', classes: ['acct'], attrs: {} }, { tag: 'tbody', classes: [], attrs: {} }];
+  assert.equal(winning(sheet.slice(0, narrow), cell, around, ['height']).value, '3em', 'the cells have a least height at full width');
+  assert.equal(winning(sheet, cell, around, ['height']).value, 'auto', 'and none where they are stacked');
+  assert.deepEqual(winning(sheet, cell, around, ['height']).unreadable, []);
+});
+
+test('R3-CR1: in the Claude account grouping the two Antigravity rows of one place name their group, as in the other groupings', () => {
+  const run = page();
+  const select = run.document.getElementById('group');
+  assert.ok(select !== null);
+  select.value = 'account';
+  run.document.dispatch('change', select);
+  const section = run.document.querySelectorAll('section').find((one) => one.querySelector('h2')?.textContent === 'Antigravity');
+  assert.ok(section !== undefined, 'no Antigravity section');
+  const places = section.querySelectorAll('td').filter((cell) => cell.children.some((one) => one.className === 'label' && one.textContent === 'Place'));
+  const seconds = places.map((cell) => cell.children.find((one) => one.tag === 'div')?.textContent ?? '');
+  assert.ok(seconds.includes('Gemini') && seconds.includes('Claude and GPT'), `the groups are not named: ${JSON.stringify(seconds)}`);
+  assert.ok(places.every((cell) => cell.children.filter((one) => one.tag === 'div').length === 1), 'a place cell has not one second line');
+  const codex = run.document.querySelectorAll('section').find((one) => one.querySelector('h2')?.textContent === 'Codex');
+  const codexSeconds = (codex?.querySelectorAll('td') ?? []).filter((cell) => cell.children.some((one) => one.className === 'label' && one.textContent === 'Place')).map((cell) => cell.children.find((one) => one.tag === 'div')?.textContent);
+  assert.ok(codexSeconds.length >= 1 && codexSeconds.every((text) => text === '\u00a0'), 'a Codex row keeps an empty second line');
 });
 
 test('R3-F9b: the heading of a Claude account is drawn by the same function as the account cells — one email span, in the class of its colour', () => {

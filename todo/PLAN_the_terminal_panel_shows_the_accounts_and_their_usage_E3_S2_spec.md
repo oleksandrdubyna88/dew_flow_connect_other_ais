@@ -72,10 +72,10 @@
 
 ## R2.3 — `ACCOUNTS_SCRIPT`, revision 3, exact (`src/remoteAccountsScript.ts`)
 
-`ACCOUNTS_SCRIPT` is the text below, byte for byte: **413 lines**, 14 798 bytes, each line ends with LF, ASCII
-only. It holds `${` 15 times, 82 backslashes and no backtick.
+`ACCOUNTS_SCRIPT` is the text below, byte for byte: **418 lines**, 15 173 bytes, each line ends with LF, ASCII
+only. It holds `${` 16 times, 82 backslashes and no backtick.
 
-Pinned sha256: `6d02ea1cb3bb1644fee0a2d65c948ff5b9ea7f0cb829496156a86569bd18bfa2`
+Pinned sha256: `67b7228c25f327f35cf57f74dbbe9c052dfac68ea44f69a0ee222cc0162995fa`
 
 *Revision 3 (the owner, 2026-11-27) changed this text a second time; the pin above is its sha256.* The accounts tab now says what
 Codex and Antigravity say just now, instead of reading what they left behind. **Codex:** the three session files (`ls`, `stat`,
@@ -88,7 +88,7 @@ are gone. **Antigravity:** `agy -p /quota --output-format json` is run when `jq`
 `no-agy-quota`; only a reply with `num_turns` 0, `command.name` `usage` and an empty `conversation_id` is read (any other is `COAI-USAGE
 agy failed model-call`, because an unknown slash command is sent to the model), as `:quota <gemini|third-party> <5h|weekly> <percent left>
 <reset epoch or ->` lines; agy's account is the last `applyAuthResult: email=` line of its own `cli.log`, read after that call, one line, a
-shape-checked email, as `:account` (as UID 0 the log's path, and the target of its link, is checked first and the account is skipped when it fails). `jq_agy` uses no regular expression, and a reply with `usage.total_tokens` not 0 is `failed model-call` too. **Any** outcome of the quota command that is not a read blocks the place (the extension keeps the block apart from its memory, in `globalState`, by place, version and reason). **Operands:** the first mode takes the optional second operand `no-agy-quota`; no other. `sleep` replaces
+shape-checked email, as `:account` (as UID 0 the log's path, and the target of its link, is checked first and the account is skipped when it fails). `jq_agy` uses no regular expression, and a reply without an explicit numeric `usage.total_tokens` of 0 (absent, null, false, a string) is `failed model-call` too. An email is judged whole BEFORE any cut: one longer than the 120 characters that are sent is not sent (Claude's `:email`, Codex's and agy's `:account`), never cut into another address. A `#!` line that names `env` by a path has that `env` checked as well as the interpreter it names, and the `:unsafe-path` line also follows `signed-out` and the `unreadable` words of Claude and Codex (the early returns). **Any** outcome of the quota command that is not a read blocks the place (the extension keeps the block apart from its memory, in `globalState`, by place, version and reason). **Operands:** the first mode takes the optional second operand `no-agy-quota`; no other. `sleep` replaces
 `ls` in the tool list. **As UID 0 (the owner, 2026-11-27):** a vendor program (`claude`, `codex`, `agy`) whose path fails `coai_closed` is NOT refused: it runs and the
 script sends one `:unsafe-path <path>` line for it (`vwarn`); the first line of its file is read, and when it is a `#!` script its interpreter (`env` resolved on the
 `PATH`) is checked the same way; a `$HOME/.local/bin` that fails the check goes at the END of the `PATH`. The tools and `jq` keep `COAI-BAD unsafe`.
@@ -118,9 +118,10 @@ coai_accounts() {
   dot=$(printf '\302\267')
   window='[0-9]{1,3}(\.[0-9]{1,2})?% used '"$dot"' resets [A-Za-z0-9,: ]{1,40} \([A-Za-z0-9_/+-]{1,40}\)$'
   version='1s/^[^0-9]*\([0-9][0-9.]\{0,31\}\).*$/\1/p'
-  one='def one: tostring | split("\n") | join(" ") | split("\r") | join(" ") | .[0:120];'
+  one='def line: tostring | split("\n") | join(" ") | split("\r") | join(" "); def one: line | .[0:120]; def whole: if (line | length) <= 120 then line else empty end;'
   jq_auth="$one"'
     def key(k): if type == "string" and . != "" then ":" + k + " " + one else empty end;
+    def mail: if type == "string" and . != "" then (whole | ":email " + .) else empty end;
     [inputs] as $all
     | ([$all[] | select(type == "object") | select(has("coai_exit")) | .coai_exit] | .[-1]) as $rc
     | ([$all[] | select(type == "object") | select(has("loggedIn"))] | .[0]) as $a
@@ -128,7 +129,7 @@ coai_accounts() {
         (if $rc == 124 or $rc == 137 then "COAI-VENDOR claude unreadable timeout" else "COAI-VENDOR claude unreadable auth" end)
       elif $a.loggedIn != true then "COAI-VENDOR claude signed-out"
       else "COAI-VENDOR claude found",
-        ($a.email | key("email")), ($a.orgName | key("org")), ($a.subscriptionType | key("plan"))
+        ($a.email | mail), ($a.orgName | key("org")), ($a.subscriptionType | key("plan"))
       end'
   jq_usage='[inputs] as $all
     | ([$all[] | select(type == "object") | select(has("coai_exit")) | .coai_exit] | .[-1]) as $rc
@@ -149,7 +150,7 @@ coai_accounts() {
     | ([$all[] | select(.id == 2) | .result.account | select(type == "object")] | .[0]) as $a
     | ([$all[] | select(.id == 3) | .result | select(type == "object")] | .[0]) as $r3
     | ([$r3.rateLimits | select(type == "object")] | .[0]) as $r
-    | (if ($a.email | type) == "string" then ":account " + ($a.email | one) else empty end),
+    | (if ($a.email | type) == "string" then ($a.email | whole | ":account " + .) else empty end),
       (($r.planType // $a.planType) | if type == "string" and . != "" then ":plan " + one else empty end),
       (if $r3 == null then (if $rc == 124 or $rc == 137 then "COAI-USAGE codex failed timeout" else "COAI-USAGE codex failed error" end)
         elif $r == null or ([$r.primary, $r.secondary] | map(select(type == "object")) | length) == 0 then "COAI-USAGE codex failed none"
@@ -163,7 +164,7 @@ coai_accounts() {
     | ([$all[] | select(type == "object") | select(has("num_turns"))] | .[0]) as $r
     | if $rc == 124 or $rc == 137 then "=timeout"
       elif $rc != 0 or $r == null then "=error"
-      elif $r.num_turns != 0 or (try ($r.usage.total_tokens // 0) catch 1) != 0 or $r.conversation_id != "" or ($r.command | type) != "object" or $r.command.name != "usage" then "=model-call"
+      elif $r.num_turns != 0 or ((try ($r.usage.total_tokens | type == "number" and . == 0) catch false) | not) or $r.conversation_id != "" or ($r.command | type) != "object" or $r.command.name != "usage" then "=model-call"
       else "=read",
         ($r.command.data.groups[]? | select(type == "object") | .buckets[]? | select(type == "object")
           | (.id | kind) as $g | (.window | span) as $w | (.remaining_fraction | left) as $l
@@ -292,6 +293,9 @@ coai_accounts() {
     interp=${1-}
     case $interp in
       */env)
+        if ! coai_closed "$interp"; then
+          [ -n "$vwarn" ] || vwarn=$unsafe
+        fi
         shift
         while [ "$#" -gt 0 ]; do
           case $1 in
@@ -327,7 +331,7 @@ coai_accounts() {
 
   coai_claude() {
     coai_vendor claude || return 0
-    [ "$jq" = found ] || { printf 'COAI-VENDOR claude unreadable no-jq\n'; return 0; }
+    [ "$jq" = found ] || { printf 'COAI-VENDOR claude unreadable no-jq\n'; coai_warn; return 0; }
     auth=$(
       {
         timeout -k 1 3 claude auth status --json
@@ -336,8 +340,8 @@ coai_accounts() {
     )
     case $auth in
       'COAI-VENDOR claude found'|'COAI-VENDOR claude found'"$nl":*) ;;
-      'COAI-VENDOR claude signed-out'|'COAI-VENDOR claude unreadable timeout') printf '%s\n' "$auth"; return 0 ;;
-      *) printf 'COAI-VENDOR claude unreadable auth\n'; return 0 ;;
+      'COAI-VENDOR claude signed-out'|'COAI-VENDOR claude unreadable timeout') printf '%s\n' "$auth"; coai_warn; return 0 ;;
+      *) printf 'COAI-VENDOR claude unreadable auth\n'; coai_warn; return 0 ;;
     esac
     printf '%s\n' "$auth" || return 0
     coai_version "$(timeout -k 1 2 claude --version | LC_ALL=C timeout -k 1 2 sed -n -e "$version" -e 1q)"
@@ -386,7 +390,7 @@ coai_accounts() {
       fi
       return 0
     }
-    [ "$jq" = found ] || { printf 'COAI-VENDOR codex unreadable no-jq\n'; return 0; }
+    [ "$jq" = found ] || { printf 'COAI-VENDOR codex unreadable no-jq\n'; coai_warn; return 0; }
     printf 'COAI-VENDOR codex found\n' || return 0
     coai_sign_in "$HOME/.codex/auth.json"
     coai_warn
@@ -449,6 +453,7 @@ coai_accounts() {
           timeout -k 1 1 tail -n 1 | LC_ALL=C timeout -k 1 1 grep -E -e "^$mail_re"
       )
     fi
+    [ "${#mail}" -le 120 ] || mail=
     [ -z "$mail" ] || printf ':account %s\n' "$mail"
     printf '%s\n' "$quota"
     return 0

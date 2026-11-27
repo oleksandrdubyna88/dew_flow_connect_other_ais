@@ -40,8 +40,8 @@ export interface UnsafeSide { readonly state: 'unsafe'; readonly path: string | 
 export type ClaudeSide =
   | { readonly state: 'absent' }
   | UnsafeSide
-  | { readonly state: 'signed-out' }
-  | { readonly state: 'unreadable'; readonly why: 'no-jq' | 'auth' | 'timeout' | 'credential-shape' }
+  | { readonly state: 'signed-out'; readonly unsafePath?: string | null }
+  | { readonly state: 'unreadable'; readonly why: 'no-jq' | 'auth' | 'timeout' | 'credential-shape'; readonly unsafePath?: string | null }
   | {
     readonly state: 'found'; readonly version: string | null;
     /** `''` = the account is not known. */
@@ -54,7 +54,7 @@ export type ClaudeSide =
 export type CodexSide =
   | { readonly state: 'absent' }
   | UnsafeSide
-  | { readonly state: 'unreadable'; readonly why: 'no-jq' | 'credential-shape' }
+  | { readonly state: 'unreadable'; readonly why: 'no-jq' | 'credential-shape'; readonly unsafePath?: string | null }
   | {
     readonly state: 'found'; readonly signInFile: boolean;
     /** `''` = the account is not known. */
@@ -148,6 +148,7 @@ const NONE: Readonly<Record<string, Count>> = {};
 
 const BAD_WORDS = ['operands', 'home', 'folder', 'tool'] as const;
 const ONE_PATH: Readonly<Record<string, Count>> = { path: ONCE };
+const WARNED: Readonly<Record<string, Count>> = { 'unsafe-path': MAYBE };
 
 /** A row for each word of a marker: the marker's whole line, and the keys its data lines may hold. */
 const wordRows = (head: string, words: readonly string[], keys: Readonly<Record<string, Count>> = NONE): readonly (readonly [string, Readonly<Record<string, Count>>])[] => words.map((word) => [`${head} ${word}`, keys]);
@@ -163,12 +164,15 @@ export const ACCOUNTS_GRAMMAR: Readonly<Record<string, Readonly<Record<string, C
   ['COAI-JQ found', NONE],
   ...wordRows('COAI-JQ missing', MANAGER_WORDS),
   ['COAI-VENDOR claude found', { version: MAYBE, email: MAYBE, org: MAYBE, plan: MAYBE, 'unsafe-path': MAYBE }],
-  ...wordRows('COAI-VENDOR claude', ['absent', 'signed-out', 'unreadable no-jq', 'unreadable auth', 'unreadable timeout']),
+  ['COAI-VENDOR claude absent', NONE],
+  // a vendor that runs as root from a path others can write keeps its warning when it stops early (the owner's decision of 2026-11-27)
+  ...wordRows('COAI-VENDOR claude', ['signed-out', 'unreadable no-jq', 'unreadable auth', 'unreadable timeout'], WARNED),
   ['COAI-VENDOR claude unsafe', ONE_PATH],
   ['COAI-USAGE claude read', { turns: ONCE, line: [0, USAGE_LINES_MAX], unmatched: ONCE }],
   ...wordRows('COAI-USAGE claude', ['skipped', 'skipped account-changed', 'failed timeout', 'failed error']),
   ['COAI-VENDOR codex found', { 'sign-in-file': ONCE, account: MAYBE, plan: MAYBE, 'unsafe-path': MAYBE }],
-  ...wordRows('COAI-VENDOR codex', ['absent', 'unreadable no-jq']),
+  ['COAI-VENDOR codex absent', NONE],
+  ...wordRows('COAI-VENDOR codex', ['unreadable no-jq'], WARNED),
   ['COAI-VENDOR codex unsafe', ONE_PATH],
   ['COAI-USAGE codex read', { window: [0, 2] }],
   ...wordRows('COAI-USAGE codex', ['failed none', 'failed error', 'failed timeout', 'failed not-started']),
@@ -438,7 +442,7 @@ function claudeOf(part: Part, nowMs: number): ClaudeSide {
   }
   const flat = CLAUDE_FLAT[wordsAfter(part.vendor, 'COAI-VENDOR claude ')];
   if (flat !== undefined) {
-    return flat;
+    return { ...flat, ...warningOf(part.vendor) } as ClaudeSide;
   }
 
   return credentialIn(part) ? { state: 'unreadable', why: 'credential-shape' } : {
@@ -476,7 +480,7 @@ function codexOf(part: Part): CodexSide {
   }
   const flat = CODEX_FLAT[wordsAfter(part.vendor, 'COAI-VENDOR codex ')];
   if (flat !== undefined) {
-    return flat;
+    return { ...flat, ...warningOf(part.vendor) } as CodexSide;
   }
 
   return credentialIn(part) ? { state: 'unreadable', why: 'credential-shape' } : {

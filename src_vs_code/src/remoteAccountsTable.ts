@@ -336,7 +336,7 @@ function claudeSideRow(shell: Shell, claude: Exclude<Reading['claude'], { state:
   }
   const said = CLAUDE_SIDE_SAID[claude.state === 'signed-out' ? 'signed-out' : claude.why];
 
-  return said === undefined ? undefined : sentenceRow(shell, said);
+  return said === undefined ? undefined : { ...sentenceRow(shell, said), warning: warningOf(claude.unsafePath) };
 }
 
 function claudeRow(place: string, claude: Reading['claude'], readAt: number): ToolRow | undefined {

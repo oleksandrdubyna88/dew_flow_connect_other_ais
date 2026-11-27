@@ -20,7 +20,7 @@ import { ownedTemp } from './ownedTemp';
  * <p>The script is given a made-up `jq` (a file in the test's own `~/.local/bin` that prints the account lines), so these runs need no real `jq`.</p>
  */
 
-const PIN2 = '6d02ea1cb3bb1644fee0a2d65c948ff5b9ea7f0cb829496156a86569bd18bfa2';
+const PIN2 = '67b7228c25f327f35cf57f74dbbe9c052dfac68ea44f69a0ee222cc0162995fa';
 const sha256 = (text: string): string => createHash('sha256').update(text).digest('hex');
 const ON_PATH = (name: string): string | undefined => (process.env['PATH'] ?? '').split(delimiter).map((dir) => join(dir, name)).find((path) => existsSync(path));
 const SH = ON_PATH('sh');

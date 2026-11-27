@@ -142,8 +142,8 @@ export function worstSeconds(mode: AccountsMode, root = false): number {
 const shebangSeconds = (mode: AccountsMode): number => ACCOUNTS_READ_SECONDS.shebang * (mode === 'claude-usage' ? 1 : 3);
 
 /**
- * The text that is sent to a VM, byte for byte the first `sh` block after the heading `## R2.3` of the E3.S2 spec (revision 3): 413 lines, ASCII only,
- * each line ends with LF. It holds `${` 15 times and 82 backslashes, so every backslash is written twice here.
+ * The text that is sent to a VM, byte for byte the first `sh` block after the heading `## R2.3` of the E3.S2 spec (revision 3): 418 lines, ASCII only,
+ * each line ends with LF. It holds `${` 16 times and 82 backslashes, so every backslash is written twice here.
  * Hash and spec are held to this constant by `remoteAccountsScript.test.ts` (E3S2-T1); a change of the text is a change of the spec.
  */
 export const ACCOUNTS_SCRIPT = `coai_accounts() {
@@ -155,9 +155,10 @@ export const ACCOUNTS_SCRIPT = `coai_accounts() {
   dot=$(printf '\\302\\267')
   window='[0-9]{1,3}(\\.[0-9]{1,2})?% used '"$dot"' resets [A-Za-z0-9,: ]{1,40} \\([A-Za-z0-9_/+-]{1,40}\\)$'
   version='1s/^[^0-9]*\\([0-9][0-9.]\\{0,31\\}\\).*$/\\1/p'
-  one='def one: tostring | split("\\n") | join(" ") | split("\\r") | join(" ") | .[0:120];'
+  one='def line: tostring | split("\\n") | join(" ") | split("\\r") | join(" "); def one: line | .[0:120]; def whole: if (line | length) <= 120 then line else empty end;'
   jq_auth="$one"'
     def key(k): if type == "string" and . != "" then ":" + k + " " + one else empty end;
+    def mail: if type == "string" and . != "" then (whole | ":email " + .) else empty end;
     [inputs] as $all
     | ([$all[] | select(type == "object") | select(has("coai_exit")) | .coai_exit] | .[-1]) as $rc
     | ([$all[] | select(type == "object") | select(has("loggedIn"))] | .[0]) as $a
@@ -165,7 +166,7 @@ export const ACCOUNTS_SCRIPT = `coai_accounts() {
         (if $rc == 124 or $rc == 137 then "COAI-VENDOR claude unreadable timeout" else "COAI-VENDOR claude unreadable auth" end)
       elif $a.loggedIn != true then "COAI-VENDOR claude signed-out"
       else "COAI-VENDOR claude found",
-        ($a.email | key("email")), ($a.orgName | key("org")), ($a.subscriptionType | key("plan"))
+        ($a.email | mail), ($a.orgName | key("org")), ($a.subscriptionType | key("plan"))
       end'
   jq_usage='[inputs] as $all
     | ([$all[] | select(type == "object") | select(has("coai_exit")) | .coai_exit] | .[-1]) as $rc
@@ -186,7 +187,7 @@ export const ACCOUNTS_SCRIPT = `coai_accounts() {
     | ([$all[] | select(.id == 2) | .result.account | select(type == "object")] | .[0]) as $a
     | ([$all[] | select(.id == 3) | .result | select(type == "object")] | .[0]) as $r3
     | ([$r3.rateLimits | select(type == "object")] | .[0]) as $r
-    | (if ($a.email | type) == "string" then ":account " + ($a.email | one) else empty end),
+    | (if ($a.email | type) == "string" then ($a.email | whole | ":account " + .) else empty end),
       (($r.planType // $a.planType) | if type == "string" and . != "" then ":plan " + one else empty end),
       (if $r3 == null then (if $rc == 124 or $rc == 137 then "COAI-USAGE codex failed timeout" else "COAI-USAGE codex failed error" end)
         elif $r == null or ([$r.primary, $r.secondary] | map(select(type == "object")) | length) == 0 then "COAI-USAGE codex failed none"
@@ -200,7 +201,7 @@ export const ACCOUNTS_SCRIPT = `coai_accounts() {
     | ([$all[] | select(type == "object") | select(has("num_turns"))] | .[0]) as $r
     | if $rc == 124 or $rc == 137 then "=timeout"
       elif $rc != 0 or $r == null then "=error"
-      elif $r.num_turns != 0 or (try ($r.usage.total_tokens // 0) catch 1) != 0 or $r.conversation_id != "" or ($r.command | type) != "object" or $r.command.name != "usage" then "=model-call"
+      elif $r.num_turns != 0 or ((try ($r.usage.total_tokens | type == "number" and . == 0) catch false) | not) or $r.conversation_id != "" or ($r.command | type) != "object" or $r.command.name != "usage" then "=model-call"
       else "=read",
         ($r.command.data.groups[]? | select(type == "object") | .buckets[]? | select(type == "object")
           | (.id | kind) as $g | (.window | span) as $w | (.remaining_fraction | left) as $l
@@ -329,6 +330,9 @@ export const ACCOUNTS_SCRIPT = `coai_accounts() {
     interp=\${1-}
     case $interp in
       */env)
+        if ! coai_closed "$interp"; then
+          [ -n "$vwarn" ] || vwarn=$unsafe
+        fi
         shift
         while [ "$#" -gt 0 ]; do
           case $1 in
@@ -364,7 +368,7 @@ export const ACCOUNTS_SCRIPT = `coai_accounts() {
 
   coai_claude() {
     coai_vendor claude || return 0
-    [ "$jq" = found ] || { printf 'COAI-VENDOR claude unreadable no-jq\\n'; return 0; }
+    [ "$jq" = found ] || { printf 'COAI-VENDOR claude unreadable no-jq\\n'; coai_warn; return 0; }
     auth=$(
       {
         timeout -k 1 3 claude auth status --json
@@ -373,8 +377,8 @@ export const ACCOUNTS_SCRIPT = `coai_accounts() {
     )
     case $auth in
       'COAI-VENDOR claude found'|'COAI-VENDOR claude found'"$nl":*) ;;
-      'COAI-VENDOR claude signed-out'|'COAI-VENDOR claude unreadable timeout') printf '%s\\n' "$auth"; return 0 ;;
-      *) printf 'COAI-VENDOR claude unreadable auth\\n'; return 0 ;;
+      'COAI-VENDOR claude signed-out'|'COAI-VENDOR claude unreadable timeout') printf '%s\\n' "$auth"; coai_warn; return 0 ;;
+      *) printf 'COAI-VENDOR claude unreadable auth\\n'; coai_warn; return 0 ;;
     esac
     printf '%s\\n' "$auth" || return 0
     coai_version "$(timeout -k 1 2 claude --version | LC_ALL=C timeout -k 1 2 sed -n -e "$version" -e 1q)"
@@ -423,7 +427,7 @@ export const ACCOUNTS_SCRIPT = `coai_accounts() {
       fi
       return 0
     }
-    [ "$jq" = found ] || { printf 'COAI-VENDOR codex unreadable no-jq\\n'; return 0; }
+    [ "$jq" = found ] || { printf 'COAI-VENDOR codex unreadable no-jq\\n'; coai_warn; return 0; }
     printf 'COAI-VENDOR codex found\\n' || return 0
     coai_sign_in "$HOME/.codex/auth.json"
     coai_warn
@@ -486,6 +490,7 @@ export const ACCOUNTS_SCRIPT = `coai_accounts() {
           timeout -k 1 1 tail -n 1 | LC_ALL=C timeout -k 1 1 grep -E -e "^$mail_re"
       )
     fi
+    [ "\${#mail}" -le 120 ] || mail=
     [ -z "$mail" ] || printf ':account %s\\n' "$mail"
     printf '%s\\n' "$quota"
     return 0

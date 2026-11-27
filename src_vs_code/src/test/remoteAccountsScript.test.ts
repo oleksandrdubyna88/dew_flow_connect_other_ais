@@ -22,7 +22,7 @@ import { SSH_OPTIONS } from '../remoteSsh';
  */
 
 /** The sha256 of `ACCOUNTS_SCRIPT`, as pinned by the E3.S2 spec (§ R2.3). A later change of the text moves the block, the pin and this literal in one commit. */
-const PINNED = '6d02ea1cb3bb1644fee0a2d65c948ff5b9ea7f0cb829496156a86569bd18bfa2';
+const PINNED = '67b7228c25f327f35cf57f74dbbe9c052dfac68ea44f69a0ee222cc0162995fa';
 
 const HERE = join(__dirname, '..', '..');
 const SPEC_NAME = 'PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E3_S2_spec.md';
@@ -57,12 +57,12 @@ function firstDifference(left: string, right: string): string {
 
 const sha256 = (text: string): string => createHash('sha256').update(text).digest('hex');
 
-test('E3S2-T1: the sha256 of ACCOUNTS_SCRIPT is the pinned value, and the text is 413 lines of ASCII ending with LF', () => {
+test('E3S2-T1: the sha256 of ACCOUNTS_SCRIPT is the pinned value, and the text is 418 lines of ASCII ending with LF', () => {
   assert.match(PINNED, /^[0-9a-f]{64}$/u, 'the test still holds a pin that is not a sha256');
   assert.equal(sha256(ACCOUNTS_SCRIPT), PINNED, 'the text of ACCOUNTS_SCRIPT changed without the pin');
-  assert.equal(ACCOUNTS_SCRIPT.split('\n').length - 1, 413, 'the text is 413 lines');
-  assert.equal(Buffer.byteLength(ACCOUNTS_SCRIPT), 14_798, 'the text is 14 798 bytes');
-  assert.equal(count(ACCOUNTS_SCRIPT, '${'), 15, 'the text holds ${ 15 times');
+  assert.equal(ACCOUNTS_SCRIPT.split('\n').length - 1, 418, 'the text is 418 lines');
+  assert.equal(Buffer.byteLength(ACCOUNTS_SCRIPT), 15_173, 'the text is 15 173 bytes');
+  assert.equal(count(ACCOUNTS_SCRIPT, '${'), 16, 'the text holds ${ 16 times');
   assert.equal(count(ACCOUNTS_SCRIPT, '\\'), 82, 'the text holds 82 backslashes');
   assert.ok(ACCOUNTS_SCRIPT.endsWith('\n'), 'the text ends with a line end');
 });
