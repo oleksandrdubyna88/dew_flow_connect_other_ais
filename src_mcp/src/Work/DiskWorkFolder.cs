@@ -1,5 +1,6 @@
 using System.Text;
 using CoaiMcp.Core.Work;
+using CoaiMcp.Runners.Files;
 
 namespace CoaiMcp.Work;
 
@@ -36,22 +37,32 @@ internal sealed class DiskWorkFolder(string root) : IWorkFolder
             return new WorkFile.TooLarge(info.Length);
         }
 
-        // At most maxBytes + 1 bytes are taken, so a file that grew since the length was read cannot be read whole.
-        using var stream = info.OpenRead();
-        var buffer = new byte[maxBytes + 1];
-        var read = stream.ReadAtLeast(buffer, buffer.Length, throwOnEndOfStream: false);
-        if (read > maxBytes)
+        // The tree is one a coder's unit and every check unit can write, so an entry may have been made a FIFO (a plain open waits for ever): it is read by the one road for such entries — no wait, a regular file only, at most maxBytes, a time bound (pass 9, M20).
+        switch (UnitWrittenFile.Read(info.FullName, maxBytes))
         {
-            return new WorkFile.TooLarge(read);
-        }
+            case FileReadResult.Content content:
+                try
+                {
+                    return new WorkFile.Text(Strict.GetString(content.Bytes));
+                }
+                catch (DecoderFallbackException)
+                {
+                    return new WorkFile.NotUtf8();
+                }
 
-        try
-        {
-            return new WorkFile.Text(Strict.GetString(buffer, 0, read));
-        }
-        catch (DecoderFallbackException)
-        {
-            return new WorkFile.NotUtf8();
+            case FileReadResult.Missing:
+                return new WorkFile.Missing();
+            case FileReadResult.Unreadable unreadable when unreadable.Reason.StartsWith("larger than", StringComparison.Ordinal):
+                return new WorkFile.TooLarge((long)maxBytes + 1);
+            case FileReadResult.Unreadable unreadable when unreadable.Reason.Contains("not a regular file", StringComparison.Ordinal) || unreadable.Reason.Contains("symbolic link", StringComparison.Ordinal) || unreadable.Reason.StartsWith("it did not finish", StringComparison.Ordinal):
+                return new WorkFile.NotRegular(unreadable.Reason);
+            case FileReadResult.Unreadable unreadable:
+                // A read the disk refuses (a permission, a fault) is still an exception, as before: the mode turns it into exit 74.
+                throw unreadable.Reason.StartsWith("no read permission", StringComparison.Ordinal) || unreadable.Reason.StartsWith(nameof(UnauthorizedAccessException), StringComparison.Ordinal)
+                    ? new UnauthorizedAccessException(unreadable.Reason)
+                    : new IOException(unreadable.Reason);
+            default:
+                return new WorkFile.NotRegular("it could not be read");
         }
     }
 

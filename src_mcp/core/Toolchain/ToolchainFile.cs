@@ -19,6 +19,7 @@ public static class ToolchainFile
         WorkFile.Missing => new ToolchainRead.NotConfigured(),
         WorkFile.Text text => FromText(text.Content, reader),
         WorkFile.TooLarge large => RefusedWith($"the toolchain file is {large.Bytes} bytes; at most {ToolchainTables.MaxBytes} are read"),
+        WorkFile.NotRegular odd => RefusedWith($"the toolchain file is not a regular file that can be read ({odd.Reason})"),
         _ => RefusedWith("the toolchain file is not UTF-8 text"),
     };
 

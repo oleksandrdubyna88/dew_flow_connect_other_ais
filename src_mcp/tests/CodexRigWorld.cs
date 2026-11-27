@@ -25,9 +25,9 @@ internal sealed class CodexRigWorld : IAsyncDisposable
             "properties": [], "pending": [] } ] }
         """), CodexCoderVendor.Instance);
 
-    internal static async Task<CodexRigWorld> CreateAsync()
+    internal static async Task<CodexRigWorld> CreateAsync(string? toolchain = null)
     {
-        var world = new CodexRigWorld(await CoderRig.CreateAsync());
+        var world = new CodexRigWorld(await CoderRig.CreateAsync(toolchain: toolchain));
         var rig = world.Rig;
         rig.CodexUnit = true;
         rig.Vendors = Vendors();

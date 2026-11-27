@@ -122,12 +122,17 @@ internal static class SignInCopy
         return recipe.ExpiryIsJwt ? JwtExpiry(text) : DateTime.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var time) ? time : null;
     }
 
-    /// <summary>The expiry of the copy that lies at <paramref name="copyFile"/>, or null.</summary>
-    public static DateTime? ExpiryOfFile(CoderSignInRecipe.CopyForJob recipe, string copyFile)
+    /// <summary>
+    /// The expiry of the sign-in file at <paramref name="copyFile"/>, or null. Read by the road that never waits on a FIFO, reads a regular file only, within a limit and a time bound (pass 9, S66); <paramref name="noFollow"/> is for the JOB's copy (a unit can write it, so a link there is not followed);
+    /// the person's real file may be a link they made and is followed, as before.
+    /// </summary>
+    public static DateTime? ExpiryOfFile(CoderSignInRecipe.CopyForJob recipe, string copyFile, bool noFollow = false)
     {
         try
         {
-            return JsonNode.Parse(File.ReadAllBytes(copyFile)) is JsonObject root ? ExpiryOf(recipe, root) : null;
+            var read = noFollow ? UnitWrittenFile.Read(copyFile, UnitWrittenFile.MostCopyBytes) : UnitWrittenFile.ReadFollowing(copyFile, UnitWrittenFile.MostCopyBytes);
+
+            return read is Files.FileReadResult.Content content && JsonNode.Parse(content.Bytes) is JsonObject root ? ExpiryOf(recipe, root) : null;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException)
         {

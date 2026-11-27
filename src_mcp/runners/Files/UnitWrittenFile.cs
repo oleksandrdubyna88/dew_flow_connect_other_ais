@@ -24,6 +24,60 @@ internal static class UnitWrittenFile
 
     public const int MostDepth = 12;
 
+    /// <summary>The longest line of a rollout, in characters: a file with no line end is not read to its end (pass 9, S68).</summary>
+    public const int MostLineChars = 4 * 1024 * 1024;
+
+    /// <summary>
+    /// The next line of <paramref name="reader"/>, or null at the end; a line longer than <paramref name="maxChars"/> is an <see cref="InvalidDataException"/> and the rest of the file is not read.
+    /// </summary>
+    public static string? ReadLine(TextReader reader, int maxChars)
+    {
+        var line = new System.Text.StringBuilder();
+        int next;
+        while ((next = reader.Read()) >= 0)
+        {
+            if (next == '\n')
+            {
+                return line.ToString().TrimEnd('\r');
+            }
+
+            if (line.Length >= maxChars)
+            {
+                throw new InvalidDataException($"a line is longer than {maxChars} characters");
+            }
+
+            line.Append((char)next);
+        }
+
+        return line.Length > 0 ? line.ToString() : null;
+    }
+
+    /// <summary>
+    /// <see cref="Read"/> for a file that may be a link the person made on purpose (their own sign-in file): a final link is followed, as a plain open would; a FIFO and the rest are still never waited on, and the read is limited and bounded.
+    /// </summary>
+    public static FileReadResult ReadFollowing(string path, int maxBytes) =>
+        Bounded(() =>
+        {
+            try
+            {
+                using var stream = RegularFiles.OpenRegular(path);
+
+                return RegularFiles.Capped(stream, maxBytes);
+            }
+            catch (NotRegularFileException e)
+            {
+                return new FileReadResult.Unreadable(e.Message);
+            }
+            catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException)
+            {
+                return new FileReadResult.Missing();
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException or PlatformNotSupportedException)
+            {
+                return new FileReadResult.Unreadable(e.GetType().Name);
+            }
+        }, new FileReadResult.Unreadable($"it did not finish in {Bound.TotalSeconds:0} seconds"));
+
     /// <summary>The bytes of <paramref name="path"/>: <see cref="FileReadResult.Missing"/> when nothing is there, <see cref="FileReadResult.Unreadable"/> (with the reason) for a link, a FIFO, a folder, a file over <paramref name="maxBytes"/>, or a read that did not finish in <see cref="Bound"/>.</summary>
     public static FileReadResult Read(string path, int maxBytes) =>
         Bounded(() => RegularFiles.ReadNoFollow(path, maxBytes), new FileReadResult.Unreadable($"it did not finish in {Bound.TotalSeconds:0} seconds"));
@@ -61,6 +115,7 @@ internal static class UnitWrittenFile
     {
         var files = new List<string>();
         var pending = new Stack<(string Folder, int Depth)>();
+        var seen = 0;
         pending.Push((root, 0));
         try
         {
@@ -69,7 +124,7 @@ internal static class UnitWrittenFile
                 var (folder, depth) = pending.Pop();
                 foreach (var entry in Directory.EnumerateFileSystemEntries(folder))
                 {
-                    if (files.Count + pending.Count >= MostEntries)
+                    if (++seen > MostEntries)
                     {
                         return (files, $"there are more than {MostEntries} entries below the folder", true);
                     }

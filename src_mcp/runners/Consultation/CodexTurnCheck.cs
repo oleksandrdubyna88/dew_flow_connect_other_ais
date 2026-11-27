@@ -274,7 +274,7 @@ internal static class CodexTurnCheck
 
                 using var reader = new StreamReader(stream);
                 string? line;
-                while ((line = reader.ReadLine()) is not null)
+                while ((line = Runners.Files.UnitWrittenFile.ReadLine(reader, Runners.Files.UnitWrittenFile.MostLineChars)) is not null)
                 {
                     if (line.Length == 0)
                     {
@@ -296,6 +296,11 @@ internal static class CodexTurnCheck
                     }
                 }
             }
+        }
+        catch (InvalidDataException)
+        {
+            // A line past the limit: no CLI wrote this file, and it is not read to its end (pass 9, S68).
+            return NotRegular;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {

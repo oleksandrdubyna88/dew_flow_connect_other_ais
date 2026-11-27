@@ -255,6 +255,26 @@ if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor" || minimal is
         return 65;
     }
 
+    // A command of the model in the unit, in its working folder (model map `cwdDelete` and `cwdFifos`, JSON arrays of paths below the working folder): each file is deleted, then a FIFO is made at each name — what the host's plain read of the worktree's toolchain file would wait on for ever.
+    if (steering.Get("CWD_DELETE") is { Length: > 0 } cwdDelete)
+    {
+        foreach (var relative in System.Text.Json.JsonSerializer.Deserialize<string[]>(cwdDelete) ?? [])
+        {
+            File.Delete(Path.Combine(Directory.GetCurrentDirectory(), relative));
+        }
+    }
+
+    if (steering.Get("CWD_FIFOS") is { Length: > 0 } cwdFifos)
+    {
+        foreach (var relative in System.Text.Json.JsonSerializer.Deserialize<string[]>(cwdFifos) ?? [])
+        {
+            var at = Path.Combine(Directory.GetCurrentDirectory(), relative);
+            Directory.CreateDirectory(Path.GetDirectoryName(at)!);
+            using var cwdFifo = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("/usr/bin/mkfifo", [at]) { UseShellExecute = false })!;
+            cwdFifo.WaitForExit();
+        }
+    }
+
     // A command of the model in the unit (model map `homeFifos`, a JSON array of paths below $HOME): a FIFO is made at each name — what a host read that opens with a plain open would wait on for ever.
     if (steering.Get("HOME_FIFOS") is { Length: > 0 } homeFifos && Environment.GetEnvironmentVariable("HOME") is { Length: > 0 } fifoHome)
     {

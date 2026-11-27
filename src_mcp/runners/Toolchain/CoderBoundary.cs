@@ -129,7 +129,7 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
 
         state.Remember();
 
-        return SignInCopy.Gate(recipe, SignInCopy.ExpiryOfFile(recipe, state.CopyFile), nowUtc, runtimeMax, Vendor.Id);
+        return SignInCopy.Gate(recipe, SignInCopy.ExpiryOfFile(recipe, state.CopyFile, noFollow: true), nowUtc, runtimeMax, Vendor.Id);
     }
 
     /// <summary>The vendor's own preparation of the launch (<see cref="ICoderVendor.PrepareLaunch"/>): files it needs in its home, its tripwires, and the request to launch.</summary>
