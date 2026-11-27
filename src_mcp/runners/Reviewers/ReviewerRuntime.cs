@@ -445,7 +445,8 @@ public interface IReviewerRuntime
 
     /// <summary>
     /// What this launch asked for and its runtime said it did NOT apply — one sentence for the reviewer's note, or empty.
-    /// Only a Team server answers it (contract 2's dropped and clamped fields); a local launch applies what it sends.
+    /// A Team server answers it (contract 2's dropped and clamped fields); the claude adapter answers it when the CLI's own result
+    /// names another model family than the one asked for (<see cref="ClaudeModels.Mismatch"/>). A local launch otherwise applies what it sends.
     /// </summary>
     string NotApplied(ReviewerInvocation invocation, ProcessResult result) => string.Empty;
 

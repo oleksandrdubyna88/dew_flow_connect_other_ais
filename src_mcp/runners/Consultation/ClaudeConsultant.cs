@@ -178,7 +178,7 @@ public sealed class ClaudeConsultant(IReviewerRuntime inner, string vendor = "cl
         var fast = ClaudeFastMode.Args(settings);
 
         return (
-            [.. settings.Model.Length > 0 ? (string[])["--model", settings.Model] : [], .. effort, .. fast],
+            [.. ClaudeModels.Arguments(settings), .. effort, .. fast],
             new SentOptions(effort is [_, var level] ? level : string.Empty, ClaudeFastMode.TierOf(fast, settings.Fast)));
     }
 
