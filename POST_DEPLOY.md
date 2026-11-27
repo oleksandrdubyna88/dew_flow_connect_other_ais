@@ -19,7 +19,18 @@ one of them arriving wrong.
 
 Target: the released **extension** version — `--target 0.33.1`. The MCP binary ships on its own tag and its own number, so item 1 reads `MCP_VERSION` (`mcp-v<version>`) rather than the target.
 
-Last verified: 2026-11-27 · extension **2.1.1** (released: `extension-v2.1.1` on 5801b846, cut by a release-please
+Last verified: 2026-11-27 · extension **2.2.0** (released: `extension-v2.2.0` on 6a491ad9, cut by a release-please
+dispatch after release PR #1067; release run 46063446566 green) · mcp **2.0.0** unchanged · server **0.16.3** served by the
+box. Run locally: `MCP_VERSION=2.0.0 SERVER_VERSION=0.16.3 node .agents/conventions/tools/post-deploy-check.mjs --target
+2.2.0`, re-run each minute until the Marketplace served 2.2.0; at 20:39:01 UTC it printed every automated item PASS:
+`PASS 1`, `PASS 2`, `PASS 6`, `PASS 9` and `PASS 10`. The released vsix (`connect-other-ais-2.2.0.vsix`, sha256
+`2fbe1adf8a0f4dce1b93abeeaebd8056285fac683c8298a0d87d77f95c7398b4`) was opened: `package.json` says 2.2.0, and
+`dist/modules/chat.js` holds `no-agy-quota` and `app-server`. The release carries #1066 (Codex from `codex app-server`,
+Antigravity's quota and account, the agy model-call block, root vendors run with a warning, email colours). The owner
+checked the pre-release VSIX 2.1.901 in a real window; the released vsix is installed in the owner's VS Code. Manual
+items 3, 4, 5, 7, 8, 11 and 12 were not run.
+
+Previously verified: 2026-11-27 · extension **2.1.1** (released: `extension-v2.1.1` on 5801b846, cut by a release-please
 dispatch after release PR #1063; release run 46000027336 green) · mcp **2.0.0** unchanged · server **0.16.3** served by the
 box. Run locally: `MCP_VERSION=2.0.0 SERVER_VERSION=0.16.3 node .agents/conventions/tools/post-deploy-check.mjs --target
 2.1.1`. The first run printed `FAIL 2 — marketplace serves 2.1.0` (the Marketplace's own delay); re-run each minute, it
