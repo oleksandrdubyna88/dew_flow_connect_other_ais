@@ -146,7 +146,9 @@ exit $code
 const CODEX = (fx: string): string => `${logged('codex', fx)}[ -e "${fx}/hang-codex" ] && exec sleep 100
 [ -e "${fx}/deaf-codex" ] && { trap '' TERM; while :; do sleep 1 >/dev/null 2>&1; done; }
 [ -f "${fx}/codex.out" ] && cat "${fx}/codex.out"
-exit 0
+code=0
+[ -f "${fx}/codex.code" ] && code=$(cat "${fx}/codex.code")
+exit $code
 `;
 
 /** Writes a file. A link of that name is removed first, so a write never goes THROUGH it to the real tool. */
@@ -433,7 +435,7 @@ shellTest('A2-T1: a script cut after any line of its function, or at any byte of
 shellTest('A2-T1 companion: the last line as TWO lines (the form before gate G2) creates a path when it is cut inside the path of 2>', async (shell) => {
   const t = tree();
   const folder = scratch();
-  const base = ACCOUNTS_SCRIPT.split('\n').slice(0, 341);
+  const base = ACCOUNTS_SCRIPT.split('\n').slice(0, FUNCTION_LINES);
   const call = `</dev/null 2>${folder}/dev/null coai_accounts "$@"`;
   const from = call.indexOf(`${folder}/dev/null`) + folder.length;
   for (let k = from + 2; k < from + '/dev/null'.length; k += 1) {
@@ -732,7 +734,15 @@ jqTest('R3-T5: Codex — found with its account, its plan and its window from co
   const folderOnly = tree({ jq: true });
   renameSync(join(folderOnly.local, 'codex'), join(folderOnly.root, 'codex-away'));
   mkdirSync(join(folderOnly.home, '.codex', 'sessions', '2026', '11', '17'), { recursive: true });
-  assert.deepEqual((await read(shell, folderOnly, 'no-claude-usage')).got.codex, { state: 'absent' }, 'a ~/.codex alone, with no program, is no Codex');
+  assert.deepEqual((await read(shell, folderOnly, 'no-claude-usage')).got.codex, { state: 'found', signInFile: false, email: '', plan: null, usage: { state: 'failed', why: 'not-started' } }, 'a ~/.codex with no program on the script\'s PATH is a Codex that was not started, not one that vanished');
+  assert.equal(calls(folderOnly, 'codex').length, 0);
+  const nowhere = tree({ jq: true });
+  renameSync(join(nowhere.local, 'codex'), join(nowhere.root, 'codex-away'));
+  assert.deepEqual((await read(shell, nowhere, 'no-claude-usage')).got.codex, { state: 'absent' }, 'no program and no ~/.codex is no Codex');
+  const noJq = tree({ hide: ['jq'] });
+  renameSync(join(noJq.local, 'codex'), join(noJq.root, 'codex-away'));
+  mkdirSync(join(noJq.home, '.codex'), { recursive: true });
+  assert.deepEqual((await read(shell, noJq, 'no-claude-usage')).got.codex, { state: 'unreadable', why: 'no-jq' }, 'the no-jq word keeps its place beside COAI-JQ missing');
 
   const none = tree({ jq: true });
   put(none, 'codex.out', codexOut({ rateLimits: { limitId: 'codex', primary: null, secondary: null, planType: 'prolite' } }));
@@ -741,7 +751,7 @@ jqTest('R3-T5: Codex — found with its account, its plan and its window from co
 
   const silent = tree({ jq: true });
   put(silent, 'codex.out', '');
-  assert.deepEqual((await read(shell, silent, 'no-claude-usage')).got.codex, { state: 'found', signInFile: false, email: '', plan: null, usage: { state: 'failed', why: 'none' } }, 'no reply at all is no rate limits, with no account');
+  assert.deepEqual((await read(shell, silent, 'no-claude-usage')).got.codex, { state: 'found', signInFile: false, email: '', plan: null, usage: { state: 'failed', why: 'error' } }, 'no reply at all is no rate limits, with no account');
 });
 
 jqTest('R3-T5: agy — the quota of both groups, the reset epoch of a window that has started, a dash for one that has not, and the account from the log', async (shell) => {
@@ -889,7 +899,7 @@ shellTest('A2-T8 (iv): agy that hangs by exec sleep is ended by its own limit; t
   put(t, 'hang-agy', '');
   const { seconds, outcome } = await timed(shell, t, 'no-claude-usage');
   whole(outcome);
-  assert.ok(seconds >= 3.8, `agy was ended after ${seconds} s, before its limit of 4 s`);
+  assert.ok(seconds >= 1.8, `agy was ended after ${seconds} s, before its limit of 2 s`);
   const got = readAccounts(outcome, 'no-claude-usage', NOW);
   assert.ok(got.kind === 'read' && got.agy.state === 'found' && got.agy.version === null, JSON.stringify(got));
   assert.deepEqual(calls(t, 'agy').map(argsOf), [VERSION_ARGS], 'with no jq agy is not asked for its quota');
@@ -932,7 +942,7 @@ test('A2-T8: the six hang runs, started together in ONE test', { timeout: 40_000
     assert.ok(done.seconds >= 7.8 && done.outcome.stdout.includes('COAI-USAGE claude failed timeout'), `the usage command that starts a child and hangs: ${done.outcome.stdout.slice(0, 300)}`);
   }
   assert.ok(g.seconds >= 3.8 && g.outcome.stdout.includes('COAI-USAGE agy failed timeout') && g.outcome.stdout.includes(':version 1.5.12'), `the quota command of agy that hangs: ${g.seconds} s, ${g.outcome.stdout.slice(0, 400)}`);
-  assert.ok(f.seconds >= 2.8 && f.seconds < 5.5 && f.outcome.stdout.includes('COAI-USAGE codex failed none') && !f.outcome.stdout.includes(':window '), `codex app-server that hangs: ${f.seconds} s, ${f.outcome.stdout.slice(0, 400)}`);
+  assert.ok(f.seconds >= 3.8 && f.seconds < 6.5 && f.outcome.stdout.includes('COAI-USAGE codex failed timeout') && !f.outcome.stdout.includes(':window '), `codex app-server that hangs: ${f.seconds} s, ${f.outcome.stdout.slice(0, 400)}`);
   for (const t of [version, account, usageSh, usageBash, agy, file]) {
     await noneAlive(t);
   }
@@ -1146,13 +1156,35 @@ jqTest('R3-T6: the measured replies — the account, the plan, the weekly window
   assert.deepEqual(await codexWith(shell, two), [':account cox@example.test', ':plan prolite', 'COAI-USAGE codex read', ':window 19 10080 1796123826', ':window 3.46 300 1795500000']);
 });
 
-jqTest('R3-T6: no rate limits — failed none, with the account and plan that were said; a reply that is no JSON is the same', async (shell) => {
+jqTest('R3-T6: no rate limits — failed none, with the account and plan that were said; no reply, no JSON and an error reply are failed error', async (shell) => {
   const empty = codexOut({ rateLimits: { primary: null, secondary: null, planType: 'prolite' } });
   assert.deepEqual(await codexWith(shell, empty), [':account cox@example.test', ':plan prolite', 'COAI-USAGE codex failed none']);
-  assert.deepEqual(await codexWith(shell, 'not json at all\n{"id":3\n'), ['COAI-USAGE codex failed none']);
-  assert.deepEqual(await codexWith(shell, ''), ['COAI-USAGE codex failed none']);
+  // only a real reply without rate limits is none: no reply at all, a reply that is no JSON and a reply that is an error are errors
+  assert.deepEqual(await codexWith(shell, 'not json at all\n{"id":3\n'), ['COAI-USAGE codex failed error']);
+  assert.deepEqual(await codexWith(shell, ''), ['COAI-USAGE codex failed error']);
+  assert.deepEqual(await codexWith(shell, '{"id":1,"result":{}}\n{"id":3,"error":{"code":-32600,"message":"not signed in"}}\n'), ['COAI-USAGE codex failed error'], 'an error reply is no rate limits that were stated');
   const onlyRates = codexOut().split('\n').filter((line) => !line.includes('"id":2')).join('\n');
   assert.deepEqual(await codexWith(shell, onlyRates), [':plan prolite', 'COAI-USAGE codex read', ':window 19 10080 1796123826'], 'no account reply: the rate limits are still shown');
+});
+
+jqTest('R3-S4: the exit code of codex app-server — the figures are accepted when the rate limits came (even on 124 or 3), no rate limits reply with a bad exit is an error, 124 is a timeout, and a reply without id 1 is no reply', async (shell) => {
+  const withCode = async (out: string, code: string): Promise<readonly string[]> => {
+    const t = tree({ jq: true });
+    put(t, 'codex.out', out);
+    put(t, 'codex.code', code);
+
+    return codexLinesOf((await read(shell, t, 'no-claude-usage')).outcome);
+  };
+  const figures = [':account cox@example.test', ':plan prolite', 'COAI-USAGE codex read', ':window 19 10080 1796123826'];
+  assert.deepEqual(await withCode(codexOut(), '0'), figures);
+  assert.deepEqual(await withCode(codexOut(), '124'), figures, 'the reply came and the program was ended after it');
+  assert.deepEqual(await withCode(codexOut(), '3'), figures, 'the reply came');
+  const noRates = codexOut().split('\n').filter((line) => !line.includes('"id":3')).join('\n');
+  assert.deepEqual(await withCode(noRates, '124'), [':account cox@example.test', ':plan prolite', 'COAI-USAGE codex failed timeout']);
+  assert.deepEqual(await withCode(noRates, '137'), [':account cox@example.test', ':plan prolite', 'COAI-USAGE codex failed timeout']);
+  assert.deepEqual(await withCode(noRates, '3'), [':account cox@example.test', ':plan prolite', 'COAI-USAGE codex failed error']);
+  assert.deepEqual(await withCode(noRates, '0'), [':account cox@example.test', ':plan prolite', 'COAI-USAGE codex failed error'], 'a program that exits at once with no rate-limit reply');
+  assert.deepEqual(await withCode('', '2'), ['COAI-USAGE codex failed error'], 'no app-server in this version: it printed nothing and exited');
 });
 
 jqTest('R3-T6: an email that is not in the safe shape is not sent, and the plan and the windows still are', async (shell) => {
@@ -1203,6 +1235,9 @@ const MODEL_CALL_SAID = ['COAI-VENDOR agy found', ':account agy@example.test', '
 jqTest('R3-T7: an unknown slash command is sent to the model — every reply that is not a usage reply with no turn, no tokens and no conversation is failed model-call, and no figure leaves', async (shell) => {
   const replies: readonly (readonly [string, string])[] = [
     ['a turn was made', quotaJson({ num_turns: 1 })],
+    ['tokens were spent', quotaJson({ usage: { input_tokens: 5, output_tokens: 0, total_tokens: 5 } })],
+    ['tokens that are no number', quotaJson({ usage: { total_tokens: 'many' } })],
+    ['a usage that is no object', quotaJson({ usage: 'x' })],
     ['a conversation was created', quotaJson({ conversation_id: 'CONVERSATION-MARK' })],
     ['another command', quotaJson({ command: { name: 'help', data: { groups: [] } } })],
     ['no command at all', quotaJson({ command: undefined })],
@@ -1398,7 +1433,7 @@ test('E3S2-T13: T46, the run — a false claude --version, codex and agy that ig
   // inside the sum of the steps (the ssh connect is not part of a local run) plus one second
   assert.ok(f.seconds <= worstSeconds('no-claude-usage') - ACCOUNTS_CONNECT_SECONDS + 1, `the first mode took ${f.seconds} s`);
   assert.ok(u.seconds <= worstSeconds('claude-usage') - ACCOUNTS_CONNECT_SECONDS + 1, `the usage mode took ${u.seconds} s`);
-  assert.ok(f.seconds >= 2.5 + 2.8 + 3.8 + 3.8 + 3.8, `the first mode ended after ${f.seconds} s, before its deaf programs were killed`);
+  assert.ok(f.seconds >= 2.5 + 1.8 + 3.8 + 1.8 + 3.8, `the first mode ended after ${f.seconds} s, before its deaf programs were killed`);
   // the usage step must be REACHED (gate E3-G1, F2): the false sha256sum's true digest, then the usage command ended by its own limit
   assert.ok(lines(u.outcome).includes('COAI-USAGE claude failed timeout') || lines(u.outcome).includes('COAI-USAGE claude read'), `the usage step was not reached: ${u.outcome.stdout}`);
   assert.ok(lines(u.outcome).includes('COAI-USAGE claude read'), `the slow usage step did not end with its figures: ${u.outcome.stdout}`);
@@ -1407,7 +1442,7 @@ test('E3S2-T13: T46, the run — a false claude --version, codex and agy that ig
   // a quota command that ignores TERM is killed one second later, at the end of its readers' limit: they may have gone by then, and the reply is a timeout or an error, never figures
   assert.ok((lines(f.outcome).includes('COAI-USAGE agy failed timeout') || lines(f.outcome).includes('COAI-USAGE agy failed error')) && !f.outcome.stdout.includes(':version 1.5') && !f.outcome.stdout.includes(':quota '), `the deaf agy: ${f.outcome.stdout}`);
   // a codex that ignores TERM is killed one second later, at the very end of its readers' limit: they have gone by then, and Codex is said not to have answered
-  assert.ok(lines(f.outcome).includes('COAI-USAGE codex failed error') || lines(f.outcome).includes('COAI-USAGE codex failed none'), `the deaf codex: ${f.outcome.stdout}`);
+  assert.ok(lines(f.outcome).includes('COAI-USAGE codex failed error') || lines(f.outcome).includes('COAI-USAGE codex failed timeout'), `the deaf codex: ${f.outcome.stdout}`);
   for (const t of [first, usage]) {
     await noneAlive(t);
   }
@@ -1492,7 +1527,6 @@ function rootTree(relative: readonly string[] = []): Tree {
   return t;
 }
 
-const sideOf = (got: FirstRead, name: 'claude' | 'codex' | 'agy'): unknown => got[name];
 
 jqTest('E3S1-T20: as UID 0, all closed — the three parts, and claude and agy each record a start', async (shell) => {
   const t = rootTree();
@@ -1507,27 +1541,43 @@ jqTest('E3S1-T20: as UID 0, all closed — the three parts, and claude and agy e
   assert.ok(usage.got.claude.state === 'found' && usage.got.claude.usage.state === 'read', JSON.stringify(usage.got));
 });
 
-jqTest('E3S1-T21: as UID 0, root\'s ~/.local/bin writable by its group — claude, codex and agy are unsafe with that folder\'s path, and none records a start', async (shell) => {
+const warnLines = (outcome: Outcome): readonly string[] => lines(outcome).filter((line) => line.startsWith(':unsafe-path '));
+
+jqTest('E3S1-T21: as UID 0, root\'s ~/.local/bin writable by its group (the owner\'s decision of 2026-11-27) — claude, codex and agy are read and started, each with one :unsafe-path line of that folder, and nothing is refused', async (shell) => {
   const t = rootTree();
   chmodSync(t.local, 0o775);
   const { outcome, got } = await read(shell, t, 'no-claude-usage');
-  assert.deepEqual(sideOf(got, 'claude'), { state: 'unsafe', path: t.local }, outcome.stdout);
-  assert.deepEqual(sideOf(got, 'agy'), { state: 'unsafe', path: t.local }, outcome.stdout);
-  assert.deepEqual(sideOf(got, 'codex'), { state: 'unsafe', path: t.local }, outcome.stdout);
-  assert.deepEqual(calls(t, 'claude'), [], 'claude was started');
-  assert.deepEqual(calls(t, 'agy'), [], 'agy was started');
-  assert.deepEqual(calls(t, 'codex'), [], 'codex was started');
-  assert.ok(lines(outcome).includes(`:path ${t.local}`));
-  // the usage mode says it for Claude
+  assert.ok(got.claude.state === 'found' && got.codex.state === 'found' && got.agy.state === 'found', outcome.stdout);
+  assert.deepEqual(warnLines(outcome), [`:unsafe-path ${t.local}`, `:unsafe-path ${t.local}`, `:unsafe-path ${t.local}`]);
+  assert.ok(got.claude.state === 'found' && got.claude.unsafePath === t.local && got.agy.state === 'found' && got.agy.unsafePath === t.local && got.codex.state === 'found' && got.codex.unsafePath === t.local);
+  assert.ok(!outcome.stdout.includes('COAI-BAD') && !outcome.stdout.includes(':path ') && !outcome.stdout.includes(' unsafe'), 'something was refused');
+  assert.ok(calls(t, 'claude').length >= 1 && calls(t, 'agy').length === 2 && calls(t, 'codex').length === 1, 'a vendor was not started');
+  // the usage mode says it for Claude too, and the digest does not change
   const usage = await readUsage(shell, t);
-  assert.deepEqual(usage.got.claude, { state: 'unsafe', path: t.local });
-  assert.deepEqual(calls(t, 'claude'), []);
-  // closed again: both are read
+  assert.ok(usage.got.claude.state === 'found' && usage.got.claude.unsafePath === t.local && usage.got.claude.usage.state === 'read', JSON.stringify(usage.got));
+  // closed again: no warning at all
   chmodSync(t.local, 0o755);
-  assert.equal((await read(shell, t, 'no-claude-usage')).got.claude.state, 'found');
+  const closed = await read(shell, t, 'no-claude-usage');
+  assert.deepEqual(warnLines(closed.outcome), []);
+  assert.ok(closed.got.claude.state === 'found' && !('unsafePath' in closed.got.claude));
 });
 
-jqTest('E3S1-T22: as UID 0, claude is a link whose target sits in a folder open to all — unsafe with that folder, no start; agy beside it is read', async (shell) => {
+jqTest('E3S1-T21: as UID 0, a TOOL (sed) behind a link into a folder open to all is still refused — COAI-BAD unsafe with that folder, and no program of the place is started', async (shell) => {
+  const t = rootTree();
+  const open = join(t.root, 'open');
+  mkdirSync(open, { recursive: true });
+  chmodSync(open, 0o777);
+  const sed = onPath('sed');
+  assert.ok(sed !== undefined, 'no sed on this machine');
+  symlinkSync(sed as string, join(open, 'sed-real'));
+  symlinkSync(join(open, 'sed-real'), join(t.local, 'sed'));
+  const outcome = await run(shell, t, ['no-claude-usage']);
+  assert.deepEqual(lines(outcome), ['COAI-ACCOUNTS 1', 'COAI-BAD unsafe', `:path ${open}`, 'COAI-ACCOUNTS-END']);
+  assert.deepEqual(readAccounts(outcome, 'no-claude-usage', NOW), { kind: 'unreadable', why: 'unsafe', path: open });
+  assert.deepEqual(logLines(t), [], 'a program of the place was started');
+});
+
+jqTest('E3S1-T22: as UID 0, claude is a link whose target sits in a folder open to all — it is read and started with that folder in its warning; agy beside it has none', async (shell) => {
   const t = rootTree();
   const open = join(t.root, 'open');
   mkdirSync(open, { recursive: true });
@@ -1535,14 +1585,15 @@ jqTest('E3S1-T22: as UID 0, claude is a link whose target sits in a folder open 
   write(join(open, 'claude-real'), CLAUDE(t.fx), 0o755);
   rmSync(join(t.local, 'claude'), { force: true });
   symlinkSync(join(open, 'claude-real'), join(t.local, 'claude'));
-  const { got } = await read(shell, t, 'no-claude-usage');
-  assert.deepEqual(sideOf(got, 'claude'), { state: 'unsafe', path: open });
-  assert.deepEqual(calls(t, 'claude'), [], 'claude was started');
-  assert.equal(got.agy.state, 'found');
-  assert.equal(calls(t, 'agy').length, 2, 'agy beside it was not read (version and quota)');
+  const { outcome, got } = await read(shell, t, 'no-claude-usage');
+  assert.ok(got.claude.state === 'found' && got.claude.unsafePath === open, outcome.stdout);
+  assert.ok(calls(t, 'claude').length >= 1, 'claude was not started');
+  assert.ok(got.agy.state === 'found' && !('unsafePath' in got.agy));
+  assert.equal(calls(t, 'agy').length, 2, 'agy beside it was not read');
+  assert.deepEqual(warnLines(outcome), [`:unsafe-path ${open}`]);
 });
 
-jqTest('E3S1-T23: as UID 0, agy is another owner\'s file behind an absolute link — unsafe, no start; claude beside it is read', async (shell) => {
+jqTest('E3S1-T23: as UID 0, agy is another owner\'s file behind an absolute link — it is read and started with that folder in its warning; claude beside it has none', async (shell) => {
   const t = rootTree();
   const other = join(t.root, 'other');
   mkdirSync(other, { recursive: true });
@@ -1550,10 +1601,77 @@ jqTest('E3S1-T23: as UID 0, agy is another owner\'s file behind an absolute link
   rmSync(join(t.local, 'agy'), { force: true });
   symlinkSync(join(other, 'agy-real'), join(t.local, 'agy'));
   const { got } = await read(shell, t, 'no-claude-usage');
-  assert.deepEqual(sideOf(got, 'agy'), { state: 'unsafe', path: other });
-  assert.deepEqual(calls(t, 'agy'), [], 'agy was started');
-  assert.equal(got.claude.state, 'found');
+  assert.ok(got.agy.state === 'found' && got.agy.unsafePath === other, JSON.stringify(got.agy));
+  assert.equal(calls(t, 'agy').length, 2, 'agy was not started');
+  assert.ok(got.claude.state === 'found' && !('unsafePath' in got.claude));
   assert.ok(calls(t, 'claude').length >= 1, 'claude beside it was not read');
+});
+
+/** A false claude that starts with this first line (a script's `#!`), as UID 0: its interpreter is a wrapper that runs `sh` and stands in a folder open to all. */
+function claudeBehind(t: Tree, first: (open: string) => string): string {
+  const open = join(t.root, 'open');
+  mkdirSync(open, { recursive: true });
+  chmodSync(open, 0o777);
+  write(join(open, 'interp-real'), '#!/bin/sh\nexec /bin/sh "$@"\n', 0o755);
+  symlinkSync(join(open, 'interp-real'), join(t.local, 'fakenode'));
+  write(join(t.local, 'claude'), CLAUDE(t.fx).replace('#!/bin/sh', first(open)), 0o755);
+
+  return open;
+}
+
+jqTest('R3-S3: as UID 0, the interpreter of a vendor script is checked too — `#!/usr/bin/env fakenode` with fakenode in a folder open to all: claude is read and started, and the warning names that folder', async (shell) => {
+  const t = rootTree();
+  const open = claudeBehind(t, () => '#!/usr/bin/env fakenode');
+  const { outcome, got } = await read(shell, t, 'no-claude-usage');
+  assert.ok(got.claude.state === 'found' && got.claude.unsafePath === open, outcome.stdout);
+  assert.ok(calls(t, 'claude').length >= 1, 'claude was not started');
+  assert.deepEqual(warnLines(outcome), [`:unsafe-path ${open}`]);
+  assert.ok(got.agy.state === 'found' && !('unsafePath' in got.agy) && got.codex.state === 'found' && !('unsafePath' in got.codex), 'a warning of another vendor');
+});
+
+jqTest('R3-S3: …an absolute interpreter, `env -S` with a variable before the name, and the vendor\'s own path keeps the first warning; a closed interpreter warns of nothing', async (shell) => {
+  const absolute = rootTree();
+  const open = claudeBehind(absolute, (folder) => `#!${folder}/interp-real`);
+  const a = await read(shell, absolute, 'no-claude-usage');
+  assert.ok(a.got.claude.state === 'found' && a.got.claude.unsafePath === open, a.outcome.stdout);
+  const withOptions = rootTree();
+  const folder = claudeBehind(withOptions, () => '#!/usr/bin/env -S FOO=bar fakenode');
+  const b = await read(shell, withOptions, 'no-claude-usage');
+  assert.ok(b.got.claude.state === 'found' && b.got.claude.unsafePath === folder, b.outcome.stdout);
+  const closed = rootTree();
+  write(join(closed.local, 'claude'), CLAUDE(closed.fx).replace('#!/bin/sh', '#!/usr/bin/env sh'), 0o755);
+  const c = await read(shell, closed, 'no-claude-usage');
+  assert.ok(c.got.claude.state === 'found' && !('unsafePath' in c.got.claude), c.outcome.stdout);
+  assert.deepEqual(warnLines(c.outcome), []);
+  // the vendor's own folder fails first: the warning names it, and the interpreter's is not added
+  const both = rootTree();
+  chmodSync(both.local, 0o775);
+  claudeBehind(both, () => '#!/usr/bin/env fakenode');
+  const d = await read(shell, both, 'no-claude-usage');
+  assert.ok(d.got.claude.state === 'found' && d.got.claude.unsafePath === both.local, d.outcome.stdout);
+});
+
+jqTest('R3-S5: as UID 0, agy\'s log is checked before it is read — a folder of its path open to others: no :account line, and agy is still read; a closed path gives it', async (shell) => {
+  const t = rootTree();
+  const log = join(t.home, '.gemini', 'antigravity-cli', 'log');
+  chmodSync(log, 0o775);
+  const { outcome, got } = await read(shell, t, 'no-claude-usage');
+  assert.ok(got.agy.state === 'found' && got.agy.email === '' && got.agy.usage.state === 'read', outcome.stdout);
+  assert.ok(!outcome.stdout.includes(':account agy@') && !outcome.stdout.includes(AGY_MAIL), 'the account of an agy log that others can write was sent');
+  assert.ok(!outcome.stdout.includes('COAI-BAD') && !outcome.stdout.includes(' unsafe'), 'a refusal');
+  chmodSync(log, 0o755);
+  const closed = await read(shell, t, 'no-claude-usage');
+  assert.ok(closed.got.agy.state === 'found' && closed.got.agy.email === AGY_MAIL, closed.outcome.stdout);
+  // the link cli.log leads to a file in a folder open to all: the same
+  const t2 = rootTree();
+  const open = join(t2.root, 'open');
+  mkdirSync(open, { recursive: true });
+  chmodSync(open, 0o777);
+  rmSync(join(t2.home, '.gemini', 'antigravity-cli', 'cli.log'), { force: true });
+  write(join(open, 'cli-x.log'), 'I1127 17:23:22.016270 1 server_oauth.go:221] applyAuthResult: email=agy@example.test, authMethod=consumer\n');
+  symlinkSync(join(open, 'cli-x.log'), join(t2.home, '.gemini', 'antigravity-cli', 'cli.log'));
+  const second = await read(shell, t2, 'no-claude-usage');
+  assert.ok(second.got.agy.state === 'found' && second.got.agy.email === '', second.outcome.stdout);
 });
 
 jqTest('E3S1-T24: as UID 0, a tool (jq) writable by others — COAI-BAD unsafe with its path, and NO program of that place records a start', async (shell) => {
@@ -1568,7 +1686,7 @@ jqTest('E3S1-T24: as UID 0, a tool (jq) writable by others — COAI-BAD unsafe w
   assert.deepEqual(logLines(t), [], 'a program of the place was started');
 });
 
-jqTest('E3S1-T25: as UID 0, 17 links in a row and a link that points to itself are unsafe; a command -v answer that is not absolute is unsafe', async (shell) => {
+jqTest('E3S1-T25: as UID 0, 17 links in a row are warned and read; a link that points to itself is not found; a command -v answer that is not absolute is warned with a dash', async (shell) => {
   const t = rootTree();
   rmSync(join(t.local, 'claude'), { force: true });
   write(join(t.local, 'real-claude'), CLAUDE(t.fx), 0o755);
@@ -1580,15 +1698,15 @@ jqTest('E3S1-T25: as UID 0, 17 links in a row and a link that points to itself a
   }
   symlinkSync(target, join(t.local, 'claude'));
   rmSync(join(t.local, 'agy'), { force: true });
-  // a link to itself is not found by `command -v` (the kernel says it loops), so the prelude claims its path: the walk is what must refuse it
+  // a link to itself is not found by `command -v` (the kernel says it loops), so the prelude claims its path: the walk is what refuses it, and agy is then asked to run by that path
   symlinkSync('agy', join(t.local, 'agy'));
   t.prelude = uid0Prelude(t, [], { agy: join(t.local, 'agy') });
   const { got } = await read(shell, t, 'no-claude-usage');
-  assert.ok(got.claude.state === 'unsafe' && got.claude.path !== null && got.claude.path.startsWith(t.local), JSON.stringify(got.claude));
-  assert.ok(got.agy.state === 'unsafe' && got.agy.path === join(t.local, 'agy'), JSON.stringify(got.agy));
-  assert.deepEqual(calls(t, 'claude'), []);
-  assert.deepEqual(calls(t, 'agy'), []);
-  // sixteen links are still followed
+  assert.ok(got.claude.state === 'found' && got.claude.unsafePath !== undefined && got.claude.unsafePath !== null && got.claude.unsafePath.startsWith(t.local), JSON.stringify(got.claude));
+  assert.ok(calls(t, 'claude').length >= 1, 'claude behind 18 links was not started');
+  assert.ok(got.agy.state === 'found' && got.agy.unsafePath === join(t.local, 'agy'), JSON.stringify(got.agy));
+  assert.deepEqual(calls(t, 'agy'), [], 'a link that loops cannot be started');
+  // sixteen links are still followed, and need no warning for them
   const ok = rootTree();
   rmSync(join(ok.local, 'claude'), { force: true });
   write(join(ok.local, 'real-claude'), CLAUDE(ok.fx), 0o755);
@@ -1598,15 +1716,16 @@ jqTest('E3S1-T25: as UID 0, 17 links in a row and a link that points to itself a
     to = `l${n}`;
   }
   symlinkSync(to, join(ok.local, 'claude'));
-  assert.equal((await read(shell, ok, 'no-claude-usage')).got.claude.state, 'found', '16 links are not followed');
-  // a command -v answer with no path
+  const sixteen = await read(shell, ok, 'no-claude-usage');
+  assert.ok(sixteen.got.claude.state === 'found' && !('unsafePath' in sixteen.got.claude), '16 links are not followed');
+  // a command -v answer with no path: claude is found by its name, runs, and the warning shows a dash
   const bare = rootTree(['claude']);
   const outcome = await run(shell, bare, ['no-claude-usage']);
-  assert.ok(lines(outcome).includes('COAI-VENDOR claude unsafe'), outcome.stdout);
-  assert.ok(lines(outcome).includes(':path claude'), 'the relative answer is the text of the path line');
-  assert.deepEqual(calls(bare, 'claude'), []);
-  // the parser keeps the safe direction: a path that is not absolute is not one of the closed forms
-  assert.deepEqual(readAccounts(outcome, 'no-claude-usage', NOW), { kind: 'unreadable', why: 'value' });
+  assert.ok(lines(outcome).includes('COAI-VENDOR claude found'), outcome.stdout);
+  assert.ok(lines(outcome).includes(':unsafe-path -'), 'the relative answer is not shown');
+  assert.ok(calls(bare, 'claude').length >= 1, 'claude was not started');
+  const parsed = readAccounts(outcome, 'no-claude-usage', NOW);
+  assert.ok(parsed.kind === 'read' && parsed.claude.state === 'found' && parsed.claude.unsafePath === null, JSON.stringify(parsed));
 });
 
 jqTest('E3S1-T26: not UID 0 — the folders of T21 and T22 start the tools and print no :path line; and with root\'s HOME a claude in ANOTHER home and one on the caller\'s PATH record no start', async (shell) => {
@@ -1637,12 +1756,12 @@ jqTest('E3S1-T26: not UID 0 — the folders of T21 and T22 start the tools and p
   assert.deepEqual(calls(other, 'claude'), [], 'a claude of another home or of the caller\'s PATH was started');
 });
 
-jqTest('E3S2-T23: leak, the path — a run that does not stand for UID 0 never prints a :path line; a refused path that holds a space is printed as -', async (shell) => {
+jqTest('E3S2-T23: leak, the path — a run that does not stand for UID 0 never prints a :path or :unsafe-path line; a warned path that holds a space is printed as -', async (shell) => {
   const plain = tree({ jq: true });
   claudeFixtures(plain);
   chmodSync(plain.local, 0o777);
   const outcome = await run(shell, plain, ['no-claude-usage']);
-  assert.ok(!outcome.stdout.includes(':path'), outcome.stdout);
+  assert.ok(!outcome.stdout.includes(':path') && !outcome.stdout.includes(':unsafe-path'), outcome.stdout);
   // as UID 0, a link whose target folder has a space in its name
   const t = rootTree();
   const spaced = join(t.root, 'open dir');
@@ -1652,9 +1771,9 @@ jqTest('E3S2-T23: leak, the path — a run that does not stand for UID 0 never p
   rmSync(join(t.local, 'claude'), { force: true });
   symlinkSync(join(spaced, 'claude-real'), join(t.local, 'claude'));
   const root = await run(shell, t, ['no-claude-usage']);
-  assert.ok(lines(root).includes('COAI-VENDOR claude unsafe'), root.stdout);
-  assert.ok(lines(root).includes(':path -'), `the path with a space was printed: ${root.stdout}`);
+  assert.ok(lines(root).includes('COAI-VENDOR claude found'), root.stdout);
+  assert.ok(lines(root).includes(':unsafe-path -'), `the path with a space was printed: ${root.stdout}`);
   assert.ok(!root.stdout.includes('open dir'), 'the folder name is in stdout');
   const got = readAccounts(root, 'no-claude-usage', NOW);
-  assert.ok(got.kind === 'read' && got.claude.state === 'unsafe' && got.claude.path === null, JSON.stringify(got));
+  assert.ok(got.kind === 'read' && got.claude.state === 'found' && got.claude.unsafePath === null, JSON.stringify(got));
 });

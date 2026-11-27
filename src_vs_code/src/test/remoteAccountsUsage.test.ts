@@ -214,8 +214,8 @@ test('R3-T1: the measured quota — two groups of two windows, a dash is a windo
   assert.deepEqual(agyUsage(...AGY_QUOTA_LINES), {
     state: 'read',
     windows: [
-      { group: 'gemini', window: 'weekly', leftPercent: 60, resetsAtMs: 1796283734000 },
-      { group: 'gemini', window: '5h', leftPercent: 92, resetsAtMs: 1795813241000 },
+      { group: 'gemini', window: 'weekly', leftPercent: 60, resetsAtMs: 1795506120000 },
+      { group: 'gemini', window: '5h', leftPercent: 92, resetsAtMs: 1795100400000 },
       { group: 'third-party', window: 'weekly', leftPercent: 100, resetsAtMs: null },
       { group: 'third-party', window: '5h', leftPercent: 100, resetsAtMs: null },
     ],

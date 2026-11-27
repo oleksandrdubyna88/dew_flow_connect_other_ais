@@ -1,6 +1,7 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { agyBlocksInMemory } from '../remoteAccountsAgyBlocks';
 import { AccountsDriver, CAN_BE_SHOWN, answerCanBeShown } from '../remoteAccountsDriver';
 import type { DriverWorld } from '../remoteAccountsDriver';
 import { FIRST_DELAY_MS, ROUND_GAP_MS, STATE_KEY, USAGE_POLICY, armFor, nextAfterRound, stateMerge } from '../remoteAccountsRound';
@@ -43,6 +44,7 @@ function rig(init: { hosts?: readonly string[]; permitted?: boolean; test?: bool
     hold: undefined, refused: new Set(), failing: false,
   };
   const given: DriverWorld = {
+    agy: agyBlocksInMemory(),
     test: init.test ?? false,
     live: () => control.terminals,
     permitted: () => Promise.resolve(control.permitted),

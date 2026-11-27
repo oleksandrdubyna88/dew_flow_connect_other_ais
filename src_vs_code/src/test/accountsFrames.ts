@@ -41,8 +41,8 @@ export const USAGE_READ_LINES: readonly string[] = [
 
 /** The measured quota of agy: the Gemini group part-used with a reset, the third-party group full with none (a dash). */
 export const AGY_QUOTA_LINES: readonly string[] = [
-  ':quota gemini weekly 60 1796283734',
-  ':quota gemini 5h 92 1795813241',
+  ':quota gemini weekly 60 1795506120',
+  ':quota gemini 5h 92 1795100400',
   ':quota third-party weekly 100 -',
   ':quota third-party 5h 100 -',
 ];

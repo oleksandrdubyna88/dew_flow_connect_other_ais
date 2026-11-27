@@ -22,7 +22,7 @@ import { SSH_OPTIONS } from '../remoteSsh';
  */
 
 /** The sha256 of `ACCOUNTS_SCRIPT`, as pinned by the E3.S2 spec (§ R2.3). A later change of the text moves the block, the pin and this literal in one commit. */
-const PINNED = 'e87bebc6620ce782455f790d6ba71758aabc28cbac71920120271f9d74baf2e2';
+const PINNED = '6d02ea1cb3bb1644fee0a2d65c948ff5b9ea7f0cb829496156a86569bd18bfa2';
 
 const HERE = join(__dirname, '..', '..');
 const SPEC_NAME = 'PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E3_S2_spec.md';
@@ -57,13 +57,13 @@ function firstDifference(left: string, right: string): string {
 
 const sha256 = (text: string): string => createHash('sha256').update(text).digest('hex');
 
-test('E3S2-T1: the sha256 of ACCOUNTS_SCRIPT is the pinned value, and the text is 341 lines of ASCII ending with LF', () => {
+test('E3S2-T1: the sha256 of ACCOUNTS_SCRIPT is the pinned value, and the text is 413 lines of ASCII ending with LF', () => {
   assert.match(PINNED, /^[0-9a-f]{64}$/u, 'the test still holds a pin that is not a sha256');
   assert.equal(sha256(ACCOUNTS_SCRIPT), PINNED, 'the text of ACCOUNTS_SCRIPT changed without the pin');
-  assert.equal(ACCOUNTS_SCRIPT.split('\n').length - 1, 341, 'the text is 341 lines');
-  assert.equal(Buffer.byteLength(ACCOUNTS_SCRIPT), 13_045, 'the text is 13 045 bytes');
-  assert.equal(count(ACCOUNTS_SCRIPT, '${'), 12, 'the text holds ${ 12 times');
-  assert.equal(count(ACCOUNTS_SCRIPT, '\\'), 77, 'the text holds 77 backslashes');
+  assert.equal(ACCOUNTS_SCRIPT.split('\n').length - 1, 413, 'the text is 413 lines');
+  assert.equal(Buffer.byteLength(ACCOUNTS_SCRIPT), 14_798, 'the text is 14 798 bytes');
+  assert.equal(count(ACCOUNTS_SCRIPT, '${'), 15, 'the text holds ${ 15 times');
+  assert.equal(count(ACCOUNTS_SCRIPT, '\\'), 82, 'the text holds 82 backslashes');
   assert.ok(ACCOUNTS_SCRIPT.endsWith('\n'), 'the text ends with a line end');
 });
 
@@ -179,26 +179,30 @@ const COMMAND_LINES = [
   'timeout -k 1 3 claude auth status --json',
   'timeout -k 1 2 claude --version',
   'TZ=UTC timeout -k 1 8 claude -p "/usage" --output-format json --no-session-persistence --strict-mcp-config --setting-sources ""',
-  'timeout -k 1 4 agy --version',
+  'timeout -k 1 2 agy --version',
   'timeout -k 1 4 agy -p /quota --output-format json',
-  'timeout -k 1 3 codex app-server',
+  'timeout -k 1 4 codex app-server',
 ] as const;
 
 const VENDOR_RULES: readonly Rule[] = [
   ['the six vendor command lines are there, each once, word for word', (t) => COMMAND_LINES.some((line) => count(t, line) !== 1)],
   ['claude follows timeout -k 1 <n> three times, agy twice and codex once', (t) => matches(t, /timeout -k 1 \d+ claude /gu) !== 3 || matches(t, /timeout -k 1 \d+ agy /gu) !== 2 || matches(t, /timeout -k 1 \d+ codex /gu) !== 1],
   ['no command is claude, agy or codex at the start of a line', (t) => linesOf(t).some((line) => /^\s*(?:claude|agy|codex)\s/u.test(line))],
-  ['the only codex in a command is codex app-server (and coai_vendor codex)', (t) => /codex/u.test(t.replaceAll('timeout -k 1 3 codex app-server', '').replaceAll('coai_vendor codex', '').replaceAll(/COAI-(?:VENDOR|USAGE) codex/gu, '').replaceAll('.codex', '').replaceAll('coai_codex', '').replaceAll('jq_codex', ''))],
+  ['the only codex in a command is codex app-server (and coai_vendor codex)', (t) => /codex/u.test(t.replaceAll('timeout -k 1 4 codex app-server', '').replaceAll('coai_vendor codex', '').replaceAll(/COAI-(?:VENDOR|USAGE) codex/gu, '').replaceAll('.codex', '').replaceAll('coai_codex', '').replaceAll('jq_codex', ''))],
   ['no credential file of Claude or agy is named; cli.log once, as the log whose tail is searched', (t) => ['.credentials.json', '.claude.json'].some((name) => t.includes(name))
-    || count(t, 'cli.log') !== 1 || !t.includes('tail -c 1048576 "$HOME/.gemini/antigravity-cli/cli.log"')],
-  ['auth.json and the agy token are named once each, as the argument of coai_sign_in', (t) => count(t, 'auth.json') !== 1 || count(t, 'antigravity-oauth-token') !== 1
+    || count(t, 'cli.log') !== 1 || !t.includes('logf=$HOME/.gemini/antigravity-cli/cli.log') || !t.includes('tail -c 1048576 "$logf"')],
+  ['auth.json (in the two places Codex is found) and the agy token are named as the argument of coai_sign_in', (t) => count(t, 'auth.json') !== 2 || count(t, 'antigravity-oauth-token') !== 1
     || !t.includes('coai_sign_in "$HOME/.codex/auth.json"') || !t.includes('coai_sign_in "$HOME/.gemini/antigravity-cli/antigravity-oauth-token"')],
-  ['no jq program holds a word that prints a whole value, a key list or the environment', (t) => /\b(?:tojson|to_entries|input_filename|debug|keys|env)\b|@json|@text|\$ENV/u.test(t)],
+  ['no jq program holds a word that prints a whole value, a key list or the environment', (t) => /\b(?:tojson|to_entries|input_filename|debug|keys)\b|(?<!\/)\benv\b|@json|@text|\$ENV/u.test(t)],
+];
+
+const JQ_RULES: readonly Rule[] = [
+  ['no jq program uses a regular expression, so a jq built without one still gives the quota', (t) => /\b(?:test|match|capture|scan|splits|sub|gsub)\(/u.test(t)],
 ];
 
 const COMPANION_RULES: readonly Rule[] = [
   ['</dev/null 2>/dev/null is there once', (t) => count(t, '</dev/null 2>/dev/null') !== 1],
-  ['|| return 0 is there thirteen times', (t) => count(t, '|| return 0') !== 13],
+  ['|| return 0 is there seventeen times', (t) => count(t, '|| return 0') !== 17],
   ['the first set is set -f, and there is no set +f: nothing is globbed any more', (t) => {
     const lines = linesOf(t);
     const first = lines.find((line) => /^\s*set /u.test(line));
@@ -207,7 +211,7 @@ const COMPANION_RULES: readonly Rule[] = [
   }],
 ];
 
-const RULES: readonly Rule[] = [...SHAPE_RULES, ...NO_WRITE_RULES, ...VENDOR_RULES, ...COMPANION_RULES];
+const RULES: readonly Rule[] = [...SHAPE_RULES, ...NO_WRITE_RULES, ...VENDOR_RULES, ...JQ_RULES, ...COMPANION_RULES];
 const broken = (text: string): readonly string[] => RULES.filter(([, rule]) => rule(text)).map(([name]) => name);
 
 test('A2-T25: the script keeps its own rules', () => {
@@ -236,16 +240,17 @@ const MUTATIONS: readonly (readonly [string, string, (text: string) => string])[
   ['the six vendor command lines are there, each once, word for word', 'a changed flag', (t) => t.replace('--strict-mcp-config', '--strict-mcp')],
   ['the six vendor command lines are there, each once, word for word', 'a changed agy quota command', (t) => t.replace('agy -p /quota --output-format json', 'agy -p /quota')],
   ['claude follows timeout -k 1 <n> three times, agy twice and codex once', 'a claude with no timeout', (t) => t.replace('timeout -k 1 3 claude auth status --json', 'claude auth status --json')],
-  ['claude follows timeout -k 1 <n> three times, agy twice and codex once', 'a codex with no timeout', (t) => t.replace('timeout -k 1 3 codex app-server', 'codex app-server')],
+  ['claude follows timeout -k 1 <n> three times, agy twice and codex once', 'a codex with no timeout', (t) => t.replace('timeout -k 1 4 codex app-server', 'codex app-server')],
   ['claude follows timeout -k 1 <n> three times, agy twice and codex once', 'an agy quota with no timeout', (t) => t.replace('timeout -k 1 4 agy -p /quota', 'agy -p /quota')],
   ['no command is claude, agy or codex at the start of a line', 'a bare claude command', (t) => t.replace('  unset IFS\n', '  unset IFS\n  claude auth status\n')],
   ['the only codex in a command is codex app-server (and coai_vendor codex)', 'a start of codex', (t) => t.replace('  unset IFS\n', '  unset IFS\n  : codex login status\n')],
   ['no credential file of Claude or agy is named; cli.log once, as the log whose tail is searched', 'a second mention of the log', (t) => t.replace('  unset IFS\n', '  unset IFS\n  : "$HOME/.gemini/antigravity-cli/cli.log"\n')],
   ['no credential file of Claude or agy is named; cli.log once, as the log whose tail is searched', 'the credential file named', (t) => t.replace('  unset IFS\n', '  unset IFS\n  : "$HOME/.claude/.credentials.json"\n')],
-  ['auth.json and the agy token are named once each, as the argument of coai_sign_in', 'auth.json opened', (t) => t.replace('  unset IFS\n', '  unset IFS\n  : "$HOME/.codex/auth.json"\n')],
+  ['auth.json (in the two places Codex is found) and the agy token are named as the argument of coai_sign_in', 'auth.json opened', (t) => t.replace('  unset IFS\n', '  unset IFS\n  : "$HOME/.codex/auth.json"\n')],
   ['no jq program holds a word that prints a whole value, a key list or the environment', 'tojson', (t) => t.replace('($r.primary | win)', '($r.primary | tojson)')],
+  ['no jq program uses a regular expression, so a jq built without one still gives the quota', 'a test() in the bucket prefix', (t) => t.replace('startswith("gemini-")', 'test("^gemini-")')],
   ['</dev/null 2>/dev/null is there once', 'a second pair', (t) => t.replace('  unset IFS\n', '  unset IFS\n  : </dev/null 2>/dev/null\n')],
-  ['|| return 0 is there thirteen times', 'a fourteenth', (t) => t.replace('  unset IFS\n', '  unset IFS\n  : || return 0\n')],
+  ['|| return 0 is there seventeen times', 'an eighteenth', (t) => t.replace('  unset IFS\n', '  unset IFS\n  : || return 0\n')],
   ['the first set is set -f, and there is no set +f: nothing is globbed any more', 'a set +f', (t) => t.replace('  unset IFS\n', '  unset IFS\n  set +f\n')],
 ];
 
@@ -292,6 +297,7 @@ test('A2-T26: the vendor commands and the readers carry the numbers of the const
     ['the quota reader (tail)', `timeout -k 1 ${r.agyQuota} tail`],
     ['the quota reader (jq)', `timeout -k 1 ${r.agyQuota} jq -n -r "$jq_agy"`],
     ['the log reader (tail)', `timeout -k 1 ${r.agyLog} tail -c`],
+    ['the reader of a vendor program\'s first line (UID 0)', `timeout -k 1 ${r.shebang} sed -n -e '1{/^#!/p;q;}'`],
     ['the log reader (sed)', `timeout -k 1 ${r.agyLog} sed`],
     ['the log reader (tail -n)', `timeout -k 1 ${r.agyLog} tail -n 1`],
     ['the log reader (grep)', `timeout -k 1 ${r.agyLog} grep`],
@@ -331,8 +337,8 @@ test('A2-T26: no Codex session file is read any more, every tail and the sleep f
   for (const part of ['account', 'version', 'usage', 'agy', 'codex', 'agyQuota'] as const) {
     assert.ok(r[part] >= s[part], `the reader of ${part} (${r[part]} s) ends before its command (${s[part]} s)`);
   }
-  assert.ok(t.includes('        sleep 2\n'), 'the sleep that keeps stdin open for codex app-server');
-  assert.ok(s.codex > 2, `codex app-server (${s.codex} s) must outlast the 2 s of its input`);
+  assert.ok(t.includes('        sleep 3\n'), 'the sleep that keeps stdin open for codex app-server');
+  assert.ok(s.codex > 3, `codex app-server (${s.codex} s) must outlast the 3 s of its input`);
   assert.ok(r.agyQuota > s.agyQuota && r.codex > s.codex, 'the reader of a step with a KILL second is longer than its TERM');
 });
 
@@ -349,13 +355,17 @@ test('E3S2-T12 (T46, the sum): worstSeconds of each mode is the table of § R3.5
   assert.equal(ACCOUNTS_CONNECT_SECONDS, connectSeconds(), 'the connect seconds are the ConnectTimeout of SSH_OPTIONS');
   assert.equal(ACCOUNTS_CEILING_SECONDS, 30);
   assert.deepEqual({ ...ACCOUNTS_KILL_SECONDS }, { version: 1, agy: 1 });
-  const table: Readonly<Record<(typeof ACCOUNTS_MODES)[number], number>> = { 'no-claude-usage': 22, 'claude-usage': 17 };
+  const table: Readonly<Record<(typeof ACCOUNTS_MODES)[number], number>> = { 'no-claude-usage': 21, 'claude-usage': 17 };
+  const asRoot: Readonly<Record<(typeof ACCOUNTS_MODES)[number], number>> = { 'no-claude-usage': 24, 'claude-usage': 18 };
   for (const mode of ACCOUNTS_MODES) {
     assert.equal(worstSeconds(mode), table[mode] + ACCOUNTS_CONNECT_SECONDS, `${mode}: the table of § R3.5 says ${table[mode]} s and then the connect`);
     assert.ok(worstSeconds(mode) <= ACCOUNTS_CEILING_SECONDS - 2, `${mode}: ${worstSeconds(mode)} s is over the ceiling of ${ACCOUNTS_CEILING_SECONDS} s minus 2 s`);
+    // as UID 0 the first line of each vendor program is read too (one second each, three in the first mode): the end line must still come before the runner's ceiling
+    assert.equal(worstSeconds(mode, true), asRoot[mode] + ACCOUNTS_CONNECT_SECONDS, `${mode} as UID 0`);
+    assert.ok(worstSeconds(mode, true) <= ACCOUNTS_CEILING_SECONDS - 1, `${mode} as UID 0: ${worstSeconds(mode, true)} s is over the ceiling of ${ACCOUNTS_CEILING_SECONDS} s minus 1 s`);
   }
-  // the first mode, step by step, as the table says it: account 4; version 2 + 1; codex app-server 4; agy version 4 + 1, quota 5, log 1
-  assert.equal(r.account + r.version + ACCOUNTS_KILL_SECONDS.version + r.codex + r.agy + ACCOUNTS_KILL_SECONDS.agy + r.agyQuota + r.agyLog, 22);
+  // the first mode, step by step, as the table says it: account 4; version 2 + 1; codex app-server 5; agy version 2 + 1, quota 5, log 1
+  assert.equal(r.account + r.version + ACCOUNTS_KILL_SECONDS.version + r.codex + r.agy + ACCOUNTS_KILL_SECONDS.agy + r.agyQuota + r.agyLog, 21);
   // the usage mode: account 4; version 2 + 1; the digest 1; usage 9
   assert.equal(r.account + r.version + ACCOUNTS_KILL_SECONDS.version + r.digest + r.usage, 17);
   const s = ACCOUNTS_SECONDS;
@@ -374,7 +384,7 @@ test('A2-T26 / E3S2-T3: each tool of ACCOUNTS_TOOLS is in the text and no other 
   const setLines = lines.filter((one) => one.trimStart().startsWith('PATH='));
   assert.ok(setLines.includes(`  PATH=${ACCOUNTS_PATH}`), 'the PATH line is not ACCOUNTS_PATH');
   assert.equal(setLines.filter((one) => /^\s*PATH=\//u.test(one)).length, 1, 'more than one fixed PATH line');
-  assert.ok(setLines.every((one) => one === `  PATH=${ACCOUNTS_PATH}` || /^ +PATH=\$HOME\/\.local\/bin(?::\$PATH)?$/u.test(one)), 'a PATH line adds something that is not the home folder');
+  assert.ok(setLines.every((one) => one === `  PATH=${ACCOUNTS_PATH}` || /^ +PATH=(?:\$HOME\/\.local\/bin(?::\$PATH)?|\$PATH:\$HOME\/\.local\/bin)$/u.test(one)), 'a PATH line adds something that is not the home folder');
   const entries = ACCOUNTS_PATH.split(':');
   assert.equal(entries.length, 6);
   for (const entry of entries) {

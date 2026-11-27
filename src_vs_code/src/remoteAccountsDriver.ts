@@ -1,3 +1,4 @@
+import type { AgyBlocks } from './remoteAccountsAgyBlocks';
 import { oneAtATime } from './oneAtATime';
 import {
   AccountsCall, AccountsState, Memory, ROUND_GAP_MS, RoundResult, RoundSeams, STATE_KEY, StateChange, StateCommitted, StopDoor, TimerAction, Trigger, accountsHosts, accountsStateOf, armFor, callableHosts,
@@ -60,6 +61,8 @@ export interface DriverWorld {
   readonly landed: (host: string | undefined) => void;
   /** One fixed line. */
   readonly log: (line: string) => void;
+  /** The blocks of Antigravity's quota, by place (the window keeps them in `globalState`). */
+  readonly agy: AgyBlocks;
   /** The state row as the window holds it. */
   readonly readState: () => unknown;
   readonly door: StopDoor;
@@ -125,6 +128,7 @@ export class AccountsDriver {
       parse: w.parse,
       now: w.now,
       landed: (memory, host) => { this.landedFrom(memory, host); },
+      agy: w.agy,
       generation: () => this.generation,
       dropped: (host) => { w.log(droppedLine(host)); },
       get wsl() { return wslNow(); },

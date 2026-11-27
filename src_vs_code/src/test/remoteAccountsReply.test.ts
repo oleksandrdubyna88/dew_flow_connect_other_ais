@@ -65,9 +65,10 @@ const SAMPLE: Readonly<Record<string, string>> = {
   unmatched: '0',
   'sign-in-file': 'present',
   window: '14 10080 1795518850',
-  quota: 'gemini 5h 92 1795813241',
+  quota: 'gemini 5h 92 1795100400',
   account: 'someone@example.test',
   path: '/home/a/.local/bin',
+  'unsafe-path': '/home/a/.local/bin',
 };
 
 const TEXT_KEYS = ['email', 'org', 'plan', 'version', 'line', 'account'];
@@ -170,7 +171,7 @@ test('A2-T15: each fault by its own word', () => {
   const at = USAGE_GOOD_LINES.indexOf(`:line ${LINES[0]}`);
   unreadableWith(run(text(...USAGE_GOOD_LINES.slice(0, at), ...Array.from({ length: 6 }, () => `:line ${LINES[0]}`), ...USAGE_GOOD_LINES.slice(at)), USAGE_MODE), 'key', 'nine :line');
   for (const [from, to] of [[':sign-in-file present', ':sign-in-file maybe'],
-    [':window 14 10080 1795518850', ':window 1 2'], [':quota gemini weekly 60 1796283734', ':quota 1 2'], [':quota gemini weekly 60 1796283734', ':quota gemini weekly 60']] as const) {
+    [':window 14 10080 1795518850', ':window 1 2'], [':quota gemini weekly 60 1795506120', ':quota 1 2'], [':quota gemini weekly 60 1795506120', ':quota gemini weekly 60']] as const) {
     const lines = GOOD_LINES.map((line) => (line === from ? to : line));
     unreadableWith(run(text(...lines)), 'value', to);
   }
@@ -343,7 +344,7 @@ test('A2-T17: each number of GOOD taken out is null, and no field of the result 
     ['- for used', without((line) => line.startsWith(':window '), ':window - 10080 1795518850')],
     ['- for reset', without((line) => line.startsWith(':window '), ':window 14 10080 -')],
     ['no reset zone', run(text(...USAGE_GOOD_LINES.flatMap((line) => (line.startsWith(':line Current session') ? [`:line Current session: 56% used · resets Nov 19, 3pm`] : [line]))), USAGE_MODE)],
-    ['no quota reset', without((line) => line === ':quota gemini 5h 92 1795813241', ':quota gemini 5h 92 -')],
+    ['no quota reset', without((line) => line === ':quota gemini 5h 92 1795100400', ':quota gemini 5h 92 -')],
     ['no :version', without((line) => line === ':version 2.1.326')],
   ];
   for (const [name, answer] of variants) {
@@ -383,13 +384,13 @@ test('A2-T17: 300 replies from a seeded generator — the result equals the one 
     const reset = pick(['-', '1795518850']);
     const minutes = pick(['300', '10080']);
     const left = pick(['0', '49', '100']);
-    const quotaReset = pick(['-', '1795813241']);
+    const quotaReset = pick(['-', '1795100400']);
     const version = pick(['', ':version 1.5.12']);
     const lines = GOOD_LINES.flatMap((line) => {
       if (line.startsWith(':window ')) {
         return [`:window ${used} ${minutes} ${reset}`];
       }
-      if (line === ':quota gemini 5h 92 1795813241') {
+      if (line === ':quota gemini 5h 92 1795100400') {
         return [`:quota gemini 5h ${left} ${quotaReset}`];
       }
 

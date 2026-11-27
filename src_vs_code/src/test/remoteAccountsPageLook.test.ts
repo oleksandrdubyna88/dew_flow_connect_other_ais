@@ -4,7 +4,7 @@ import test from 'node:test';
 import { accountsHtml } from '../remoteAccountsPage';
 import { tableModel } from '../remoteAccountsTable';
 import type { TableModel } from '../remoteAccountsTable';
-import { VENDOR_PALETTE } from '../vendorColour';
+import { EMAIL_COLOURS, EMAIL_PALETTE_ORDER, VENDOR_PALETTE } from '../vendorColour';
 import { stylesheet, winning } from './cssRules';
 import { runAccountsPage } from './accountsPageHarness';
 import type { AccountsPage } from './accountsPageHarness';
@@ -120,6 +120,10 @@ test('R3-L3: the model makes the class — over the sorted and de-duplicated ema
   const all = [...byEmail.values()].map((tones) => [...tones][0]);
   assert.equal(new Set(all).size, 12, 'twelve emails are not twelve classes');
   assert.deepEqual([...all].sort(), VENDOR_PALETTE.map((_, n) => `em-${n + 1}`).sort());
+  assert.deepEqual([...EMAIL_PALETTE_ORDER].sort((a, b) => a - b), VENDOR_PALETTE.map((_, n) => n), 'the email palette is the twelve colours of the vendor palette, each once, with no slot held back for a vendor');
+  // the first emails get the hues far from the tool colours: green and lime, not the cyan, salmon or purple that stand next to Codex, Claude Code and Antigravity
+  assert.deepEqual(EMAIL_COLOURS.slice(0, 2), [VENDOR_PALETTE[4], VENDOR_PALETTE[9]]);
+  assert.ok(!EMAIL_COLOURS.slice(0, 6).some((colour) => [VENDOR_PALETTE[2], VENDOR_PALETTE[3], VENDOR_PALETTE[6], VENDOR_PALETTE[10]].includes(colour)), 'a hue next to a tool colour among the first six emails');
   // an email whose text looks like a class, and a row that has no email: the class is the palette's, or null
   const odd = tableModel(inputOf({ hosts: ['h'], memory: memoryOf(['h', seen(reading({ claude: claude({ email: 'em-3 x@example.test', usage: { state: 'skipped' } }), codex: codexOf(undefined, '') }), 1)]) }));
   const rows = odd.blocks[0]?.rows ?? [];
@@ -141,7 +145,7 @@ test('R3-L3: the page sets only one of its twelve closed classes, whatever the m
     assert.deepEqual(toneOf(run, ANN), [], `${groupBy}: a class that is not one of the twelve was set`);
   }
   const sheet = stylesheet(HTML.replace(/<style nonce="[^"]*">/u, '<style>'));
-  VENDOR_PALETTE.forEach((colour, n) => {
+  EMAIL_COLOURS.forEach((colour, n) => {
     const rule = sheet.find((one) => one.selector === `.em-${n + 1}`);
     assert.ok(rule !== undefined, `no rule for .em-${n + 1}`);
     assert.equal(rule?.body.replace(/\s+/gu, ' ').trim(), `color: ${colour};`);

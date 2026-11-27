@@ -5,6 +5,7 @@ import { notifyThen } from './notify';
 import { AccountsDriver, CAN_BE_SHOWN, DriverWorld, RoundSummary, answerCanBeShown } from './remoteAccountsDriver';
 import { AccountsPanel } from './remoteAccountsPanel';
 import { readAccounts } from './remoteAccountsReply';
+import { AgyBlocks, agyBlocksOnMemento } from './remoteAccountsAgyBlocks';
 import { AccountsCall, Memory, RoundResult, STATE_KEY, Trigger, accountsHosts, callFor, logGate } from './remoteAccountsRound';
 import { runAccountsCommand } from './remoteAccountsRun';
 import { RoundNow, TableModel, tableModel } from './remoteAccountsTable';
@@ -85,11 +86,13 @@ class AccountsWindow implements TerminalAccounts {
     writeText: (text) => Promise.resolve(vscode.env.clipboard.writeText(text)),
     say: (message, forMs) => vscode.window.setStatusBarMessage(message, forMs),
   });
+  private readonly agyBlocks: AgyBlocks;
   private replaced: AccountsCall | undefined;
   private replacedWsl: WslPort | undefined;
 
   constructor(private readonly context: vscode.ExtensionContext, private readonly sessions: RemoteSessions, private readonly test: boolean) {
     this.onLanded = this.landed.event;
+    this.agyBlocks = agyBlocksOnMemento(this.context.globalState);
     this.driver = new AccountsDriver(this.worldOf());
     this.tab = new AccountsPanel({ run: (command) => { guarded(runAccountsCommand(command, this.seams()).then(() => this.redraw())); } });
     this.door = {
@@ -108,14 +111,14 @@ class AccountsWindow implements TerminalAccounts {
   /** The doors a command of the tab uses: the road's own and the driver's, bound once. A press that widens only raises a question. */
   private seams(): Parameters<typeof runAccountsCommand>[1] {
     return {
-      refresh: () => this.driver.refresh(),
+      refresh: () => { this.agyBlocks.clearTransient(); return this.driver.refresh(); },
       stop: () => this.driver.stop(),
       start: () => this.driver.start(),
       askPermission: () => this.sessions.askPermission(),
       withdraw: () => this.sessions.withdraw(),
       saveWaiting: () => this.sessions.saveWaiting(),
       refuse: (host) => this.sessions.commitHost({ kind: 'person', host, answer: 'no' }),
-      askChange: (host) => this.sessions.changeHost(host),
+      askChange: (host) => { this.agyBlocks.clear(host); return this.sessions.changeHost(host); },
       copy: (decision) => this.copier.copy(() => decision),
     };
   }
@@ -148,6 +151,7 @@ class AccountsWindow implements TerminalAccounts {
       clearTimer: (handle) => { clearTimeout(handle as ReturnType<typeof setTimeout>); },
       landed: (host) => { this.landed.fire(host); },
       log: write,
+      agy: this.agyBlocks,
       readState: () => this.context.globalState.get(STATE_KEY),
       door: this.sessions,
       canBeShown: () => { canBeShownNotice(); },

@@ -47,6 +47,8 @@ export type ClaudeSide =
     /** `''` = the account is not known. */
     readonly email: string;
     readonly org: string | null; readonly plan: string | null; readonly usage: ClaudeUsage;
+    /** The vendor program runs as root although a folder of its path is writable by another user (`:unsafe-path`): the path as it is shown, or `null` when it is not. Absent when there is no such warning. */
+    readonly unsafePath?: string | null;
   };
 
 export type CodexSide =
@@ -58,6 +60,8 @@ export type CodexSide =
     /** `''` = the account is not known. */
     readonly email: string;
     readonly plan: string | null; readonly usage: CodexUsage;
+    /** The vendor program runs as root although a folder of its path is writable by another user (`:unsafe-path`): the path as it is shown, or `null` when it is not. Absent when there is no such warning. */
+    readonly unsafePath?: string | null;
   };
 
 export type AgySide =
@@ -69,6 +73,8 @@ export type AgySide =
     /** `''` = the account is not known: agy's log had no such line. */
     readonly email: string;
     readonly usage: AgyUsage;
+    /** The vendor program runs as root although a folder of its path is writable by another user (`:unsafe-path`): the path as it is shown, or `null` when it is not. Absent when there is no such warning. */
+    readonly unsafePath?: string | null;
   };
 
 export type AccountsRead =
@@ -156,17 +162,17 @@ export const ACCOUNTS_GRAMMAR: Readonly<Record<string, Readonly<Record<string, C
   ['COAI-BAD unsafe', ONE_PATH],
   ['COAI-JQ found', NONE],
   ...wordRows('COAI-JQ missing', MANAGER_WORDS),
-  ['COAI-VENDOR claude found', { version: MAYBE, email: MAYBE, org: MAYBE, plan: MAYBE }],
+  ['COAI-VENDOR claude found', { version: MAYBE, email: MAYBE, org: MAYBE, plan: MAYBE, 'unsafe-path': MAYBE }],
   ...wordRows('COAI-VENDOR claude', ['absent', 'signed-out', 'unreadable no-jq', 'unreadable auth', 'unreadable timeout']),
   ['COAI-VENDOR claude unsafe', ONE_PATH],
   ['COAI-USAGE claude read', { turns: ONCE, line: [0, USAGE_LINES_MAX], unmatched: ONCE }],
   ...wordRows('COAI-USAGE claude', ['skipped', 'skipped account-changed', 'failed timeout', 'failed error']),
-  ['COAI-VENDOR codex found', { 'sign-in-file': ONCE, account: MAYBE, plan: MAYBE }],
+  ['COAI-VENDOR codex found', { 'sign-in-file': ONCE, account: MAYBE, plan: MAYBE, 'unsafe-path': MAYBE }],
   ...wordRows('COAI-VENDOR codex', ['absent', 'unreadable no-jq']),
   ['COAI-VENDOR codex unsafe', ONE_PATH],
   ['COAI-USAGE codex read', { window: [0, 2] }],
-  ...wordRows('COAI-USAGE codex', ['failed none', 'failed error']),
-  ['COAI-VENDOR agy found', { version: MAYBE, 'sign-in-file': ONCE, account: MAYBE }],
+  ...wordRows('COAI-USAGE codex', ['failed none', 'failed error', 'failed timeout', 'failed not-started']),
+  ['COAI-VENDOR agy found', { version: MAYBE, 'sign-in-file': ONCE, account: MAYBE, 'unsafe-path': MAYBE }],
   ['COAI-VENDOR agy absent', NONE],
   ['COAI-VENDOR agy unsafe', ONE_PATH],
   ['COAI-USAGE agy read', { quota: [0, AGY_WINDOWS_MAX] }],
@@ -182,6 +188,7 @@ const CLOSED: Readonly<Record<string, (value: string) => boolean>> = {
   unmatched: (value) => DIGITS.test(value),
   'sign-in-file': (value) => value === 'present' || value === 'absent',
   path: (value) => PATH_WORD.test(value),
+  'unsafe-path': (value) => PATH_WORD.test(value),
   window: (value) => value.split(' ').length === 3,
   quota: (value) => value.split(' ').length === 4,
 };
@@ -377,7 +384,7 @@ function partOf(recs: readonly Rec[], name: string): Part {
 const wordsAfter = (rec: Rec, prefix: string): string => rec.head.slice(prefix.length);
 
 /** Rule 9: one value of the vendor that looks like a credential, and the vendor is unreadable with every other value of it. */
-const credentialIn = (part: Part): boolean => [part.vendor, part.usage].some((rec) => rec?.data.some((one) => credentialShaped(plainValue(one.value))) === true);
+const credentialIn = (part: Part): boolean => [part.vendor, part.usage].some((rec) => rec?.data.some((one) => one.key !== 'unsafe-path' && credentialShaped(plainValue(one.value))) === true);
 
 /** The value of a key through `plainValue` and the text rule of the field; `absent` when the key is not there. */
 function ruled<T>(rec: Rec, key: string, rule: (plain: string) => T, absent: T): T {
@@ -416,6 +423,13 @@ function pathOf(value: string): string | null {
   return plain === '-' || credentialShaped(plain) ? null : plain;
 }
 
+/** The warning of a vendor that runs from a path another user can write (`:unsafe-path`, the path closed by the grammar): nothing, or the path as it is shown (`null` for a dash or a path in the shape of a credential). */
+const warningOf = (rec: Rec): { readonly unsafePath?: string | null } => {
+  const value = valuesOf(rec, 'unsafe-path')[0];
+
+  return value === undefined ? {} : { unsafePath: pathOf(value) };
+};
+
 const unsafeOf = (rec: Rec): UnsafeSide => ({ state: 'unsafe', path: pathOf(valueOf(rec, 'path')) });
 
 function claudeOf(part: Part, nowMs: number): ClaudeSide {
@@ -434,12 +448,15 @@ function claudeOf(part: Part, nowMs: number): ClaudeSide {
     org: ruled(part.vendor, 'org', orgOf, null),
     plan: ruled(part.vendor, 'plan', planOf, null),
     usage: claudeUsageSide(part.usage as Rec, nowMs),
+    ...warningOf(part.vendor),
   };
 }
 
 const CODEX_USAGE_FLAT: Readonly<Record<string, CodexUsage>> = {
   'failed none': { state: 'failed', why: 'none' },
   'failed error': { state: 'failed', why: 'error' },
+  'failed timeout': { state: 'failed', why: 'timeout' },
+  'failed not-started': { state: 'failed', why: 'not-started' },
 };
 
 function codexUsageSide(rec: Rec): CodexUsage {
@@ -468,6 +485,7 @@ function codexOf(part: Part): CodexSide {
     email: ruled(part.vendor, 'account', emailOf, ''),
     plan: ruled(part.vendor, 'plan', planOf, null),
     usage: codexUsageSide(part.usage as Rec),
+    ...warningOf(part.vendor),
   };
 }
 
@@ -479,9 +497,9 @@ const AGY_USAGE_FLAT: Readonly<Record<string, AgyUsage>> = {
   'failed no-jq': { state: 'failed', why: 'no-jq' },
 };
 
-const agyUsageSide = (rec: Rec): AgyUsage => AGY_USAGE_FLAT[wordsAfter(rec, 'COAI-USAGE agy ')] ?? agyUsageOf(plainValues(rec, 'quota'));
+const agyUsageSide = (rec: Rec, nowMs: number): AgyUsage => AGY_USAGE_FLAT[wordsAfter(rec, 'COAI-USAGE agy ')] ?? agyUsageOf(plainValues(rec, 'quota'), nowMs);
 
-function agyOf(part: Part): AgySide {
+function agyOf(part: Part, nowMs: number): AgySide {
   if (part.vendor.head.endsWith(' absent')) {
     return { state: 'absent' };
   }
@@ -494,7 +512,8 @@ function agyOf(part: Part): AgySide {
     version: ruled(part.vendor, 'version', versionOf, null),
     signInFile: valueOf(part.vendor, 'sign-in-file') === 'present',
     email: ruled(part.vendor, 'account', emailOf, ''),
-    usage: agyUsageSide(part.usage as Rec),
+    usage: agyUsageSide(part.usage as Rec, nowMs),
+    ...warningOf(part.vendor),
   };
 }
 
@@ -532,5 +551,5 @@ function readOfRecords(recs: readonly Rec[], mode: AccountsMode, nowMs: number):
     return { kind: 'claude-only', claude, jqMissing: jqMissingOf(recs) };
   }
 
-  return { kind: 'read', claude, codex: codexOf(partOf(recs, 'codex')), agy: agyOf(partOf(recs, 'agy')), jqMissing: jqMissingOf(recs) };
+  return { kind: 'read', claude, codex: codexOf(partOf(recs, 'codex')), agy: agyOf(partOf(recs, 'agy'), nowMs), jqMissing: jqMissingOf(recs) };
 }

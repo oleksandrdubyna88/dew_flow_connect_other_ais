@@ -77,12 +77,12 @@ export function accountsDigest(stdout: string): string | undefined {
 
 /**
  * The vendor commands' limits in seconds: a TERM after this long (`timeout -k 1 <n>`; a KILL one second later). `agy` is its version command, `agyQuota` its quota
- * command; `codex` is `codex app-server`, which is given two seconds of input first (the `sleep 2` inside its own limit).
+ * command; `codex` is `codex app-server`, which is given three seconds of input first (the `sleep 3` inside its own limit). `shebang` is the read of the first line of a vendor program, as UID 0 only.
  */
-export const ACCOUNTS_SECONDS = { account: 3, version: 2, usage: 8, agy: 4, codex: 3, agyQuota: 4 } as const;
+export const ACCOUNTS_SECONDS = { account: 3, version: 2, usage: 8, agy: 2, codex: 4, agyQuota: 4, shebang: 1 } as const;
 
 /** The limits of the readers at the end of each pipe; the sum of them and ssh's connect stays under the ceiling. `agyLog` is each stage of the one-line read of agy's log. */
-export const ACCOUNTS_READ_SECONDS = { account: 4, version: 2, usage: 9, agy: 4, digest: 1, codex: 4, agyQuota: 5, agyLog: 1 } as const;
+export const ACCOUNTS_READ_SECONDS = { account: 4, version: 2, usage: 9, agy: 2, digest: 1, codex: 5, agyQuota: 5, agyLog: 1, shebang: 1 } as const;
 
 /** The KILL second after a TERM in a step that is NOT inside its reader's limit: the two version commands (§ R2.5). */
 export const ACCOUNTS_KILL_SECONDS = { version: 1, agy: 1 } as const;
@@ -128,19 +128,22 @@ export const ACCOUNTS_REPLY_BYTES_MAX = (ACCOUNTS_LINES_MAX + 2) * (ACCOUNTS_LIN
  * The worst time of one mode, in seconds (T46, § R2.5): the reader limits of the steps that mode runs, the KILL seconds that are not inside a
  * reader's limit, and ssh's connect time. The KILL seconds of the account, the usage, Codex and agy's quota commands are inside their readers' limits.
  */
-export function worstSeconds(mode: AccountsMode): number {
+export function worstSeconds(mode: AccountsMode, root = false): number {
   const r = ACCOUNTS_READ_SECONDS;
   const claude = r.account + r.version + ACCOUNTS_KILL_SECONDS.version;
   const rest = mode === 'claude-usage'
     ? r.digest + r.usage
     : r.codex + r.agy + ACCOUNTS_KILL_SECONDS.agy + r.agyQuota + r.agyLog;
 
-  return claude + rest + ACCOUNTS_CONNECT_SECONDS;
+  return claude + rest + (root ? shebangSeconds(mode) : 0) + ACCOUNTS_CONNECT_SECONDS;
 }
 
+/** As UID 0 the first line of each vendor program the mode starts is read once more: three programs in the first mode, Claude Code's alone in the usage mode. */
+const shebangSeconds = (mode: AccountsMode): number => ACCOUNTS_READ_SECONDS.shebang * (mode === 'claude-usage' ? 1 : 3);
+
 /**
- * The text that is sent to a VM, byte for byte the first `sh` block after the heading `## R2.3` of the E3.S2 spec (revision 3): 341 lines, ASCII only,
- * each line ends with LF. It holds `${` 12 times and 77 backslashes, so every backslash is written twice here.
+ * The text that is sent to a VM, byte for byte the first `sh` block after the heading `## R2.3` of the E3.S2 spec (revision 3): 413 lines, ASCII only,
+ * each line ends with LF. It holds `${` 15 times and 82 backslashes, so every backslash is written twice here.
  * Hash and spec are held to this constant by `remoteAccountsScript.test.ts` (E3S2-T1); a change of the text is a change of the spec.
  */
 export const ACCOUNTS_SCRIPT = `coai_accounts() {
@@ -179,22 +182,25 @@ export const ACCOUNTS_SCRIPT = `coai_accounts() {
     def int: if type == "number" then (floor | tostring) else "-" end;
     def win: if type == "object" then ":window " + (.usedPercent | num) + " " + (.windowDurationMins | int) + " " + (.resetsAt | int) else empty end;
     [inputs | fromjson? | select(type == "object")] as $all
+    | ([$all[] | select(has("coai_exit")) | .coai_exit] | .[-1]) as $rc
     | ([$all[] | select(.id == 2) | .result.account | select(type == "object")] | .[0]) as $a
-    | ([$all[] | select(.id == 3) | .result.rateLimits | select(type == "object")] | .[0]) as $r
+    | ([$all[] | select(.id == 3) | .result | select(type == "object")] | .[0]) as $r3
+    | ([$r3.rateLimits | select(type == "object")] | .[0]) as $r
     | (if ($a.email | type) == "string" then ":account " + ($a.email | one) else empty end),
       (($r.planType // $a.planType) | if type == "string" and . != "" then ":plan " + one else empty end),
-      (if $r == null or ([$r.primary, $r.secondary] | map(select(type == "object")) | length) == 0 then "COAI-USAGE codex failed none"
+      (if $r3 == null then (if $rc == 124 or $rc == 137 then "COAI-USAGE codex failed timeout" else "COAI-USAGE codex failed error" end)
+        elif $r == null or ([$r.primary, $r.secondary] | map(select(type == "object")) | length) == 0 then "COAI-USAGE codex failed none"
         else "COAI-USAGE codex read", ($r.primary | win), ($r.secondary | win) end)'
   jq_agy='def kind: if type == "string" and startswith("gemini-") then "gemini" elif type == "string" and startswith("3p-") then "third-party" else empty end;
     def span: if . == "5h" or . == "weekly" then . else empty end;
     def left: if type == "number" and 0 <= . and . <= 1 then ((. * 100 + 0.5) | floor | tostring) else empty end;
-    def at: (if type == "string" then sub("[.][0-9]+Z$"; "Z") else "" end) | (if test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$") then (try fromdateiso8601 catch 0) else 0 end) | if 0 < . then tostring else "-" end;
+    def at: (if type == "string" and .[10:11] == "T" and (.[19:20] == "Z" or .[19:20] == ".") then (try (.[0:19] + "Z" | fromdateiso8601) catch 0) else 0 end) | if 0 < . then tostring else "-" end;
     [inputs] as $all
     | ([$all[] | select(type == "object") | select(has("coai_exit")) | .coai_exit] | .[-1]) as $rc
     | ([$all[] | select(type == "object") | select(has("num_turns"))] | .[0]) as $r
     | if $rc == 124 or $rc == 137 then "=timeout"
       elif $rc != 0 or $r == null then "=error"
-      elif $r.num_turns != 0 or $r.conversation_id != "" or ($r.command | type) != "object" or $r.command.name != "usage" then "=model-call"
+      elif $r.num_turns != 0 or (try ($r.usage.total_tokens // 0) catch 1) != 0 or $r.conversation_id != "" or ($r.command | type) != "object" or $r.command.name != "usage" then "=model-call"
       else "=read",
         ($r.command.data.groups[]? | select(type == "object") | .buckets[]? | select(type == "object")
           | (.id | kind) as $g | (.window | span) as $w | (.remaining_fraction | left) as $l
@@ -286,29 +292,74 @@ export const ACCOUNTS_SCRIPT = `coai_accounts() {
     return 0
   }
 
-  coai_path() {
+  coai_clean() {
     case $unsafe in
       ''|*[!A-Za-z0-9._/@+-]*) unsafe=- ;;
     esac
     [ "\${#unsafe}" -le 200 ] || unsafe=-
+  }
+
+  coai_path() {
+    coai_clean
     printf ':path %s\\n' "$unsafe"
   }
 
+  coai_warn() {
+    if [ -n "$vwarn" ]; then
+      unsafe=$vwarn
+      coai_clean
+      case $unsafe in
+        /*|-) ;;
+        *) unsafe=- ;;
+      esac
+      printf ':unsafe-path %s\\n' "$unsafe"
+    fi
+  }
+
+  coai_script() {
+    [ "$uid" = 0 ] || return 0
+    found=$(command -v "$1") || return 0
+    [ -f "$found" ] || return 0
+    shebang=$(LC_ALL=C timeout -k 1 1 sed -n -e '1{/^#!/p;q;}' "$found")
+    case $shebang in
+      '#!'*) ;;
+      *) return 0 ;;
+    esac
+    set -- \${shebang#??}
+    interp=\${1-}
+    case $interp in
+      */env)
+        shift
+        while [ "$#" -gt 0 ]; do
+          case $1 in
+            -*|*=*) shift ;;
+            *) break ;;
+          esac
+        done
+        interp=\${1-}
+        ;;
+    esac
+    case $interp in
+      '') return 0 ;;
+      /*) ipath=$interp ;;
+      *) ipath=$(command -v "$interp") || return 0 ;;
+    esac
+    if ! coai_closed "$ipath"; then
+      [ -n "$vwarn" ] || vwarn=$unsafe
+    fi
+    return 0
+  }
+
   coai_vendor() {
+    vwarn=
     coai_may "$1"
     case $? in
-      0) return 0 ;;
-      1) ;;
-      *) printf 'COAI-VENDOR %s unsafe\\n' "$1"; coai_path; return 1 ;;
+      0) ;;
+      1) [ "$#" -gt 1 ] || printf 'COAI-VENDOR %s absent\\n' "$1"; return 1 ;;
+      *) vwarn=$unsafe ;;
     esac
-    if [ -n "$home_unsafe" ] && { [ -e "$HOME/.local/bin/$1" ] || [ -L "$HOME/.local/bin/$1" ]; }; then
-      unsafe=$home_unsafe
-      printf 'COAI-VENDOR %s unsafe\\n' "$1"
-      coai_path
-    else
-      printf 'COAI-VENDOR %s absent\\n' "$1"
-    fi
-    return 1
+    coai_script "$1"
+    return 0
   }
 
   coai_claude() {
@@ -327,6 +378,7 @@ export const ACCOUNTS_SCRIPT = `coai_accounts() {
     esac
     printf '%s\\n' "$auth" || return 0
     coai_version "$(timeout -k 1 2 claude --version | LC_ALL=C timeout -k 1 2 sed -n -e "$version" -e 1q)"
+    coai_warn
     if [ "$mode" != claude-usage ]; then
       printf 'COAI-USAGE claude skipped\\n'
       return 0
@@ -360,16 +412,30 @@ export const ACCOUNTS_SCRIPT = `coai_accounts() {
   }
 
   coai_codex() {
-    coai_vendor codex || return 0
+    coai_vendor codex quiet || {
+      if [ -d "$HOME/.codex" ]; then
+        [ "$jq" = found ] || { printf 'COAI-VENDOR codex unreadable no-jq\\n'; return 0; }
+        printf 'COAI-VENDOR codex found\\n' || return 0
+        coai_sign_in "$HOME/.codex/auth.json"
+        printf 'COAI-USAGE codex failed not-started\\n'
+      else
+        printf 'COAI-VENDOR codex absent\\n'
+      fi
+      return 0
+    }
     [ "$jq" = found ] || { printf 'COAI-VENDOR codex unreadable no-jq\\n'; return 0; }
     printf 'COAI-VENDOR codex found\\n' || return 0
     coai_sign_in "$HOME/.codex/auth.json"
+    coai_warn
     record=$(
       {
         printf '%s\\n' '{"method":"initialize","id":1,"params":{"clientInfo":{"name":"coai","title":"coai","version":"1"}}}' '{"method":"initialized"}' '{"method":"account/read","id":2,"params":{}}' '{"method":"account/rateLimits/read","id":3}'
-        sleep 2
-      } | timeout -k 1 3 codex app-server | timeout -k 1 4 tail -c 1048576 | timeout -k 1 4 jq -n -R -r "$jq_codex" |
-        LC_ALL=C grep -E -e "^:account $mail_re" -e '^:plan ' -e '^COAI-USAGE codex (read|failed none)$' -e '^:window [-0-9.]{1,8} [-0-9]{1,6} [-0-9]{1,11}$'
+        sleep 3
+      } | {
+        timeout -k 1 4 codex app-server
+        printf '\\n{"coai_exit":%s}\\n' "$?"
+      } | timeout -k 1 5 tail -c 1048576 | timeout -k 1 5 jq -n -R -r "$jq_codex" |
+        LC_ALL=C grep -E -e "^:account $mail_re" -e '^:plan ' -e '^COAI-USAGE codex (read|failed none|failed error|failed timeout)$' -e '^:window [-0-9.]{1,8} [-0-9]{1,6} [-0-9]{1,11}$'
     )
     case $record in
       *'COAI-USAGE codex '*) printf '%s\\n' "$record" ;;
@@ -400,8 +466,9 @@ export const ACCOUNTS_SCRIPT = `coai_accounts() {
   coai_agy() {
     coai_vendor agy || return 0
     printf 'COAI-VENDOR agy found\\n' || return 0
-    coai_version "$(timeout -k 1 4 agy --version | LC_ALL=C timeout -k 1 4 sed -n -e "$version" -e 1q)"
+    coai_version "$(timeout -k 1 2 agy --version | LC_ALL=C timeout -k 1 2 sed -n -e "$version" -e 1q)"
     coai_sign_in "$HOME/.gemini/antigravity-cli/antigravity-oauth-token"
+    coai_warn
     if [ "$jq" != found ]; then
       printf 'COAI-USAGE agy failed no-jq\\n'
       return 0
@@ -411,10 +478,14 @@ export const ACCOUNTS_SCRIPT = `coai_accounts() {
     else
       quota='COAI-USAGE agy skipped'
     fi
-    mail=$(
-      timeout -k 1 1 tail -c 1048576 "$HOME/.gemini/antigravity-cli/cli.log" | LC_ALL=C timeout -k 1 1 sed -n -e 's/^.*applyAuthResult: email=\\([^,]*\\),.*$/\\1/p' |
-        timeout -k 1 1 tail -n 1 | LC_ALL=C timeout -k 1 1 grep -E -e "^$mail_re"
-    )
+    logf=$HOME/.gemini/antigravity-cli/cli.log
+    mail=
+    if [ "$uid" != 0 ] || coai_closed "$logf"; then
+      mail=$(
+        timeout -k 1 1 tail -c 1048576 "$logf" | LC_ALL=C timeout -k 1 1 sed -n -e 's/^.*applyAuthResult: email=\\([^,]*\\),.*$/\\1/p' |
+          timeout -k 1 1 tail -n 1 | LC_ALL=C timeout -k 1 1 grep -E -e "^$mail_re"
+      )
+    fi
     [ -z "$mail" ] || printf ':account %s\\n' "$mail"
     printf '%s\\n' "$quota"
     return 0
@@ -477,6 +548,10 @@ export const ACCOUNTS_SCRIPT = `coai_accounts() {
     1) jq=missing; printf 'COAI-JQ missing %s\\n' "$(coai_manager)" || return 0 ;;
     *) printf 'COAI-BAD unsafe\\n'; coai_path; return 0 ;;
   esac
+  if [ -n "$home_unsafe" ]; then
+    PATH=$PATH:$HOME/.local/bin
+  fi
+  vwarn=
   coai_claude
   [ "$mode" != claude-usage ] || return 0
   coai_codex

@@ -5,7 +5,7 @@ import { INSTALL_JQ } from './remoteAccountsRows';
 import { PLAIN_TEXT, TEXT_CONTROLS_CSS, textControlsHtml, textControlsScript, textControlsStyle } from './textControls';
 import type { TextSettings } from './textControls';
 import { RESET_PASSED, minutesLeft, resetDate, resetText } from './usageWords';
-import { VENDOR_PALETTE } from './vendorColour';
+import { EMAIL_COLOURS } from './vendorColour';
 import { jsonForScript } from './webviewHtml';
 
 /**
@@ -32,8 +32,8 @@ const WORDS = {
   toolNames: { 'claude-code': 'Claude Code', codex: 'Codex', agy: 'Antigravity' },
 };
 
-/** The twelve classes of an email's colour, `em-1` to `em-12`: the palette's own `var()` values, in the palette's order. The page only ever sets a class of this closed list. */
-const EMAIL_CSS = VENDOR_PALETTE.map((colour, at) => `.em-${at + 1} { color: ${colour}; }`).join(' ');
+/** The twelve classes of an email's colour, `em-1` to `em-12`: the palette's own `var()` values, in the order the emails are given them (`EMAIL_COLOURS`). The page only ever sets a class of this closed list. */
+const EMAIL_CSS = EMAIL_COLOURS.map((colour, at) => `.em-${at + 1} { color: ${colour}; }`).join(' ');
 
 const STYLE = `
   body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); background: var(--vscode-editor-background); margin: 0; padding: 16px 20px; __TEXT__ }
@@ -56,6 +56,7 @@ ${TEXT_CONTROLS_CSS}
   .bad { color: var(--vscode-errorForeground); }
   table.acct { border-collapse: collapse; width: 100%; margin: 2px 0 4px; table-layout: fixed; }
   table.acct th, table.acct td { text-align: left; vertical-align: top; padding: 4px 10px 4px 0; overflow-wrap: anywhere; }
+  table.acct tbody td { height: 3em; }
   .pct-g { color: #22c55e; } .pct-o { color: #f97316; } .pct-r { color: #ef4444; }
   .rs-g { color: #22c55e; } .rs-o { color: #f97316; } .rs-r { color: #ef4444; }
   .tn-claude-code { color: #d97757; } .tn-codex { color: #38bdf8; } .tn-agy { color: #a78bfa; }
@@ -77,6 +78,7 @@ ${TEXT_CONTROLS_CSS}
     table.acct, table.acct tbody, table.acct tr, table.acct td { display: block; width: auto; }
     table.acct thead, table.acct colgroup { display: none; }
     table.acct tr { padding: 4px 0; border-bottom: 1px solid var(--vscode-panel-border); }
+    table.acct tbody td { height: auto; }
     .acct td .label { display: inline-block; min-width: 9em; opacity: .7; }
     .toolbar { gap: 6px 10px; }
     #summary { margin-left: 0; width: 100%; }
@@ -219,7 +221,7 @@ const SCRIPT = `
       reset.setAttribute('title', stamp(cell.resetsAt));
       box.appendChild(reset);
     } else if (cell.left !== null) {
-      box.appendChild(el('div', 'reset', tool === 'agy' ? 'no reset' : 'resets in —'));
+      box.appendChild(el('div', 'reset', tool === 'agy' && cell.left === 100 ? 'no reset' : 'resets in —'));
     }
     return box;
   }
@@ -334,15 +336,19 @@ const SCRIPT = `
   function accountCell(row) {
     var cell = td('Account');
     cell.appendChild(accountText(el('div'), row.account));
-    cell.appendChild(secondLine(row.account.plan === null ? null : 'plan ' + row.account.plan));
-    if (row.sharedAcross !== null) { cell.appendChild(el('div', 'muted', 'shared across ' + row.sharedAcross + ' hosts')); }
+    // ONE second line, whatever it holds, so the rows of a block stand as tall as one another
+    var second = [];
+    if (row.account.plan !== null) { second.push('plan ' + row.account.plan); }
+    if (row.sharedAcross !== null) { second.push('shared across ' + row.sharedAcross + ' hosts'); }
+    cell.appendChild(secondLine(second.join(' · ')));
+    if (row.warning) { cell.appendChild(el('div', 'muted warn', row.warning)); }
     return cell;
   }
   /** A row of Antigravity stands for every group of models it has: one row for each, the group's windows in place of the first group's. Another tool's row is its own. */
   function expand(row) {
     if (!row.groups || row.groups.length === 0) { return [row]; }
-    return row.groups.map(function (group) {
-      return Object.assign({}, row, { five: group.five, week: group.week, group: group.name });
+    return row.groups.map(function (group, at) {
+      return Object.assign({}, row, { five: group.five, week: group.week, group: group.name, warning: at === 0 ? row.warning : null });
     });
   }
   /** A place name as shown: cut like the model's shown field, while the raw name is what a button posts. */
@@ -426,14 +432,7 @@ const SCRIPT = `
   function accountUnit(account) {
     var node = el('section', 'block');
     var heading = el('div', 'heading');
-    var title = el('strong', 'host tn-claude-code');
-    var tone = toneClass(account.tone);
-    if (tone === null || account.email === '' || account.text.indexOf(account.email) !== 0) {
-      title.textContent = account.text;
-    } else {
-      put(title, el('span', tone, account.email), account.text.length > account.email.length ? el('span', null, account.text.slice(account.email.length)) : null);
-    }
-    put(heading, title);
+    put(heading, accountText(el('strong', 'host tn-claude-code'), account));
     if (account.usage.plan !== null) { heading.appendChild(el('span', 'muted', 'plan ' + account.usage.plan)); }
     node.appendChild(heading);
     var usage = el('div', 'usage');
@@ -449,7 +448,9 @@ const SCRIPT = `
     var body = el('tbody');
     account.places.forEach(function (one) {
       var tr = el('tr');
-      put(tr, put(td('Place', 'tb-claude-code'), el('strong', null, one.shown)), readCell(one.place, one.failure, one.readAt, one.tookMs));
+      var place = put(td('Place', 'tb-claude-code'), el('strong', null, one.shown));
+      if (one.warning) { place.appendChild(el('div', 'muted warn', one.warning)); }
+      put(tr, place, readCell(one.place, one.failure, one.readAt, one.tookMs));
       body.appendChild(tr);
     });
     node.appendChild(put(el('table', 'acct'), cols(W_ACCOUNT), headRow([{ label: 'Place', key: 'name' }, { label: 'Read', key: 'age' }]), body));
@@ -494,6 +495,7 @@ const SCRIPT = `
       return cell;
     }
     cell.appendChild(accountText(el('div'), row.account));
+    if (row.warning) { cell.appendChild(el('div', 'muted warn', row.warning)); }
     if (row.span !== null) {
       cell.appendChild(el('div', 'muted', row.span));
       return cell;

@@ -1,3 +1,5 @@
+import type { AgyBlocks } from '../remoteAccountsAgyBlocks';
+import { agyBlocksInMemory } from '../remoteAccountsAgyBlocks';
 import type { AccountsRead } from '../remoteAccountsReply';
 import type { ClaudeUsage } from '../remoteAccountsUsage';
 import type { AccountsMode } from '../remoteAccountsScript';
@@ -81,6 +83,8 @@ export interface Options {
   readonly stopped?: (world: World) => Promise<boolean>;
   /** The first reply's frame holds no account lines (so no digest). */
   readonly noLines?: boolean;
+  /** The blocks of Antigravity's quota: a test gives its own (a reload is a new store over the stored value); the default is empty and in memory. */
+  readonly agy?: AgyBlocks;
   /** `read`: the fake parser answers a usage call with the first mode's arm, which the real parser never does (a test of the join's row for it). */
   readonly usageArm?: 'claude-only' | 'read';
 }
@@ -88,6 +92,8 @@ export interface Options {
 export interface World {
   readonly seams: RoundSeams;
   readonly calls: Call[];
+  /** The blocks of Antigravity's quota the round used. */
+  readonly agy: AgyBlocks;
   readonly events: string[];
   readonly admits: string[];
   readonly dropped: string[];
@@ -114,6 +120,7 @@ export function world(options: Options = {}): World {
   const usageAsClaudeOnly = options.usageArm !== 'read';
   const reply = options.reply ?? ((): AccountsRead => claudeFound('x@example.test'));
   const self: { current?: World } = {};
+  const agy = options.agy ?? agyBlocksInMemory();
 
   const seams: RoundSeams = {
     live: () => control.terminals,
@@ -155,10 +162,11 @@ export function world(options: Options = {}): World {
     },
     now: () => control.now,
     landed: (memory) => { landed.count += 1; landed.memories.push(memory); },
+    agy,
     generation: () => control.generation,
     dropped: (host) => { dropped.push(host); },
   };
-  const made: World = { seams, calls, events, admits, dropped, parsed, landed, control };
+  const made: World = { seams, calls, agy, events, admits, dropped, parsed, landed, control };
   self.current = made;
 
   return made;

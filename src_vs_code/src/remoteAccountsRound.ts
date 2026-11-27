@@ -1,5 +1,6 @@
 import { credsSession } from './credsSession';
 import type { AccountsRead, AccountsUnreadable } from './remoteAccountsReply';
+import { AgyBlock, AgyBlocks, agyBlockAfter } from './remoteAccountsAgyBlocks';
 import { ACCOUNTS_SKIP_AGY, accountsDigest } from './remoteAccountsScript';
 import type { AccountsMode } from './remoteAccountsScript';
 import type { HostStanding } from './remoteHosts';
@@ -72,8 +73,8 @@ export interface HostMemory {
   readonly usageAtMs?: number | undefined;
   /** The Claude Code version at which the usage read went wrong; `''` stands for a version that was not known. */
   readonly usageBlockedAt?: string | undefined;
-  /** The agy version at which its quota command went wrong (it asked the model, or printed no known bucket); `''` stands for a version that was not known. */
-  readonly agyBlockedAt?: string | undefined;
+  /** The block of this place's agy quota as the round last saw it (the store holds it; this copy is for the row's sentence): the version and why the quota command is not asked. */
+  readonly agyBlock?: AgyBlock | undefined;
   /** Why this place's last usage call did not give figures; cleared by the place's next first reply (E3.S2, § R2.8). */
   readonly usageMiss?: UsageMiss | undefined;
   /** How long this place's last call took, in ms: the hover of the age says it beside the exact time (R9a). */
@@ -184,32 +185,21 @@ export function blockedAfter(read: AccountsRead): string | undefined {
 
 const agyFoundOf = (read: AccountsRead | undefined): AgyFound | undefined => (read?.kind === 'read' && read.agy.state === 'found' ? read.agy : undefined);
 
-const agyVersionOf = (agy: AgyFound): string => agy.version ?? '';
+/**
+ * The operand of a place's FIRST call: the word that tells the script not to run agy's quota command, for as long as the place has a block (`remoteAccountsAgyBlocks.ts`).
+ * The block does not depend on the last reading: a place whose reading was dropped (a Stop, a closed terminal, a refusal) is not asked again.
+ */
+export const firstOperandOf = (block: AgyBlock | undefined): string | undefined => (block === undefined ? undefined : ACCOUNTS_SKIP_AGY);
 
-const agyBlocks = (usage: AgyFound['usage']): boolean => usage.state === 'failed' && (usage.why === 'model-call' || usage.why === 'format');
-
-/** The agy block after a reply: made by a reply that says the quota command went wrong, kept while the reply names the same agy version, else gone (a new version asks again). */
-function agyBlockOf(prev: HostMemory, read: FirstRead): string | undefined {
-  const agy = agyFoundOf(read);
-  if (agy === undefined) {
-    return undefined;
+/** What a first reply does to the place's block in the store: the quota went wrong, was read, or says nothing (`agyBlockAfter`). */
+function agyBlockApplied(blocks: AgyBlocks, place: string, read: FirstRead | undefined): AgyBlock | undefined {
+  const next = agyBlockAfter(blocks.get(place), agyFoundOf(read));
+  if (next !== 'keep') {
+    blocks.set(place, next);
   }
 
-  return agyBlocks(agy.usage) || prev.agyBlockedAt === agyVersionOf(agy) ? agyVersionOf(agy) : undefined;
+  return blocks.get(place);
 }
-
-/**
- * The operand of a place's FIRST call: the word that tells the script not to run agy's quota command, while the place's last reading names the agy version at which
- * that command asked the model (or printed nothing known); nothing otherwise. No version of agy is asked again at a host that it went wrong on.
- */
-export function firstOperandOf(memory: HostMemory | undefined): string | undefined {
-  const agy = lastAgyOf(memory);
-
-  return agy !== undefined && memory?.agyBlockedAt === agyVersionOf(agy) ? ACCOUNTS_SKIP_AGY : undefined;
-}
-
-/** The agy part of a place's last reading, when it was found. */
-const lastAgyOf = (memory: HostMemory | undefined): AgyFound | undefined => agyFoundOf(memory?.reading?.read);
 
 // ───────────────── the round ─────────────────
 
@@ -229,6 +219,8 @@ export interface RoundSeams {
   readonly now: () => number;
   /** After each host whose memory changed, so the page posts that block. `memory`: the round's memory with this host's news; `host`: the place. */
   readonly landed: (memory: Memory, host: string) => void;
+  /** The blocks of Antigravity's quota, by place: kept apart from the memory, which a Stop, a closed terminal and a refusal clear. */
+  readonly agy: AgyBlocks;
   /** Bumped on a Stop, on a refusal and on a Forget. */
   readonly generation: () => number;
   /** One fixed log line for a result that was dropped. */
@@ -328,7 +320,6 @@ function readMemory(prev: HostMemory, host: string, read: FirstRead, nowMs: numb
   return {
     ...prev, reading: { read, atMs: nowMs }, unreadable: undefined, failure: undefined, usageMiss: undefined,
     claudeAccount: found === undefined ? undefined : claudeAccountKey(found, host), usageAtMs: usageTimeOf(prev, read, host, nowMs), usageBlockedAt: blockOf(prev, read),
-    agyBlockedAt: agyBlockOf(prev, read),
   };
 }
 
@@ -491,7 +482,9 @@ async function settled(context: Context, state: RoundState, host: string, run: R
   }
   const read = answeredFirst(seams, run);
   const nowMs = seams.now();
-  const next = publishedState(state, host, run, read, nowMs, Math.max(0, nowMs - startedMs));
+  const block = agyBlockApplied(seams.agy, host, read);
+  const shown = publishedState(state, host, run, read, nowMs, Math.max(0, nowMs - startedMs));
+  const next = { ...shown, memory: put(shown.memory, host, { ...(shown.memory.get(host) ?? {}), agyBlock: block }) };
   seams.landed(next.memory, host);
 
   return { kind: 'published', state: next, read, digest: digestOfRun(run) };
@@ -568,7 +561,7 @@ async function firstStep(context: Context, state: RoundState, host: string, run:
     return early;
   }
   const startedMs = context.seams.now();
-  const got = await run(modeFor('first'), firstOperandOf(state.memory.get(host)));
+  const got = await run(modeFor('first'), firstOperandOf(context.seams.agy.get(host)));
 
   return aside(context, state, host, got) ?? settled(context, admitted(state, host), host, got as RemoteRun, startedMs);
 }

@@ -9,7 +9,8 @@ import { isWslKey, splitWslKey } from './remotePlaces';
 import type { WslFacts } from './remoteWslRound';
 import type { Permission } from './remotePermission';
 import { percentLeft, windowLabel } from './usageWords';
-import { VENDOR_PALETTE, vendorPalette } from './vendorColour';
+import { EMAIL_COLOURS, emailSlots } from './vendorColour';
+import type { AgyBlock, AgyWhy } from './remoteAccountsAgyBlocks';
 
 /**
  * The model of the accounts tab (E2.S2, contract C4). PURE: what the window holds goes in, and ONE JSON-serialisable value comes out, so the
@@ -79,6 +80,8 @@ export interface ToolRow {
   readonly groups: readonly GroupCells[];
   /** Why the two window cells are empty: spans both, with its own sentence. `null` when the numbers are shown. */
   readonly span: string | null;
+  /** One muted line under the account when the program runs as root although a folder of its path is writable by another user; else `null`. The words are this module's, the path went through `forList`. */
+  readonly warning: string | null;
   /** The tool was found and its account is the row's: `false` for a row that only says why it could not be read (signed out, a credential-shaped value). */
   readonly found: boolean;
   /** The instant of the read that this row comes from: the older read for a place whose last read failed. */
@@ -194,6 +197,8 @@ const NO_TOOL_SAID = 'no Claude Code, Codex or Antigravity found';
 const NO_CLAUDE_SAID = 'no Claude Code found';
 const NOT_SHOWN_SAID = 'not shown: a value in the answer looked like a credential';
 const NOT_KNOWN = 'not known';
+/** What the account cell of a row that only says why its tool could not be read holds: the reason stands once, in the cells of the windows. */
+const NO_ACCOUNT = '—';
 const ACCOUNT_NOT_KNOWN = 'account not known';
 const AGY_ACCOUNT_SAID = 'account not read';
 const NO_FIGURE_SAID = 'no figure was read for this tool';
@@ -208,9 +213,11 @@ const CLAUDE_SIDE_SAID: Readonly<Record<string, string>> = {
   'credential-shape': NOT_SHOWN_SAID,
 };
 
-const CODEX_FAILED_SAID: Readonly<Record<'none' | 'error', string>> = {
+const CODEX_FAILED_SAID: Readonly<Record<'none' | 'error' | 'timeout' | 'not-started', string>> = {
   none: 'Codex stated no rate limits',
-  error: 'Codex did not answer its account and rate-limit calls',
+  error: 'Codex did not answer (no app-server in this version, or it did not start)',
+  timeout: `Codex did not answer within ${ACCOUNTS_SECONDS.codex} s`,
+  'not-started': 'Codex\'s program was not found on the PATH the script uses, so it was not asked',
 };
 
 type Reading = Extract<AccountsRead, { kind: 'read' }>;
@@ -252,6 +259,8 @@ interface UsageContext {
   readonly miss: UsageMiss | undefined;
   readonly blocked: boolean;
   readonly readingNow: boolean;
+  /** The block of this place's Antigravity quota, with the reason: what a `skipped` reply says. */
+  readonly agyBlock?: AgyBlock | undefined;
 }
 
 /** Why a reading with no usage figures has none, when the script did not say it failed. */
@@ -282,7 +291,7 @@ const usageFailedSaid = (found: Found, context: UsageContext): string => {
   return `Usage unavailable: ${said[usage.why]}`;
 };
 
-const usageContextOf = (memory: HostMemory, readingNow: boolean): UsageContext => ({ miss: memory.usageMiss, blocked: memory.usageBlockedAt !== undefined, readingNow });
+const usageContextOf = (memory: HostMemory, readingNow: boolean): UsageContext => ({ miss: memory.usageMiss, blocked: memory.usageBlockedAt !== undefined, readingNow, agyBlock: memory.agyBlock });
 
 /** The round is at this place now: at its ssh host, or, for a WSL place, at the scope host `wsl` whose turn reads it. */
 const readingNowAt = (round: RoundNow, key: string): boolean => round.kind === 'running' && (round.host === key || (round.host === 'wsl' && isWslKey(key)));
@@ -290,15 +299,25 @@ const readingNowAt = (round: RoundNow, key: string): boolean => round.kind === '
 type Shell = Omit<ToolRow, 'version' | 'account' | 'span'>;
 
 const base = (place: string, tool: ToolName, readAt: number): Shell => ({
-  place, tool, found: true, accountKey: null, sharedAcross: null, five: NO_CELL, week: NO_CELL, models: [], others: [], groups: [], readAt,
+  place, tool, found: true, accountKey: null, sharedAcross: null, five: NO_CELL, week: NO_CELL, models: [], others: [], groups: [], warning: null, readAt,
 });
+
+/** The warning of a vendor program that runs as root from a path another user can write (the owner's decision of 2026-11-27: one login for the three root places). */
+const warningOf = (unsafePath: string | null | undefined): string | null => {
+  if (unsafePath === undefined) {
+    return null;
+  }
+  const where = unsafePath === null ? 'a folder of its path' : forList(unsafePath, SENTENCE_MAX);
+
+  return `runs as root although ${where} is writable by another user`;
+};
 
 /** The account of a row: the email (cut through `forList`) with what follows it in the text, or the sentence when no email is known. The `tone` is set later, by `marked`. */
 const accountOf = (email: string, rest: string, plan: string | null, sentence: string): Account =>
   (email === '' ? { text: sentence, plan, email: '', tone: null } : { text: rest === '' ? email : `${email} · ${rest}`, plan, email, tone: null });
 
 /** A row that only says why its tool could not be read. */
-const sentenceRow = (shell: Shell, said: string): ToolRow => ({ ...shell, found: false, version: null, account: accountOf('', '', null, said), span: said });
+const sentenceRow = (shell: Shell, said: string): ToolRow => ({ ...shell, found: false, version: null, account: accountOf('', '', null, NO_ACCOUNT), span: said });
 
 // ───────────────── Claude ─────────────────
 
@@ -308,7 +327,7 @@ export const accountKeyOf = (found: Found): string | null => (found.email === ''
 const claudeAccount = (found: Found): Account => accountOf(forList(found.email, EMAIL_MAX), forList(found.org ?? '', NAME_MAX), planOf(found.plan), ACCOUNT_NOT_KNOWN);
 
 const claudeFoundRow = (shell: Shell, found: Found): ToolRow =>
-  ({ ...shell, version: versionText(found.version), account: claudeAccount(found), accountKey: accountKeyOf(found), span: null });
+  ({ ...shell, version: versionText(found.version), account: claudeAccount(found), accountKey: accountKeyOf(found), warning: warningOf(found.unsafePath), span: null });
 
 /** `no-jq` is the heading's: the host says `jq` is missing, and this tool has no row of its own. */
 function claudeSideRow(shell: Shell, claude: Exclude<Reading['claude'], { state: 'absent' | 'found' }>): ToolRow | undefined {
@@ -418,7 +437,7 @@ function codexWindows(row: ToolRow, codex: CodexFound): ToolRow {
 }
 
 const codexFoundRow = (shell: Shell, codex: CodexFound): ToolRow =>
-  codexWindows({ ...shell, version: null, account: accountOf(forList(codex.email, EMAIL_MAX), '', planOf(codex.plan), ACCOUNT_NOT_KNOWN), span: null }, codex);
+  codexWindows({ ...shell, version: null, account: accountOf(forList(codex.email, EMAIL_MAX), '', planOf(codex.plan), ACCOUNT_NOT_KNOWN), warning: warningOf(codex.unsafePath), span: null }, codex);
 
 /** A Codex that is not absent: its row, or nothing for `no-jq`, which is the heading's. */
 function codexSideRow(shell: Shell, codex: Exclude<Reading['codex'], { state: 'absent' }>): ToolRow | undefined {
@@ -443,20 +462,23 @@ type AgyFound = Extract<Reading['agy'], { state: 'found' }>;
 const agyCell = (window: { readonly leftPercent: number | null; readonly resetsAtMs: number | null } | undefined): Cell =>
   ({ left: window === undefined ? null : instantOf(window.leftPercent), resetsAt: window === undefined ? null : instantOf(window.resetsAtMs) });
 
-/** The sentence of a quota that is not figures. `skipped` is only ever said for a host that the round was blocked at. */
-function agyMissSaid(agy: AgyFound): string {
-  const { usage } = agy;
-  const version = `Antigravity ${versionText(agy.version)}`;
-  const blocked = `Quota not read: the quota command of ${version} asked the model, so CoAI stopped asking this host`;
-  const failed: Readonly<Record<'timeout' | 'error' | 'model-call' | 'format' | 'no-jq', string>> = {
-    timeout: `Quota not read: Antigravity did not answer within ${ACCOUNTS_SECONDS.agyQuota} s`,
-    error: `Quota not read: the quota command of ${version} ended with an error`,
-    'model-call': blocked,
-    format: `Quota not read: ${version} printed no quota this version understands`,
-    'no-jq': 'Quota not read: jq is missing on this host',
-  };
+/** The sentences of a quota that is not figures, by reason: every one of them stops the round from asking this place at this version of agy. */
+const AGY_WHY_SAID: Readonly<Record<AgyWhy, (version: string) => string>> = {
+  'model-call': (version) => `Quota not read: the quota command of ${version} asked the model, ${STOPPED}`,
+  format: (version) => `Quota not read: ${version} printed no quota this version understands, ${STOPPED}`,
+  timeout: (version) => `Quota not read: ${version} did not answer within ${ACCOUNTS_SECONDS.agyQuota} s, ${STOPPED} (Refresh now asks again)`,
+  error: (version) => `Quota not read: the quota command of ${version} ended with an error, ${STOPPED} (Refresh now asks again)`,
+};
+const STOPPED = 'so CoAI stopped asking this host';
 
-  return usage.state === 'failed' ? failed[usage.why] : blocked;
+/** The reason a row without figures gives: a failed reply's own, a skipped reply's from its block (the safe one when the memory holds none), or `no-jq`. */
+const agyReasonOf = (usage: AgyFound['usage'], block: AgyBlock | undefined): AgyWhy | 'no-jq' => (usage.state === 'failed' ? usage.why as AgyWhy | 'no-jq' : (block?.why ?? 'model-call'));
+
+/** The sentence of a quota that is not figures. A timeout and an error end with *Refresh now*, which asks again; the others do not. */
+function agyMissSaid(agy: AgyFound, block: AgyBlock | undefined): string {
+  const why = agyReasonOf(agy.usage, block);
+
+  return why === 'no-jq' ? 'Quota not read: jq is missing on this host' : AGY_WHY_SAID[why](`Antigravity ${versionText(agy.version)}`);
 }
 
 /** The groups of a quota that was read, in the fixed order of the closed words: one entry for each group that has a window. */
@@ -468,15 +490,15 @@ function agyGroups(windows: readonly { readonly group: AgyGroup; readonly window
   });
 }
 
-function agyFoundRow(shell: Shell, agy: AgyFound): ToolRow {
-  const row = { ...shell, version: versionText(agy.version), account: accountOf(forList(agy.email, EMAIL_MAX), '', null, AGY_ACCOUNT_SAID) };
+function agyFoundRow(shell: Shell, agy: AgyFound, block: AgyBlock | undefined): ToolRow {
+  const row = { ...shell, version: versionText(agy.version), account: accountOf(forList(agy.email, EMAIL_MAX), '', null, AGY_ACCOUNT_SAID), warning: warningOf(agy.unsafePath) };
   const groups = agy.usage.state === 'read' ? agyGroups(agy.usage.windows) : [];
   const [first] = groups;
 
-  return first === undefined ? { ...row, span: agyMissSaid(agy) } : { ...row, five: first.five, week: first.week, groups, span: null };
+  return first === undefined ? { ...row, span: agyMissSaid(agy, block) } : { ...row, five: first.five, week: first.week, groups, span: null };
 }
 
-function agyRow(place: string, agy: Reading['agy'], readAt: number): ToolRow | undefined {
+function agyRow(place: string, agy: Reading['agy'], readAt: number, block: AgyBlock | undefined): ToolRow | undefined {
   if (agy.state === 'absent') {
     return undefined;
   }
@@ -485,7 +507,7 @@ function agyRow(place: string, agy: Reading['agy'], readAt: number): ToolRow | u
     return sentenceRow(shell, unsafeSaid(agy.path));
   }
 
-  return agy.state === 'unreadable' ? sentenceRow(shell, NOT_SHOWN_SAID) : agyFoundRow(shell, agy);
+  return agy.state === 'unreadable' ? sentenceRow(shell, NOT_SHOWN_SAID) : agyFoundRow(shell, agy, block);
 }
 
 // ───────────────── a place ─────────────────
@@ -502,7 +524,7 @@ function rowsOf(shown: string, seen: Seen, shared: ReadonlyMap<string, Shared>):
   const claude = claudeRow(shown, read.claude, at);
   const withFigures = claude === undefined || read.claude.state !== 'found' ? claude : withShared(claude, read.claude, shared.get(claude.accountKey ?? ''), seen);
 
-  return [withFigures, codexRow(shown, read.codex, at), agyRow(shown, read.agy, at)].flatMap((one) => (one === undefined ? [] : [reasoned(one)]));
+  return [withFigures, codexRow(shown, read.codex, at), agyRow(shown, read.agy, at, seen.agyBlock)].flatMap((one) => (one === undefined ? [] : [reasoned(one)]));
 }
 
 /** Claude's own sentence when it could not be read as an account. */
@@ -696,20 +718,19 @@ const seenOf = (input: TableInput, keys: readonly string[]): readonly Seen[] =>
 
 // ───────────────── the colour of an email ─────────────────
 
-/** The closed class of a palette colour: `em-1` to `em-12` by the colour's place in `VENDOR_PALETTE`; `null` for a colour that is not in it. The page holds the twelve rules. */
-const toneOfColour = (colour: string): string | null => {
-  const at = VENDOR_PALETTE.indexOf(colour);
-
-  return at < 0 ? null : `em-${at + 1}`;
-};
 
 /**
- * Every email of the model gets ONE class, over the sorted and de-duplicated list of the emails of ALL rows (`vendorPalette`: the same email is the same colour in every
+ * Every email of the model gets ONE class, over the sorted and de-duplicated list of the emails of ALL rows (`emailSlots`, with no slot held back for a vendor: the same email is the same colour in every
  * tool and place, and up to twelve emails are twelve colours). The class is the extension's own closed name; no text of a reply is ever a class.
  */
 export function marked(blocks: readonly Block[]): readonly Block[] {
-  const colour = vendorPalette(blocks.flatMap((block) => block.rows.map((row) => row.account.email)).filter((email) => email !== ''));
-  const mark = (row: ToolRow): ToolRow => (row.account.email === '' ? row : { ...row, account: { ...row.account, tone: toneOfColour(colour(row.account.email)) } });
+  const slot = emailSlots(blocks.flatMap((block) => block.rows.map((row) => row.account.email)));
+  const classOf = (email: string): string | null => {
+    const at = slot(email);
+
+    return at === undefined || at >= EMAIL_COLOURS.length ? null : `em-${at + 1}`;
+  };
+  const mark = (row: ToolRow): ToolRow => (row.account.email === '' ? row : { ...row, account: { ...row.account, tone: classOf(row.account.email) } });
 
   return blocks.map((block) => ({ ...block, rows: block.rows.map(mark) }));
 }

@@ -33,7 +33,8 @@ export interface CodexWindow {
 /** What `codex app-server` said just now: the windows it named, or why there are none. */
 export type CodexUsage =
   | { readonly state: 'read'; readonly windows: readonly CodexWindow[] }
-  | { readonly state: 'failed'; readonly why: 'none' | 'error' };
+  /** `none`: Codex answered and has no rate limits; `error`: it did not answer (no app-server in this version, or it did not start); `timeout`: it did not answer in time; `not-started`: its program was not found on the script's PATH. */
+  | { readonly state: 'failed'; readonly why: 'none' | 'error' | 'timeout' | 'not-started' };
 
 /** The two groups of models agy states a quota for; the closed words of the script's `:quota` lines. */
 export type AgyGroup = 'gemini' | 'third-party';
@@ -223,21 +224,28 @@ export function codexUsageOf(windowValues: readonly string[]): CodexUsage {
 const AGY_GROUPS: readonly string[] = ['gemini', 'third-party'];
 const AGY_WINDOWS: readonly string[] = ['5h', 'weekly'];
 
+/** An agy reset: epoch seconds, kept only between one hour ago and eight days ahead like Claude's (a window of agy is 5 hours or a week); a dash and anything else is no reset. */
+function agyResetOf(word: string, nowMs: number): number | null {
+  const ms = secondsToMs(word);
+
+  return ms === null ? null : inReach(ms, nowMs);
+}
+
 /** `<group> <window> <left> <reset>` (four words, the caller has checked that): a closed group and window, else the line is no window. */
-function agyWindowOf(value: string): AgyWindow | undefined {
+function agyWindowOf(value: string, nowMs: number): AgyWindow | undefined {
   const words = value.split(' ');
   if (!AGY_GROUPS.includes(words[0] as string) || !AGY_WINDOWS.includes(words[1] as string)) {
     return undefined;
   }
 
-  return { group: words[0] as AgyGroup, window: words[1] as AgyWindow['window'], leftPercent: percentOf(words[2] as string), resetsAtMs: secondsToMs(words[3] as string) };
+  return { group: words[0] as AgyGroup, window: words[1] as AgyWindow['window'], leftPercent: percentOf(words[2] as string), resetsAtMs: agyResetOf(words[3] as string, nowMs) };
 }
 
 /** The windows in the order sent; of two lines for one group and window the first is kept. */
-export function agyWindowsOf(values: readonly string[]): readonly AgyWindow[] {
+export function agyWindowsOf(values: readonly string[], nowMs: number): readonly AgyWindow[] {
   const windows: AgyWindow[] = [];
   for (const value of values) {
-    const one = agyWindowOf(value);
+    const one = agyWindowOf(value, nowMs);
     if (one !== undefined && !windows.some((have) => have.group === one.group && have.window === one.window)) {
       windows.push(one);
     }
@@ -247,8 +255,8 @@ export function agyWindowsOf(values: readonly string[]): readonly AgyWindow[] {
 }
 
 /** The agy usage of the `window` values of a `COAI-USAGE agy read` record: no window at all is `format`. */
-export function agyUsageOf(windowValues: readonly string[]): AgyUsage {
-  const windows = agyWindowsOf(windowValues);
+export function agyUsageOf(windowValues: readonly string[], nowMs: number): AgyUsage {
+  const windows = agyWindowsOf(windowValues, nowMs);
 
   return windows.length === 0 ? { state: 'failed', why: 'format' } : { state: 'read', windows };
 }
