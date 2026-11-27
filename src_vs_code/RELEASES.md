@@ -3,6 +3,13 @@
 > The next release of the extension is 2.0.0, requested by hand with a `Release-As: 2.0.0` footer: the v1 data migration runs only from major version 2 (v2 epoch 1, E5).
 > What changes for a person is in `RELEASE_NOTES_2.0.md` at the repository root.
 
+## [2.2.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v2.1.1...extension-v2.2.0) (2026-11-27)
+
+
+### Features
+
+* **extension:** the accounts tab reads Codex's account, plan and limits and Antigravity's quota and account just now; emails in one colour each ([#1066](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/1066)) ([32d9f78](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/32d9f780cff5d5f8a62ea6bfded696138646d188))
+
 ## [2.1.1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v2.1.0...extension-v2.1.1) (2026-11-27)
 
 
