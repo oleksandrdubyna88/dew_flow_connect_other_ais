@@ -1,5 +1,31 @@
 # Changelog
 
+## Extension 2.2.0 — 2026-11-27
+
+**Codex and Antigravity in the accounts tab, as they show themselves.**
+
+- **Codex** shows its account (the email), its plan and how much of each window is left, with the reset. They come
+  from Codex itself (`codex app-server`) at each round, not from the last session file. If Codex does not answer,
+  the row says why: no answer, too slow, or the program is not found.
+- **Antigravity** shows its account and its quota by model group (Gemini; Claude and GPT), the 5-hour and the
+  weekly window, each with what is left and when it resets. The quota comes from `agy -p /quota`; the account comes
+  from the last sign-in line of agy's own log.
+- **Safety for Antigravity.** An agy that does not know `/quota` would send it to its model. CoAI accepts the reply
+  only when no model turn ran. Otherwise it stops asking that host for the quota at that agy version, and every
+  window remembers this. *Read this host again* asks once more.
+
+**Root.** A program of Claude Code, Codex or Antigravity that root would start from a folder another user can
+write is now started anyway, and its row says so. This is for machines where one sign-in is shared on purpose.
+The basic tools (`timeout`, `sed`, `jq` and the like) are still refused in such a folder.
+
+**The table.**
+- Every email has its own colour, and the same email has the same colour under every tool and host.
+- Rows of one host have the same height.
+- The text is no longer pressed against the coloured edge.
+- The Antigravity table's *Read* column is no longer one letter wide.
+
+The permission you gave stays valid. It is not asked again.
+
 ## Extension 2.1.1 — 2026-11-27
 
 **The accounts tab no longer says "not asked" while it asks.** A round reads each host twice: first its accounts, then the

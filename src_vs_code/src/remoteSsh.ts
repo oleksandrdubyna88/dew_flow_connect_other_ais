@@ -4,7 +4,7 @@ import { credsSession } from './credsSession';
 import { Platform, hostPlatform } from './hostSide';
 import { system32 } from './processLauncher';
 import { withoutControls } from './remoteAccountsReply';
-import { ACCOUNTS_SCRIPT, AccountsMode, isAccountsDigest, isAccountsMode } from './remoteAccountsScript';
+import { ACCOUNTS_SCRIPT, AccountsMode, isAccountsMode, operandFits } from './remoteAccountsScript';
 import { callOf, shQuoted } from './remoteScript';
 import { Captured, capture } from './versionProbe';
 
@@ -52,20 +52,17 @@ export function sshArgv(host: string, operands: readonly string[]): readonly str
 }
 
 /**
- * The accounts call's words: the same options, the host and the operands of E3.S2 (§ R2.2): `no-claude-usage` alone, or `claude-usage` and the 64-character digest of the
- * account the first reply named. THROWS the same fixed text for a bad host, a mode outside the list, the usage mode without a digest that fits, or the first mode with one.
- * No other text is an operand, ever: no email, no host, no name.
+ * The accounts call's words: the same options, the host and the operands of E3.S2 (§ R2.2): `no-claude-usage` alone or with the word that skips agy's quota (revision 3),
+ * or `claude-usage` and the 64-character digest of the account the first reply named. THROWS the same fixed text for a bad host, a mode outside the list, or an operand that
+ * `operandFits` refuses. No other text is an operand, ever: no email, no host, no name.
  */
-export function accountsArgv(host: string, mode: AccountsMode, digest?: string): readonly string[] {
-  if (!isAccountsMode(mode) || !operandsOk(mode, digest)) {
+export function accountsArgv(host: string, mode: AccountsMode, operand?: string): readonly string[] {
+  if (!isAccountsMode(mode) || !operandFits(mode, operand)) {
     throw new Error(REFUSED_WORD);
   }
 
-  return argvWith(host, mode === 'claude-usage' ? [mode, digest as string] : [mode]);
+  return argvWith(host, operand === undefined ? [mode] : [mode, operand]);
 }
-
-/** The usage mode takes a digest of its class and the first mode takes none. */
-const operandsOk = (mode: AccountsMode, digest: string | undefined): boolean => (mode === 'claude-usage' ? digest !== undefined && isAccountsDigest(digest) : digest === undefined);
 
 /** C1's host class, the ONE test of it in this file. */
 const hostOk = (host: string): boolean => credsSession(`Creds: ${host} / s`).kind === 'session';
@@ -159,8 +156,8 @@ export async function runRemote(
  * The accounts call: the same road, with `ACCOUNTS_SCRIPT` ALWAYS on stdin — there is no script parameter, so no other text can be sent.
  * NEVER rejects. A bad host, a mode outside the list or operands that do not fit the mode (§ R2.2) is a `refused` with no call.
  */
-export function runAccounts(host: string, mode: AccountsMode, digest: string | undefined, limits: RemoteLimits = ACCOUNTS_LIMITS, seams: RemoteSeams = defaultRemoteSeams()): Promise<RemoteRun> {
-  return ranWith(host, { argv: accountsArgvOf(host, mode, digest), label: 'accounts', subject: ACCOUNTS_SUBJECT }, ACCOUNTS_SCRIPT, limits, seams);
+export function runAccounts(host: string, mode: AccountsMode, operand: string | undefined, limits: RemoteLimits = ACCOUNTS_LIMITS, seams: RemoteSeams = defaultRemoteSeams()): Promise<RemoteRun> {
+  return ranWith(host, { argv: accountsArgvOf(host, mode, operand), label: 'accounts', subject: ACCOUNTS_SUBJECT }, ACCOUNTS_SCRIPT, limits, seams);
 }
 
 /** What a call is ABOUT: its argv (nothing when a rule refused it), the label of its log line and the words of its sentences. */
@@ -205,9 +202,9 @@ async function ranAsked(host: string, ask: Ask, script: string, limits: RemoteLi
 }
 
 /** The accounts argv, or nothing when a rule refuses. */
-function accountsArgvOf(host: string, mode: AccountsMode, digest: string | undefined): readonly string[] | undefined {
+function accountsArgvOf(host: string, mode: AccountsMode, operand: string | undefined): readonly string[] | undefined {
   try {
-    return accountsArgv(host, mode, digest);
+    return accountsArgv(host, mode, operand);
   } catch {
     return undefined;
   }

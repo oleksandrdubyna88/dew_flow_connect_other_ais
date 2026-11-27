@@ -1,4 +1,4 @@
-import type { AccountsRead, ClaudeUsage, CodexUsage } from '../remoteAccountsReply';
+import type { AccountsRead, AgyUsage, ClaudeUsage, CodexUsage } from '../remoteAccountsReply';
 import type { HostMemory, Memory } from '../remoteAccountsRound';
 import type { HostStanding } from '../remoteHosts';
 import type { TableInput } from '../remoteAccountsTable';
@@ -32,11 +32,25 @@ export const usageOf = (five: number | null, week: number | null, fable: number 
 });
 
 export const codexUsage = (over: Partial<Extract<CodexUsage, { state: 'read' }>> = {}): CodexUsage =>
-  ({ state: 'read', windows: [{ minutes: 300, usedPercent: 10, resetsAtMs: NOW + min(65) }, { minutes: 10_080, usedPercent: 14, resetsAtMs: NOW + min(6_000) }], asOf: { ms: NOW - hour(48), from: 'file' }, statMissing: false, ...over });
+  ({ state: 'read', windows: [{ minutes: 300, usedPercent: 10, resetsAtMs: NOW + min(65) }, { minutes: 10_080, usedPercent: 14, resetsAtMs: NOW + min(6_000) }], ...over });
 
-export const codexOf = (usage: CodexUsage = codexUsage()): Reading['codex'] => ({ state: 'found', signInFile: true, plan: 'prolite', usage });
+export const COX = 'cox@example.test';
+export const AGY_MAIL = 'agy@example.test';
 
-export const agyOf = (): Reading['agy'] => ({ state: 'found', version: '1.5.12', signInFile: true, usage: { state: 'no-source' } });
+export const codexOf = (usage: CodexUsage = codexUsage(), email = COX): Reading['codex'] => ({ state: 'found', signInFile: true, email, plan: 'prolite', usage });
+
+/** Antigravity's quota as the parser makes it: the Gemini group part-used with a reset, the third-party group full with none. */
+export const agyUsage = (): AgyUsage => ({
+  state: 'read',
+  windows: [
+    { group: 'gemini', window: 'weekly', leftPercent: 60, resetsAtMs: NOW + hour(60) },
+    { group: 'gemini', window: '5h', leftPercent: 92, resetsAtMs: NOW + min(95) },
+    { group: 'third-party', window: 'weekly', leftPercent: 100, resetsAtMs: null },
+    { group: 'third-party', window: '5h', leftPercent: 100, resetsAtMs: null },
+  ],
+});
+
+export const agyOf = (usage: AgyUsage = agyUsage(), email = AGY_MAIL): Reading['agy'] => ({ state: 'found', version: '1.5.12', signInFile: true, email, usage });
 
 export const seen = (read: Reading, ageMin: number, over: Partial<HostMemory> = {}): HostMemory => ({ reading: { read, atMs: NOW - min(ageMin) }, ...over });
 

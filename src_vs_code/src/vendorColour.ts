@@ -197,3 +197,30 @@ function colourOf(name: string, slots: ReadonlyMap<string, number>): string {
 
   return VENDOR_PALETTE[slot] ?? UNNAMED_VENDOR_COLOUR;
 }
+
+// ───────────────── the colours of an email (the accounts tab) ─────────────────
+
+/**
+ * The palette slots an EMAIL takes, in the order they are given out: a new order of the same twelve colours, with NO slot held back for a vendor (an email is
+ * never a vendor name), and the hues that are far from the tool colours of the accounts tab first — Claude Code's orange `#d97757`, Codex's sky blue `#38bdf8`
+ * and Antigravity's violet `#a78bfa` — so that the first emails of a tab are never mistaken for a tool. By the distance of each hue to the nearest tool hue:
+ * green (71°), lime (50°), pink (40°), turquoise (32°), amber (27°), blue (21°), then slate, purple, brown, orange, cyan and salmon (13° and less).
+ */
+export const EMAIL_PALETTE_ORDER: readonly number[] = [4, 9, 5, 8, 1, 0, 11, 6, 7, 10, 3, 2];
+
+/** The twelve colours of the emails, in the order they are given out. */
+export const EMAIL_COLOURS: readonly string[] = EMAIL_PALETTE_ORDER.map((slot) => VENDOR_PALETTE[slot] ?? UNNAMED_VENDOR_COLOUR);
+
+/**
+ * The place of each email in the order of {@link EMAIL_COLOURS}: over the SORTED, de-duplicated emails (case and surrounding space make no second email), the first is
+ * the first colour, and so on; the thirteenth repeats the first. The same set of emails gives the same places in every window. `undefined` for an empty email.
+ */
+export function emailSlots(emails: readonly string[]): (email: string) => number | undefined {
+  const sorted = [...new Set(emails.map(normalise))].filter((email) => email.length > 0).sort(byCodeUnit);
+
+  return (email) => {
+    const at = sorted.indexOf(normalise(email));
+
+    return at < 0 ? undefined : at % EMAIL_COLOURS.length;
+  };
+}

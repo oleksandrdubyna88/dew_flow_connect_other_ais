@@ -1,12 +1,12 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { ClaudeUsage, CodexUsage, readAccounts } from '../remoteAccountsReply';
-import { FILE_TIME, GOOD, LINES, NOW, RECORD_TIME, claudeLines, claudeOnlyOf, codexLines, ok, readOf } from './accountsFrames';
+import { AgyUsage, ClaudeUsage, CodexUsage, readAccounts } from '../remoteAccountsReply';
+import { AGY_QUOTA_LINES, GOOD, LINES, NOW, agyLines, claudeLines, claudeOnlyOf, codexLines, frame, ok, readOf } from './accountsFrames';
 
 /**
  * The value rules of the accounts parser (E1.S2, spec § A2.11.3): the Claude usage lines with their reset text, and the Codex
- * record's windows and times. Every case is a frame handed to the REAL `readAccounts`, so a rule that is not wired in fails here.
+ * windows (the quota of agy too). Every case is a frame handed to the REAL `readAccounts`, so a rule that is not wired in fails here.
  * Nothing reads the clock: `at` passes the moment.
  */
 
@@ -137,9 +137,8 @@ function codexUsage(...data: readonly string[]): CodexUsage {
   return codex.state === 'found' ? codex.usage : { state: 'failed', why: 'error' };
 }
 
-const AS_OF = `:as-of ${RECORD_TIME} ${FILE_TIME}`;
 const windowsOfCodex = (...data: readonly string[]): readonly { minutes: number; usedPercent: number | null; resetsAtMs: number | null }[] => {
-  const usage = codexUsage(...data, AS_OF);
+  const usage = codexUsage(...data);
   assert.equal(usage.state, 'read', JSON.stringify(usage));
 
   return usage.state === 'read' ? usage.windows : [];
@@ -173,7 +172,7 @@ test('A2-T19: a dash is not zero, and 101 is not known', () => {
 
 test('A2-T19: a window with no usable length is no window, and with no window left the usage is failed none', () => {
   for (const one of [':window 14 - 1', ':window 14 0 1', ':window 14 600000 1']) {
-    assert.deepEqual(codexUsage(one, AS_OF), { state: 'failed', why: 'none' }, one);
+    assert.deepEqual(codexUsage(one), { state: 'failed', why: 'none' }, one);
     assert.deepEqual(windowsOfCodex(one, ':window 5 300 9').map((window) => window.minutes), [300], `${one}: left out beside a good one`);
   }
 });
@@ -184,32 +183,8 @@ test('A2-T19: two windows of one length — the first is kept', () => {
   assert.equal(kept[0]?.usedPercent, 5);
 });
 
-interface Seen2 { readonly asOf: { readonly ms: number; readonly from: string } | null; readonly statMissing: boolean }
-function asOfOf(words: string): Seen2 {
-  const usage = codexUsage(':window 14 10080 1795518850', `:as-of ${words}`);
-  assert.equal(usage.state, 'read', JSON.stringify(usage));
-
-  return usage.state === 'read' ? { asOf: usage.asOf, statMissing: usage.statMissing } : { asOf: null, statMissing: false };
-}
-
-test('A2-T19: the time — the record\'s own when it parses, else the file\'s', () => {
-  assert.deepEqual(asOfOf(`${RECORD_TIME} ${FILE_TIME}`), { asOf: { ms: Date.UTC(2026, 10, 17, 19, 32, 36, 474), from: 'record' }, statMissing: false });
-  assert.deepEqual(asOfOf(`2026-11-17T20:32:36+01:00 ${FILE_TIME}`).asOf, { ms: Date.UTC(2026, 10, 17, 19, 32, 36), from: 'record' }, 'with an offset it is the same moment');
-  const file = { ms: FILE_TIME * 1000, from: 'file' };
-  for (const words of [`- ${FILE_TIME}`, `not-a-time ${FILE_TIME}`, `2026-11-17 19:32 ${FILE_TIME}`, `2026-11-17T19:32:36 ${FILE_TIME}`, `2099-01-01T00:00:00Z ${FILE_TIME}`, `2019-12-31T23:59:59Z ${FILE_TIME}`]) {
-    assert.deepEqual(asOfOf(words).asOf, file, words);
-  }
-  assert.deepEqual(asOfOf('- -'), { asOf: null, statMissing: false });
-});
-
-test('A2-T19: a host without stat is said, and is not a time that is not known', () => {
-  assert.deepEqual(asOfOf(`${RECORD_TIME} no-stat`), { asOf: { ms: Date.UTC(2026, 10, 17, 19, 32, 36, 474), from: 'record' }, statMissing: true });
-  assert.deepEqual(asOfOf('- no-stat'), { asOf: null, statMissing: true });
-  assert.notDeepEqual(asOfOf('- no-stat'), asOfOf('- -'));
-});
-
 test('A2-T19: the slots primary and secondary are not in the grammar', () => {
-  const base = ['COAI-JQ found', 'COAI-VENDOR claude absent', 'COAI-VENDOR codex found', ':sign-in-file present', 'COAI-USAGE codex read', AS_OF, 'COAI-VENDOR agy absent'];
+  const base = ['COAI-JQ found', 'COAI-VENDOR claude absent', 'COAI-VENDOR codex found', ':sign-in-file present', 'COAI-USAGE codex read', 'COAI-VENDOR agy absent'];
   const withKey = [...base.slice(0, 5), ':primary 1 2 3', ...base.slice(5)];
   const withMarker = [...base.slice(0, 5), 'COAI-USAGE secondary read', ...base.slice(5)];
   const reply = (lines: readonly string[]): string => ['COAI-ACCOUNTS 1', ...lines, 'COAI-ACCOUNTS-END', ''].join('\n');
@@ -217,15 +192,69 @@ test('A2-T19: the slots primary and secondary are not in the grammar', () => {
   assert.deepEqual(readAccounts(ok(reply(withMarker)), 'no-claude-usage', NOW), { kind: 'unreadable', why: 'marker' });
 });
 
-test('A2-T19 companion: the reply of § A2.5 is read, one window, the time from the record', () => {
+test('A2-T19 companion: the reply of § A2.5 is read — one window, and the account and the plan of what Codex said just now', () => {
   const codex = readOf(readAccounts(ok(GOOD), 'no-claude-usage', NOW)).codex;
   assert.ok(codex.state === 'found' && codex.usage.state === 'read');
   const usage = codex.state === 'found' && codex.usage.state === 'read' ? codex.usage : undefined;
   assert.equal(usage?.windows.length, 1);
-  assert.equal(usage?.asOf?.from, 'record');
+  assert.ok(codex.state === 'found' && codex.email === 'cox@example.test' && codex.plan === 'prolite');
+  assert.deepEqual(Object.keys(usage ?? {}).sort(), ['state', 'windows'], 'a Codex reading has no time of a file: it is from now');
 });
 
-test('A2-T19: asOf is null — and the iso helper says so — when neither time can be read', () => {
-  assert.equal(iso(null), null);
-  assert.equal(iso(Date.UTC(2026, 10, 17, 19, 32)), '2026-11-17T19:32Z');
+// ───────────────── the Antigravity quota (revision 3) ─────────────────
+
+function agyUsage(...data: readonly string[]): AgyUsage {
+  const agy = readOf(readAccounts(ok(agyLines(...data)), 'no-claude-usage', NOW)).agy;
+  assert.equal(agy.state, 'found', `the agy side is ${JSON.stringify(agy)}`);
+
+  return agy.state === 'found' ? agy.usage : { state: 'failed', why: 'error' };
+}
+
+test('R3-T1: the measured quota — two groups of two windows, a dash is a window that has not started', () => {
+  assert.deepEqual(agyUsage(...AGY_QUOTA_LINES), {
+    state: 'read',
+    windows: [
+      { group: 'gemini', window: 'weekly', leftPercent: 60, resetsAtMs: 1795506120000 },
+      { group: 'gemini', window: '5h', leftPercent: 92, resetsAtMs: 1795100400000 },
+      { group: 'third-party', window: 'weekly', leftPercent: 100, resetsAtMs: null },
+      { group: 'third-party', window: '5h', leftPercent: 100, resetsAtMs: null },
+    ],
+  });
+});
+
+test('R3-T1: a window that is not in the closed lists is no window; no window at all is the failure format', () => {
+  for (const line of [':quota other weekly 50 1', ':quota gemini daily 50 1', ':quota Gemini 5h 50 1', ':quota third_party 5h 50 1']) {
+    assert.deepEqual(agyUsage(line), { state: 'failed', why: 'format' }, line);
+    assert.deepEqual((agyUsage(line, ':quota gemini 5h 50 9') as { windows: readonly unknown[] }).windows.length, 1, `${line}: left out beside a good one`);
+  }
+  assert.deepEqual(agyUsage(), { state: 'failed', why: 'format' });
+});
+
+test('R3-T1: 101 is not known, a zero is a zero, a decimal is as sent, two lines for one window keep the first', () => {
+  const windows = (...data: readonly string[]): readonly { leftPercent: number | null; resetsAtMs: number | null }[] => (agyUsage(...data) as { windows: readonly { leftPercent: number | null; resetsAtMs: number | null }[] }).windows;
+  assert.equal(windows(':quota gemini 5h 101 5')[0]?.leftPercent, null);
+  assert.equal(windows(':quota gemini 5h 0 5')[0]?.leftPercent, 0);
+  assert.equal(windows(':quota gemini 5h 33.5 5')[0]?.leftPercent, 33.5);
+  assert.equal(windows(':quota gemini 5h 10 5', ':quota gemini 5h 90 6').length, 1);
+  assert.equal(windows(':quota gemini 5h 10 5', ':quota gemini 5h 90 6')[0]?.leftPercent, 10);
+  assert.equal(windows(':quota gemini 5h 10 -')[0]?.resetsAtMs, null);
+});
+
+test('R3-T1: the usage words of agy that are not figures; no-jq is only legal beside COAI-JQ missing', () => {
+  const reply = (jq: string, word: string): string => frame(jq, 'COAI-VENDOR claude absent', 'COAI-VENDOR codex absent', 'COAI-VENDOR agy found', ':sign-in-file present', `COAI-USAGE agy ${word}`);
+  const agyOf = (jq: string, word: string): unknown => {
+    const answer = readAccounts(ok(reply(jq, word)), 'no-claude-usage', NOW);
+
+    return answer.kind === 'read' ? answer.agy : answer;
+  };
+  const side = (usage: AgyUsage): unknown => ({ state: 'found', version: null, signInFile: true, email: '', usage });
+  assert.deepEqual(agyOf('COAI-JQ found', 'skipped'), side({ state: 'skipped' }));
+  assert.deepEqual(agyOf('COAI-JQ found', 'failed timeout'), side({ state: 'failed', why: 'timeout' }));
+  assert.deepEqual(agyOf('COAI-JQ found', 'failed error'), side({ state: 'failed', why: 'error' }));
+  assert.deepEqual(agyOf('COAI-JQ found', 'failed model-call'), side({ state: 'failed', why: 'model-call' }));
+  assert.deepEqual(agyOf('COAI-JQ missing apt-get', 'failed no-jq'), side({ state: 'failed', why: 'no-jq' }));
+  assert.deepEqual(agyOf('COAI-JQ found', 'failed no-jq'), { kind: 'unreadable', why: 'shape' }, 'no-jq beside COAI-JQ found');
+  assert.deepEqual(agyOf('COAI-JQ missing apt-get', 'skipped'), { kind: 'unreadable', why: 'shape' }, 'a quota that was asked for beside COAI-JQ missing');
+  assert.deepEqual(agyOf('COAI-JQ found', 'failed format'), { kind: 'unreadable', why: 'marker' }, 'format is the parser\'s word, the script never sends it');
+  assert.deepEqual(agyOf('COAI-JQ found', 'none'), { kind: 'unreadable', why: 'marker' }, 'the old word is gone');
 });
