@@ -972,3 +972,335 @@ store; **A6** ("the cost of the pin") is gone and A10 takes its place; **G13** i
 - The rows of 1.5.17 that were not run again on 1.5.18 (the controls of U10, the 35 model-free probes of the unit).
 - Another machine, and any release but 1.5.18.
 - The judge ran no row again, started no vendor program and ran no test.
+
+## Addendum 4 — the codex tool rule and the family names (2026-11-27)
+
+Judge: Fable, the same role (epoch 3 E3 s2 t5 d9; a judge job of its own, ordered by the lead). By its place this is section 15 of the
+file; its parts are 15.1 to 15.11. **The verdict is at the end: 15.11.** Head `244ec26e` on `feat/v2-ep3-e3-roles`. Read: `v2/PLAN.md`
+(the entries 2.1 and 2.2, the record "Re-review for epoch 3", the line of epoch 3), `SPEC_CHANGES.md` sections Q, R, S and T, `SPEC.md`
+sections C, D and H, the task file of s2 t5, this file whole, the lines of `RESULTS_e3_real_codex_pass7.md` on the tool list, three saved
+files of `v2/spikes/e3s5_measure/out_codex/` (`tools_probe.txt`, `rollout_call_names.txt`, `x1b_js_rollout.txt`), and the code of the
+local commit `62685e2b` (not pushed: an unfinished s2 t5 that follows entry 2.1 only): `CodexToolList.cs`, `CodexModelList.cs`,
+`CodexEntryModel.cs`, `CodexPreflightScript.cs`, `CodexPreflightRows.cs`, `CodexCoderVendor.cs`, and the parts of `CoderBoundary.cs`,
+`CoderTurns.cs`, `CoderOsLayer.cs`, `RoleModelLauncher.cs` and `RoleFailover.cs` that the commit changed.
+Run by the judge: **no vendor CLI, no model call, no build, no test, no probe.** Reads only. Sections 1 to 14 stand as they were written.
+This addendum changes no row of section 8 and adds no id (15.8).
+
+**The judge rules on the PLAN** (section S4 of `SPEC_CHANGES.md`, items 1 to 13, and the task file), not on the commit `62685e2b`. The
+commit shows the real shape of the code. Where it is not the plan, 15.2 says so.
+
+What reached the judge through the lead's brief, and not in the owner's own words: the entries 2.1 and 2.2, "I accept" for risk 14, and
+the approval of the revised plan on 2026-11-27. `PLAN.md` at `244ec26e` records all four.
+
+### 15.1 What was asked
+
+1. Fewer tools pass: is one of the 11 known tools a guard? Is the grammar of the whole read enough?
+2. A tool outside the set before the first launch: `model-unavailable`, the failover, the notice. Three cases stay `coder-boundary`.
+3. Risk 14: what still holds for a codex model that nobody measured, and what does not.
+4. The run that reads the list of models (`codex debug models`): is it safe, and does it need preflight rows of its own?
+5. The rest of S4.
+
+### 15.2 What the judge checked itself
+
+| # | Question | How | Answer |
+|---|---|---|---|
+| J31 | how the code reads the tool report | `CodexToolList.NamesOf` and `Walk` at `62685e2b` | It takes the FIRST item of type `additional_tools` and no other. It skips an element of a `tools` array that is not an object. `functions.exec` with no `description` gives no nested name and no error. The nested names come from the pattern ``### `(\w+)` `` anywhere in the text, not from whole lines. An element with no name becomes a name with nothing after its prefix, which is outside the set: that one is closed |
+| J32 | does the repository hold the text that the grammar reads | a search for `additional_tools` | **No.** Two scripts name the key and no report is saved; `tools_probe.txt` holds the NAMES only. The judge did not see the description of `functions.exec`. Section T, item 3, says the same |
+| J33 | what the stand-in project is | `CodexPreflightScript.cs`, the part `Probes` | `/tmp/coai-pf-standin`, made INSIDE the unit by the preflight program: a `.codex/config.toml` with one MCP server whose command is `/bin/true`, and `git init`. The program removes it at its end. So it is not there when the list of models is read, and it holds a config file |
+| J34 | the run that reads the list of models, in the code at hand | `CoderBoundary.RunModelFreeAsync`, `CoderTurns.RunModelFreeAsync`, `RoleModelLauncher.ListCodexModelsAsync` | The unit has the property list and the environment of the launch. The sign-in copy is made first and its gate (the margin) is asked. The argv is `debug models`, with a deadline of 60 s and a limit of 4 MiB. A unit that cannot start is a refusal of the boundary. **Not the plan:** the working folder is the worktree. And the checks of a launch do not run, so nothing looks for `environments.toml`; no `config.toml` is written (it names the model, which is not known yet) |
+| J35 | the environment of the codex unit | `CodexCoderVendor.Environment` | 9 names: `PATH`, `HOME`, `CODEX_HOME`, the refresh override, `TMPDIR`, `LANG`, `TERM`, `NO_COLOR`, `GIT_TERMINAL_PROMPT`. No name gives the CLI another address for its requests |
+| J36 | what a rollout file names | `rollout_call_names.txt` | The call names are `exec` and `collaboration.*`. A nested tool is called inside the JavaScript and is no call name. So CX-T5 cannot see a nested tool by its name |
+| J37 | which two names `gpt-5.6-terra` does not have | `RESULTS_e3_real_codex_pass7.md` | Not recorded ("2 of it are missing"). So nobody has shown that the read of that report was whole. d5 and d8 of the task ask it |
+| J38 | where a shown tool name can come from | `CodexToolList.Judge`; `RoleFailover.cs` at `62685e2b`, the lines that make the stop and the notice | The names outside the set are taken from BOTH reads together, and the notice is raised whenever there is one — also when the job ends `coder-boundary` because the two reads differ. A name that only the worktree read holds can come from a file of the repository |
+| J39 | the test that ties the table to this file | `ACoderVendorSeamTests.cs` (`JudgementIds`, `JudgementVerdict`) | It reads section 8 and the first line that starts with the vendor's cell. This addendum touches neither |
+
+### 15.3 Point 1 — fewer tools pass
+
+**No tool of the 11 is a guard.** A known name is a PATH that was measured: what the tool reaches and where it runs (13.3, 13.11). A
+model with fewer names has fewer paths, and each of them was measured. The judge's own reading of each name:
+
+| Name | What it is, and where it runs when that was measured | Does its absence let the model do more? |
+|---|---|---|
+| `functions.exec` | the JavaScript, in `codex-code-mode-host`, outside the vendor sandbox (C5) | No. Without it no nested tool can be called. It is also the one name whose text holds the nested inventory: without it there is no nested inventory, and a nested tool under another top-level name is a name outside the set |
+| `functions.wait` | it waits for a running `exec` | No |
+| `functions.request_user_input`, `functions.request_user_input_async` | a question to the person; nobody answers in a job (13.10: what it does in a job was not measured) | No. An approval does not go through them: `approval_policy="never"` is on the argv and CX-C4 reads it back |
+| `apply_patch` | under the profile, like a command (CX-T2) | No. The model then writes with a command, under the same sandbox. `.git`, `.agents` and `.codex` are protected by the sandbox (CX-V6), not by this tool |
+| `exec_command`, `write_stdin` | the vendor sandbox | No |
+| `list_mcp_resources`, `list_mcp_resource_templates`, `read_mcp_resource` | reads of MCP resources; measured empty (X9 c) | No |
+| `clock__curr_time` | it gives the time | No |
+
+So no measured tool must stay required. The judge agrees with the table of `SPEC_CHANGES.md` Q3. A CLI that works in another mode
+shows its tools under other names (a command tool at the top level, for example): those are outside the set and are refused. What limits
+a codex coder is asked by other rows, and none of them changes: the unit, the sandbox tried with `codex sandbox`, the profile from
+`codex doctor`, the argv, the config, the sign-in copy, and the checks of every turn.
+
+**What the exact list did, and the set does not.** The exact list had a second job that nobody wrote down: it was a tripwire for the
+READ. A change of the report that lost one name made the row red. With "fewer pass", a lost name is a pass. The re-review found this
+(S3) and S4 item 8 is its answer. The question is whether item 8 closes it. It does not, as written:
+
+| # | A change of the CLI | Under S4 item 8 as written | With A4-M1 (15.7) |
+|---|---|---|---|
+| 1 | the headings of the nested tools get another form: another level, other quotes, a word after the name | not whole | not whole |
+| 2 | the nested tools move from `functions.exec` to another tool | a name outside the set | the same |
+| 3 | a second item of type `additional_tools`, or tools under another member of the report | **whole**: "the expected JSON" does not say "one item", and the code reads the first (J31) | not whole |
+| 4 | an element of a `tools` array that is not an object; `functions.exec` with no description text | **whole** in the code at hand (J31). By the words of item 8 the second case has "no such line" and is not whole; the first case is not named | not whole |
+| 5 | a heading with spaces before it; a heading with a carriage return or a space after the name | open: "starts with `###`" and the `$` of the grammar can each be read two ways | not whole |
+| 6 | SOME nested tools keep their `###` heading, and others are named in running text, in a list, or only where the model asks for them | **whole** | **still whole — the limit that stays** |
+
+**The limit that stays (row 6).** No rule on the text can see a tool that the text names in no heading. Under the exact list this case
+was refused when one of the 11 moved, and it passed when only NEW tools came in the other form. So the set is weaker than the exact list
+in one case: known tools that moved. What stands behind the row then: the turn rule CX-T4 (an item type that nobody measured ends the
+job; an MCP call that is not one of the two list tools with an empty answer ends the job), the unit, and for a command the vendor
+sandbox. What does not stand behind it: a tool that is no command, runs in the CLI process and leaves no item in the stream. C2, C5 and
+C7 say what that process can reach. The judge found no model-free second count of the nested tools. It is a line of risk 14 (15.8).
+
+Two more facts about the read, both old:
+
+- The report never showed a tool that runs on the vendor's side (13.11: the list is the same with and without the web search). A
+  read that is whole is whole for the tools the report holds. CX-T6 and CX-T4 stand for the rest, as before.
+- Both reads use one reader. Two equal reads prove nothing about the form of the report (S3).
+
+**The ruling.** A list with fewer than the 11 names passes the row `tool-list` when the read was whole by A4-M1, both reads hold the
+same names, and no name is outside the set. With A4-M1 this is safe but for the limit above. The sentence of 13.3 — "a list that
+differs for another model refuses the job … the lead then has a measure to order, not a list to widen" — is replaced **for a smaller
+list only**. For a list with a name outside the set it stands, word for word: A4-M4.
+
+### 15.4 Point 2 — a tool outside the set before the first launch
+
+**The ruling: safe.** The reasons:
+
+1. The property is "no model is launched with a name outside the set". Each entry has a preflight of its own that asks it. The stop
+   word changes what the JOB does next. It does not change whether the MODEL starts. d5 counts zero launches of the refused model.
+2. Who can make the case "the same outside name in both reads, every other row green": the vendor's side (the release, the account,
+   the model) and coai's own files. **Not the repository.** The stand-in project is coai's own folder in the unit's own `/tmp` (J33);
+   no file of the worktree reaches that read. A name that a file of the repository adds shows in one read only, and that is
+   `coder-boundary`. So text of a repository cannot move a job to another vendor by this road.
+3. The next entry is an entry of the route as a person or coai's defaults wrote it. The notice of the switch names the vendor that
+   the repository text now goes to (SPEC E, rule 7).
+4. When the cause is the CLI or the account and not the model, each codex entry is refused the same way and pays one preflight. No
+   codex model starts.
+5. One mapping for every outside name, `collaboration.*` and `mcp__` too: agreed, because nothing ran. But these two say more than
+   "a new model". The first says that the switch of 13.4 has no effect for this model. The second says that a server reached the
+   session from the account or from the home. The sentence and the notice must keep saying which kind was seen (the sentence of the
+   code at hand does). A server in the home's config also turns the row `no-project-tools` red through the doctor report, and then
+   the boundary row wins.
+
+**The three cases that stay `coder-boundary` with no failover are right, and each is needed.**
+
+- **Two reads that differ.** The CLI read the config of a project that is not trusted (CX-C3). That is a fact about the CLI and the
+  repository, the same for every model. It is worse than a wrong list: to list the tools of a server, the CLI may have STARTED the
+  repository's server inside the unit — code of the repository, outside the vendor sandbox, beside the sign-in copy. The job ends and a
+  person looks.
+- **Another red row.** The boundary row wins. A machine on which a boundary row is red must not try the next model.
+- **A red preflight of a later launch of the entry**, whatever row (S4 item 12). A tool that was not there at turn 0 means that the
+  session changed under the job. The turns before it are committed work that nobody can vouch for.
+
+Two limits. They are not holes: in both no launch is made.
+
+- **Attention.** Under entry 2.1 the stop told a person at once. Now the job can end green on another model. A switch that lost its
+  effect, or a server from the account, is then one notice among the others until the tab of epoch 4 exists.
+- **"The first launch of an entry" is not always "nothing of this vendor ran in this job".** On a route codex → codex the second
+  entry starts in the SAME `CODEX_HOME`, after turns of the first (the sessions are cleared, the config is written again, the look
+  for `environments.toml` is made). A name that shows at its first preflight is read as "this model", although turns of another model
+  ran in that home. Recommended, and not a condition: a new home for each entry, with the sign-in copy made again, so that the words
+  are true by construction.
+
+### 15.5 Point 3 — risk 14: a codex model that nobody measured
+
+| | What | Why it holds, or does not, for such a model |
+|---|---|---|
+| **Holds, the same for every model** | the unit and the check unit (U1 to U9, K1 to K3); the vendor sandbox TRIED with `codex sandbox -P coai` (CX-V1 to CX-V6); the sign-in copy, the margin, the override, the placeholder (CX-R1 to CX-R4); the config read back and the look for `environments.toml` (CX-C1); the argv of 13.4 with the agent switch, the web flag, `--disable hooks` and no never-flag (CX-C2); the help half of CX-P1; the handle (CX-S1, CX-S2); the report reader (CX-S3) | none of them is a fact about a model. Each is asked on every job, of the installed program |
+| **Holds, asked WITH the job's model before the launch** | CX-T1 (the set, the whole read); CX-C3 (two equal reads, `mcp servers = 0`); the `pre` half of CX-C4 (`codex doctor`: profile `coai`, restricted, `Never`) | the probes take the resolved name. The vendor sends settings with each model of its list, and the program builds the session from them: this is where another model would show |
+| **Holds after every turn, closed** | CX-T4 (an item type nobody measured, a `web_search` item and a `collab_tool_call` item end the job); CX-T5; S4 item 12 (terminal, no failover) | closed by construction: what the check cannot read ends the job |
+| **Holds for the name** | the text after `-m` has the exact shape or is a name of the file; only the slug and the visibility of the list are read | a name of the vendor's list is text; nothing else of it reaches an argv or a sentence |
+| **Assumed** (class `release`: measured with another model, and nothing asks it for this one) | the `release` half of CX-C4: `exec` applies the profile to every command of THIS model | it is the program's work, not the model's. A command path that is not a known name would show in CX-T1 |
+| | CX-T3: the JavaScript reaches nothing by itself | the same program for every model. But the evidence is the smallest model and the measurer's script, and nobody attacked the isolate. A newer model is a stronger hand on the same ONE layer: C5 grows with the model |
+| | CX-T6: the web flag works for this model; and any other tool on the vendor's side | one pair of calls, one model. No list shows such a tool. CX-T4 sees the item after the fact: text may have left, nothing is committed, the job ends. Each later job on that model pays one turn and can send text once more, until a person changes the route. Each such job ends red, so it is seen |
+| | CX-T2: a child keeps the sandbox | it is the layer under the switch. When the switch has no effect for a model, CX-T1 refuses it |
+| | the item types of this model's stream; every text that the failover and CX-T5 read | an unknown type ends the job after one paid turn (no `reasoning` item was ever seen). A cost of "by itself", not a hole (Q4) |
+| **Does not hold, as before** | a gate by version or by model; the network of the CLI process (C2); a view of the vendor-side tools before a turn | by the owner's decisions of 2026-11-26 and 2026-11-27, and by what a user unit can do |
+
+What it comes to. For a model that nobody measured, the unit, the sandbox as the program starts it, the sign-in copy and the argv are
+as strong as for the measured one. The tool list is asked again with the model, and A4-M1 keeps that read honest. What is weaker is
+every `release` id, and two of them matter: the isolate (C5) and the tools of the vendor's side (CX-T6). Both are seen, if at all,
+after one turn. The owner accepted this as risk 14.
+
+### 15.6 Point 4 — the run that reads the list of models
+
+**What the run is.** The vendor's program in the job's unit, with `debug models` and nothing else: no model, no prompt, no text of a
+repository in a request. It sends the access token of the job's copy to the vendor, who gave it. It is of the class of `codex doctor`
+(13.3 called that "the first vendor contact of a job"). The list read is now the first contact.
+
+**Why the folder matters.** The run has none of the flags of 13.4 and no profile: the `config.toml` names the model, and the model is
+not known yet. For row B13, section 13.3 kept TWO things — the project is not trusted, and `--disable hooks` — "and neither is ever
+dropped because the other one holds it". A run of the CLI in the worktree without the flags drops one of the two. So this run must
+have no file of a repository beside it or above it. S4 item 13 is right. The code at hand is not the plan here (J34).
+
+**Which folder: an empty one, not the stand-in project.** The stand-in project exists to hold a config file that the CLI must NOT
+read, and the row that asks this comes after the list read. It is made and removed inside the unit by the preflight program (J33). An
+empty folder has nothing to read, and "empty" can be asked before the run.
+
+**It needs no preflight rows of its own.** Everything the run relies on is coai's own write, asked by coai before the run:
+
+| What the run relies on | What makes it true | Where it is asked |
+|---|---|---|
+| no text of a repository beside the run | coai makes the working folder | by coai, before the run (A4-M3) |
+| the sign-in is the job's copy with the placeholder, and its token has the margin | coai writes the copy by its recipe; the gate is asked (J34) | before the run. CX-R3 and CX-R4 ask the same file from inside the unit in the first preflight |
+| a refresh cannot reach the vendor | the margin first; the placeholder; the override in the unit's environment (J35) | before the run. CX-R2 asks the refused connection in the first preflight; only root can listen on that port (J7) |
+| the real home is not used | `HOME` and `CODEX_HOME` of the environment are the job's | before the run. U6 in the first preflight |
+| no file sends a command of the CLI to another place | no `environments.toml` in the job's `CODEX_HOME` | by coai, before the run (A4-M3) |
+| the text that reaches `-m` | the shape rule and the strict reader | coai's own code |
+
+None of these needs the unit to hold for the run to be safe: for this run the unit is the second layer. The first preflight asks the
+same unit, in the same job, before any model starts, and a red row there ends the job. The order cannot be turned: the tool rows need
+the name. Said plainly: the first vendor contact of a job is made in a unit that no row has asked yet in that job. That was already
+true for `doctor`, which runs in the preflight program beside the rows.
+
+**What must stay terminal** (S4 item 13 says it): a unit that is refused, a write that the OS layer stopped, and a unit that does not
+stop, during the list read, are `coder-boundary`. They are faults of the machine, not of a model.
+
+**What the read leaves in the home** was not measured. The launch that follows clears the sessions, writes the config again and looks
+for `environments.toml`, and CX-T5 is closed, so a file that the read left is seen or is harmless. A4-M3 asks one record of it.
+
+**The read-only roles** (scout, judge, BA, orchestrator) are outside this judgement: they have no write boundary, they run with the
+person's own home, and their launch runs in the repository as it did before v2. The same empty folder costs nothing there. Recommended.
+
+### 15.7 Must-changes
+
+Each is a change of the text of s2 t5 and has a test. None adds a risk for the owner and none makes the plan narrower.
+
+- **A4-M1. The read of the tool report is whole only by a closed rule** (it makes S4 item 8 and d5 exact). A read is whole only when
+  ALL of this is true; any other read is "a list that cannot be read":
+  1. The report is a JSON array. It holds exactly ONE item whose `type` is `additional_tools`, and `tools` of that item is an array.
+     No other item of the report has a member named `tools`.
+  2. Every element of a `tools` array is an object, at every depth. An element that has a member `tools` has it as an array, has a
+     name of at least one character, and is walked by this same rule. Every other element has a name of at least one character.
+     Nothing is skipped: one element that cannot be read makes the read not whole.
+  3. `functions.exec` is in the list at most once. When it is there, its `description` is a string.
+  4. The grammar ``^### `[A-Za-z0-9_.-]+`$`` is asked line by line. The text is cut at each line feed, and a line matches only as a
+     WHOLE: no character before `###` and none after the closing backtick (a carriage return or a space is a character). A line that
+     starts with `###` after spaces or tabs is a `###` line too, and it does not match. A heading of another level (one to six `#`)
+     whose text starts with a backtick makes the read not whole.
+  5. At least one line matches (as item 8 says).
+
+  Tests (d5): for each of 1 to 4, a recorded report changed in that one place. In both copies: the entry ends `model-unavailable`,
+  with the second reason of the notice and zero launches. In one copy: the job ends `coder-boundary`. The two recorded reports of d8
+  ARE read whole, and the scrub of d8 changes no byte of their `additional_tools` item. If a real report is not whole by this rule,
+  the task stops and says so (d5) and the judge is asked. The task does not make the rule wider.
+- **A4-M2. The name of a tool is shown only when BOTH reads hold it.** A name that one read only holds is counted and never shown:
+  it can be text of the repository (J38). When the two reads differ, the sentence, the envelope, the notice, the record of the row
+  and the log lines carry counts and no name. Test (d6): a name in the worktree read only is in none of the five places.
+- **A4-M3. The run that reads the list of models** (S4 item 13; d2, d4, d8):
+  1. Its working folder is an EMPTY folder that coai makes for the run, in the job's own folder of the vendor or in the unit's own
+     empty temp folder. Never the worktree, never a folder inside the worktree, the main checkout or a submodule mount, and never
+     the stand-in project. Before the run coai asks: it is a real folder and no link, it holds no entry, and no folder above it is a
+     folder of the repository. The test of d2 looks at the folder AND at every folder above it inside the unit.
+  2. Before the run coai makes the checks that it makes before every start of the CLI in the job's home: the gate of the sign-in
+     copy (the code at hand does) and the look for `environments.toml` (it does not). A file that is there is `coder-boundary`.
+  3. The argv is `debug models` and nothing else, and standard input is empty.
+  4. The real run of d8 records once, with no model call: the names of the files of the job's `CODEX_HOME` before and after the
+     read, and the names of the processes of the unit. If the read leaves an `environments.toml`, a `config.toml` or a file under
+     `sessions`, or starts a process that is not the CLI, the task stops and says so.
+- **A4-M4. The known set grows only by an addendum of this file.** The 11 names of 13.3 are the set. A name is added only after a
+  measure of that tool — what it reaches (B2, B6, B10, B11) and where it runs — and an addendum; never by one commit alone. The
+  sentence of `SPEC_CHANGES.md` Q4 ("one commit adds it to the known set") is read so, and the text of the notice does not tell a
+  person to add the name. A test holds the set of the product equal to a list of its own that names section 13.3, so one edit
+  alone is red.
+
+### 15.8 The ids, the risks, and the sentence of 13.3
+
+**No id is added and no class changes.** The table needs no new property. Three ids mean more than they did:
+
+- **CX-T1** (`pre`): with the job's resolved model and the argv of 13.4, the tool report was read whole (S4 item 8 with A4-M1) and
+  holds no name outside the 11 of 13.3. It is no longer "the measured list". It still says nothing about the web search (CX-T6).
+- **CX-C3** (`pre`): the two reads hold the same names. Before, both had to be the 11, so this was implied. Now it is asked.
+- **CX-C1**, the `launch` half: its checks are made before EVERY start of the CLI in the job's home, the list read too (A4-M3).
+
+`model-unavailable` is a stop word, not a property: no id.
+
+**The history of the table.** This addendum measured nothing. The record that s2 t5 writes names this heading as the judgement
+heading; its results heading is the one of d8 (`RESULTS_e3_codex_model_name.md`), which does not exist yet and which the judge did
+not see. If d8 shows that something of 15.10 was assumed wrong, the task stops.
+
+**The risks for the owner.** C1 to C9 stand as 13.8 and 13.11 left them. One is new in this file and is not new for the owner:
+
+- **C10 — risk 14 of SPEC H: a codex model that nobody measured runs as a coder on the day the CLI lists it.** Accepted by the owner
+  on 2026-11-27, by the lead's word. Its lines, so that the choice is seen whole: (a) every `release` id is assumed for the new
+  model, and of them C5 and CX-T6 matter (15.5); (b) a fault of the new model that only a turn can show is seen after one turn, and
+  every later job pays that turn again until a person changes the route; (c) the tool inventory is read from text that the vendor
+  writes for the model, and **the whole-read rule sees a change of the FORM of that text; it cannot see a tool that the text names
+  in no heading** (15.3, row 6).
+- Line (c) says less than the line of SPEC H does today ("item 8 is what keeps a change of that text from passing as a smaller tool
+  set"). The judge's view: it is the same risk, said more exactly, and not a wider one. The lead corrects the line of SPEC H. Whether
+  the owner sees the corrected line is the lead's decision, by the rule of risk 9 there.
+
+### 15.9 Point 5 — the rest of S4
+
+| Item of S4 | For the boundary |
+|---|---|
+| 1, 2 — the family; the name recorded once | Good for B14: the model of a session never changes, and a resume uses the recorded name. The resolved name is text of the vendor's list that reaches an argv; the shape rule is what makes that safe, and it must stay exact |
+| 3 — a hidden model named in full | Allowed. The same rows ask it. "A person" is also the main AI, through the `model` argument of `start_role`: it can name any model of the shape, a hidden one too. That is risk 14, by a name instead of by a family |
+| 4 — the file of names | Right, and the line that matters is the one that does NOT change: a claude id is never accepted by its shape |
+| 5 (cut) — a full name with no family is not looked up | No hole. The CLI refuses a name it does not serve before a paid call (Q1); pass 7 saw the tool read fail for the bare name `terra` |
+| 6 — lists are compared by the written name | The safe side: it refuses. One effect outside the write boundary, said so that it is seen: when `important` holds a family, the model that judges security tasks changes by itself on the day the vendor lists a newer one |
+| 7 — the three outcomes of `model-unavailable` | No hole: in each of them nothing was launched |
+| 8 | 15.3 and A4-M1 |
+| 9, 10 | 15.4 |
+| 11 — the name and the redactor | Right. A4-M2 adds where a name may come from |
+| 12 — after the first launch every boundary stop is terminal | Right, and the strongest line of the revision. Its one soft word is "the first launch of an entry": 15.4, the second limit |
+| 13 | 15.6 and A4-M3 |
+
+### 15.10 For the lead, and what was not measured
+
+For the lead (the judge edited no file but this one):
+
+1. **s2 t5**: d5 takes A4-M1 and A4-M4; d6 takes A4-M2; d2, d4 and d8 take A4-M3.
+2. **The plan-change count** is the lead's: four must-changes for one cause (this addendum). Epoch 3 of the ledger has no change yet.
+3. **SPEC H**, risk 14: the line on item 8 (15.8). **`SPEC_CHANGES.md` Q4**: the words "one commit adds it" (A4-M4).
+4. **Recommended, not conditions of the verdict:** a new `CODEX_HOME` for each codex entry of a job (15.4); the empty working folder
+   for the list read of the read-only roles too (15.6); CX-T5 as a list of the call names and item types that a rollout MAY hold, in
+   place of one forbidden prefix — it needs a read of the saved rollouts first, and it would be the turn-side partner of the known
+   set for a model nobody measured.
+5. **The local commit `62685e2b`** is not the plan in these places, beside what S6 and S7 already name: J31, J34 and J38.
+
+Not measured, and not checked by this judge:
+
+- **The text of the description of `functions.exec`.** No report is saved (J32). Clause 4 of A4-M1 may meet real text that it
+  refuses; then the task stops (d5). Which two tools `gpt-5.6-terra` does not have (J37).
+- **`codex debug models`**: what it does at its start beside its one request, what it writes into the home, whether it reads a
+  project config, and whether it works inside the unit with the placeholder copy (d8 asks the last). "A network call, no model
+  call" is taken from `SPEC_CHANGES.md` Q1; the judge did not read `RESULTS_model_lists.md`.
+- Any model but those of the measures; a hidden model; a model with a tool on the vendor's side that is not the web search.
+- Everything about `62685e2b` is a reading. Nothing was built and nothing was run. The commit is not the plan and will change.
+- The owner's own words (the head of this addendum).
+- agy: this addendum says nothing about it. Section 14 stands.
+
+### 15.11 Verdict
+
+**codex, for the commit that changes the rows `tool-list` and `no-project-tools` (s2 t5 d9): `ship with must-changes`.**
+
+The must-changes are A4-M1, A4-M2, A4-M3 and A4-M4 (15.7). The answers to the five points:
+
+1. **Fewer tools pass: yes.** No tool of the 11 is a guard. The grammar alone is not enough: A4-M1 closes the report's own form; one
+   limit stays and is named (a tool that the text names in no heading).
+2. **`model-unavailable` and the failover for a tool outside the set before the first launch: safe.** No model is launched with such
+   a tool, and text of a repository cannot cause the case. The three cases that stay `coder-boundary` are right. A4-M2.
+3. **Risk 14**: the unit, the sandbox as the program starts it, the profile from `doctor`, the argv, the sign-in copy and the closed
+   turn checks hold for a model nobody measured. Every `release` id is only assumed, and of them the isolate (C5) and the tools of
+   the vendor's side (CX-T6) matter. C10.
+4. **The run that reads the list of models: safe** in an empty folder, with the launch checks before it. It needs no preflight rows
+   of its own. A4-M3.
+5. **The rest of S4** opens nothing. The known set grows only by an addendum: A4-M4.
+
+Why not a plain `ship`: S4 item 8 names a grammar for the headings and leaves the form of the report open, and the code at hand reads
+the first container only and skips what it cannot read. With "fewer pass", each such gap admits a model with tools that coai did not
+see. Why not `refuse`: no rule of S4 lets a model start with a name outside the set; every stop after a launch is terminal; and
+nothing the list read relies on needs a model turn to be shown.
+
+**What the verdict means for the gate.** When the commit of the rows carries A4-M1 to A4-M4 as 15.7 writes them, each with its test
+green, this verdict reads `ship` for that commit and no new addendum is needed. When one of them cannot be built as written, the task
+stops and the judge is asked again. By d9 as it is written, a verdict other than `ship` stops the task and goes to the owner: that
+decision is the lead's. The judge's view, for that decision: the four must-changes make the plan's own rule exact and add tests; they
+drop no protection, add no risk and ask the owner nothing.
+
+**The verdict for the vendor does not change**: codex is `ship`, as sections 1 and 13.1 say, and the row of the table stays as it is.
